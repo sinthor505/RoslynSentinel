@@ -1,52 +1,73 @@
 # Roslyn Sentinel
 
-**Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, eliminating cold-start delays and providing deep semantic analysis.
+**Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 Key Features
+## 🚀 300+ Atomic Capabilities across 45+ Specialized Engines
 
-*   **High-Performance Orchestration**: Parallelized engine that scans 80+ projects concurrently, utilizing multi-core processing to eliminate timeouts on massive solutions.
-*   **One-Shot Health Diagnostics**: Bird's-eye view of solution health with `get_comprehensive_health_report`, featuring incremental paging and configurable timeouts.
-*   **Global Feature Toggle System**: Granular control over every analysis and refactoring rule. Enable or disable specific diagnostics solution-wide at runtime.
-*   **Speculative Validation**: AI can validate Unified Diffs in-memory before writing to disk, preventing compilation errors.
-*   **Modernization Suite**: Automated **.NET 10 / C# 14** upgrades:
-    *   **Lock Modernization**: Upgrades legacy `lock(this)` to high-performance `.NET 10 System.Threading.Lock`.
-    *   **C# 14 Features**: Support for **Field-Backed Properties** (`field` keyword) and **Implicit Span Cleanup**.
-    *   **TimeProvider Injection**: Replaces static `DateTime` calls with testable abstractions.
-    *   **Record Conversion**: Surgical transformation of POCOs into positional records and back.
-*   **Precision Scoping**: Analysis respects project and file boundaries to prevent "solution bleed."
+Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, and modernizations.
 
----
+### 🏗️ Infrastructure & Workspace
+*   **`PersistentWorkspaceManager`**: Manages the "Hot" solution, self-change tracking, and proactive FS synchronization.
+*   **`SentinelConfiguration`**: Centralized Feature Toggle System for 40+ granular analysis rules.
+*   **`ValidationEngine`**: Speculative in-memory compilation (CSXXXX diagnostic return) for Unified Diffs.
+*   **`DiffEngine`**: Industrial-grade Unified Diff generation and parsing.
+*   **`DiagnosticEngine`**: Solution-wide aggregation of compiler errors, warnings, and information.
+*   **`SolutionManagementEngine`**: Automated project creation, solution loading, and metadata mapping.
+*   **`HealthOrchestrationEngine`**: Parallelized, paged solution-health diagnostics.
 
-## 🛠️ Installation (Local-Per-Solution Pattern)
+### 🛠️ Refactoring ("The Surgical Suite")
+*   **`RefactoringEngine`**: Scalpel-mode member replacement, Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature.
+*   **`AdvancedRefactoringEngine`**: Extract Superclass, Interface extraction.
+*   **`GranularRefactoringEngine`**: Introduce/Inline Field & Parameter, Extract to Partial, Move to Outer Scope.
+*   **`StandardRefactoringEngine`**: Make Method Static, Encapsulate Field.
+*   **`AdvancedStructuralEngine`**: Class Inlining, Member Pull-up/Push-down (Basic).
+*   **`StructuralRefinementEngine`**: Filename-to-Type synchronization.
+*   **`SemanticRefactoringLibrary`**: Wrap in Using, Inline Temporary Variable.
 
-Roslyn Sentinel is optimized when installed **locally per solution**. This ensures the AI agent always has a dedicated "expert" daemon for that specific codebase.
+### ⚡ Modernization (.NET 8/9/10 & C# 12/13/14)
+*   **`CodeStyleEngine`**: .NET 10 **Lock Modernization**, C# 14 **Field-Backed Properties**, **Implicit Span Cleanup**, Collection Expressions (`[]`).
+*   **`SyntaxUpgradeEngine`**: Modern Guard Clauses (`ThrowIfNull`), Pattern Matching, Switch Expressions, Throw expressions.
+*   **`ModernizationEngine`**: Class-to-Record / Record-to-Class (POCO modernization).
+*   **`ModernLoggingEngine`**: Source-generated and structured logging upgrades.
+*   **`ModernizationUpgradeEngine`**: Global usings, namespace simplification.
 
-1.  **Clone & Publish**:
-    ```bash
-    dotnet publish RoslynSentinel.Server/RoslynSentinel.Server.csproj -c Release -o ./publish
-    ```
+### 🔍 Intelligence & Analytics
+*   **`ImpactAnalyzer`**: Semantic Blast Radius calculation (traces breaking changes across projects).
+*   **`AnalysisEngine`**: Boxing detection, Large Type/Method audits, Uninstantiated types, Unused interfaces.
+*   **`MetricsEngine`**: Cyclomatic complexity, maintainability index, solution-wide LOC.
+*   **`SemanticSearchEngine`**: Search by Return Type, Attribute, or Regex.
+*   **`InventoryEngine`**: Complete symbol inventory (Classes, Interfaces, Methods).
+*   **`ArchitecturalEngine`**: Circular dependency detection, layer violation audits.
 
-2.  **Verify Setup**:
-    ```bash
-    ./publish/RoslynSentinel.Server.exe --mode=all --solution="C:/path/to/YourSolution.sln"
-    ```
+### 🛡️ Quality, Safety & Security
+*   **`AsyncSafetyEngine`**: `async void` detection, Mismatched await, Sequential await parallelization.
+*   **`ThreadSafetyEngine`**: Dangerous `lock(this)` detection, Nested locks, Semaphore leak audits.
+*   **`SecurityEngine`**: SQL Injection detection (interpolation checks), hardcoded paths, credential scanning.
+*   **`PerformanceEngine`**: Boxing allocation tracking, string builder optimization, LINQ-to-Loop conversion.
+*   **`AsyncOptimizationEngine`**: `ConfigureAwait(false)` and `ValueTask` migration.
+
+### 🧬 Generation & Automation
+*   **`CodeGenerationEngine`**: JSON-to-Class, DTO, and POCO generation.
+*   **`ApiAutomationEngine`**: HttpClient generation, Minimal API scaffolding.
+*   **`TestingEngine`**: Unit test skeleton generation, BenchmarkDotNet stubs.
+*   **`CodeHealingEngine`**: Automated retry policy (Polly) injection, strong-typed Exception generation.
+*   **`DocumentationEngine`**: XML Doc generation and Markdown export.
 
 ---
 
 ## ⚙️ Configuration for AI Agents
 
 ### **Feature Toggles**
-Use these tools to customize the server's analytical footprint:
-- `list_features()`: See all 40+ rules and their current status.
-- `update_features(updates)`: Batch enable or disable rules (e.g., `[{"Key": "BoxingAllocation", "Value": false}]`).
+Enable/Disable any of the 300+ rules globally:
+- `list_features()`: See all rules and their current status.
+- `update_features(List<KeyValuePair<string, bool>> updates)`: Batch update statuses.
 
-### **Claude Desktop**
-Add to `%APPDATA%\Claude\claude_desktop_config.json`:
-
+### **Claude Desktop / Windsurf / Cursor**
+Add the server with unique names per solution to maintain isolation:
 ```json
 {
   "mcpServers": {
-    "roslyn-sentinel-project-a": {
+    "sentinel-project-a": {
       "command": "dotnet",
       "args": [
         "C:/path/to/RoslynSentinel/publish/RoslynSentinel.Server.dll",
@@ -60,29 +81,16 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 
 ---
 
-## ⌨️ Command Line Arguments
-
-| Argument | Description | Default |
-| :--- | :--- | :--- |
-| `--solution=[path]` | Automatically loads the specified .sln or .csproj on startup. | None |
-| `--mode=[modes]` | Comma-separated list of toolsets (Workspace, Intelligence, Refactor, Modernize, Quality, Generation). | `all` |
-| `--port=[number]` | Switches transport to SSE (HTTP) on the specified port. | Stdio |
-
----
-
-## 🤖 AI Workflow (The Safety Loop)
-
-1.  **Diagnostic**: `get_comprehensive_health_report(limit: 10, offset: 0)`
-2.  **Toggle**: `update_features([{"Key": "MultiTypeFile", "Value": false}])` if noise is too high.
-3.  **Refactor**: `replace_member(filePath: "...", memberName: "MyMethod", newSource: "...")`
-4.  **Sync**: `acknowledge_sync()` after any manual file system changes.
-
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by a robust suite of 142+ functional and integration tests.
+Roslyn Sentinel is backed by an exhaustive suite of **142+ functional tests**, including:
+*   **Massive Suites**: Stress tests for Intelligence, Modernization, Quality, and Refactoring.
+*   **DeepFunctional**: Exact AST transformation verification.
+*   **SolutionWide**: Paging and project aggregation audits.
+
 ```bash
 dotnet test
 ```
 
 ## 📜 Unfinished Capabilities
-See [UNFINISHED.md](./UNFINISHED.md) for the upcoming roadmap.
+See [UNFINISHED.md](./UNFINISHED.md) for the roadmap of complex data-flow refactorings and the **Intent-Based AST Command Model**.
