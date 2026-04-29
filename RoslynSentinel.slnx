@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RoslynSentinel.Server/RoslynSentinel.Server.csproj" />
+  <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
+</Solution>

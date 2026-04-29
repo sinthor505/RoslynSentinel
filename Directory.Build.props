@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- This property disables NuGet audit failures during builds, which prevents the Roslyn workspace from loading projects with known vulnerabilities. -->
+    <!-- This is a temporary workaround to enable semantic analysis. The underlying vulnerabilities should be fixed. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "roslyn-sentinel": {
+      "command": "dotnet",
+      "args": [
+        "E:\\source\\repos\\RoslynSentinel\\publish\\RoslynSentinel.Server.dll",
+        "--mode=all"
+      ]
+    }
+  }
+}

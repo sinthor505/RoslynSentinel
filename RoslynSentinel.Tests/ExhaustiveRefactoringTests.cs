@@ -1,0 +1,96 @@
+#pragma warning disable CS8618
+using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Server;
+
+namespace RoslynSentinel.Tests;
+
+[TestFixture]
+public class ExhaustiveRefactoringTests
+{
+    private PersistentWorkspaceManager _workspaceManager;
+    private SyntaxUpgradeEngine _syntaxUpgradeEngine;
+    private CodeStyleEngine _codeStyleEngine;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager.Dispose();
+
+    private void SetSource(string source)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("Test.cs", source) });
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    [Test]
+    public async Task UpgradeGuards_ShouldHandleAllRangeVariants()
+    {
+        SetSource(@"
+using System;
+public class C {
+    public void M(int i, int limit) {
+        if (i < 0) throw new ArgumentOutOfRangeException(nameof(i));
+        if (i <= 0) throw new ArgumentOutOfRangeException(nameof(i));
+        if (i == 0) throw new ArgumentOutOfRangeException(nameof(i));
+        if (i > limit) throw new ArgumentOutOfRangeException(nameof(i));
+    }
+}");
+        var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
+        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegative(i)"));
+        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegativeOrZero(i)"));
+        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfZero(i)"));
+        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfGreaterThan(i, limit)"));
+    }
+
+    [Test]
+    public async Task UseTimeProvider_ShouldDetectExistingField()
+    {
+        SetSource(@"
+using System;
+public class C {
+    private readonly TimeProvider _myCustomProvider;
+    public DateTime M() => DateTime.UtcNow;
+}");
+        var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
+        Assert.That(result, Contains.Substring("_myCustomProvider.GetUtcNow()"));
+        Assert.That(result, Does.Not.Contain("private readonly TimeProvider _timeProvider;"), "Should not add new field if one exists.");
+    }
+
+    [Test]
+    public async Task UseTimeProvider_ShouldHandleDateTimeOffsetAndLocal()
+    {
+        SetSource(@"
+using System;
+public class C {
+    public void M() {
+        var a = DateTimeOffset.UtcNow;
+        var b = DateTime.Now;
+    }
+}");
+        var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
+        Assert.That(result, Contains.Substring("_timeProvider.GetUtcNow()"));
+        Assert.That(result, Contains.Substring("_timeProvider.GetLocalNow()"));
+        Assert.That(result, Contains.Substring("private readonly TimeProvider _timeProvider;"));
+    }
+
+    [Test]
+    public async Task ClassToRecord_ShouldHandleAttributesAndMethods()
+    {
+        SetSource(@"
+public class MyPoco {
+    [Required]
+    public string Name { get; set; }
+    public void DoWork() {}
+}");
+        var modernizationEngine = new ModernizationEngine(_workspaceManager);
+        var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
+        Assert.That(result, Contains.Substring("public record MyPoco(string Name)"));
+        Assert.That(result, Contains.Substring("public void DoWork()"));
+    }
+}
