@@ -19,3 +19,43 @@ The following advanced capabilities require deep data-flow analysis or cross-fil
 
 ---
 *Note: Many previous "Unfinished" items (SafeDelete, TimeProvider, Collection Expressions, Circular Dependencies, Boxing detection) have been moved into the core high-performance engine suite and are now fully functional.*
+
+## 🚀 Future Architectural Vision: Intent-Based AST Commands
+
+The goal is to shift from the **String-Replacement Model** (where the AI sends raw C# strings) to an **Intent-Based AST Command Model**. This eliminates syntax errors caused by malformed strings and allows Roslyn to handle the heavy lifting of code generation, formatting, and trivia preservation.
+
+### Concept: The "Refactor Recipe"
+Instead of re-emitting code, the AI provides a structured manifest of logical changes.
+
+**Example: Dependency Injection & Method Guard**
+```json
+{
+  "target": "OrderService",
+  "actions": [
+    { 
+      "op": "InjectDependency", 
+      "type": "ILogger<OrderService>", 
+      "name": "_logger", 
+      "access": "private readonly" 
+    },
+    { 
+      "op": "AddGuard", 
+      "member": "ProcessOrder", 
+      "param": "order", 
+      "type": "NullCheck" 
+    },
+    { 
+      "op": "WrapInTryCatch", 
+      "member": "ProcessOrder", 
+      "exception": "OrderException", 
+      "logInside": "_logger.LogError(ex, \"Order failed\")" 
+    }
+  ]
+}
+```
+
+### Advantages for AI Agents:
+1.  **Zero Syntax Errors**: The AI never writes a semicolon or brace; Roslyn generates them.
+2.  **Token Efficiency**: Only the *delta* is transmitted, not the entire method body.
+3.  **Automatic Formatting**: Uses the project's existing `.editorconfig` rules automatically.
+4.  **Trivia Safety**: Comments and doc-strings are never "eaten" or displaced.
