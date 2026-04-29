@@ -21,13 +21,14 @@ public class DeepFunctionalVerificationTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        var config = new SentinelConfiguration();
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager);
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager);
+        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _modernizationEngine = new ModernizationEngine(_workspaceManager);
+        _modernizationEngine = new ModernizationEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -175,5 +176,98 @@ public class C {
         
         // Cleanup
         File.Delete(tempCsproj);
+    }
+
+    [Test]
+    public async Task ReplaceMember_ShouldReplaceMethodByName()
+    {
+        // Arrange
+        SetSource("public class C { public void Old() { } }", "C.cs");
+        var newSource = "public void New() { Console.WriteLine(\"Hello\"); }";
+
+        // Act
+        var result = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Old", newSource);
+
+        // Assert
+        Assert.That(result, Contains.Substring("public void New()"));
+        Assert.That(result, Does.Not.Contain("public void Old()"));
+    }
+
+    [Test]
+    public async Task AddMember_ShouldAppendToClass()
+    {
+        // Arrange
+        SetSource("public class C { }", "C.cs");
+        var member = "public int NewField;";
+
+        // Act
+        var result = await _refactoringEngine.AddMemberAsync("C.cs", "C", member);
+
+        // Assert
+        Assert.That(result, Contains.Substring("public int NewField;"));
+    }
+
+    [Test]
+    public async Task RemoveMember_ShouldDeleteByName()
+    {
+        // Arrange
+        SetSource("public class C { public void Junk() {} public void Keep() {} }", "C.cs");
+
+        // Act
+        var result = await _refactoringEngine.RemoveMemberAsync("C.cs", "Junk");
+
+        // Assert
+        Assert.That(result, Does.Not.Contain("void Junk()"));
+        Assert.That(result, Contains.Substring("void Keep()"));
+    }
+
+    [Test]
+    public async Task FixDangerousLock_ShouldInjectLockObject()
+    {
+        // Arrange
+        SetSource("public class C { public void M() { lock(this) { } } }", "C.cs");
+
+        // Act
+        var result = await _codeStyleEngine.FixDangerousLockAsync("C.cs");
+
+        // Assert
+        Assert.That(result, Contains.Substring("private readonly Lock _lockObj = new Lock()"));
+        Assert.That(result, Contains.Substring("lock (_lockObj)"));
+        Assert.That(result, Contains.Substring("using System.Threading;"));
+    }
+
+    [Test]
+    public async Task ConvertPropertyToMethods_ShouldCreateGetSet()
+    {
+        // Arrange
+        SetSource("public class C { public string Name { get; set; } }", "C.cs");
+
+        // Act
+        var result = await _codeStyleEngine.ConvertPropertyToMethodsAsync("C.cs", "Name");
+
+        // Assert
+        Assert.That(result, Contains.Substring("public string GetName()"));
+        Assert.That(result, Contains.Substring("public void SetName(string value)"));
+        Assert.That(result, Contains.Substring("private string _name;"));
+    }
+
+    [Test]
+    public async Task CleanupImplicitSpans_ShouldRemoveAsSpan()
+    {
+        // Arrange
+        SetSource(@"
+using System;
+public class C {
+    public void M(byte[] data) {
+        ReadOnlySpan<byte> span = data.AsSpan();
+    }
+}", "C.cs");
+
+        // Act
+        var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("C.cs");
+
+        // Assert
+        Assert.That(result, Contains.Substring("ReadOnlySpan<byte> span = data;"));
+        Assert.That(result, Does.Not.Contain(".AsSpan()"));
     }
 }

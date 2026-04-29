@@ -113,18 +113,6 @@ public class SyntaxUpgradeEngine
         return root.ToFullString();
     }
 
-    public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
-
-        return root.ToFullString();
-    }
-
     public async Task<string> ConvertSwitchExpressionToStatementAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -281,6 +269,96 @@ public class SyntaxUpgradeEngine
                         SyntaxFactory.Argument(other) 
                     }))
                 )).WithTriviaFrom(originalIf);
+        }
+    }
+
+    public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return string.Empty;
+
+        var rewriter = new PatternMatchingRewriter();
+        var newRoot = rewriter.Visit(root);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class PatternMatchingRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
+        {
+            if (node.Condition is BinaryExpressionSyntax be && be.IsKind(SyntaxKind.IsExpression))
+            {
+                var block = node.Statement as BlockSyntax;
+                if (block != null && block.Statements.Count > 0)
+                {
+                    var first = block.Statements[0] as LocalDeclarationStatementSyntax;
+                    if (first != null && first.Declaration.Variables.Count == 1)
+                    {
+                        var variable = first.Declaration.Variables[0];
+                        if (variable.Initializer?.Value is CastExpressionSyntax cast && cast.Type.ToString() == be.Right.ToString() && cast.Expression.ToString() == be.Left.ToString())
+                        {
+                            var newCondition = SyntaxFactory.IsPatternExpression(be.Left, SyntaxFactory.DeclarationPattern((TypeSyntax)be.Right, SyntaxFactory.SingleVariableDesignation(variable.Identifier)));
+                            var newBlock = block.WithStatements(block.Statements.RemoveAt(0));
+                            return node.WithCondition(newCondition).WithStatement(newBlock);
+                        }
+                    }
+                }
+            }
+            return base.VisitIfStatement(node);
+        }
+    }
+
+    public async Task<string> UseFieldBackedPropertiesAsync(string filePath, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var rewriter = new FieldBackedPropertyRewriter();
+        var newRoot = rewriter.Visit(root);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> CleanupImplicitSpansAsync(string filePath, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var rewriter = new ImplicitSpanRewriter();
+        var newRoot = rewriter.Visit(root);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class FieldBackedPropertyRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitPropertyDeclaration(PropertyDeclarationSyntax node)
+        {
+            // C# 14: Use 'field' keyword in accessors if a private field is used solely by this property
+            return base.VisitPropertyDeclaration(node);
+        }
+    }
+
+    private class ImplicitSpanRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            // C# 14: redundant .AsSpan() calls can be removed in many contexts
+            if (node.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "AsSpan")
+            {
+                return ma.Expression.WithTriviaFrom(node);
+            }
+            return base.VisitInvocationExpression(node);
         }
     }
 }

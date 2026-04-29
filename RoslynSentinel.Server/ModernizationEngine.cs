@@ -7,26 +7,25 @@ namespace RoslynSentinel.Server;
 public class ModernizationEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
 
-    public ModernizationEngine(PersistentWorkspaceManager workspaceManager)
+    public ModernizationEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
-    /// <summary>
-    /// Converts a class to a record where possible.
-    /// </summary>
     public async Task<string> ClassToRecordAsync(string filePath, string className, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("ClassToRecord")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) throw new Exception("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null) return root?.ToFullString() ?? "";
 
-        // Create a Record declaration
         var recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
             .WithModifiers(classNode.Modifiers)
             .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(
@@ -35,75 +34,15 @@ public class ModernizationEngine
             .WithMembers(SyntaxFactory.List(classNode.Members.Where(m => m is not PropertyDeclarationSyntax)))
             .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
-        if (recordNode.Members.Count > 0)
-        {
-            // If it has members, it shouldn't have a trailing semicolon on the header
-            recordNode = recordNode.WithSemicolonToken(default);
-        }
+        if (recordNode.Members.Count > 0) recordNode = recordNode.WithSemicolonToken(default);
 
         var newRoot = root!.ReplaceNode(classNode, recordNode);
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    /// <summary>
-    /// Converts traditional namespaces to file-scoped namespaces.
-    /// </summary>
-    public async Task<string> UseFileScopedNamespaceAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var ns = root?.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
-        if (ns == null) return root?.ToFullString() ?? "";
-
-        var fileScopedNs = SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name)
-            .WithLeadingTrivia(ns.GetLeadingTrivia())
-            .WithMembers(ns.Members);
-
-        var newRoot = root!.ReplaceNode(ns, fileScopedNs);
-        return newRoot.ToFullString();
-    }
-
-    /// <summary>
-    /// Converts a simple method body to an expression body.
-    /// </summary>
-    public async Task<string> BlockToExpressionBodyAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
-
-        if (method?.Body?.Statements.Count == 1)
-        {
-            var statement = method.Body.Statements[0];
-            ExpressionSyntax? expr = null;
-            if (statement is ReturnStatementSyntax ret) expr = ret.Expression;
-            else if (statement is ExpressionStatementSyntax ess) expr = expr = ess.Expression;
-
-            if (expr != null)
-            {
-                var newMethod = method.WithBody(null)
-                    .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expr))
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-                
-                var newRoot = root!.ReplaceNode(method, newMethod);
-                return newRoot.ToFullString();
-            }
-        }
-        return root?.ToFullString() ?? "";
-    }
-
-    /// <summary>
-    /// Converts a record back to a standard class.
-    /// </summary>
     public async Task<string> RecordToClassAsync(string filePath, string recordName, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("RecordToClass")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
@@ -112,13 +51,9 @@ public class ModernizationEngine
         var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
         if (recordNode == null) return root?.ToFullString() ?? "";
 
-        // 1. Create a class declaration
-        var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier)
-            .WithModifiers(recordNode.Modifiers);
-
+        var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier).WithModifiers(recordNode.Modifiers);
         var properties = new List<MemberDeclarationSyntax>();
 
-        // 2. Convert positional parameters to properties
         if (recordNode.ParameterList != null)
         {
             foreach (var parameter in recordNode.ParameterList.Parameters)
@@ -133,11 +68,38 @@ public class ModernizationEngine
             }
         }
 
-        // 3. Keep existing members
         properties.AddRange(recordNode.Members);
         classNode = classNode.WithMembers(SyntaxFactory.List(properties));
 
         var newRoot = root!.ReplaceNode(recordNode, classNode);
         return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> ConvertMethodToExpressionBodyAsync(string filePath, string methodName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "";
+        var root = await document.GetSyntaxRootAsync(ct);
+        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        
+        if (method?.Body != null && method.Body.Statements.Count == 1)
+        {
+            var stmt = method.Body.Statements[0];
+            ExpressionSyntax? expr = null;
+            if (stmt is ReturnStatementSyntax ret) expr = ret.Expression;
+            else if (stmt is ExpressionStatementSyntax es) expr = es.Expression;
+
+            if (expr != null)
+            {
+                var newMethod = method.WithBody(null)
+                    .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expr))
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                
+                var newRoot = root!.ReplaceNode(method, newMethod);
+                return newRoot.ToFullString();
+            }
+        }
+        return root?.ToFullString() ?? "";
     }
 }

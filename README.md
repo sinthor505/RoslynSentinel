@@ -4,17 +4,22 @@
 
 ## 🚀 Key Features
 
-*   **High-Performance Orchestration**: Parallelized engine that scans 80+ projects concurrently.
-*   **One-Shot Health Diagnostics**: Get a bird's-eye view of your solution's health with `get_comprehensive_health_report`.
-*   **Speculative Validation**: AI can validate Unified Diffs in-memory before writing to disk.
-*   **Modernization Suite**: Automated .NET 9 upgrades (TimeProvider, Records, modern Guard Clauses).
+*   **High-Performance Orchestration**: Parallelized engine that scans 80+ projects concurrently, utilizing multi-core processing to eliminate timeouts on massive solutions.
+*   **One-Shot Health Diagnostics**: Bird's-eye view of solution health with `get_comprehensive_health_report`, featuring incremental paging and configurable timeouts.
+*   **Global Feature Toggle System**: Granular control over every analysis and refactoring rule. Enable or disable specific diagnostics solution-wide at runtime.
+*   **Speculative Validation**: AI can validate Unified Diffs in-memory before writing to disk, preventing compilation errors.
+*   **Modernization Suite**: Automated **.NET 10 / C# 14** upgrades:
+    *   **Lock Modernization**: Upgrades legacy `lock(this)` to high-performance `.NET 10 System.Threading.Lock`.
+    *   **C# 14 Features**: Support for **Field-Backed Properties** (`field` keyword) and **Implicit Span Cleanup**.
+    *   **TimeProvider Injection**: Replaces static `DateTime` calls with testable abstractions.
+    *   **Record Conversion**: Surgical transformation of POCOs into positional records and back.
 *   **Precision Scoping**: Analysis respects project and file boundaries to prevent "solution bleed."
 
 ---
 
 ## 🛠️ Installation (Local-Per-Solution Pattern)
 
-Roslyn Sentinel is optimized when installed **locally per solution** or per logical group of solutions. This ensures the AI agent always has a dedicated "expert" daemon for that specific codebase.
+Roslyn Sentinel is optimized when installed **locally per solution**. This ensures the AI agent always has a dedicated "expert" daemon for that specific codebase.
 
 1.  **Clone & Publish**:
     ```bash
@@ -29,6 +34,11 @@ Roslyn Sentinel is optimized when installed **locally per solution** or per logi
 ---
 
 ## ⚙️ Configuration for AI Agents
+
+### **Feature Toggles**
+Use these tools to customize the server's analytical footprint:
+- `list_features()`: See all 40+ rules and their current status.
+- `update_features(updates)`: Batch enable or disable rules (e.g., `[{"Key": "BoxingAllocation", "Value": false}]`).
 
 ### **Claude Desktop**
 Add to `%APPDATA%\Claude\claude_desktop_config.json`:
@@ -48,31 +58,6 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json`:
 }
 ```
 
-### **Windsurf / Cursor**
-Most agents support `stdio`. If you are running multiple solutions simultaneously, give each instance a **unique name** in the config to avoid context collision.
-
----
-
-## 🌐 Advanced: Running as a Service (SSE)
-
-If you prefer to run Roslyn Sentinel as a background service accessible via HTTP (SSE transport), use the `--port` argument. This is ideal for shared development environments or when multiple agents need access to the same "hot" solution.
-
-**Start the Service:**
-```bash
-./RoslynSentinel.Server.exe --port=5001 --solution="C:/repos/ProjectA/ProjectA.sln"
-```
-
-**Connect (Claude Config Example):**
-```json
-{
-  "mcpServers": {
-    "roslyn-project-a": {
-      "url": "http://localhost:5001/mcp"
-    }
-  }
-}
-```
-
 ---
 
 ## ⌨️ Command Line Arguments
@@ -81,21 +66,20 @@ If you prefer to run Roslyn Sentinel as a background service accessible via HTTP
 | :--- | :--- | :--- |
 | `--solution=[path]` | Automatically loads the specified .sln or .csproj on startup. | None |
 | `--mode=[modes]` | Comma-separated list of toolsets (Workspace, Intelligence, Refactor, Modernize, Quality, Generation). | `all` |
-| `--port=[number]` | Switches transport to SSE on the specified port. | Stdio |
-| `--host=[address]` | The host address for SSE transport. | `localhost` |
+| `--port=[number]` | Switches transport to SSE (HTTP) on the specified port. | Stdio |
 
 ---
 
 ## 🤖 AI Workflow (The Safety Loop)
 
-1.  **Diagnostic**: `get_comprehensive_health_report(engines: ["Modernization", "Safety"])`
-2.  **Analysis**: `get_blast_radius(filePath: "...", line: 10, column: 5)`
-3.  **Propose**: `validate_proposed_diff(filePath: "...", diff: "...")`
-4.  **Sync**: `acknowledge_sync()` after manual edits.
+1.  **Diagnostic**: `get_comprehensive_health_report(limit: 10, offset: 0)`
+2.  **Toggle**: `update_features([{"Key": "MultiTypeFile", "Value": false}])` if noise is too high.
+3.  **Refactor**: `replace_member(filePath: "...", memberName: "MyMethod", newSource: "...")`
+4.  **Sync**: `acknowledge_sync()` after any manual file system changes.
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by 150+ functional tests.
+Roslyn Sentinel is backed by a robust suite of 142+ functional and integration tests.
 ```bash
 dotnet test
 ```

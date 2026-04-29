@@ -11,13 +11,15 @@ public class SentinelRefactoringTools
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
     private readonly AdvancedStructuralEngine _advancedStructuralEngine;
     private readonly MappingEngine _mappingEngine;
-    private readonly SemanticRefactoringLibrary _semanticRefinementLibrary;
+    private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
     private readonly AdvancedLogicEngine _advancedLogicEngine;
     private readonly RefinementEngine _refinementEngine;
     private readonly AdvancedTypeEngine _advancedTypeEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
+    private readonly CodeStyleEngine _codeStyleEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
 
     public SentinelRefactoringTools(
@@ -25,26 +27,30 @@ public class SentinelRefactoringTools
         StandardRefactoringEngine standardRefactoringEngine,
         AdvancedStructuralEngine advancedStructuralEngine,
         MappingEngine mappingEngine,
-        SemanticRefactoringLibrary semanticRefinementLibrary,
+        SemanticRefactoringLibrary semanticRefactoringLibrary,
         GranularRefactoringEngine granularRefactoringEngine,
         AdvancedLogicEngine advancedLogicEngine,
         RefinementEngine refinementEngine,
         AdvancedTypeEngine advancedTypeEngine,
         StructuralRefinementEngine structuralRefinementEngine,
+        CodeStyleEngine codeStyleEngine,
         PersistentWorkspaceManager workspaceManager,
+        SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
         _standardRefactoringEngine = standardRefactoringEngine;
         _advancedStructuralEngine = advancedStructuralEngine;
         _mappingEngine = mappingEngine;
-        _semanticRefinementLibrary = semanticRefinementLibrary;
+        _semanticRefactoringLibrary = semanticRefactoringLibrary;
         _granularRefactoringEngine = granularRefactoringEngine;
         _advancedLogicEngine = advancedLogicEngine;
         _refinementEngine = refinementEngine;
         _advancedTypeEngine = advancedTypeEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
+        _codeStyleEngine = codeStyleEngine;
         _workspaceManager = workspaceManager;
+        _config = config;
         _logger = logger;
     }
 
@@ -164,7 +170,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Wraps a range of code in a using statement for an IDisposable object.")]
     public async Task<string> WrapInUsing(string filePath, int startLine, int endLine, string disposalName) 
-        => await _semanticRefinementLibrary.WrapInUsingAsync(filePath, startLine, endLine, disposalName);
+        => await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, disposalName);
 
     [McpServerTool]
     [Description("Converts an anonymous object creation to a formal named class.")]
@@ -184,12 +190,12 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Inlines a local temporary variable into all its usages within the scope.")]
     public async Task<string> InlineVariable(string filePath, string variableName) 
-        => await _semanticRefinementLibrary.InlineVariableAsync(filePath, variableName);
+        => await _semanticRefactoringLibrary.InlineVariableAsync(filePath, variableName);
 
     [McpServerTool]
     [Description("Converts a property into formal GetX() and SetX() methods.")]
-    public async Task<string> ConvertPropertyToMethods(string filePath, string className, string propertyName) 
-        => await _semanticRefinementLibrary.ConvertPropertyToMethodsAsync(filePath, className, propertyName);
+    public async Task<string> ConvertPropertyToMethods(string filePath, string propertyName) 
+        => await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propertyName);
 
     [McpServerTool]
     [Description("Extracts specific members from a class into a new separate class.")]
@@ -210,4 +216,19 @@ public class SentinelRefactoringTools
     [Description("Moves a nested type out to the containing namespace scope.")]
     public async Task<string> MoveTypeToOuterScope(string filePath, string typeName) 
         => await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
+
+    [McpServerTool]
+    [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
+    public async Task<string> ReplaceMember(string filePath, string memberName, string newSource) 
+        => await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
+
+    [McpServerTool]
+    [Description("Adds a new member (method, field, etc.) to an existing class or interface.")]
+    public async Task<string> AddMemberToClass(string filePath, string containerName, string newMemberSource) 
+        => await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
+
+    [McpServerTool]
+    [Description("Removes a specific member from a class or interface by name.")]
+    public async Task<string> RemoveMember(string filePath, string memberName) 
+        => await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
 }

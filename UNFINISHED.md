@@ -3,22 +3,23 @@
 The following advanced capabilities require deep data-flow analysis or cross-file AST rewriting that is currently in the architectural planning phase.
 
 ## Advanced AST Refactoring
-- `InvertBooleanLogic`: Inverts the meaning of a boolean variable and automatically updates all its logical usages solution-wide.
-- `FlattenIfsToSwitch`: Flattens complex, deeply nested if/else chains into modern switch expressions.
 - `PullUpMember` / `PushDownMember`: Moves members through type hierarchies with reference updates.
-- `InlineMethod`: Replaces all call sites with the method's body while managing scope and variable naming.
-- `ConvertPropertyToMethods`: Converts properties to formal Get/Set pairs for legacy API compatibility.
+- `InlineMethod` (Deep): Replaces all call sites with the method's body while managing scope, parameters, and variable naming for complex methods.
+- `OrganizeImports`: Groups and sorts using directives globally across the solution based on custom rules.
 
 ## High-Level Optimization
 - `UseSpanForParsing`: Automatically upgrades string manipulation logic to use `Span<char>` and `Memory<T>` for zero-allocation parsing.
 - `AutoParallelize`: Identifies sequential data processing loops that can be safely converted to `Parallel.ForEach` or `Task.WhenAll`.
+- `VectorizeLoop`: Suggests using SIMD (System.Runtime.Intrinsics) for compute-heavy numerical loops.
 
 ## Advanced Dependency Analysis
-- `FindUnusedReferences`: Identifies NuGet package references in a project that are not actually being used by any code.
-- `CheckPackageInconsistency`: Detects and resolves version conflicts for shared dependencies across 50+ projects.
+- `VisualDependencyGraph`: Generates a Mermaid.js or Graphviz representation of the project dependency tree.
 
 ---
-*Note: Many previous "Unfinished" items (SafeDelete, TimeProvider, Collection Expressions, Circular Dependencies, Boxing detection) have been moved into the core high-performance engine suite and are now fully functional.*
+*Note: The following items have been promoted to the core engine suite and are now fully functional:*
+*   **Logical**: `InvertBooleanLogic`, `FlattenIfsToSwitch`, `ConvertPropertyToMethods`.
+*   **Dependency**: `CheckPackageInconsistency`, `FindUnusedReferences`.
+*   **Modernization**: `LockModernization (.NET 10)`, `FieldBackedProperties (C# 14)`, `ImplicitSpanCleanup`, `SafeDelete`.
 
 ## 🚀 Future Architectural Vision: Intent-Based AST Commands
 
@@ -43,19 +44,7 @@ Instead of re-emitting code, the AI provides a structured manifest of logical ch
       "member": "ProcessOrder", 
       "param": "order", 
       "type": "NullCheck" 
-    },
-    { 
-      "op": "WrapInTryCatch", 
-      "member": "ProcessOrder", 
-      "exception": "OrderException", 
-      "logInside": "_logger.LogError(ex, \"Order failed\")" 
     }
   ]
 }
 ```
-
-### Advantages for AI Agents:
-1.  **Zero Syntax Errors**: The AI never writes a semicolon or brace; Roslyn generates them.
-2.  **Token Efficiency**: Only the *delta* is transmitted, not the entire method body.
-3.  **Automatic Formatting**: Uses the project's existing `.editorconfig` rules automatically.
-4.  **Trivia Safety**: Comments and doc-strings are never "eaten" or displaced.

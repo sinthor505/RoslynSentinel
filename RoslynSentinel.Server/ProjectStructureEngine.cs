@@ -7,10 +7,12 @@ namespace RoslynSentinel.Server;
 public class ProjectStructureEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
 
-    public ProjectStructureEngine(PersistentWorkspaceManager workspaceManager)
+    public ProjectStructureEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
     public async Task<string> FixMismatchedNamespacesAsync(string filePath, CancellationToken cancellationToken = default)
@@ -97,7 +99,7 @@ public class ProjectStructureEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
 
-        var projects = solution.Projects;
+        var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
         {
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
@@ -120,12 +122,12 @@ public class ProjectStructureEngine
                     .Where(t => t is ClassDeclarationSyntax || t is InterfaceDeclarationSyntax || t is RecordDeclarationSyntax || t is StructDeclarationSyntax || t is EnumDeclarationSyntax)
                     .ToList();
                 
-                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.MultiType) && types.Count > 1)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.MultiType) && _config.IsFeatureEnabled("MultiTypeFile") && types.Count > 1)
                 {
                     results.Add($"[MULTI_TYPE] File '{document.Name}' in project '{project.Name}' contains {types.Count} type declarations.");
                 }
 
-                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && types.Count > 0)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && _config.IsFeatureEnabled("NameMismatch") && types.Count > 0)
                 {
                     var primaryType = types[0].Identifier.Text;
                     var fileName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
@@ -135,7 +137,7 @@ public class ProjectStructureEngine
                     }
                 }
 
-                if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameofCandidate)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameofCandidate) && _config.IsFeatureEnabled("UnboundNameof"))
                 {
                     var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
                     if (semanticModel != null)
@@ -158,7 +160,7 @@ public class ProjectStructureEngine
                     }
                 }
 
-                if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.LegacyGuardClause)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.LegacyGuardClause) && _config.IsFeatureEnabled("ModernGuardClauses"))
                 {
                     var ifs = root.DescendantNodes().OfType<IfStatementSyntax>();
                     foreach (var ifStmt in ifs)
@@ -195,13 +197,17 @@ public class ProjectStructureEngine
                 
                 if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.Verbosity)
                 {
-                    var objCreations = root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
-                    foreach (var oce in objCreations)
+                    // Target-typed new
+                    if (_config.IsFeatureEnabled("RedundantTypeSpecification"))
                     {
-                        if (oce.Parent is VariableDeclarationSyntax vds && vds.Type.ToString() == oce.Type.ToString())
+                        var objCreations = root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
+                        foreach (var oce in objCreations)
                         {
-                            var line = oce.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                            results.Add($"[VERBOSITY] Redundant type specification in '{document.Name}' (Line {line}). Use 'new()' for target-typed object creation.");
+                            if (oce.Parent is VariableDeclarationSyntax vds && vds.Type.ToString() == oce.Type.ToString())
+                            {
+                                var line = oce.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                                results.Add($"[VERBOSITY] Redundant type specification in '{document.Name}' (Line {line}). Use 'new()' for target-typed object creation.");
+                            }
                         }
                     }
 
@@ -228,7 +234,7 @@ public class ProjectStructureEngine
                     }
                 }
 
-                if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.ThreadSafety)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.ThreadSafety) && _config.IsFeatureEnabled("ThreadSafety"))
                 {
                     var locks = root.DescendantNodes().OfType<LockStatementSyntax>();
                     foreach (var lockStmt in locks)
@@ -254,7 +260,7 @@ public class ProjectStructureEngine
                     }
                 }
 
-                if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.TimeAbstraction)
+                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.TimeAbstraction) && _config.IsFeatureEnabled("TimeAbstraction"))
                 {
                     var timeCalls = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
                         .Where(m => m.Expression.ToString() == "DateTime" && m.Name.Identifier.Text is "Now" or "UtcNow" or "Today");

@@ -14,6 +14,7 @@ public class SentinelWorkspaceTools
     private readonly SolutionManagementEngine _solutionManagementEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly DependencyEngine _dependencyEngine;
+    private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
 
     public SentinelWorkspaceTools(
@@ -24,6 +25,7 @@ public class SentinelWorkspaceTools
         SolutionManagementEngine solutionManagementEngine,
         StructuralRefinementEngine structuralRefinementEngine,
         DependencyEngine dependencyEngine,
+        SentinelConfiguration config,
         ILogger<SentinelWorkspaceTools> logger)
     {
         _workspaceManager = workspaceManager;
@@ -33,8 +35,26 @@ public class SentinelWorkspaceTools
         _solutionManagementEngine = solutionManagementEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _dependencyEngine = dependencyEngine;
+        _config = config;
         _logger = logger;
     }
+
+    [McpServerTool]
+    [Description("Lists all available analysis/refactoring features and their current enabled status.")]
+    public List<KeyValuePair<string, bool>> ListFeatures() => _config.GetFeatureStatuses();
+
+    [McpServerTool]
+    [Description("Batch updates the enabled status of one or more features.")]
+    public string UpdateFeatures(List<KeyValuePair<string, bool>> updates)
+    {
+        _config.BatchUpdateFeatureStatus(updates);
+        return $"Updated {updates.Count} features.";
+    }
+
+    [McpServerTool]
+    [Description("Gets the enabled status of specific features by name.")]
+    public List<KeyValuePair<string, bool>> GetFeatureStatus(List<string> featureNames)
+        => _config.GetFeatureStatuses(featureNames);
 
     [McpServerTool]
     [Description("Lists all projects in the current solution.")]

@@ -15,8 +15,8 @@ public class GranularFilteringTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
         _metricsEngine = new MetricsEngine(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjectA", new[] {
@@ -24,12 +24,10 @@ public class GranularFilteringTests
             ("File2.cs", "namespace App; public class Mismatch {}")
         });
         
-        // Add another project
         var projectIdB = ProjectId.CreateNewId();
         solution = solution.AddProject(projectIdB, "ProjectB", "ProjectB", LanguageNames.CSharp);
         var documentIdB = DocumentId.CreateNewId(projectIdB);
         solution = solution.AddDocument(documentIdB, "File3.cs", "namespace App; public class C3 {}");
-
 
         _workspaceManager.SetTestSolution(solution);
     }

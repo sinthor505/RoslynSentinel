@@ -16,9 +16,10 @@ public class ModernizationTests
     [SetUp]
     public void Setup()
     {
+        var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _modernEngine = new ModernizationEngine(_workspaceManager);
-        _styleEngine = new CodeStyleEngine(_workspaceManager);
+        _modernEngine = new ModernizationEngine(_workspaceManager, config);
+        _styleEngine = new CodeStyleEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
     }
 

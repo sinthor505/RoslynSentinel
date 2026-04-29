@@ -15,7 +15,7 @@ public class StructureTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _engine = new ProjectStructureEngine(_workspaceManager);
+        _engine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]

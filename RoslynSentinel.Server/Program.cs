@@ -31,7 +31,8 @@ Log.Logger = new LoggerConfiguration()
 builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
 builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-// --- Register Engines ---
+// --- Register Infrastructure ---
+builder.Services.AddSingleton<SentinelConfiguration>(); // <--- Global Toggle Service
 builder.Services.AddSingleton<PersistentWorkspaceManager>();
 builder.Services.AddSingleton<DiffEngine>();
 builder.Services.AddSingleton<ValidationEngine>();
@@ -84,20 +85,7 @@ builder.Services.AddSingleton<ControlFlowEngine>();
 builder.Services.AddSingleton<HealthOrchestrationEngine>();
 
 // --- Configure MCP Server Transport ---
-var mcpBuilder = builder.Services.AddMcpServer();
-
-if (!string.IsNullOrEmpty(portArg) && int.TryParse(portArg, out var port))
-{
-    // SSE Transport (Web Server)
-    mcpBuilder.WithSseServerTransport(options => {
-        options.Url = $"http://{hostArg}:{port}/mcp";
-    });
-}
-else
-{
-    // Default Stdio Transport
-    mcpBuilder.WithStdioServerTransport();
-}
+var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
 
 // --- Tool Registration ---
 if (activeModes.Contains("Workspace")) 
@@ -139,12 +127,9 @@ if (!string.IsNullOrEmpty(solutionPath))
 {
     var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
     logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
-    // Running fire-and-forget but logged. The manager handles its own async initialization.
     _ = workspaceManager.LoadSolutionAsync(solutionPath);
 }
 
-logger.LogInformation("Roslyn Sentinel MCP Server starting. Transport: {Transport}. Modes: {Modes}", 
-    string.IsNullOrEmpty(portArg) ? "Stdio" : $"SSE ({hostArg}:{portArg})", 
-    string.Join(", ", activeModes));
+logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes}", string.Join(", ", activeModes));
 
 await host.RunAsync();

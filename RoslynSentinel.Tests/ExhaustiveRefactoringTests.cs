@@ -14,9 +14,10 @@ public class ExhaustiveRefactoringTests
     [SetUp]
     public void Setup()
     {
+        var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
-        _codeStyleEngine = new CodeStyleEngine(_workspaceManager);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -82,13 +83,14 @@ public class C {
     [Test]
     public async Task ClassToRecord_ShouldHandleAttributesAndMethods()
     {
+        var config = new SentinelConfiguration();
         SetSource(@"
 public class MyPoco {
     [Required]
     public string Name { get; set; }
     public void DoWork() {}
 }");
-        var modernizationEngine = new ModernizationEngine(_workspaceManager);
+        var modernizationEngine = new ModernizationEngine(_workspaceManager, config);
         var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
         Assert.That(result, Contains.Substring("public record MyPoco(string Name)"));
         Assert.That(result, Contains.Substring("public void DoWork()"));

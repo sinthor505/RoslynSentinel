@@ -17,10 +17,11 @@ public class QualityTests
     [SetUp]
     public void Setup()
     {
+        var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _logicEngine = new LogicOptimizationEngine(_workspaceManager);
         _perfEngine = new PerformanceEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager);
+        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
     }
 

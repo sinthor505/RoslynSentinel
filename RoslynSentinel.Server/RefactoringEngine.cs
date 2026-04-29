@@ -700,6 +700,96 @@ public class RefactoringEngine
         var newRoot = root.RemoveNode(node, SyntaxRemoveOptions.KeepNoTrivia)!;
         return new Dictionary<string, string> { { filePath, newRoot.ToFullString() } };
     }
+
+    /// <summary>
+    /// Replaces a specific member (method, property, class, etc.) in a file by name.
+    /// </summary>
+    public async Task<string> ReplaceMemberAsync(string filePath, string memberName, string newSource, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var member = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == memberName);
+
+        if (member == null) throw new Exception($"Member '{memberName}' not found in {filePath}.");
+
+        var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
+        if (newMember == null) throw new Exception("Could not parse the new member source code.");
+
+        var newRoot = root.ReplaceNode(member, newMember);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    /// <summary>
+    /// Adds a new member to an existing class or interface.
+    /// </summary>
+    public async Task<string> AddMemberAsync(string filePath, string containerName, string newMemberSource, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var container = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == containerName);
+
+        if (container == null) throw new Exception($"Container '{containerName}' not found.");
+
+        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
+        if (newMember == null) throw new Exception("Could not parse the new member source.");
+
+        var newContainer = container switch
+        {
+            ClassDeclarationSyntax c => (BaseTypeDeclarationSyntax)c.AddMembers(newMember),
+            InterfaceDeclarationSyntax i => (BaseTypeDeclarationSyntax)i.AddMembers(newMember),
+            StructDeclarationSyntax s => (BaseTypeDeclarationSyntax)s.AddMembers(newMember),
+            RecordDeclarationSyntax r => (BaseTypeDeclarationSyntax)r.AddMembers(newMember),
+            _ => throw new Exception("Unsupported container type.")
+        };
+
+        var newRoot = root.ReplaceNode(container, newContainer);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    /// <summary>
+    /// Removes a member from a class/interface by name.
+    /// </summary>
+    public async Task<string> RemoveMemberAsync(string filePath, string memberName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == memberName);
+
+        if (member == null) throw new Exception($"Member '{memberName}' not found.");
+
+        var newRoot = root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia);
+        return newRoot?.NormalizeWhitespace().ToFullString() ?? "";
+    }
+
+    private string? GetMemberName(MemberDeclarationSyntax member)
+    {
+        return member switch
+        {
+            MethodDeclarationSyntax m => m.Identifier.Text,
+            PropertyDeclarationSyntax p => p.Identifier.Text,
+            ClassDeclarationSyntax c => c.Identifier.Text,
+            InterfaceDeclarationSyntax i => i.Identifier.Text,
+            FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
+            ConstructorDeclarationSyntax ctor => ctor.Identifier.Text,
+            _ => null
+        };
+    }
 }
 
 

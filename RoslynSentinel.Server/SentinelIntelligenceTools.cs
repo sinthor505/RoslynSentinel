@@ -32,6 +32,7 @@ public class SentinelIntelligenceTools
         ProjectStructureEngine projectStructureEngine,
         AsyncSafetyEngine asyncSafetyEngine,
         HealthOrchestrationEngine healthOrchestrationEngine,
+        SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
         _impactAnalyzer = impactAnalyzer;
@@ -49,12 +50,15 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Generates a comprehensive health report. engines options: Structure, Modernization, Performance, Safety, Architecture. Scopes: projectName, filePath.")]
+    [Description("Generates a paged comprehensive health report. engines: Structure, Modernization, Performance, Safety, Architecture. offset/limit for project paging.")]
     public async Task<ComprehensiveHealthReport> GetComprehensiveHealthReport(
         List<HealthEngineType>? engines = null,
         string? projectName = null,
-        string? filePath = null) 
-        => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath);
+        string? filePath = null,
+        int offset = 0,
+        int limit = 10,
+        int timeoutSeconds = 25) 
+        => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
 
     [McpServerTool]
     [Description("Gets the blast radius (impact analysis) of a change to a symbol at a specific location.")]

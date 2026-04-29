@@ -16,16 +16,18 @@ public record InterfaceCandidateReport(string FilePath, string ClassName, List<s
 public class AnalysisEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
 
-    public AnalysisEngine(PersistentWorkspaceManager workspaceManager)
+    public AnalysisEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
     private async Task<IEnumerable<(Document Document, SyntaxNode Root, SemanticModel? SemanticModel)>> GetTargetDocumentsAsync(
         Solution solution, string? projectName, string? filePath, bool includeSemantic = false, CancellationToken ct = default)
     {
-        var projects = solution.Projects;
+        var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
         {
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
@@ -34,7 +36,7 @@ public class AnalysisEngine
         var documentList = new List<(Document, SyntaxNode, SemanticModel?)>();
         foreach (var project in projects)
         {
-            var docs = project.Documents;
+            var docs = project.Documents.AsEnumerable();
             if (!string.IsNullOrEmpty(filePath))
             {
                 docs = docs.Where(d => d.Name == filePath || d.FilePath == filePath || (d.FilePath != null && d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase)));
@@ -53,6 +55,7 @@ public class AnalysisEngine
 
     public async Task<List<LargeTypeReport>> FindLargeTypesAsync(int maxLines = 500, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("LargeTypes")) return new List<LargeTypeReport>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var reports = new List<LargeTypeReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -74,6 +77,7 @@ public class AnalysisEngine
 
     public async Task<List<LargeMethodReport>> FindLargeMethodsAsync(int maxLines = 50, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("LargeMethods")) return new List<LargeMethodReport>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var reports = new List<LargeMethodReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -96,6 +100,7 @@ public class AnalysisEngine
 
     public async Task<List<DuplicateMethodGroup>> FindDuplicateMethodsAsync(int minStatements = 5, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("DuplicateMethods")) return new List<DuplicateMethodGroup>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var methodHashes = new Dictionary<string, List<MethodLocation>>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -123,6 +128,7 @@ public class AnalysisEngine
 
     public async Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidatesAsync(int minPublicMethods = 3, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("UnusedInterfaces")) return new List<InterfaceCandidateReport>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var candidates = new List<InterfaceCandidateReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -149,6 +155,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectLongParameterListsAsync(int threshold = 5, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("LongParameterLists")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -168,6 +175,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindUninstantiatedTypesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("UninstantiatedTypes")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var instantiatedTypes = new HashSet<string>();
         var declaredTypes = new List<(string Name, string Document)>();
@@ -292,11 +300,13 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectMemoryLeaksAsync(string filePath, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("MemoryLeaks")) return new List<string>();
         return new List<string>();
     }
 
     public async Task<List<string>> AnalyzeSemaphoreUsageAsync(string filePath, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("SemaphoreLeaks")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
@@ -325,11 +335,36 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindInternalClassesThatCouldBePrivateAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        return new List<string>();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<string>();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
+
+        foreach (var target in targets)
+        {
+            if (target.SemanticModel == null) continue;
+            var internalClasses = target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                .Where(c => c.Modifiers.Any(m => m.IsKind(SyntaxKind.InternalKeyword)));
+
+            foreach (var @class in internalClasses)
+            {
+                var symbol = target.SemanticModel.GetDeclaredSymbol(@class, cancellationToken);
+                if (symbol != null)
+                {
+                    var refs = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+                    var uniqueFiles = refs.SelectMany(r => r.Locations).Select(l => l.Document.FilePath).Distinct().Count();
+                    if (uniqueFiles <= 1)
+                    {
+                        results.Add($"Internal class '{@class.Identifier.Text}' in {target.Document.Name} is only used in one file and could be made private.");
+                    }
+                }
+            }
+        }
+        return results;
     }
 
     public async Task<List<string>> DetectMismatchedAwaitAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("MismatchedAwait")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
@@ -353,6 +388,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> CheckForEmptyCatchBlocksAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("EmptyCatchBlocks")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -367,6 +403,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindLargeSwitchStatementsAsync(int threshold = 10, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("LargeSwitchStatements")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -384,6 +421,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> CheckForRedundantCastAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("RedundantCasts")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
@@ -409,6 +447,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> OptimizeResourceDisposalAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("ResourceDisposal")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
@@ -441,6 +480,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectReflectionUsageAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("ReflectionUsage")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -462,6 +502,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectInefficientStringComparisonsAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("InefficientStringComparison")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -484,6 +525,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindBoxingAllocationsAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("BoxingAllocation")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
@@ -491,23 +533,55 @@ public class AnalysisEngine
         foreach (var target in targets)
         {
             if (target.SemanticModel == null) continue;
+
+            // 1. Check Assignments (e.g. object o; o = 1;)
             var assignments = target.Root.DescendantNodes().OfType<AssignmentExpressionSyntax>();
             foreach (var assignment in assignments)
             {
                 var leftType = target.SemanticModel.GetTypeInfo(assignment.Left, cancellationToken).Type;
                 var rightType = target.SemanticModel.GetTypeInfo(assignment.Right, cancellationToken).Type;
 
-                if (leftType != null && leftType.SpecialType == SpecialType.System_Object && rightType != null && rightType.IsValueType)
+                if (IsBoxing(leftType, rightType))
                 {
-                    results.Add($"[PERF] Boxing allocation in {target.Document.Name} at line {assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Value type '{rightType.Name}' assigned to object.");
+                    results.Add($"[PERF] Boxing allocation in {target.Document.Name} at line {assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Value type '{rightType!.Name}' assigned to object.");
+                }
+            }
+
+            // 2. Check Variable Declarations (e.g. object o = 1;)
+            var declarators = target.Root.DescendantNodes().OfType<VariableDeclaratorSyntax>();
+            foreach (var declarator in declarators)
+            {
+                if (declarator.Initializer == null) continue;
+                
+                var symbol = target.SemanticModel.GetDeclaredSymbol(declarator, cancellationToken);
+                ITypeSymbol? leftType = null;
+
+                if (symbol is ILocalSymbol local) leftType = local.Type;
+                else if (symbol is IFieldSymbol field) leftType = field.Type;
+                
+                if (leftType != null)
+                {
+                    var rightType = target.SemanticModel.GetTypeInfo(declarator.Initializer.Value, cancellationToken).Type;
+
+                    if (IsBoxing(leftType, rightType))
+                    {
+                        results.Add($"[PERF] Boxing allocation in {target.Document.Name} at line {declarator.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Value type '{rightType!.Name}' assigned to object.");
+                    }
                 }
             }
         }
         return results;
     }
 
+    private bool IsBoxing(ITypeSymbol? left, ITypeSymbol? right)
+    {
+        if (left == null || right == null) return false;
+        return (left.SpecialType == SpecialType.System_Object || left.Name == "ValueType") && right.IsValueType;
+    }
+
     public async Task<List<string>> FindPossibleDeadlocksAsync(string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("Deadlocks")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -528,9 +602,10 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindUnusedInterfacesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("UnusedInterfaces")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
-        var projects = solution.Projects;
+        var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName)) projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
 
         foreach (var project in projects)

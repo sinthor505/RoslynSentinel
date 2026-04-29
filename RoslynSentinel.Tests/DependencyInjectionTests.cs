@@ -21,6 +21,7 @@ public class DependencyInjectionTests
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
 
         // 2. Register all engines (Copying logic from Program.cs)
+        services.AddSingleton<SentinelConfiguration>(); // <--- Added missing dependency
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<DiffEngine>();
         services.AddSingleton<ValidationEngine>();
@@ -106,9 +107,6 @@ public class DependencyInjectionTests
     [Test]
     public void DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable()
     {
-        // This test ensures that even if we add a new tool class in the future and 
-        // forget to add it to the list above, we still catch it.
-        
         var assembly = typeof(SentinelWorkspaceTools).Assembly;
         var toolTypes = assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() != null);

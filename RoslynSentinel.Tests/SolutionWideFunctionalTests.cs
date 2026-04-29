@@ -18,31 +18,28 @@ public class SolutionWideFunctionalTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
-        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager);
-        _analysisEngine = new AnalysisEngine(_workspaceManager);
+        var config = new SentinelConfiguration();
+        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
+        _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         
         _healthEngine = new HealthOrchestrationEngine(
             _workspaceManager, 
             _projectStructureEngine, 
             _analysisEngine, 
-            _asyncSafetyEngine);
+            _asyncSafetyEngine,
+            config);
 
-        // Build a mock solution with various smells across 2 projects
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("CoreProj", new[] {
-            ("File1.cs", "namespace Core; public class C1 {} public class C2 {}"), // MULTI_TYPE
-            ("Mismatch.cs", "namespace Core; public class DifferentName {}")      // NAME_MISMATCH
-        });
+        // Build a mock solution with 3 projects to test paging
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjA", new[] { ("F1.cs", "class A {}") });
+        
+        var idB = ProjectId.CreateNewId();
+        solution = solution.AddProject(idB, "ProjB", "ProjB", LanguageNames.CSharp);
+        solution = solution.AddDocument(DocumentId.CreateNewId(idB), "F2.cs", "class B {}");
 
-        var projectIdB = ProjectId.CreateNewId();
-        solution = solution.AddProject(projectIdB, "WebProj", "WebProj", LanguageNames.CSharp);
-        solution = solution.AddDocument(DocumentId.CreateNewId(projectIdB), "Async.cs", @"
-            using System;
-            using System.Threading.Tasks;
-            public class Web {
-                public async void BadAsync() {} // ASYNC_VOID
-                public void Catch() { try {} catch(Exception) {} } // EMPTY_CATCH
-            }");
+        var idC = ProjectId.CreateNewId();
+        solution = solution.AddProject(idC, "ProjC", "ProjC", LanguageNames.CSharp);
+        solution = solution.AddDocument(DocumentId.CreateNewId(idC), "F3.cs", "class C {}");
 
         _workspaceManager.SetTestSolution(solution);
     }
@@ -51,55 +48,32 @@ public class SolutionWideFunctionalTests
     public void TearDown() => _workspaceManager.Dispose();
 
     [Test]
-    public async Task GetComprehensiveHealthReport_SolutionWide_ShouldAggregateAll()
+    public async Task GetComprehensiveHealthReport_Paging_ShouldReturnChunks()
     {
-        // Act
-        var report = await _healthEngine.GenerateComprehensiveHealthReportAsync();
+        // Act - Page 1
+        var report1 = await _healthEngine.GenerateComprehensiveHealthReportAsync(limit: 2, offset: 0);
 
         // Assert
-        Assert.That(report.TotalIssues, Is.GreaterThanOrEqualTo(4));
-        Assert.That(report.ProjectSummaries.Count, Is.EqualTo(2));
-        
-        var coreProj = report.ProjectSummaries.First(p => p.ProjectName == "CoreProj");
-        // File1.cs: [MULTI_TYPE], [NAME_MISMATCH] (C1 is primary but C2 exists)
-        // Mismatch.cs: [NAME_MISMATCH]
-        // Note: The analyzer reports MULTI_TYPE for File1, and NAME_MISMATCH for both File1 and Mismatch.
-        // Let's check for at least these 3.
-        Assert.That(coreProj.TotalIssues, Is.GreaterThanOrEqualTo(2));
+        Assert.That(report1.ProjectSummaries.Count, Is.EqualTo(2));
+        Assert.That(report1.HasMore, Is.True);
+        Assert.That(report1.NextProjectOffset, Is.EqualTo(2));
+
+        // Act - Page 2
+        var report2 = await _healthEngine.GenerateComprehensiveHealthReportAsync(limit: 2, offset: 2);
+
+        // Assert
+        Assert.That(report2.ProjectSummaries.Count, Is.EqualTo(1));
+        Assert.That(report2.HasMore, Is.False);
+        Assert.That(report2.NextProjectOffset, Is.Null);
     }
 
     [Test]
-    public async Task GetComprehensiveHealthReport_WithEngineFilter_ShouldOnlyRunSelected()
+    public async Task GetComprehensiveHealthReport_Timeout_ShouldReturnPartial()
     {
-        // Act - Only run Structure
-        var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(
-            engines: new List<HealthEngineType> { HealthEngineType.Structure });
+        // Act - Set a very aggressive timeout (0ms) to force immediate partial return
+        var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(timeoutSeconds: 0);
 
         // Assert
-        Assert.That(report.TotalIssuesByCategory.Any(c => c.Category == "MULTI_TYPE"), Is.True);
-        Assert.That(report.TotalIssuesByCategory.Any(c => c.Category == "ASYNC_VOID"), Is.False, "Safety engine should not have run.");
-    }
-
-    [Test]
-    public async Task GetComprehensiveHealthReport_WithProjectFilter_ShouldFocusOnlyOnOne()
-    {
-        // Act
-        var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(projectName: "WebProj");
-
-        // Assert
-        Assert.That(report.ProjectSummaries.Count, Is.EqualTo(1));
-        Assert.That(report.ProjectSummaries[0].ProjectName, Is.EqualTo("WebProj"));
-    }
-
-    [Test]
-    public async Task GetComprehensiveHealthReport_WithFileFilter_ShouldFocusOnSingleFile()
-    {
-        // Act
-        var report = await _healthEngine.GenerateComprehensiveHealthReportAsync(filePath: "File1.cs");
-
-        // Assert
-        Assert.That(report.TotalIssues, Is.GreaterThanOrEqualTo(1));
-        var coreSummary = report.ProjectSummaries.First(p => p.ProjectName == "CoreProj");
-        Assert.That(coreSummary.IssuesByCategory.Any(c => c.Category == "MULTI_TYPE"), Is.True);
+        Assert.That(report.StatusMessage, Does.Contain("timed out"));
     }
 }

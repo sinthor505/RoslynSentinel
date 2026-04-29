@@ -32,6 +32,7 @@ public class SentinelModernizationTools
         CodeHealingEngine codeHealingEngine,
         AdvancedLogicEngine advancedLogicEngine,
         PersistentWorkspaceManager workspaceManager,
+        SentinelConfiguration config,
         ILogger<SentinelModernizationTools> logger)
     {
         _modernizationEngine = modernizationEngine;
@@ -73,6 +74,16 @@ public class SentinelModernizationTools
         => await _codeStyleEngine.UpgradeThreadSafetyAsync(filePath);
 
     [McpServerTool]
+    [Description("Replaces lock(this) or lock(typeof(T)) with a private readonly object lock.")]
+    public async Task<string> FixDangerousLock(string filePath) 
+        => await _codeStyleEngine.FixDangerousLockAsync(filePath);
+
+    [McpServerTool]
+    [Description("Wraps SemaphoreSlim.WaitAsync calls in a try-finally block with Release().")]
+    public async Task<string> EnsureSemaphoreFinally(string filePath) 
+        => await _codeStyleEngine.EnsureSemaphoreFinallyAsync(filePath);
+
+    [McpServerTool]
     [Description("Replaces direct DateTime usage with modern TimeProvider abstractions for testability.")]
     public async Task<string> UseTimeProvider(string filePath) 
         => await _codeStyleEngine.UseTimeProviderAsync(filePath);
@@ -95,6 +106,16 @@ public class SentinelModernizationTools
     [Description("Replaces hardcoded string literals with nameof() expressions where applicable.")]
     public async Task<string> UseNameofExpression(string filePath, int line, int column) 
         => await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, line, column);
+
+    [McpServerTool]
+    [Description("Upgrades properties with manual backing fields to modern C# 14 auto-properties using the 'field' keyword.")]
+    public async Task<string> UseFieldBackedProperties(string filePath) 
+        => await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
+
+    [McpServerTool]
+    [Description("Removes redundant .AsSpan() calls that are now handled natively by C# 14 implicit span conversions.")]
+    public async Task<string> CleanupImplicitSpans(string filePath) 
+        => await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
 
     [McpServerTool]
     [Description("Modernizes logging patterns to use source-generated Log messages or structured logging.")]
