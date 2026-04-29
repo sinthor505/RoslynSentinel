@@ -5,18 +5,23 @@ using ModelContextProtocol;
 using RoslynSentinel.Server;
 using Serilog;
 using Serilog.Extensions.Logging;
+using System.Linq;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Parse Modes from CLI (e.g. --mode Workspace,Intelligence or --mode all)
+// --- Command Line Argument Parsing ---
 var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
+var solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution="))?.Replace("--solution=", "");
+var portArg = args.FirstOrDefault(a => a.StartsWith("--port="))?.Replace("--port=", "");
+var hostArg = args.FirstOrDefault(a => a.StartsWith("--host="))?.Replace("--host=", "") ?? "localhost";
+
 var activeModes = modeArg.Equals("all", StringComparison.OrdinalIgnoreCase) 
     ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
     : modeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 Console.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
 
-// Configure Logging with Serilog directly
+// Configure Logging
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .Enrich.FromLogContext()
@@ -26,7 +31,7 @@ Log.Logger = new LoggerConfiguration()
 builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
 builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-// Register Infrastructure
+// --- Register Engines ---
 builder.Services.AddSingleton<PersistentWorkspaceManager>();
 builder.Services.AddSingleton<DiffEngine>();
 builder.Services.AddSingleton<ValidationEngine>();
@@ -78,10 +83,23 @@ builder.Services.AddSingleton<ApiAutomationEngine>();
 builder.Services.AddSingleton<ControlFlowEngine>();
 builder.Services.AddSingleton<HealthOrchestrationEngine>();
 
-// Configure MCP Server
-var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
+// --- Configure MCP Server Transport ---
+var mcpBuilder = builder.Services.AddMcpServer();
 
-// Focused Registration
+if (!string.IsNullOrEmpty(portArg) && int.TryParse(portArg, out var port))
+{
+    // SSE Transport (Web Server)
+    mcpBuilder.WithSseServerTransport(options => {
+        options.Url = $"http://{hostArg}:{port}/mcp";
+    });
+}
+else
+{
+    // Default Stdio Transport
+    mcpBuilder.WithStdioServerTransport();
+}
+
+// --- Tool Registration ---
 if (activeModes.Contains("Workspace")) 
 {
     builder.Services.AddSingleton<SentinelWorkspaceTools>();
@@ -115,6 +133,18 @@ if (activeModes.Contains("Generation"))
 
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
-logger.LogInformation("Roslyn Sentinel MCP Server v1.1.0 (Build: {BuildDate}) starting in modes: {Modes}", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC"), string.Join(", ", activeModes));
+
+// --- Auto-Load Solution if Provided ---
+if (!string.IsNullOrEmpty(solutionPath))
+{
+    var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
+    logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
+    // Running fire-and-forget but logged. The manager handles its own async initialization.
+    _ = workspaceManager.LoadSolutionAsync(solutionPath);
+}
+
+logger.LogInformation("Roslyn Sentinel MCP Server starting. Transport: {Transport}. Modes: {Modes}", 
+    string.IsNullOrEmpty(portArg) ? "Stdio" : $"SSE ({hostArg}:{portArg})", 
+    string.Join(", ", activeModes));
 
 await host.RunAsync();
