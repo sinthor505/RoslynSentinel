@@ -1105,7 +1105,7 @@ public class C
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("42") + 1;
 
-        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", line, col, "_answer");
+        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
 
         Assert.That(result, Does.Contain("_answer"), "New field name must appear in output.");
         Assert.That(result, Does.Contain("private"), "Extracted field must be private.");
@@ -1118,8 +1118,8 @@ public class C
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
 
-        // Column 1 points to 'p' in 'public' — no expression there
-        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", 1, 1, "_f");
+        // Snippet points to class declaration — no expression there; graceful fallback returns original
+        var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "public class C", "_f");
 
         // Should return the original source unchanged (graceful fallback)
         Assert.That(result, Is.Not.Null.And.Not.Empty);
@@ -1144,7 +1144,7 @@ public class C
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("30") + 1;
 
-        var result = await _granularRefactoringEngine.IntroduceParameterAsync("C.cs", line, col, "timeoutMs");
+        var result = await _granularRefactoringEngine.IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
 
         Assert.That(result, Does.Contain("timeoutMs"), "New parameter name must appear.");
         Assert.That(result, Does.Contain("M("), "Method M signature must be present.");
@@ -1169,7 +1169,7 @@ public class C
         var lines = source.Split('\n');
         int col = lines[line - 1].IndexOf("6") + 1;
 
-        var result = await _granularRefactoringEngine.IntroduceVariableAsync("C.cs", line, col, "product");
+        var result = await _granularRefactoringEngine.IntroduceVariableAsync("C.cs", "6 * 7", "product");
 
         Assert.That(result, Does.Contain("product"), "Extracted variable name must appear.");
         Assert.That(result, Does.Contain("var"), "Local variable should be declared with var.");

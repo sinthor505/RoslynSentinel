@@ -96,7 +96,7 @@ public class GranularRefactoringEngine
         return root?.ToFullString() ?? "";
     }
 
-    public async Task<string> IntroduceFieldAsync(string filePath, int line, int column, string newFieldName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -105,8 +105,8 @@ public class GranularRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return "";
 
-        var text = await document.GetTextAsync(cancellationToken);
-        var position = text.Lines[line - 1].Start + (column - 1);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();
@@ -148,7 +148,7 @@ public class GranularRefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> IntroduceParameterAsync(string filePath, int line, int column, string newParamName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, CancellationToken cancellationToken = default)
     {
         // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -158,8 +158,8 @@ public class GranularRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return "";
 
-        var text = await document.GetTextAsync(cancellationToken);
-        var position = text.Lines[line - 1].Start + (column - 1);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();
@@ -194,7 +194,7 @@ public class GranularRefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> IntroduceVariableAsync(string filePath, int line, int column, string newVariableName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceVariableAsync(string filePath, string contextSnippet, string newVariableName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -203,8 +203,8 @@ public class GranularRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return "";
 
-        var text = await document.GetTextAsync(cancellationToken);
-        var position = text.Lines[line - 1].Start + (column - 1);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();

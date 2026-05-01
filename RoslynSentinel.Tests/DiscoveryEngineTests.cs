@@ -389,7 +389,7 @@ public class MyService
         SetSource("public class MyService\n{\n    public void MyMethod() { }\n}", "MyService.cs");
 
         var preview = await _discoveryEngine.PreviewRenameImpactAsync(
-            "MyService.cs", "MyMethod", line: 3, column: 17);
+            "MyService.cs", "MyMethod", contextSnippet: "public void MyMethod()");
 
         Assert.That(preview.SymbolName, Is.EqualTo("MyMethod"),
             "SymbolName should reflect the name passed in.");
@@ -417,7 +417,7 @@ public class MyService
 
         // In Helper.cs, line 3, column 17 → 'E' in Execute
         var preview = await _discoveryEngine.PreviewRenameImpactAsync(
-            "Helper.cs", "Execute", line: 3, column: 17);
+            "Helper.cs", "Execute", contextSnippet: "public void Execute()");
 
         Assert.That(preview.SymbolName, Is.EqualTo("Execute"));
         // There is at least one reference in Consumer.cs (the call site)
@@ -436,7 +436,7 @@ public class MyService
         SetSource("public class Service\n{\n    private void Unused() { }\n}", "Service.cs");
 
         var preview = await _discoveryEngine.PreviewRenameImpactAsync(
-            "Service.cs", "Unused", line: 3, column: 18);
+            "Service.cs", "Unused", contextSnippet: "private void Unused()");
 
         // TotalReferences = count of call-site references (not the declaration itself)
         Assert.That(preview.TotalReferences, Is.EqualTo(0),

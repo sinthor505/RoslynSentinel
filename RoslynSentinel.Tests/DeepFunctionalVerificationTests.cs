@@ -84,7 +84,7 @@ public class Service {
         var col = sourceText.IndexOf("DeadMethod") + 1; // 1-based column
 
         var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => 
-            await _refactoringEngine.SafeDeleteSymbolAsync("Target.cs", 1, col));
+            await _refactoringEngine.SafeDeleteSymbolAsync("Target.cs", "public void DeadMethod()"));
         
         Assert.That(ex.Message, Does.Contain("Potential Reflection Risk"));
         Assert.That(ex.Message, Does.Contain("Caller.cs"));
@@ -117,7 +117,7 @@ public class MyType {
 }");
 
         // Act
-        var result = await _syntaxUpgradeEngine.UseNameofExpressionAsync("Test.cs", 4, 18);
+        var result = await _syntaxUpgradeEngine.UseNameofExpressionAsync("Test.cs", "\"MyType\"");
 
         // Assert
         Assert.That(result, Contains.Substring("var s = nameof(MyType);"));

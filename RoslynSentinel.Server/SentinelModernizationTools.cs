@@ -80,9 +80,9 @@ public class SentinelModernizationTools
         => await _codeStyleEngine.UseIndexFromEndAsync(filePath);
 
     [McpServerTool]
-    [Description("IDE0340: Upgrades nameof(List<int>) to modern C# 14 nameof(List<>).")]
-    public async Task<string> UpgradeUnboundNameof(string filePath, int line, int column) 
-        => await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, line, column);
+    [Description("IDE0340: Upgrades nameof(List<int>) to modern C# 14 nameof(List<>). Provide contextSnippet: the verbatim nameof expression text.")]
+    public async Task<string> UpgradeUnboundNameof(string filePath, string contextSnippet) 
+        => await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, contextSnippet);
 
     [McpServerTool]
     [Description("C# 14: Upgrades manual backing fields to modern 'field' keyword auto-properties.")]

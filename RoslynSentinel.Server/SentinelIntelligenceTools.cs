@@ -73,9 +73,9 @@ public class SentinelIntelligenceTools
         => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
 
     [McpServerTool]
-    [Description("Gets the blast radius (impact analysis) of a change to a symbol at a specific location.")]
-    public async Task<ImpactReport> GetBlastRadius(string filePath, int line, int column) 
-        => await _impactAnalyzer.AnalyzeImpactAsync(filePath, line, column);
+    [Description("Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Returns all call sites and affected projects.")]
+    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet) 
+        => await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet);
 
     [McpServerTool]
     [Description("Finds all methods in the solution that return a specific type.")]
@@ -181,9 +181,9 @@ public async Task<List<string>> FindStructuralSmells(
         => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath);
 
     [McpServerTool]
-    [Description("Returns hover-style symbol info at a file position: kind, full signature, containing type/namespace, XML doc summary, accessibility, and definition location.")]
-    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, int line, int column)
-        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, line, column);
+    [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration.")]
+    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, string contextSnippet)
+        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet);
 
     [McpServerTool]
     [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
@@ -299,7 +299,7 @@ public async Task<List<string>> FindStructuralSmells(
         => await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
 
     [McpServerTool]
-    [Description("Returns a rename impact preview: total references, files affected, whether test files are affected, and the affected file paths. Read-only — makes no changes.")]
-    public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, int line, int column)
-        => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, line, column);
+    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate.")]
+    public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null)
+        => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet);
 }

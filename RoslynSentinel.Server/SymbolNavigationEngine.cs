@@ -96,7 +96,7 @@ public class SymbolNavigationEngine
         _logger = logger;
     }
 
-    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, int line, int column, CancellationToken ct = default)
+    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -104,8 +104,7 @@ public class SymbolNavigationEngine
         if (document == null) return null;
 
         var text = await document.GetTextAsync(ct);
-        if (line < 1 || line > text.Lines.Count) return null;
-        var pos = text.Lines[line - 1].Start + Math.Max(0, column - 1);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
 
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;

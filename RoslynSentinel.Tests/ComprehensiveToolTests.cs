@@ -162,7 +162,7 @@ public class ComprehensiveToolTests
     {
         var source = "public class C { public void M() {} }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var report = await _intelligenceTools.GetBlastRadius("C.cs", 1, 30);
+        var report = await _intelligenceTools.GetBlastRadius("C.cs", "public void M()");
         Assert.That(report, Is.Not.Null);
     }
 

@@ -30,6 +30,26 @@ public record RenameSymbolResult(
     List<RenameFileChange> FileChanges,
     string? Error = null);
 
+public record ControlFlowSummary(
+    string MethodName,
+    bool AlwaysReturns,
+    bool SometimesReturns,
+    bool NeverReturns,
+    List<string> ReturnPoints,
+    List<string> ThrowPoints,
+    int ExitPathCount
+);
+
+public record DataFlowSummary(
+    string MethodName,
+    List<string> ReadBeforeAssignment,
+    List<string> WrittenInside,
+    List<string> ReadInside,
+    List<string> WrittenOutside,
+    List<string> CapturedVariables,
+    List<string> DataFlowWarnings
+);
+
 public class RefactoringEngine
 {
     private readonly ILogger<RefactoringEngine> _logger;
@@ -693,7 +713,7 @@ public class RefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, int line, int column, CancellationToken ct = default)
+    public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("SafeDelete")) return new Dictionary<string, string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -702,7 +722,7 @@ public class RefactoringEngine
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
         var text = await document.GetTextAsync(ct);
-        var pos = text.Lines[line-1].Start + (column - 1);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
         // Walk up ancestors to find the nearest declaration symbol (FindNode may return a child token/identifier)
         var symbol = node.AncestorsAndSelf()
@@ -741,8 +761,254 @@ public class RefactoringEngine
         return new Dictionary<string, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
     }
 
-    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)
+    public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, CancellationToken ct = default)
     {
+        if (!_config.IsFeatureEnabled("ConvertExpressionBody")) return "";
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "";
+        
+        var root = (await document.GetSyntaxRootAsync(ct))!;
+        var text = await document.GetTextAsync(ct);
+
+        MemberDeclarationSyntax? target = null;
+        if (contextSnippet != null)
+        {
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                .AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+        }
+        else
+        {
+            var candidates = root.DescendantNodes()
+                .OfType<MemberDeclarationSyntax>()
+                .Where(n => n is MethodDeclarationSyntax m && m.Identifier.Text == memberName ||
+                            n is PropertyDeclarationSyntax p && p.Identifier.Text == memberName ||
+                            n is ConstructorDeclarationSyntax c && c.Identifier.Text == memberName)
+                .ToList();
+            target = candidates.FirstOrDefault();
+        }
+
+        if (target == null) return "";
+
+        SyntaxNode newTarget;
+        if (direction == "ToExpressionBody")
+        {
+            if (target is MethodDeclarationSyntax meth && meth.Body != null)
+            {
+                var stmts = meth.Body.Statements;
+                if (stmts.Count == 1 && stmts[0] is ReturnStatementSyntax ret && ret.Expression != null)
+                {
+                    newTarget = meth
+                        .WithBody(null)
+                        .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(ret.Expression))
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                }
+                else return root.ToFullString();
+            }
+            else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
+            {
+                var getter = prop.AccessorList.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                if (getter?.Body?.Statements.Count == 1 && getter.Body.Statements[0] is ReturnStatementSyntax pret && pret.Expression != null)
+                {
+                    newTarget = prop
+                        .WithAccessorList(null)
+                        .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(pret.Expression))
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                }
+                else return root.ToFullString();
+            }
+            else return root.ToFullString();
+        }
+        else // ToBlockBody
+        {
+            if (target is MethodDeclarationSyntax methExpr && methExpr.ExpressionBody != null)
+            {
+                var returnType = methExpr.ReturnType.ToString().Trim();
+                StatementSyntax stmt = returnType == "void"
+                    ? SyntaxFactory.ExpressionStatement(methExpr.ExpressionBody.Expression)
+                    : (StatementSyntax)SyntaxFactory.ReturnStatement(methExpr.ExpressionBody.Expression);
+                newTarget = methExpr
+                    .WithExpressionBody(null)
+                    .WithSemicolonToken(default)
+                    .WithBody(SyntaxFactory.Block(stmt));
+            }
+            else if (target is PropertyDeclarationSyntax propExpr && propExpr.ExpressionBody != null)
+            {
+                var getter = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                    .WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(propExpr.ExpressionBody.Expression)));
+                newTarget = propExpr
+                    .WithExpressionBody(null)
+                    .WithSemicolonToken(default)
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getter)));
+            }
+            else return root.ToFullString();
+        }
+
+        var newRoot = root.ReplaceNode(target, newTarget.NormalizeWhitespace());
+        var doc = document.WithSyntaxRoot(newRoot);
+        var formatted = await Formatter.FormatAsync(doc, null, ct);
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
+
+    public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = "private", CancellationToken ct = default)
+    {
+        if (!_config.IsFeatureEnabled("ExtractConstant")) return "";
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "";
+
+        var root = (await document.GetSyntaxRootAsync(ct))!;
+        var text = await document.GetTextAsync(ct);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+        
+        var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
+        var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault()
+            ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
+        if (literal == null) return "";
+
+        var containingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (containingType == null) return "";
+
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        TypeSyntax constType;
+        if (semanticModel != null)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(literal, ct);
+            constType = typeInfo.Type != null
+                ? SyntaxFactory.ParseTypeName(typeInfo.Type.ToDisplayString())
+                : SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
+        else
+            constType = SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+
+        var accessMod = visibility switch
+        {
+            "public" => SyntaxKind.PublicKeyword,
+            "protected" => SyntaxKind.ProtectedKeyword,
+            "internal" => SyntaxKind.InternalKeyword,
+            _ => SyntaxKind.PrivateKeyword
+        };
+
+        var constDecl = SyntaxFactory.FieldDeclaration(
+            SyntaxFactory.VariableDeclaration(constType)
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(constantName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(literal.WithoutTrivia())))))
+            .WithModifiers(SyntaxFactory.TokenList(
+                SyntaxFactory.Token(accessMod),
+                SyntaxFactory.Token(SyntaxKind.ConstKeyword)));
+
+        var literalValue = literal.Token.Text;
+        var allLiterals = containingType.DescendantNodes()
+            .OfType<LiteralExpressionSyntax>()
+            .Where(l => l.Token.Text == literalValue)
+            .ToList();
+
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { containingType }.Concat(allLiterals));
+        foreach (var lit in allLiterals)
+        {
+            var current = trackedRoot.GetCurrentNode(lit)!;
+            trackedRoot = trackedRoot.ReplaceNode(current, SyntaxFactory.IdentifierName(constantName).WithTriviaFrom(current));
+        }
+        var currentType = trackedRoot.GetCurrentNode(containingType)!;
+        var newType = currentType.WithMembers(((TypeDeclarationSyntax)currentType).Members.Insert(0, constDecl));
+        trackedRoot = trackedRoot.ReplaceNode(currentType, newType);
+
+        return trackedRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+
+        var root = (await document.GetSyntaxRootAsync(ct))!;
+        var text = await document.GetTextAsync(ct);
+
+        MethodDeclarationSyntax? method = null;
+        if (contextSnippet != null)
+        {
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        }
+        method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method?.Body == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+
+        var model = await document.GetSemanticModelAsync(ct);
+        if (model == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+
+        var flow = model.AnalyzeControlFlow(method.Body);
+        var returnPoints = flow.ReturnStatements
+            .Select(r => r.ToString().Trim())
+            .ToList();
+        var throwPoints = method.Body.DescendantNodes()
+            .OfType<ThrowStatementSyntax>()
+            .Select(t => t.ToString().Trim())
+            .ToList();
+
+        return new ControlFlowSummary(
+            methodName,
+            flow.EndPointIsReachable == false,
+            flow.ReturnStatements.Length > 0,
+            flow.ReturnStatements.Length == 0,
+            returnPoints,
+            throwPoints,
+            flow.ExitPoints.Length
+        );
+    }
+
+    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(string filePath, string methodName, string? contextSnippet = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+
+        var root = (await document.GetSyntaxRootAsync(ct))!;
+        var text = await document.GetTextAsync(ct);
+
+        MethodDeclarationSyntax? method = null;
+        if (contextSnippet != null)
+        {
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        }
+        method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method?.Body == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+
+        var model = await document.GetSemanticModelAsync(ct);
+        if (model == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+
+        DataFlowAnalysis flow;
+        try { flow = model.AnalyzeDataFlow(method.Body)!; }
+        catch { return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string> { "AnalyzeDataFlow failed: body may contain unsupported constructs." }); }
+
+        var warnings = new List<string>();
+        var writtenOnly = flow.WrittenInside.Except(flow.ReadInside).ToList();
+        foreach (var v in writtenOnly)
+            warnings.Add($"'{v.Name}' is written but never read — possible dead assignment.");
+
+        return new DataFlowSummary(
+            methodName,
+            flow.ReadOutside.Select(s => s.Name).ToList(),
+            flow.WrittenInside.Select(s => s.Name).ToList(),
+            flow.ReadInside.Select(s => s.Name).ToList(),
+            flow.WrittenOutside.Select(s => s.Name).ToList(),
+            flow.Captured.Select(s => s.Name).ToList(),
+            warnings
+        );
+    }
+
+    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)    {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;

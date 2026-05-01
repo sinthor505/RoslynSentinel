@@ -517,7 +517,7 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        string filePath, string symbolName, int line, int column, CancellationToken ct = default)
+        string filePath, string symbolName, string? contextSnippet = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -525,7 +525,14 @@ public class DiscoveryEngine
 
         var root = await document.GetSyntaxRootAsync(ct);
         var sourceText = await document.GetTextAsync(ct);
-        var position = sourceText.Lines[line - 1].Start + column - 1;
+        int position;
+        if (contextSnippet != null)
+            position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
+        else
+        {
+            // Find first occurrence of symbolName
+            position = ContextHelper.FindSnippetPosition(sourceText.ToString(), symbolName);
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
         if (semanticModel == null) throw new Exception("Could not get semantic model.");
@@ -533,7 +540,7 @@ public class DiscoveryEngine
         var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0))).Symbol
                      ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)));
 
-        if (symbol == null) throw new Exception($"Symbol '{symbolName}' not found at {line}:{column}.");
+        if (symbol == null) throw new Exception($"Symbol '{symbolName}' not found at the provided location.");
 
         var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
         var locations = references.SelectMany(r => r.Locations).ToList();

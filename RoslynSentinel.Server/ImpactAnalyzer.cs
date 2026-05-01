@@ -30,7 +30,7 @@ public class ImpactAnalyzer
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
+    public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, string contextSnippet, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath)
@@ -52,7 +52,7 @@ public class ImpactAnalyzer
 
         // Find the symbol at the given position
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = sourceText.Lines[line - 1].Start + (column - 1);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
         var token = syntaxRoot.FindToken(position);
         var symbol = await SymbolFinder.FindSymbolAtPositionAsync(semanticModel, position, solution.Workspace, cancellationToken);
 

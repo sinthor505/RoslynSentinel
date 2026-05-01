@@ -57,6 +57,10 @@ public class SentinelConfiguration
         _features["AddRemoveParams"] = true;
         _features["TransformParameters"] = true;
         _features["UseBaseTypeWherePossible"] = true;
+        _features["ConvertExpressionBody"] = true;
+        _features["ExtractConstant"] = true;
+        _features["AnalyzeControlFlow"] = true;
+        _features["AnalyzeDataFlow"] = true;
 
         // --- MODERNIZATION (.NET 8/9/10) ---
         _features["TimeProviderInjection"] = true;

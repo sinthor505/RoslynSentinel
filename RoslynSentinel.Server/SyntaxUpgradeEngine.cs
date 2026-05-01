@@ -60,7 +60,7 @@ public class SyntaxUpgradeEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> UseNameofExpressionAsync(string filePath, int line, int column, CancellationToken ct = default)
+    public async Task<string> UseNameofExpressionAsync(string filePath, string contextSnippet, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("UnboundNameof")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -69,9 +69,9 @@ public class SyntaxUpgradeEngine
 
         var root = await document.GetSyntaxRootAsync(ct);
         var text = await document.GetTextAsync(ct);
-        if (line < 1 || line > text.Lines.Count) return string.Empty;
-        var span = text.Lines[line - 1].Span;
-        var node = root?.FindNode(span).DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression));
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+        var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
+            .DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression));
 
         if (node != null)
         {
