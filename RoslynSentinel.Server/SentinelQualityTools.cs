@@ -17,6 +17,8 @@ public class SentinelQualityTools
     private readonly AnalysisEngine _analysisEngine;
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
+    private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
+    private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -28,6 +30,8 @@ public class SentinelQualityTools
         AnalysisEngine analysisEngine,
         AsyncSafetyEngine asyncSafetyEngine,
         AntiPatternEngine antiPatternEngine,
+        AsyncOptimizationEngine asyncOptimizationEngine,
+        ThreadSafetyEngine threadSafetyEngine,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -38,6 +42,8 @@ public class SentinelQualityTools
         _analysisEngine = analysisEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
         _antiPatternEngine = antiPatternEngine;
+        _asyncOptimizationEngine = asyncOptimizationEngine;
+        _threadSafetyEngine = threadSafetyEngine;
         _logger = logger;
     }
 
@@ -253,4 +259,54 @@ public class SentinelQualityTools
         string methodName,
         int? disambiguateLine = null)
         => await _controlFlowEngine.AnalyzeMethodDataFlowAsync(filePath, methodName, disambiguateLine);
+
+    [McpServerTool]
+    [Description("Scans a file for await expressions missing .ConfigureAwait(false). Excludes classes ending in Controller/Hub/PageModel/ViewModel (those are app-level where ConfigureAwait is not needed). Returns method name, line, and reason.")]
+    public async Task<List<AsyncSafetyReport>> FindConfigureAwaitMissing(string filePath)
+        => await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects blocking calls inside async methods: Thread.Sleep, .Result, .Wait(), .GetAwaiter().GetResult(). These block the thread pool thread and can cause deadlocks.")]
+    public async Task<List<AsyncSafetyReport>> FindBlockingCallsInAsync(string filePath)
+        => await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(filePath);
+
+    [McpServerTool]
+    [Description("Finds constructors that call async methods or contain await expressions. Constructors cannot be async — use a factory method or AsyncHelper instead.")]
+    public async Task<List<AsyncSafetyReport>> FindAsyncInConstructor(string filePath)
+        => await _asyncSafetyEngine.FindAsyncInConstructorAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects 'await Task.Run(...)' patterns in server-side code. Task.Run wraps work in a new thread pool task which is wasteful in async server code. Prefer direct async methods.")]
+    public async Task<List<AsyncSafetyReport>> FindTaskRunInAsync(string filePath)
+        => await _asyncSafetyEngine.FindTaskRunInAsyncAsync(filePath);
+
+    [McpServerTool]
+    [Description("Finds lock statements that protect List<T> or Dictionary<K,V> fields and suggests replacing them with ConcurrentDictionary<K,V> or ImmutableDictionary for better performance.")]
+    public async Task<List<AsyncSafetyReport>> FindConcurrentCollectionOpportunities(string filePath)
+        => await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects unsafe lazy initialization: double-checked locking without 'volatile' keyword (field may be partially initialized due to CPU reordering). Suggests Lazy<T> or volatile.")]
+    public async Task<List<AsyncSafetyReport>> FindUnsafeLazyInit(string filePath)
+        => await _asyncSafetyEngine.FindUnsafeLazyInitAsync(filePath);
+
+    [McpServerTool]
+    [Description("Adds .ConfigureAwait(false) to all await expressions in a file that don't already have it. Use libraryMode=true (default) for library code, false for ASP.NET app code. Idempotent — skips already-configured awaits.")]
+    public async Task<string> AddConfigureAwaitFalse(string filePath, bool libraryMode = true)
+        => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
+
+    [McpServerTool]
+    [Description("Removes all .ConfigureAwait(x) calls from a file, leaving the bare awaited expression. Useful when migrating library code to ASP.NET app code where ConfigureAwait is unnecessary.")]
+    public async Task<string> RemoveConfigureAwaitFalse(string filePath)
+        => await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
+
+    [McpServerTool]
+    [Description("Converts lock statements inside a method to async-safe SemaphoreSlim pattern: adds a 'private readonly SemaphoreSlim _semaphore = new(1,1)' field, replaces each lock block with 'await _semaphore.WaitAsync(); try { ... } finally { _semaphore.Release(); }', and makes the method async if needed.")]
+    public async Task<string> ConvertLockToSemaphoreSlim(string filePath, string methodName)
+        => await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Converts a method returning Task<List<T>>, Task<IEnumerable<T>>, or List<T> to IAsyncEnumerable<T>. Transforms 'results.Add(item)' patterns to 'yield return item', removes the list variable and return statement, and adds a CancellationToken parameter if missing.")]
+    public async Task<string> ConvertToAsyncEnumerable(string filePath, string methodName)
+        => await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
 }

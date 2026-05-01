@@ -56,4 +56,93 @@ public class ThreadSafetyEngine
         var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
         return newRoot.NormalizeWhitespace().ToFullString();
     }
+
+    /// <summary>
+    /// Converts lock statements inside a method to async-safe SemaphoreSlim pattern.
+    /// Adds a SemaphoreSlim field and replaces lock with await _semaphore.WaitAsync() + try/finally.
+    /// </summary>
+    public async Task<string> ConvertLockToSemaphoreSlimAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null || method.Body == null) throw new Exception("Method or body not found.");
+
+        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (typeNode == null) throw new Exception("Type not found.");
+
+        var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
+        if (!lockStatements.Any()) return root!.ToFullString();
+
+        const string semaphoreName = "_semaphore";
+        var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
+            .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
+
+        var newMethodBody = method.Body.ReplaceNodes(lockStatements, (orig, _) =>
+        {
+            var bodyStatements = orig.Statement is BlockSyntax blk
+                ? blk.Statements
+                : SyntaxFactory.SingletonList<StatementSyntax>(orig.Statement);
+
+            var waitAsync = SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.AwaitExpression(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName(semaphoreName),
+                            SyntaxFactory.IdentifierName("WaitAsync")))));
+
+            var release = SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(semaphoreName),
+                        SyntaxFactory.IdentifierName("Release"))));
+
+            var tryFinally = SyntaxFactory.TryStatement(
+                SyntaxFactory.Block(bodyStatements),
+                new SyntaxList<CatchClauseSyntax>(),
+                SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
+
+            return SyntaxFactory.Block(waitAsync, tryFinally);
+        });
+
+        var newMethod = method.WithBody(newMethodBody);
+        if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
+        {
+            newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+            var retStr = newMethod.ReturnType.ToString().Trim();
+            if (retStr == "void")
+                newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
+            else if (!retStr.StartsWith("Task"))
+                newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
+        }
+
+        TypeDeclarationSyntax newTypeNode = typeNode.ReplaceNode(method, newMethod);
+
+        if (!hasSemaphore)
+        {
+            var semaphoreField = SyntaxFactory.FieldDeclaration(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(semaphoreName)
+                    .WithInitializer(SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                        .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                        {
+                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))),
+                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))
+                        }))))))))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+
+            newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
+        }
+
+        var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
 }

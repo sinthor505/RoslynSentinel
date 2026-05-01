@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 188 MCP Tools across 53 Specialized Engines
+## 🚀 198 MCP Tools across 53 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -67,6 +67,9 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`PerformanceEngine`**: Boxing detection, LINQ materialization, string concatenation in loops.
 *   **`SecurityEngine`**: SQL injection (dynamic/interpolated strings in SQL calls, `check_for_sql_injection`), hardcoded secrets (name-pattern matching), weak hash algorithms (MD5/SHA1), insecure `new Random()` in security-sensitive contexts.
 *   **`TestingEngine`**: Missing assertions, test code smell detection.
+*   **`AsyncSafetyEngine`** (new tools): `find_configure_await_missing`, `find_blocking_calls_in_async`, `find_async_in_constructor`, `find_task_run_in_async`, `find_concurrent_collection_opportunities`, `find_unsafe_lazy_init`.
+*   **`AsyncOptimizationEngine`** (new tools): `add_configure_await_false`, `remove_configure_await_false`, `convert_to_async_enumerable`.
+*   **`ThreadSafetyEngine`** (new tool): `convert_lock_to_semaphore_slim`.
 
 ### 🏭 Code Generation — 10 tools
 *   **`CodeGenerationEngine`**: Fluent builder, default config JSON, decorator class generation.
