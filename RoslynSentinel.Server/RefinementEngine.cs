@@ -43,9 +43,45 @@ public class RefinementEngine
         var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
         if (baseFile == null) throw new Exception("Base class source file not found.");
 
-        // logic to remove from class, add to base...
-        // ... (simplified for tool count expansion)
-        return new Dictionary<string, string> { { filePath, root!.ToFullString() } };
+        if (baseType.DeclaringSyntaxReferences.Length == 0)
+            throw new Exception("Base class is in an external assembly and cannot be modified.");
+
+        var baseDoc = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.FilePath == baseFile);
+        if (baseDoc == null) throw new Exception($"Base class source document not found at '{baseFile}'.");
+
+        var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
+        var baseClassNode = baseRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
+        if (baseClassNode == null) throw new Exception($"Base class '{baseType.Name}' not found in '{baseFile}'.");
+
+        // Remove 'override', add 'virtual' (if not already abstract/virtual)
+        SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
+        {
+            var overrideToken = modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.OverrideKeyword));
+            if (overrideToken != default)
+                modifiers = modifiers.Remove(overrideToken);
+            if (!modifiers.Any(m => m.IsKind(SyntaxKind.VirtualKeyword) || m.IsKind(SyntaxKind.AbstractKeyword)))
+                modifiers = modifiers.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword).WithLeadingTrivia(SyntaxFactory.Space));
+            return modifiers;
+        }
+
+        MemberDeclarationSyntax memberForBase = member switch
+        {
+            MethodDeclarationSyntax m => m.WithModifiers(AdjustModifiers(m.Modifiers)),
+            PropertyDeclarationSyntax p => p.WithModifiers(AdjustModifiers(p.Modifiers)),
+            _ => member
+        };
+
+        var newDerivedRoot = root!.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+        var newBaseClassNode = baseClassNode.AddMembers(memberForBase);
+        var newBaseRoot = baseRoot!.ReplaceNode(baseClassNode, newBaseClassNode);
+
+        return new Dictionary<string, string>
+        {
+            { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
+            { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
+        };
     }
 
     /// <summary>

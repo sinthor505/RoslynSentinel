@@ -30,6 +30,38 @@ public class DeadCodeEngine
         if (classNode == null) return new List<DeadCodeReport>();
 
         var reports = new List<DeadCodeReport>();
+
+        var privateMembers = classNode.Members
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PrivateKeyword))
+                && m is MethodDeclarationSyntax or PropertyDeclarationSyntax);
+
+        foreach (var member in privateMembers)
+        {
+            ISymbol? symbol = member switch
+            {
+                MethodDeclarationSyntax meth => semanticModel.GetDeclaredSymbol(meth, cancellationToken),
+                PropertyDeclarationSyntax prop => semanticModel.GetDeclaredSymbol(prop, cancellationToken),
+                _ => null
+            };
+            if (symbol == null) continue;
+
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            if (!references.Any(r => r.Locations.Any()))
+            {
+                string memberName = member switch
+                {
+                    MethodDeclarationSyntax meth => meth.Identifier.Text,
+                    PropertyDeclarationSyntax prop => prop.Identifier.Text,
+                    _ => "Unknown"
+                };
+                var lineSpan = member.GetLocation().GetLineSpan();
+                reports.Add(new DeadCodeReport(filePath, memberName,
+                    lineSpan.StartLinePosition.Line + 1,
+                    lineSpan.StartLinePosition.Character + 1,
+                    "UnusedPrivateMember"));
+            }
+        }
+
         return reports;
     }
 
@@ -127,9 +159,36 @@ public class DeadCodeEngine
         if (document == null) return new List<DeadCodeReport>();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<DeadCodeReport>();
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (root == null || semanticModel == null) return new List<DeadCodeReport>();
 
         var reports = new List<DeadCodeReport>();
+
+        foreach (var classNode in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        {
+            var constructors = classNode.Members.OfType<ConstructorDeclarationSyntax>().ToList();
+            // Skip single-constructor classes — likely registered in DI, reference count is misleading
+            if (constructors.Count < 2) continue;
+
+            foreach (var ctor in constructors)
+            {
+                var symbol = semanticModel.GetDeclaredSymbol(ctor, cancellationToken);
+                if (symbol == null) continue;
+
+                var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+                if (!references.Any(r => r.Locations.Any()))
+                {
+                    var lineSpan = ctor.GetLocation().GetLineSpan();
+                    reports.Add(new DeadCodeReport(
+                        filePath,
+                        $"{classNode.Identifier.Text}()",
+                        lineSpan.StartLinePosition.Line + 1,
+                        lineSpan.StartLinePosition.Character + 1,
+                        "UnusedConstructorOverload"));
+                }
+            }
+        }
+
         return reports;
     }
 
@@ -143,7 +202,30 @@ public class DeadCodeEngine
         if (root == null) return new List<DeadCodeReport>();
 
         var reports = new List<DeadCodeReport>();
-        // logic to find += with no -=...
+
+        // Build set of unsubscribed event+handler pairs from all -= assignments
+        var removeKeys = new HashSet<string>(
+            root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Where(a => a.IsKind(SyntaxKind.SubtractAssignmentExpression))
+                .Select(a => $"{a.Left}|{a.Right}"));
+
+        // Report += subscriptions that have no matching -=
+        foreach (var add in root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+            .Where(a => a.IsKind(SyntaxKind.AddAssignmentExpression)))
+        {
+            var key = $"{add.Left}|{add.Right}";
+            if (!removeKeys.Contains(key))
+            {
+                var lineSpan = add.GetLocation().GetLineSpan();
+                reports.Add(new DeadCodeReport(
+                    filePath,
+                    add.Left.ToString(),
+                    lineSpan.StartLinePosition.Line + 1,
+                    lineSpan.StartLinePosition.Character + 1,
+                    "EventSubscriptionWithoutUnsubscription"));
+            }
+        }
+
         return reports;
     }
 }

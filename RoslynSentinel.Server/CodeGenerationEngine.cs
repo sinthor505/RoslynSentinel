@@ -171,33 +171,70 @@ public class CodeGenerationEngine
         return (await formatted.GetTextAsync(ct)).ToString();
     }
 
-    public async Task<string> GenerateToStringAsync(string filePath, string className, CancellationToken ct = default)
+    // Property name substrings that are likely to contain sensitive data and should be
+    // excluded from ToString() output by default.
+    private static readonly string[] SensitiveNameSubstrings =
+    [
+        "password", "passwd", "secret", "apikey", "api_key", "accesstoken", "access_token",
+        "refreshtoken", "refresh_token", "privatekey", "private_key", "clientsecret",
+        "client_secret", "token", "hash", "salt", "pin", "cvv", "ssn", "creditcard",
+        "credit_card", "connectionstring", "connection_string"
+    ];
+
+    private static bool IsSensitivePropertyName(string name)
+        => SensitiveNameSubstrings.Any(sub =>
+            name.Contains(sub, StringComparison.OrdinalIgnoreCase));
+
+    public record GenerateToStringResult(
+        string UpdatedContent,
+        List<string> IncludedProperties,
+        List<string> ExcludedProperties,
+        string? Warning = null);
+
+    public async Task<GenerateToStringResult> GenerateToStringAsync(
+        string filePath,
+        string className,
+        string[]? excludeProperties = null,
+        CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+            return new GenerateToStringResult(string.Empty, [], [], "File not found.");
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return string.Empty;
+        if (classNode == null)
+            return new GenerateToStringResult(string.Empty, [], [], $"Class '{className}' not found.");
 
         var alreadyOverrides = classNode.Members
             .OfType<MethodDeclarationSyntax>()
             .Any(m => m.Identifier.Text == "ToString" &&
                       m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)));
-        if (alreadyOverrides) return root!.ToFullString();
+        if (alreadyOverrides)
+            return new GenerateToStringResult(root!.ToFullString(), [], [], "ToString() override already exists — nothing changed.");
 
-        var properties = classNode.Members
+        var allPublicProps = classNode.Members
             .OfType<PropertyDeclarationSyntax>()
             .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
             .Select(p => p.Identifier.Text)
             .ToList();
 
-        if (!properties.Any()) return root!.ToFullString();
+        if (!allPublicProps.Any())
+            return new GenerateToStringResult(root!.ToFullString(), [], [], "No public properties found — nothing generated.");
 
-        var parts = string.Join(", ", properties.Select(p => p + " = {" + p + "}"));
+        var userExcluded = excludeProperties ?? [];
+        var autoExcluded = allPublicProps.Where(IsSensitivePropertyName).ToList();
+        var allExcluded  = userExcluded.Union(autoExcluded, StringComparer.OrdinalIgnoreCase).ToList();
+        var included     = allPublicProps.Where(p => !allExcluded.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+
+        if (!included.Any())
+            return new GenerateToStringResult(root!.ToFullString(), [], allExcluded,
+                "All public properties were excluded (sensitive names or explicitly excluded). No ToString() generated.");
+
+        var parts = string.Join(", ", included.Select(p => p + " = {" + p + "}"));
         var returnStatement = "return $\"" + className + " {{ " + parts + " }}\";";
 
         var method = SyntaxFactory.MethodDeclaration(
@@ -211,7 +248,13 @@ public class CodeGenerationEngine
         var updatedClass = classNode.AddMembers(method);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
         var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot));
-        return (await formatted.GetTextAsync(ct)).ToString();
+        var updatedContent = (await formatted.GetTextAsync(ct)).ToString();
+
+        string? warning = allExcluded.Count > 0
+            ? $"Excluded sensitive/specified properties: {string.Join(", ", allExcluded)}. These are NOT in the ToString() output."
+            : null;
+
+        return new GenerateToStringResult(updatedContent, included, allExcluded, warning);
     }
 
     /// <summary>

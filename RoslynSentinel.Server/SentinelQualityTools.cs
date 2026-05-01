@@ -197,4 +197,44 @@ public class SentinelQualityTools
     [Description("Analyzes exception handling anti-patterns in a file: CatchAll (bare catch or catch Exception), EmptyRethrow (throw ex; loses stack trace), SwallowedException (catch with no rethrow/log/return), ExceptionAsControlFlow (catching FormatException etc. inside loops). Severity: High for CatchAll/EmptyRethrow, Medium for SwallowedException/ExceptionAsControlFlow.")]
     public async Task<List<ExceptionHandlingFinding>> AnalyzeExceptionHandling(string filePath)
         => await _antiPatternEngine.AnalyzeExceptionHandlingAsync(filePath);
+
+    [McpServerTool]
+    [Description("""
+        Analyzes control flow for an entire method body using Roslyn's semantic analysis.
+        
+        Unlike the raw line-based analyze_control_flow tool, this takes a method name — no
+        need to count line numbers or worry about accidentally including the method signature
+        (which causes a 'statements not within the same statement list' error in line-based tools).
+        
+        Returns: EndPointIsReachable (false = all code paths return/throw), ReturnStatements,
+        ThrowStatements, BreakStatements, ContinueStatements.
+        
+        If the method has multiple overloads, supply disambiguateLine (any line number that
+        falls inside the desired overload's body) to select the correct one.
+        """)]
+    public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlow(
+        string filePath,
+        string methodName,
+        int? disambiguateLine = null)
+        => await _controlFlowEngine.AnalyzeMethodControlFlowAsync(filePath, methodName, disambiguateLine);
+
+    [McpServerTool]
+    [Description("""
+        Analyzes data flow for an entire method body using Roslyn's semantic analysis.
+        
+        Unlike the raw line-based analyze_data_flow tool, this takes a method name — no
+        need to count line numbers or worry about accidentally including the method signature.
+        
+        Returns: DataFlowsIn (variables read but declared outside), DataFlowsOut (variables
+        assigned inside and read outside), VariablesDeclared (locals), AlwaysAssigned (always
+        initialized on all code paths), ReadInside, WrittenInside.
+        
+        If the method has multiple overloads, supply disambiguateLine (any line number that
+        falls inside the desired overload's body) to select the correct one.
+        """)]
+    public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlow(
+        string filePath,
+        string methodName,
+        int? disambiguateLine = null)
+        => await _controlFlowEngine.AnalyzeMethodDataFlowAsync(filePath, methodName, disambiguateLine);
 }

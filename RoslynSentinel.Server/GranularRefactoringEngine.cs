@@ -103,17 +103,95 @@ public class GranularRefactoringEngine
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var text = await document.GetTextAsync(cancellationToken);
+        var position = text.Lines[line - 1].Start + (column - 1);
+        var token = root.FindToken(position);
+        var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+        if (expression == null) return root.ToFullString();
+
+        var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (containingClass == null) return root.ToFullString();
+
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        TypeSyntax fieldType;
+        if (semanticModel != null)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(expression, cancellationToken);
+            fieldType = typeInfo.Type != null
+                ? SyntaxFactory.ParseTypeName(typeInfo.Type.ToDisplayString())
+                : SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
+        else
+        {
+            fieldType = SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
+
+        var fieldDeclaration = SyntaxFactory.FieldDeclaration(
+                SyntaxFactory.VariableDeclaration(fieldType)
+                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(newFieldName)
+                            .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))))
+            .WithModifiers(SyntaxFactory.TokenList(
+                SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
+
+        var fieldRef = SyntaxFactory.IdentifierName(newFieldName).WithTriviaFrom(expression);
+
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingClass });
+        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, fieldRef);
+        var currentClass = newRoot.GetCurrentNode(containingClass)!;
+        var newClass = currentClass.WithMembers(currentClass.Members.Insert(0, fieldDeclaration));
+        newRoot = newRoot.ReplaceNode(currentClass, newClass);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> IntroduceParameterAsync(string filePath, int line, int column, string newParamName, CancellationToken cancellationToken = default)
     {
+        // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var text = await document.GetTextAsync(cancellationToken);
+        var position = text.Lines[line - 1].Start + (column - 1);
+        var token = root.FindToken(position);
+        var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+        if (expression == null) return root.ToFullString();
+
+        var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        if (containingMethod == null) return root.ToFullString();
+
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        TypeSyntax paramType;
+        if (semanticModel != null)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(expression, cancellationToken);
+            paramType = typeInfo.Type != null
+                ? SyntaxFactory.ParseTypeName(typeInfo.Type.ToDisplayString())
+                : SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
+        else
+        {
+            paramType = SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
+
+        var newParameter = SyntaxFactory.Parameter(SyntaxFactory.Identifier(newParamName))
+            .WithType(paramType.WithTrailingTrivia(SyntaxFactory.Space));
+        var paramRef = SyntaxFactory.IdentifierName(newParamName).WithTriviaFrom(expression);
+
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingMethod });
+        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, paramRef);
+        var currentMethod = newRoot.GetCurrentNode(containingMethod)!;
+        var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
+        newRoot = newRoot.ReplaceNode(currentMethod, updatedMethod);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> IntroduceVariableAsync(string filePath, int line, int column, string newVariableName, CancellationToken cancellationToken = default)
@@ -123,7 +201,36 @@ public class GranularRefactoringEngine
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var text = await document.GetTextAsync(cancellationToken);
+        var position = text.Lines[line - 1].Start + (column - 1);
+        var token = root.FindToken(position);
+        var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+        if (expression == null) return root.ToFullString();
+
+        var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
+        if (containingStatement == null) return root.ToFullString();
+        if (containingStatement.Parent is not BlockSyntax block) return root.ToFullString();
+
+        var varDecl = SyntaxFactory.LocalDeclarationStatement(
+            SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(newVariableName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))));
+
+        var varRef = SyntaxFactory.IdentifierName(newVariableName).WithTriviaFrom(expression);
+
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingStatement, block });
+        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, varRef);
+        var currentStatement = newRoot.GetCurrentNode(containingStatement)!;
+        var currentBlock = newRoot.GetCurrentNode(block)!;
+        var idx = currentBlock.Statements.IndexOf(currentStatement);
+        if (idx < 0) return root.ToFullString();
+        var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
+        newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> MoveTypeToOuterScopeAsync(string filePath, string nestedTypeName, CancellationToken cancellationToken = default)

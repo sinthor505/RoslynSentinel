@@ -1,10 +1,33 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace RoslynSentinel.Server;
 
 public record PathCoverageReport(string MethodName, List<string> BranchesToTest);
+
+public record ControlFlowAnalysisResult(
+    string MethodName,
+    bool EndPointIsReachable,
+    List<string> ReturnStatements,
+    List<string> ThrowStatements,
+    List<string> BreakStatements,
+    List<string> ContinueStatements,
+    string? Error = null);
+
+public record DataFlowAnalysisResult(
+    string MethodName,
+    List<string> DataFlowsIn,
+    List<string> DataFlowsOut,
+    List<string> VariablesDeclared,
+    List<string> AlwaysAssigned,
+    List<string> ReadInside,
+    List<string> WrittenInside,
+    string? Error = null);
 
 public class ControlFlowEngine
 {
@@ -48,5 +71,156 @@ public class ControlFlowEngine
         }
 
         return new PathCoverageReport(methodName, branches);
+    }
+
+    /// <summary>
+    /// Analyzes control flow for an entire method body using Roslyn's semantic analysis.
+    /// Takes the method name (not raw line ranges) — avoids the "include method signature" trap.
+    /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
+    /// </summary>
+    public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlowAsync(
+        string filePath,
+        string methodName,
+        int? disambiguateLine = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], $"File not found: {filePath}");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var text = await document.GetTextAsync(ct);
+        var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName)
+            .ToList() ?? [];
+
+        if (methods.Count == 0)
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], $"Method '{methodName}' not found in {filePath}.");
+
+        MethodDeclarationSyntax method;
+        if (methods.Count == 1)
+        {
+            method = methods[0];
+        }
+        else if (disambiguateLine.HasValue)
+        {
+            method = methods.FirstOrDefault(m =>
+            {
+                var span = m.GetLocation().GetLineSpan();
+                return disambiguateLine.Value >= span.StartLinePosition.Line + 1 &&
+                       disambiguateLine.Value <= span.EndLinePosition.Line + 1;
+            }) ?? methods[0];
+        }
+        else
+        {
+            var locations = methods.Select(m =>
+            {
+                var span = m.GetLocation().GetLineSpan();
+                return $"line {span.StartLinePosition.Line + 1}";
+            });
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [],
+                $"Multiple overloads of '{methodName}' found at: {string.Join(", ", locations)}. " +
+                $"Provide disambiguateLine with any line number inside the desired overload.");
+        }
+
+        if (method.Body == null)
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [],
+                "Method has no block body (expression-bodied member). Control flow analysis requires a block body.");
+
+        var statements = method.Body.Statements;
+        if (statements.Count == 0)
+            return new ControlFlowAnalysisResult(methodName, true, [], [], [], [], null);
+
+        var model = await document.GetSemanticModelAsync(ct);
+        if (model == null)
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], "Semantic model unavailable.");
+        var analysis = model.AnalyzeControlFlow(statements.First(), statements.Last());
+
+        static string NodeText(SyntaxNode node) =>
+            node.ToString().Trim().Replace("\r\n", " ").Replace("\n", " ");
+
+        var returns   = analysis.ReturnStatements.Select(n => NodeText(n)).ToList();
+        var throws    = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.ThrowStatement)).Select(n => NodeText(n)).ToList();
+        var breaks    = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.BreakStatement)).Select(n => NodeText(n)).ToList();
+        var continues = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.ContinueStatement)).Select(n => NodeText(n)).ToList();
+
+        return new ControlFlowAnalysisResult(
+            methodName,
+            analysis.EndPointIsReachable,
+            returns, throws, breaks, continues);
+    }
+
+    /// <summary>
+    /// Analyzes data flow for an entire method body using Roslyn's semantic analysis.
+    /// Takes the method name (not raw line ranges) — avoids the "include method signature" trap.
+    /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
+    /// </summary>
+    public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlowAsync(
+        string filePath,
+        string methodName,
+        int? disambiguateLine = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], $"File not found: {filePath}");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName)
+            .ToList() ?? [];
+
+        if (methods.Count == 0)
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], $"Method '{methodName}' not found in {filePath}.");
+
+        MethodDeclarationSyntax method;
+        if (methods.Count == 1)
+        {
+            method = methods[0];
+        }
+        else if (disambiguateLine.HasValue)
+        {
+            method = methods.FirstOrDefault(m =>
+            {
+                var span = m.GetLocation().GetLineSpan();
+                return disambiguateLine.Value >= span.StartLinePosition.Line + 1 &&
+                       disambiguateLine.Value <= span.EndLinePosition.Line + 1;
+            }) ?? methods[0];
+        }
+        else
+        {
+            var locations = methods.Select(m =>
+            {
+                var span = m.GetLocation().GetLineSpan();
+                return $"line {span.StartLinePosition.Line + 1}";
+            });
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [],
+                $"Multiple overloads of '{methodName}' found at: {string.Join(", ", locations)}. " +
+                $"Provide disambiguateLine with any line number inside the desired overload.");
+        }
+
+        if (method.Body == null)
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [],
+                "Method has no block body (expression-bodied member). Data flow analysis requires a block body.");
+
+        var statements = method.Body.Statements;
+        if (statements.Count == 0)
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], null);
+
+        var model = await document.GetSemanticModelAsync(ct);
+        if (model == null)
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "Semantic model unavailable.");
+        var analysis = model.AnalyzeDataFlow(statements.First(), statements.Last());
+
+        return new DataFlowAnalysisResult(
+            methodName,
+            analysis.DataFlowsIn.Select(s => s.Name).ToList(),
+            analysis.DataFlowsOut.Select(s => s.Name).ToList(),
+            analysis.VariablesDeclared.Select(s => s.Name).ToList(),
+            analysis.AlwaysAssigned.Select(s => s.Name).ToList(),
+            analysis.ReadInside.Select(s => s.Name).ToList(),
+            analysis.WrittenInside.Select(s => s.Name).ToList());
     }
 }

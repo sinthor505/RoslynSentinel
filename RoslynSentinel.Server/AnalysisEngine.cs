@@ -284,24 +284,210 @@ public class AnalysisEngine
 
     private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken ct)
     {
-        if (currentDepth > maxDepth || visited.Contains(symbol)) return;
-        visited.Add(symbol);
-        sb.AppendLine($"{new string(' ', currentDepth * 2)}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
+        if (currentDepth > maxDepth || !visited.Add(symbol)) return;
+
+        var indent = new string(' ', currentDepth * 2);
+        sb.AppendLine($"{indent}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
+        {
+            var node = await syntaxRef.GetSyntaxAsync(ct);
+            var document = solution.GetDocument(node.SyntaxTree);
+            if (document == null) continue;
+
+            var model = await document.GetSemanticModelAsync(ct);
+            if (model == null) continue;
+
+            foreach (var inv in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var info = model.GetSymbolInfo(inv, ct);
+                if (info.Symbol is IMethodSymbol callee
+                    && callee.ContainingAssembly?.Name == symbol.ContainingAssembly?.Name)
+                {
+                    await BuildCallTree(callee, currentDepth + 1, maxDepth, sb, visited, ct);
+                }
+            }
+        }
     }
 
     public async Task<string> GenerateEqualityOverridesAsync(string filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) throw new Exception($"File '{filePath}' not found in solution.");
+
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (root == null || classNode == null) throw new Exception($"Class '{className}' not found.");
+
+        // Gather field names (private fields, skipping backing fields for auto-props)
+        var fieldNames = classNode.Members.OfType<FieldDeclarationSyntax>()
+            .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text))
+            .ToList();
+
+        // If no explicit fields, fall back to auto-property names
+        if (fieldNames.Count == 0)
+        {
+            fieldNames = classNode.Members.OfType<PropertyDeclarationSyntax>()
+                .Where(p => p.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
+                .Select(p => p.Identifier.Text)
+                .ToList();
+        }
+
+        if (fieldNames.Count == 0) throw new Exception($"Class '{className}' has no fields or properties to generate equality from.");
+
+        // Build: obj is ClassName other
+        ExpressionSyntax body = SyntaxFactory.IsPatternExpression(
+            SyntaxFactory.IdentifierName("obj"),
+            SyntaxFactory.DeclarationPattern(
+                SyntaxFactory.IdentifierName(className),
+                SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier("other"))));
+
+        // Chain: && field == other.field
+        foreach (var name in fieldNames)
+        {
+            var equality = SyntaxFactory.BinaryExpression(
+                SyntaxKind.EqualsExpression,
+                SyntaxFactory.IdentifierName(name),
+                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.IdentifierName("other"),
+                    SyntaxFactory.IdentifierName(name)));
+            body = SyntaxFactory.BinaryExpression(SyntaxKind.LogicalAndExpression,
+                body.WithTrailingTrivia(SyntaxFactory.Space),
+                equality);
+        }
+
+        var equalsMethod = SyntaxFactory.MethodDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)),
+                "Equals")
+            .AddModifiers(
+                SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                SyntaxFactory.Token(SyntaxKind.OverrideKeyword).WithTrailingTrivia(SyntaxFactory.Space))
+            .AddParameterListParameters(
+                SyntaxFactory.Parameter(SyntaxFactory.Identifier("obj"))
+                    .WithType(SyntaxFactory.NullableType(
+                        SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword)))))
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(body))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+        // Build GetHashCode: HashCode.Combine(f1, f2, ...) — handles up to 8 args natively
+        ExpressionSyntax hashBody;
+        if (fieldNames.Count <= 8)
+        {
+            hashBody = SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("HashCode"),
+                        SyntaxFactory.IdentifierName("Combine")))
+                .WithArgumentList(SyntaxFactory.ArgumentList(
+                    SyntaxFactory.SeparatedList(
+                        fieldNames.Select(n => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(n))))));
+        }
+        else
+        {
+            // For >8 fields use a HashCode builder
+            // Emit: { var hc = new HashCode(); hc.Add(f1); ...; return hc.ToHashCode(); }
+            var statements = new List<StatementSyntax>
+            {
+                SyntaxFactory.LocalDeclarationStatement(
+                    SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                        .AddVariables(SyntaxFactory.VariableDeclarator("hc")
+                            .WithInitializer(SyntaxFactory.EqualsValueClause(
+                                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName("HashCode"))
+                                    .WithArgumentList(SyntaxFactory.ArgumentList())))))
+            };
+            foreach (var name in fieldNames)
+            {
+                statements.Add(SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("hc"), SyntaxFactory.IdentifierName("Add")))
+                        .WithArgumentList(SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(SyntaxFactory.IdentifierName(name)))))));
+            }
+            statements.Add(SyntaxFactory.ReturnStatement(
+                SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("hc"), SyntaxFactory.IdentifierName("ToHashCode")))));
+
+            var getHashBlockBody = SyntaxFactory.MethodDeclaration(
+                    SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
+                    "GetHashCode")
+                .AddModifiers(
+                    SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                    SyntaxFactory.Token(SyntaxKind.OverrideKeyword).WithTrailingTrivia(SyntaxFactory.Space))
+                .WithBody(SyntaxFactory.Block(statements));
+
+            var newClassForBlock = classNode.AddMembers(equalsMethod, getHashBlockBody);
+            var updatedRootBlock = root.ReplaceNode(classNode, newClassForBlock);
+            return updatedRootBlock.NormalizeWhitespace().ToFullString();
+        }
+
+        var getHashMethod = SyntaxFactory.MethodDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
+                "GetHashCode")
+            .AddModifiers(
+                SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                SyntaxFactory.Token(SyntaxKind.OverrideKeyword).WithTrailingTrivia(SyntaxFactory.Space))
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(hashBody))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+        var newClass = classNode.AddMembers(equalsMethod, getHashMethod);
+        var updatedRoot = root.ReplaceNode(classNode, newClass);
+        return updatedRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<List<string>> DetectMemoryLeaksAsync(string filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MemoryLeaks")) return new List<string>();
-        return new List<string>();
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            foreach (var classNode in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                bool implementsDisposable = classNode.BaseList?.Types
+                    .Any(t => t.ToString().Contains("IDisposable")) ?? false;
+
+                // Find subscriptions to external events (left side is a non-this member access)
+                var subscriptions = classNode.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                    .Where(a => a.IsKind(SyntaxKind.AddAssignmentExpression)
+                        && a.Left is MemberAccessExpressionSyntax ma
+                        && ma.Expression is not ThisExpressionSyntax)
+                    .ToList();
+
+                if (!subscriptions.Any()) continue;
+
+                // Find the unsubscriptions
+                var unsubscribeKeys = new HashSet<string>(
+                    classNode.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                        .Where(a => a.IsKind(SyntaxKind.SubtractAssignmentExpression))
+                        .Select(a => $"{a.Left}|{a.Right}"));
+
+                foreach (var sub in subscriptions)
+                {
+                    bool hasUnsubscribe = unsubscribeKeys.Contains($"{sub.Left}|{sub.Right}");
+                    if (!implementsDisposable || !hasUnsubscribe)
+                    {
+                        var lineSpan = sub.GetLocation().GetLineSpan();
+                        string reason = !implementsDisposable
+                            ? "class does not implement IDisposable"
+                            : "Dispose does not unsubscribe";
+                        results.Add(
+                            $"{target.Document.FilePath ?? target.Document.Name}:{lineSpan.StartLinePosition.Line + 1} " +
+                            $"- Class '{classNode.Identifier.Text}' subscribes to '{sub.Left}' but {reason}.");
+                    }
+                }
+            }
+        }
+
+        return results;
     }
 
     public async Task<List<string>> AnalyzeSemaphoreUsageAsync(string filePath, CancellationToken cancellationToken = default)
@@ -330,8 +516,49 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindPossibleInfiniteLoopsAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        return new List<string>();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            // while (true) { ... }
+            foreach (var loop in target.Root.DescendantNodes().OfType<WhileStatementSyntax>()
+                .Where(w => w.Condition is LiteralExpressionSyntax l && l.IsKind(SyntaxKind.TrueLiteralExpression)))
+            {
+                if (!HasExitStatement(loop.Statement))
+                {
+                    var method = loop.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                    var line = loop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
+                        $"- Potential infinite loop (while(true)) in '{method?.Identifier.Text ?? "<unknown>"}' — no break/return/throw found.");
+                }
+            }
+
+            // for (;;) { ... } — ForStatement with no condition
+            foreach (var loop in target.Root.DescendantNodes().OfType<ForStatementSyntax>()
+                .Where(f => f.Condition == null))
+            {
+                if (!HasExitStatement(loop.Statement))
+                {
+                    var method = loop.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                    var line = loop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
+                        $"- Potential infinite loop (for(;;)) in '{method?.Identifier.Text ?? "<unknown>"}' — no break/return/throw found.");
+                }
+            }
+        }
+
+        return results;
     }
+
+    private static bool HasExitStatement(StatementSyntax body) =>
+        body.DescendantNodes().OfType<BreakStatementSyntax>().Any()
+        || body.DescendantNodes().OfType<ReturnStatementSyntax>().Any()
+        || body.DescendantNodes().OfType<ThrowStatementSyntax>().Any()
+        || body.DescendantNodes().OfType<GotoStatementSyntax>().Any();
 
     public async Task<List<string>> FindInternalClassesThatCouldBePrivateAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
