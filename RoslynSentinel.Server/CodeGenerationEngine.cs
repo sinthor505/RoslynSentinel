@@ -675,4 +675,284 @@ public class CodeGenerationEngine
         var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
         return (await formatted.GetTextAsync(ct)).ToString();
     }
+
+    /// <summary>
+    /// Converts a property between auto-property and full property with backing field.
+    /// Unlike the built-in convert_property, this preserves initializers on ToFullProperty and
+    /// correctly handles all modifiers (virtual, override, new). direction: "ToFullProperty" or "ToAutoProperty".
+    /// contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
+    /// </summary>
+    public async Task<string> ConvertPropertySafeAsync(
+        string filePath,
+        string propertyName,
+        string direction,
+        string? contextSnippet = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        PropertyDeclarationSyntax? propNode = null;
+        if (contextSnippet != null)
+        {
+            var srcText = (await document.GetTextAsync(ct)).ToString();
+            var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet);
+            propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                .AncestorsAndSelf()
+                .OfType<PropertyDeclarationSyntax>()
+                .FirstOrDefault();
+        }
+
+        propNode ??= root.DescendantNodes()
+            .OfType<PropertyDeclarationSyntax>()
+            .FirstOrDefault(p => p.Identifier.Text == propertyName);
+
+        if (propNode == null) return string.Empty;
+
+        SyntaxNode newRoot = direction switch
+        {
+            "ToFullProperty" => BuildFullProperty(root, propNode),
+            "ToAutoProperty" => BuildAutoProperty(root, propNode),
+            _ => throw new ArgumentException($"Unknown direction '{direction}'. Use 'ToFullProperty' or 'ToAutoProperty'.")
+        };
+
+        var updatedDoc = document.WithSyntaxRoot(newRoot);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
+
+    private static SyntaxNode BuildFullProperty(SyntaxNode root, PropertyDeclarationSyntax propNode)
+    {
+        var propName = propNode.Identifier.Text;
+        var fieldName = "_" + char.ToLower(propName[0]) + propName.Substring(1);
+        var propType = propNode.Type.WithoutTrivia();
+
+        var initializer = propNode.Initializer;
+        var varDeclarator = initializer != null
+            ? SyntaxFactory.VariableDeclarator(fieldName).WithInitializer(initializer.WithoutTrivia())
+            : SyntaxFactory.VariableDeclarator(fieldName);
+
+        var fieldDecl = SyntaxFactory.FieldDeclaration(
+                SyntaxFactory.VariableDeclaration(propType).AddVariables(varDeclarator))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+
+        bool hasGetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) ?? true;
+        bool hasSetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) ?? true;
+
+        var accessors = new List<AccessorDeclarationSyntax>();
+        if (hasGetter)
+            accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName(fieldName)))
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        if (hasSetter)
+            accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
+                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
+                    SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(fieldName),
+                        SyntaxFactory.IdentifierName("value"))))
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+
+        var newPropNode = SyntaxFactory.PropertyDeclaration(propType, propNode.Identifier)
+            .WithModifiers(propNode.Modifiers)
+            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
+
+        return ReplacePropertyInType(root, propNode, newPropNode, fieldDecl);
+    }
+
+    private static SyntaxNode BuildAutoProperty(SyntaxNode root, PropertyDeclarationSyntax propNode)
+    {
+        var propName = propNode.Identifier.Text;
+        var fieldName = "_" + char.ToLower(propName[0]) + propName.Substring(1);
+        var propType = propNode.Type.WithoutTrivia();
+
+        var typeDecl = propNode.Ancestors().OfType<TypeDeclarationSyntax>().First();
+        var backingField = typeDecl.Members.OfType<FieldDeclarationSyntax>()
+            .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
+
+        var fieldInitializer = backingField?.Declaration.Variables
+            .FirstOrDefault(v => v.Identifier.Text == fieldName)?.Initializer;
+
+        bool hasGetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) ?? true;
+        bool hasSetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) ?? true;
+
+        var accessors = new List<AccessorDeclarationSyntax>();
+        if (hasGetter)
+            accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        if (hasSetter)
+            accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+
+        var newProp = SyntaxFactory.PropertyDeclaration(propType, propNode.Identifier)
+            .WithModifiers(propNode.Modifiers)
+            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
+
+        if (fieldInitializer != null)
+            newProp = newProp
+                .WithInitializer(fieldInitializer.WithoutTrivia())
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+        var members = typeDecl.Members.ToList();
+        var propIdx = members.FindIndex(m => ReferenceEquals(m, propNode));
+        if (propIdx < 0) return root;
+
+        members[propIdx] = newProp;
+        if (backingField != null)
+        {
+            var fieldIdx = members.FindIndex(m => ReferenceEquals(m, backingField));
+            if (fieldIdx >= 0) members.RemoveAt(fieldIdx);
+        }
+
+        var newTypeDecl = SetTypeMembers(typeDecl, SyntaxFactory.List(members));
+        return root.ReplaceNode(typeDecl, newTypeDecl);
+    }
+
+    private static SyntaxNode ReplacePropertyInType(
+        SyntaxNode root, PropertyDeclarationSyntax propNode,
+        PropertyDeclarationSyntax newPropNode, FieldDeclarationSyntax fieldDecl)
+    {
+        var typeDecl = propNode.Ancestors().OfType<TypeDeclarationSyntax>().First();
+        var members = typeDecl.Members.ToList();
+        var propIdx = members.FindIndex(m => ReferenceEquals(m, propNode));
+        if (propIdx < 0) return root;
+
+        members[propIdx] = newPropNode;
+        members.Insert(propIdx, fieldDecl);
+
+        var newTypeDecl = SetTypeMembers(typeDecl, SyntaxFactory.List(members));
+        return root.ReplaceNode(typeDecl, newTypeDecl);
+    }
+
+    private static TypeDeclarationSyntax SetTypeMembers(TypeDeclarationSyntax typeDecl, SyntaxList<MemberDeclarationSyntax> members)
+        => typeDecl switch
+        {
+            ClassDeclarationSyntax cls => cls.WithMembers(members),
+            StructDeclarationSyntax str => str.WithMembers(members),
+            InterfaceDeclarationSyntax ifc => ifc.WithMembers(members),
+            RecordDeclarationSyntax rec => rec.WithMembers(members),
+            _ => typeDecl
+        };
+
+    /// <summary>
+    /// Converts a string.Format(...) call to an interpolated string ($"...").
+    /// Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments
+    /// via the semantic model so it works even when the format string is not a literal.
+    /// contextSnippet: verbatim substring identifying the string.Format call to convert.
+    /// </summary>
+    public async Task<string> InterpolateStringAsync(
+        string filePath,
+        string contextSnippet,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var srcText = (await document.GetTextAsync(ct)).ToString();
+        var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet);
+
+        var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+            .AncestorsAndSelf()
+            .OfType<InvocationExpressionSyntax>()
+            .FirstOrDefault(IsStringFormatCall);
+
+        if (invocation == null)
+            return "No string.Format call found at the given context snippet.";
+
+        var args = invocation.ArgumentList.Arguments;
+        if (args.Count < 1)
+            return "string.Format call has no arguments.";
+
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+
+        string? formatString = null;
+        var formatArgExpr = args[0].Expression;
+
+        if (formatArgExpr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            formatString = lit.Token.ValueText;
+        }
+        else if (semanticModel != null)
+        {
+            var constVal = semanticModel.GetConstantValue(formatArgExpr, ct);
+            if (constVal.HasValue && constVal.Value is string s)
+                formatString = s;
+        }
+
+        if (formatString == null)
+            return "Could not resolve the format string (not a string literal or const string).";
+
+        var fmtArgs = args.Skip(1).Select(a => a.Expression.ToString()).ToList();
+        var interpolated = BuildInterpolatedString(formatString, fmtArgs);
+
+        var replacement = SyntaxFactory.ParseExpression(interpolated).WithTriviaFrom(invocation);
+        var newRoot = root.ReplaceNode(invocation, replacement);
+
+        var updatedDoc = document.WithSyntaxRoot(newRoot);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
+
+    private static bool IsStringFormatCall(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Format")
+        {
+            return ma.Expression is PredefinedTypeSyntax pts && pts.Keyword.IsKind(SyntaxKind.StringKeyword)
+                || ma.Expression is IdentifierNameSyntax id && id.Identifier.Text is "String" or "string";
+        }
+        return false;
+    }
+
+    private static string BuildInterpolatedString(string format, List<string> args)
+    {
+        var sb = new System.Text.StringBuilder("$\"");
+        int i = 0;
+        while (i < format.Length)
+        {
+            if (i + 1 < format.Length && format[i] == '{' && format[i + 1] == '{')
+            {
+                sb.Append("{{");
+                i += 2;
+                continue;
+            }
+            if (i + 1 < format.Length && format[i] == '}' && format[i + 1] == '}')
+            {
+                sb.Append("}}");
+                i += 2;
+                continue;
+            }
+            if (format[i] == '{')
+            {
+                var end = format.IndexOf('}', i + 1);
+                if (end > i)
+                {
+                    var spec = format.Substring(i + 1, end - i - 1);
+                    var colonIdx = spec.IndexOf(':');
+                    var indexStr = colonIdx >= 0 ? spec.Substring(0, colonIdx) : spec;
+                    var formatSpec = colonIdx >= 0 ? ":" + spec.Substring(colonIdx + 1) : "";
+                    if (int.TryParse(indexStr.Trim(), out int idx) && idx < args.Count)
+                    {
+                        sb.Append('{').Append(args[idx]).Append(formatSpec).Append('}');
+                        i = end + 1;
+                        continue;
+                    }
+                }
+            }
+            if (format[i] == '"') sb.Append("\\\"");
+            else sb.Append(format[i]);
+            i++;
+        }
+        sb.Append('"');
+        return sb.ToString();
+    }
 }

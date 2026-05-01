@@ -19,6 +19,7 @@ public class SentinelQualityTools
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ThreadSafetyEngine _threadSafetyEngine;
+    private readonly DiagnosticEngine _diagnosticEngine;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -32,6 +33,7 @@ public class SentinelQualityTools
         AntiPatternEngine antiPatternEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         ThreadSafetyEngine threadSafetyEngine,
+        DiagnosticEngine diagnosticEngine,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -44,6 +46,7 @@ public class SentinelQualityTools
         _antiPatternEngine = antiPatternEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _threadSafetyEngine = threadSafetyEngine;
+        _diagnosticEngine = diagnosticEngine;
         _logger = logger;
     }
 
@@ -349,4 +352,57 @@ public class SentinelQualityTools
     [Description("Finds async methods not ending with 'Async', and non-async methods that end with 'Async'. Excludes event handlers.")]
     public async Task<List<AntiPatternFinding>> FindInconsistentAsyncSuffix(string? filePath = null, string? projectName = null)
         => await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("""
+        Returns a grouped summary of Roslyn compiler diagnostics (errors and warnings) for a file,
+        project, or the entire solution. Groups by diagnostic ID (e.g. CS0103) so you can see which
+        issues are most common without scrolling through hundreds of raw messages.
+        filePath: analyze a single file (mutually exclusive with projectName).
+        projectName: analyze all files in a project.
+        Leave both null to analyze the entire solution.
+        topN: max number of groups to return, sorted by count descending (default 20).
+        Returns TotalIssues, Errors, Warnings, and a TopIssues list with DiagnosticId, Severity,
+        MessageTemplate, Count, and Locations.
+        """)]
+    public async Task<DiagnosticsSummaryResult> GetDiagnosticsSummary(
+        string? filePath = null, string? projectName = null, int topN = 20)
+    {
+        DiagnosticSummary summary;
+        if (filePath != null)
+            summary = await _diagnosticEngine.GetFileDiagnosticsAsync(filePath);
+        else if (projectName != null)
+            summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(projectName);
+        else
+            summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+
+        var relevant = summary.Details
+            .Where(d => d.Severity is "Error" or "Warning")
+            .ToList();
+
+        var groups = relevant
+            .GroupBy(d => d.Id)
+            .Select(g =>
+            {
+                var first = g.First();
+                var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
+                return new DiagnosticGroupSummary(
+                    DiagnosticId: g.Key,
+                    Severity: first.Severity,
+                    MessageTemplate: first.Message,
+                    Count: g.Count(),
+                    Locations: locations
+                );
+            })
+            .OrderByDescending(g => g.Count)
+            .Take(topN)
+            .ToList();
+
+        return new DiagnosticsSummaryResult(
+            TotalIssues: relevant.Count,
+            Errors: summary.Errors,
+            Warnings: summary.Warnings,
+            TopIssues: groups
+        );
+    }
 }

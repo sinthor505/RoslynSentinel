@@ -50,6 +50,21 @@ public record DataFlowSummary(
     List<string> DataFlowWarnings
 );
 
+public record FormatHunk(
+    int StartLine,
+    int EndLine,
+    List<string> ContextBefore,
+    List<string> RemovedLines,
+    List<string> AddedLines,
+    List<string> ContextAfter
+);
+
+public record FormatPreviewResult(
+    bool Changed,
+    int TotalHunks,
+    List<FormatHunk> Hunks
+);
+
 public class RefactoringEngine
 {
     private readonly ILogger<RefactoringEngine> _logger;
@@ -1893,5 +1908,90 @@ public class RefactoringEngine
         var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
         var newRoot = root.ReplaceNode(method, newMethod);
         return newRoot.ToFullString();
+    }
+
+    /// <summary>
+    /// Returns a preview of what FormatDocument would change without applying changes.
+    /// Shows changed line ranges with ±3 lines of context (like a unified diff).
+    /// Returns Changed=false and an empty hunks list if the file is already formatted correctly.
+    /// </summary>
+    public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(string filePath, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new FormatPreviewResult(false, 0, new List<FormatHunk>());
+
+        var originalText = (await document.GetTextAsync(ct)).ToString();
+        var formattedDoc = await Formatter.FormatAsync(document, null, ct);
+        var formattedText = (await formattedDoc.GetTextAsync(ct)).ToString();
+
+        if (originalText == formattedText)
+            return new FormatPreviewResult(false, 0, new List<FormatHunk>());
+
+        var originalLines = originalText.Split('\n');
+        var formattedLines = formattedText.Split('\n');
+        var hunks = ComputeFormatHunks(originalLines, formattedLines, contextLines: 3);
+
+        return new FormatPreviewResult(true, hunks.Count, hunks);
+    }
+
+    private static List<FormatHunk> ComputeFormatHunks(string[] original, string[] formatted, int contextLines)
+    {
+        var changedLines = new List<int>();
+        var minLen = Math.Min(original.Length, formatted.Length);
+
+        for (int i = 0; i < minLen; i++)
+            if (original[i] != formatted[i])
+                changedLines.Add(i);
+
+        for (int i = minLen; i < Math.Max(original.Length, formatted.Length); i++)
+            changedLines.Add(i);
+
+        if (changedLines.Count == 0) return new List<FormatHunk>();
+
+        // Group nearby changed lines into hunks
+        var groups = new List<(int start, int end)>();
+        int gStart = changedLines[0], gEnd = changedLines[0];
+        for (int k = 1; k < changedLines.Count; k++)
+        {
+            if (changedLines[k] - gEnd <= contextLines * 2 + 1)
+                gEnd = changedLines[k];
+            else
+            {
+                groups.Add((gStart, gEnd));
+                gStart = gEnd = changedLines[k];
+            }
+        }
+        groups.Add((gStart, gEnd));
+
+        var hunks = new List<FormatHunk>();
+        foreach (var (start, end) in groups)
+        {
+            var ctxBeforeStart = Math.Max(0, start - contextLines);
+            var ctxBefore = Enumerable.Range(ctxBeforeStart, start - ctxBeforeStart)
+                .Select(l => original[l]).ToList();
+
+            var removed = Enumerable.Range(start, Math.Min(end + 1, original.Length) - start)
+                .Select(l => original[l]).ToList();
+
+            var added = Enumerable.Range(start, Math.Min(end + 1, formatted.Length) - start)
+                .Select(l => formatted[l]).ToList();
+
+            var ctxAfter = Enumerable.Range(end + 1, contextLines)
+                .Where(l => l < original.Length)
+                .Select(l => original[l]).ToList();
+
+            hunks.Add(new FormatHunk(
+                StartLine: start + 1,
+                EndLine: end + 1,
+                ContextBefore: ctxBefore,
+                RemovedLines: removed,
+                AddedLines: added,
+                ContextAfter: ctxAfter
+            ));
+        }
+
+        return hunks;
     }
 }

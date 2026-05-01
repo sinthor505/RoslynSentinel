@@ -302,4 +302,29 @@ public async Task<List<string>> FindStructuralSmells(
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate.")]
     public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null)
         => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet);
+
+    [McpServerTool]
+    [Description("""
+        Finds all call sites (references) to a symbol in the solution without requiring line/column coordinates.
+        Unlike the built-in find_callers which needs a line number, this locates the symbol by name with
+        an optional contextSnippet to disambiguate overloads.
+        symbolName: the method/property/field name to search for.
+        contextSnippet: optional verbatim substring of the declaration (e.g. the method signature line).
+        Returns CallerMethod, CallerType, FilePath, Line, and CodeSnippet for each call site.
+        """)]
+    public async Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null)
+        => await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet);
+
+    [McpServerTool]
+    [Description("""
+        Finds all implementations of an interface member or virtual/abstract method in the solution
+        without requiring line/column coordinates.
+        Unlike the built-in find_implementations which needs a line number, this locates the symbol by name
+        with an optional contextSnippet.
+        symbolName: the interface member or virtual method name.
+        contextSnippet: optional verbatim substring of the declaration to disambiguate overloads.
+        Returns TypeName, FilePath, Line, and Kind for each implementing symbol.
+        """)]
+    public async Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null)
+        => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet);
 }

@@ -97,4 +97,32 @@ public class SentinelGenerationTools
     [Description("Generates stub implementations for all unimplemented members of an interface on a class. Unlike the built-in implement_interface, this never adds the 'override' keyword (which is incorrect for interface implementations). Pass filePath of the class file, className of the implementing class, and interfaceName of the interface to implement.")]
     public async Task<string> ImplementInterfaceSafe(string filePath, string className, string interfaceName)
         => await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
+
+    [McpServerTool]
+    [Description("""
+        Converts a property between auto-property and full property with backing field.
+        Unlike the built-in convert_property, this correctly preserves initializers when converting
+        ToFullProperty (the initializer moves to the backing field) and handles virtual/override/new
+        modifiers without dropping them.
+        direction: "ToFullProperty" (auto-prop → backing field + expression-body accessors) or
+                   "ToAutoProperty" (full property → auto-prop, moving backing field initializer to property).
+        propertyName: the property to convert.
+        contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
+        Returns the updated file content.
+        """)]
+    public async Task<string> ConvertPropertySafe(
+        string filePath, string propertyName, string direction, string? contextSnippet = null)
+        => await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet);
+
+    [McpServerTool]
+    [Description("""
+        Converts a string.Format(...) call to an interpolated string ($"...").
+        Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments
+        via the semantic model, so it works even when the format string is a named const rather than a
+        literal. Handles {0:format} format specifiers correctly.
+        contextSnippet: verbatim substring identifying the string.Format call to convert (required).
+        Returns the updated file content.
+        """)]
+    public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet)
+        => await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet);
 }

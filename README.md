@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 219 MCP Tools across 55 Specialized Engines
+## 🚀 226 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -14,7 +14,7 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **Namespace management**: `fix_mismatched_namespaces`, `move_file_to_namespace_folder`.
 
 ### 🛠️ Refactoring — 63 tools ("The Surgical Suite")
-*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface, `sync_interface_to_implementation`, `update_xml_docs_from_signature`, `convert_expression_body` (block↔expression form by member name), `extract_constant` (literal → named `const`), `analyze_control_flow` (always/sometimes/never-returns per method), `analyze_data_flow` (read/written/captured variables per method).
+*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface, `sync_interface_to_implementation`, `update_xml_docs_from_signature`, `convert_expression_body` (block↔expression form by member name), `extract_constant` (literal → named `const`), `analyze_control_flow` (always/sometimes/never-returns per method), `analyze_data_flow` (read/written/captured variables per method), `format_document_preview` *(new — preview formatter changes before applying)*.
 *   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable`, `introduce_parameter_object` (groups method parameters into a new `record` type; adds TODO for call-site updates).
 *   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class.
 *   **`AdvancedRefactoringEngine`**: Replace string concatenation with interpolation; optimize `.Result`/`.Wait()` to `await`.
@@ -54,7 +54,7 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 ### 🔍 Intelligence & Analysis — 40 tools
 *   **`AnalysisEngine`**: Find large types/methods, duplicate methods, interface extraction candidates, **memory leak detection** (event subscription without `IDisposable`), **infinite loop detection**, **call tree generation**, **equality override generation** (`HashCode.Combine`).
 *   **`MetricsEngine`**: Code quality metrics (cyclomatic complexity, maintainability index, LCOM cohesion).
-*   **`SymbolNavigationEngine`**: `get_call_graph`, `get_reverse_call_graph` (who calls this method), extension method discovery.
+*   **`SymbolNavigationEngine`**: `get_call_graph`, `get_reverse_call_graph` (who calls this method), extension method discovery, `find_callers_safe` (all references without line/col), `find_implementations_safe` (all implementations without line/col).
 *   **`ArchitecturalEngine`**: `find_circular_dependencies` (Tarjan's SCC), `convert_to_background_service`.
 *   **`DeadCodeEngine`**: Unused private members/constructors (with DI false-positive avoidance), unmatched event subscriptions (`+=` without `-=`).
 *   **`AsyncSafetyEngine`**: Flag `.Result`, `.Wait()`, `ConfigureAwait`, `find_missing_cancellation_tokens`; `find_configure_await_missing`, `find_blocking_calls_in_async`, `find_async_in_constructor`, `find_task_run_in_async`, `find_concurrent_collection_opportunities`, `find_unsafe_lazy_init`, `find_async_over_sync` (async methods with no real awaits), `find_unawaited_fire_and_forget`, `detect_valuetask_misuse` (double-await, deferred, `Task.WhenAll`, `.Result` on ValueTask).
@@ -64,16 +64,20 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`DiscoveryEngine`**: `find_all_throw_sites`, `find_object_creation_sites`, `get_public_api_surface`, `find_best_insertion_point` (returns optimal line to insert a field/ctor/property/method/event/nested type by convention), `find_todo_fixme_comments` (scans TODO/FIXME/HACK/BUG/REVIEW comments across file/project/solution, severity-ranked), `preview_rename_impact` (impact analysis before rename: count, files, test refs).
 *   **`SemanticSearchEngine`**: Cross-solution symbol and usage search.
 
-### 🔎 Quality & Anti-Patterns — 38 tools
+### 🔎 Quality & Anti-Patterns — 39 tools
 *   **`AntiPatternEngine`**: `find_mutable_public_properties`, `find_naming_violations`, `find_string_magic_values`, `analyze_exception_handling`, `find_long_parameter_list` (flags methods with ≥N params, skips DI-injection ctors), `find_primitive_obsession` (same primitive type 3+ times as distinct params), `find_inconsistent_async_suffix` (async methods missing "Async" or non-async methods with "Async" suffix).
 *   **`PerformanceEngine`**: Boxing detection, LINQ materialization, string concatenation in loops.
 *   **`SecurityEngine`**: SQL injection, hardcoded secrets, weak hash algorithms, insecure `new Random()`.
 *   **`TestingEngine`**: Missing assertions, test code smell detection.
 *   **`CodeStyleEngine`** (new): `find_use_frozen_collections` — detects `private static readonly Dictionary/HashSet` initialized inline that could be `FrozenDictionary`/`FrozenSet` for zero-allocation lookups.
+*   **`GetDiagnosticsSummary`** *(new)*: Groups Roslyn compiler diagnostics (CS-codes) by ID across file/project/solution, sorted by frequency — shows which errors are most common without scrolling through hundreds of raw messages.
 
-### 🏭 Code Generation — 11 tools
+### 🏭 Code Generation — 14 tools
 *   **`CodeGenerationEngine`**: Fluent builder, default config JSON, decorator class generation.
-*   **`ImplementInterfaceSafe`** *(new — use instead of built-in `implement_interface`)*: Generates correct `public` method/property stubs with `throw new NotImplementedException()` — **never adds `override`** (which is incorrect for interface implementations). Accepts `filePath`, `typeName`, `interfaceName`; optionally limit to specific `members`.
+*   **`ImplementInterfaceSafe`** *(use instead of built-in `implement_interface`)*: Generates correct `public` method/property stubs with `throw new NotImplementedException()` — **never adds `override`** (which is incorrect for interface implementations).
+*   **`ConvertPropertySafe`** *(new — use instead of built-in `convert_property`)*: Converts a property between auto-property and full property with backing field. Unlike the built-in, this **preserves initializers** when converting `ToFullProperty` (initializer moves to the backing field) and keeps `virtual`/`override`/`new` modifiers. Direction: `"ToFullProperty"` or `"ToAutoProperty"`.
+*   **`InterpolateStringSafe`** *(new — use instead of built-in `convert_to_interpolated_string`)*: Converts `string.Format(...)` to an interpolated string. Unlike the built-in, this resolves **const string format arguments** via the semantic model, so it works even when the format string is a named const rather than a literal.
+*   **`FormatDocumentPreview`** *(new)*: Returns a unified-diff-style preview of what `format_document` would change, without applying any changes. Returns `Changed=false` and an empty `Hunks` list if the file is already formatted correctly. Each hunk includes ±3 context lines.
 *   **`ApiIntegrationEngine`**: `add_validation_to_poco` — add `[Required]`/`[Range]` annotations to plain objects.
 *   **`AsyncOptimizationEngine`**: Generate async method overloads.
 

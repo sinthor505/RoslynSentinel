@@ -35,3 +35,18 @@ public static class DiagnosticExtensions
         );
     }
 }
+
+public record DiagnosticGroupSummary(
+    string DiagnosticId,
+    string Severity,
+    string MessageTemplate,
+    int Count,
+    List<string> Locations
+);
+
+public record DiagnosticsSummaryResult(
+    int TotalIssues,
+    int Errors,
+    int Warnings,
+    List<DiagnosticGroupSummary> TopIssues
+);

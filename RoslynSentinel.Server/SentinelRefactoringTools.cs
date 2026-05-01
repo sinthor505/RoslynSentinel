@@ -699,4 +699,15 @@ public class SentinelRefactoringTools
                  "Returns: ReadBeforeAssignment, WrittenInside, ReadInside, CapturedVariables, DataFlowWarnings.")]
     public async Task<DataFlowSummary> AnalyzeDataFlow(string filePath, string methodName, string? contextSnippet = null)
         => await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, contextSnippet);
+
+    [McpServerTool]
+    [Description("""
+        Returns a preview of what format_document would change without applying the changes.
+        Shows each changed line range with ±3 lines of context (similar to a unified diff).
+        Returns Changed=false and an empty Hunks list if the file is already formatted correctly.
+        Use this to inspect formatting changes before committing to format_document.
+        filePath: path to the .cs file to preview.
+        """)]
+    public async Task<FormatPreviewResult> FormatDocumentPreview(string filePath)
+        => await _refactoringEngine.FormatDocumentPreviewAsync(filePath);
 }

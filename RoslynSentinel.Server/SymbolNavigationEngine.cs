@@ -6,6 +6,14 @@ using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Server;
 
+public record CallerInfo(
+    string CallerMethod,
+    string CallerType,
+    string FilePath,
+    int Line,
+    string CodeSnippet
+);
+
 public record SymbolHoverInfo(
     string Name,
     string Kind,
@@ -733,5 +741,152 @@ public class SymbolNavigationEngine
         }
 
         return node;
+    }
+
+    /// <summary>
+    /// Finds all call sites (references) to a symbol in the solution.
+    /// symbolName: the member name to search for. contextSnippet: optional verbatim substring
+    /// of the declaration to disambiguate overloads (e.g. the method signature line).
+    /// Returns one CallerInfo per call site with the enclosing method, file, line, and code snippet.
+    /// </summary>
+    public async Task<List<CallerInfo>> FindCallersAsync(
+        string filePath,
+        string symbolName,
+        string? contextSnippet = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new List<CallerInfo>();
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var model = await document.GetSemanticModelAsync(ct);
+        if (root == null || model == null) return new List<CallerInfo>();
+
+        ISymbol? symbol = null;
+        if (contextSnippet != null)
+        {
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, ct);
+        }
+        else
+        {
+            var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                .FirstOrDefault(m => m switch
+                {
+                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                    FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
+                    _ => false
+                });
+            if (decl != null)
+                symbol = model.GetDeclaredSymbol(decl, ct);
+        }
+
+        if (symbol == null) return new List<CallerInfo>();
+
+        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var results = new List<CallerInfo>();
+        var seen = new HashSet<string>();
+
+        foreach (var refGroup in references)
+        {
+            foreach (var location in refGroup.Locations)
+            {
+                if (!location.Location.IsInSource) continue;
+                var refTree = location.Location.SourceTree;
+                if (refTree == null) continue;
+
+                var refDoc = solution.Projects.SelectMany(p => p.Documents)
+                    .FirstOrDefault(d => d.FilePath == refTree.FilePath);
+                if (refDoc == null) continue;
+
+                var refModel = await refDoc.GetSemanticModelAsync(ct);
+                if (refModel == null) continue;
+
+                var pos = location.Location.SourceSpan.Start;
+                var enclosing = refModel.GetEnclosingSymbol(pos, ct);
+                if (enclosing == null) continue;
+
+                var lineSpan = location.Location.GetLineSpan();
+                var line = lineSpan.StartLinePosition.Line + 1;
+
+                var key = $"{refTree.FilePath}:{line}";
+                if (!seen.Add(key)) continue;
+
+                var sourceText = await refDoc.GetTextAsync(ct);
+                var lineText = line <= sourceText.Lines.Count
+                    ? sourceText.Lines[line - 1].ToString().Trim()
+                    : string.Empty;
+
+                results.Add(new CallerInfo(
+                    CallerMethod: enclosing.Name,
+                    CallerType: enclosing.ContainingType?.Name ?? enclosing.ContainingNamespace?.Name ?? string.Empty,
+                    FilePath: refTree.FilePath ?? string.Empty,
+                    Line: line,
+                    CodeSnippet: lineText
+                ));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Finds all implementations of an interface member or virtual/abstract method in the solution.
+    /// Unlike the built-in find_implementations (which requires line numbers), this uses symbolName
+    /// with an optional contextSnippet to locate the symbol without coordinates.
+    /// Returns ImplementationInfo with type name, file, line, and kind.
+    /// </summary>
+    public async Task<List<ImplementationInfo>> FindImplementationsForMemberAsync(
+        string filePath,
+        string symbolName,
+        string? contextSnippet = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new List<ImplementationInfo>();
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var model = await document.GetSemanticModelAsync(ct);
+        if (root == null || model == null) return new List<ImplementationInfo>();
+
+        ISymbol? symbol = null;
+        if (contextSnippet != null)
+        {
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, ct);
+        }
+        else
+        {
+            var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                .FirstOrDefault(m => m switch
+                {
+                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                    _ => false
+                });
+            if (decl != null)
+                symbol = model.GetDeclaredSymbol(decl, ct);
+        }
+
+        if (symbol == null) return new List<ImplementationInfo>();
+
+        var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, ct);
+        var results = new List<ImplementationInfo>();
+
+        foreach (var impl in implementations)
+        {
+            var loc = impl.Locations.FirstOrDefault(l => l.IsInSource);
+            results.Add(new ImplementationInfo(
+                TypeName: impl.ToDisplayString(),
+                FilePath: loc?.SourceTree?.FilePath,
+                Line: loc != null ? loc.GetLineSpan().StartLinePosition.Line + 1 : null,
+                Kind: impl.Kind.ToString()
+            ));
+        }
+
+        return results;
     }
 }
