@@ -138,7 +138,104 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
         var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var forEach = root.DescendantNodes()
+            .OfType<ForEachStatementSyntax>()
+            .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
+
+        if (forEach == null) return root.ToFullString();
+
+        var collection = forEach.Expression;
+        var varName = forEach.Identifier.Text;
+
+        // Determine whether to use .Length or .Count
+        string lengthProp = "Count";
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (semanticModel != null)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(collection, ct);
+            if (typeInfo.Type?.TypeKind == TypeKind.Array)
+                lengthProp = "Length";
+        }
+        else
+        {
+            // Fallback: if the type syntax has [] it's an array
+            if (forEach.Type.ToString().Contains("[]"))
+                lengthProp = "Length";
+        }
+
+        // Pick a safe index variable name
+        var bodyText = forEach.Statement.ToFullString();
+        string indexVar = "i";
+        if (System.Text.RegularExpressions.Regex.IsMatch(bodyText, @"\bi\b"))
+            indexVar = "j";
+        if (indexVar == "j" && System.Text.RegularExpressions.Regex.IsMatch(bodyText, @"\bj\b"))
+            indexVar = "k";
+
+        var collectionStr = collection.ToString();
+
+        // var varName = collection[indexVar];
+        var elementAccessStmt = SyntaxFactory.LocalDeclarationStatement(
+            SyntaxFactory.VariableDeclaration(
+                SyntaxFactory.IdentifierName("var"),
+                SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(
+                        SyntaxFactory.Identifier(varName),
+                        null,
+                        SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.ElementAccessExpression(
+                                SyntaxFactory.ParseExpression(collectionStr),
+                                SyntaxFactory.BracketedArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.IdentifierName(indexVar))))))))));
+
+        // Build the body block
+        BlockSyntax newBody;
+        if (forEach.Statement is BlockSyntax block)
+        {
+            newBody = block.WithStatements(block.Statements.Insert(0, elementAccessStmt));
+        }
+        else
+        {
+            newBody = SyntaxFactory.Block(elementAccessStmt, forEach.Statement);
+        }
+
+        // for (int i = 0; i < collection.LengthOrCount; i++)
+        var initializer = SyntaxFactory.VariableDeclaration(
+            SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
+            SyntaxFactory.SingletonSeparatedList(
+                SyntaxFactory.VariableDeclarator(
+                    SyntaxFactory.Identifier(indexVar),
+                    null,
+                    SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.LiteralExpression(
+                            SyntaxKind.NumericLiteralExpression,
+                            SyntaxFactory.Literal(0))))));
+
+        var condition = SyntaxFactory.BinaryExpression(
+            SyntaxKind.LessThanExpression,
+            SyntaxFactory.IdentifierName(indexVar),
+            SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                SyntaxFactory.ParseExpression(collectionStr),
+                SyntaxFactory.IdentifierName(lengthProp)));
+
+        var incrementors = SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
+            SyntaxFactory.PostfixUnaryExpression(
+                SyntaxKind.PostIncrementExpression,
+                SyntaxFactory.IdentifierName(indexVar)));
+
+        var forStatement = SyntaxFactory.ForStatement(
+            initializer,
+            SyntaxFactory.SeparatedList<ExpressionSyntax>(),
+            condition,
+            incrementors,
+            newBody);
+
+        var newRoot = root.ReplaceNode(forEach, forStatement);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> ConvertForToForEachAsync(string filePath, int line, CancellationToken ct = default)

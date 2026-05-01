@@ -56,7 +56,11 @@ The server is transitioning to a "Refactor Recipe" model where AI agents issue h
 
 ## Still-Stub Methods (Skipped — no real implementation in engine)
 These engine methods exist as stubs/no-ops and were not wrapped:
-- `ConvertIfToSwitchExpression/Statement`, `ConvertForEachToFor`, `ConvertForToForEach`, `ConvertWhileToFor`
-- `InlineClassAsync`, `UseSpanForParsing`, `UseThrowExpressions`, `UseObjectInitializers`, `UseNullPropagation`
+- `ConvertForToForEach`, `ConvertWhileToFor` (AdvancedLogicEngine)
+- `InlineClassAsync` (AdvancedStructuralEngine)
+- `UseSpanForParsing` (ModernizationUpgradeEngine)
+- `UseThrowExpressions`, `UseNullPropagation` (IDEStyleEngine/ModernizationUpgradeEngine)
 - `AddRetryPolicy`, `RunSpecificRule`, `RunMicroRefactoring`
 - `ModernizationUpgradeEngine.ConvertSwitchToExpression` — duplicate name conflict with `SyntaxUpgradeEngine` version
+
+*Note (subsequent session — session 3): 8 new tools added (PullUpMember exposed, CheckForSqlInjection exposed, DiscoveryEngine created with FindAllThrowSites/FindObjectCreationSites/GetPublicApiSurface, FindServicesNotRegistered added to DependencyInjectionEngine, ConvertForEachToFor implemented, UseObjectInitializers implemented). 18 new tests added in DiscoveryEngineTests.cs and related files. Total: **224 passing tests, 170 MCP tools across 53 engines**.*

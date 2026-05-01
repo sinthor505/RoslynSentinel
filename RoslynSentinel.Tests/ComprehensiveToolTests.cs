@@ -52,6 +52,7 @@ public class ComprehensiveToolTests
     private ArchitecturalEngine _architecturalEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
+    private DiscoveryEngine _discoveryEngine;
     private IDEStyleEngine _ideStyleEngine;
     private ImmutabilityEngine _immutabilityEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -112,6 +113,7 @@ public class ComprehensiveToolTests
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
@@ -120,7 +122,7 @@ public class ComprehensiveToolTests
         _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
 
         _workspaceTools= new SentinelWorkspaceTools(_workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine, _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance);
-        _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _config, NullLogger<SentinelIntelligenceTools>.Instance);
+        _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, _config, NullLogger<SentinelIntelligenceTools>.Instance);
         _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine, _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine, _advancedLogicEngine, _refinementEngine, _advancedTypeEngine, _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine, _advancedRefactoringEngine, _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
 
         _modernizationTools = new SentinelModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<SentinelModernizationTools>.Instance);

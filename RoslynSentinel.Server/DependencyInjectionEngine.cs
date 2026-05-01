@@ -15,6 +15,13 @@ public record DiRegistration(
     int Line,
     string CallSite);
 
+public record UnregisteredServiceFinding(
+    string ConsumerClass,
+    string ConsumerFile,
+    int Line,
+    string MissingType,
+    string ConstructorParam);
+
 public class DependencyInjectionEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -210,5 +217,100 @@ public class DependencyInjectionEngine
 
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
         return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private static readonly HashSet<string> _frameworkProvidedTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ILogger", "IOptions", "IConfiguration", "IHostEnvironment",
+        "IServiceProvider", "IHttpClientFactory", "IMemoryCache", "IDistributedCache"
+    };
+
+    private static readonly HashSet<string> _serviceNameSuffixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Service", "Repository", "Manager", "Factory", "Provider",
+        "Handler", "Validator", "Dispatcher"
+    };
+
+    private static bool LooksLikeInjectedService(string typeName)
+    {
+        var simpleName = typeName.Split('<')[0].Split('.').Last();
+        if (simpleName.Length >= 2 && simpleName[0] == 'I' && char.IsUpper(simpleName[1]))
+            return true;
+        foreach (var suffix in _serviceNameSuffixes)
+            if (simpleName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    private static bool IsFrameworkProvided(string typeName)
+    {
+        var simpleName = typeName.Split('<')[0].Split('.').Last();
+        foreach (var framework in _frameworkProvidedTypes)
+            if (simpleName.StartsWith(framework, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Scans all constructors in the solution (or a specific project) and reports
+    /// injected service parameters whose types are not found in any DI registration.
+    /// </summary>
+    public async Task<List<UnregisteredServiceFinding>> FindServicesNotRegisteredAsync(
+        string? projectName = null,
+        CancellationToken ct = default)
+    {
+        var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
+        var registeredTypes = new HashSet<string>(
+            registrations.Select(r => r.ServiceType.Split('<')[0].Split('.').Last()),
+            StringComparer.OrdinalIgnoreCase);
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<UnregisteredServiceFinding>();
+
+        var documents = solution.Projects
+            .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(p => p.Documents);
+
+        foreach (var doc in documents)
+        {
+            if (doc.FilePath == null) continue;
+
+            // Skip test files
+            if (doc.FilePath.Contains(".Tests.") ||
+                doc.FilePath.Contains("Tests\\") ||
+                doc.FilePath.Contains("Tests/"))
+                continue;
+
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var ctor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
+            {
+                var containingClass = ctor.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+                var className = containingClass?.Identifier.Text ?? "<unknown>";
+
+                foreach (var param in ctor.ParameterList.Parameters)
+                {
+                    if (param.Type == null) continue;
+
+                    var typeName = param.Type.ToString();
+                    var simpleName = typeName.Split('<')[0].Split('.').Last();
+
+                    if (!LooksLikeInjectedService(typeName)) continue;
+                    if (IsFrameworkProvided(typeName)) continue;
+                    if (registeredTypes.Contains(simpleName)) continue;
+
+                    var lineSpan = param.GetLocation().GetLineSpan();
+                    results.Add(new UnregisteredServiceFinding(
+                        className,
+                        doc.FilePath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        typeName,
+                        param.Identifier.Text));
+                }
+            }
+        }
+
+        return results;
     }
 }

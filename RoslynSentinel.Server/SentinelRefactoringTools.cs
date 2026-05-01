@@ -301,4 +301,24 @@ public class SentinelRefactoringTools
     [Description("Adds .ConfigureAwait(false) to all await expressions in a file for library-safe async code.")]
     public async Task<string> OptimizeTaskWait(string filePath)
         => await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath);
+
+    [McpServerTool]
+    [Description("""
+        Pulls a member (method or property) up from a derived class to its base class.
+        
+        Removes the 'override' modifier and adds 'virtual' (if not already abstract/virtual),
+        then moves the declaration from the derived class into the base class. Returns a two-file
+        change dict: derived class file (with member removed) + base class file (with member added).
+        
+        Requires: the source class has a base class with accessible source code in the solution.
+        If autoStage is true (default), returns a ChangeId for use with ApplyStagedChanges.
+        """)]
+    public async Task<object> PullUpMember(string filePath, string className, string memberName, bool autoStage = true)
+    {
+        var changes = await _refinementEngine.PullUpMemberAsync(filePath, className, memberName);
+        if (!autoStage) return changes;
+        if (changes.Count == 0) return $"Member '{memberName}' not found or no accessible base class available.";
+        var id = _workspaceManager.StageChanges(changes, $"Pull up '{memberName}' from '{className}' to base class.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Pulls '{memberName}' from '{className}' up to its base class.");
+    }
 }

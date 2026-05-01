@@ -89,6 +89,7 @@ builder.Services.AddSingleton<ControlFlowEngine>();
 builder.Services.AddSingleton<HealthOrchestrationEngine>();
 builder.Services.AddSingleton<SymbolNavigationEngine>();
 builder.Services.AddSingleton<AntiPatternEngine>();
+builder.Services.AddSingleton<DiscoveryEngine>();
 
 // --- Configure MCP Server Transport ---
 var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();

@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 162 MCP Tools across 52 Specialized Engines
+## 🚀 170 MCP Tools across 53 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -13,7 +13,7 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **Project/solution diagnostics**: `get_project_diagnostics`, `get_solution_diagnostics`, `split_project_by_folder`.
 *   **Namespace management**: `fix_mismatched_namespaces`, `move_file_to_namespace_folder`.
 
-### 🛠️ Refactoring — 37 tools ("The Surgical Suite")
+### 🛠️ Refactoring — 38 tools ("The Surgical Suite")
 *   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface.
 *   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable` — promote expressions to named locals/fields/parameters at a given line+column.
 *   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class, adding `virtual` and removing `override`.
@@ -26,27 +26,28 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`CodeStyleEngine`**: .NET 10 **Lock Modernization**, C# 14 **Field-Backed Properties**, **Implicit Span Cleanup**, Collection Expressions (`[]`).
 *   **`SyntaxUpgradeEngine`**: Modern Guard Clauses (`ThrowIfNull`), Switch Expressions, `upgrade_to_modern_guards`, `convert_switch_to_expression`, `cleanup_implicit_spans`.
 *   **`ModernizationEngine`**: Class-to-Record / Record-to-Class (POCO modernization).
-*   **`IDEStyleEngine`**: Simplify member access chains.
+*   **`IDEStyleEngine`**: Simplify member access chains; `use_object_initializers` — converts `new T()` + consecutive property assignments into object initializer syntax.
 *   **`ImmutabilityEngine`**: Convert mutable classes to immutable (init-only / records).
 *   **`AsyncOptimizationEngine`**: `optimize_to_value_task`, `optimize_independent_awaits`, `generate_async_overload`.
 *   **`ModernLoggingEngine`**: Convert to source-generated logging.
 *   **`LogicOptimizationEngine`**: Simplify boolean expressions.
-*   **`AdvancedLogicEngine`**: `convert_static_to_extension`, `invert_boolean_logic`.
+*   **`AdvancedLogicEngine`**: `convert_static_to_extension`, `invert_boolean_logic`, `convert_foreach_to_for` — rewrite `foreach` over an indexed collection to an equivalent `for` loop with index variable.
 
-### 🔍 Intelligence & Analysis — 36 tools
+### 🔍 Intelligence & Analysis — 40 tools
 *   **`AnalysisEngine`**: Find large types/methods, duplicate methods, interface extraction candidates, **memory leak detection** (event subscription without `IDisposable`), **infinite loop detection**, **call tree generation**, **equality override generation** (`HashCode.Combine`).
 *   **`MetricsEngine`**: Code quality metrics (cyclomatic complexity, maintainability index, LCOM cohesion).
 *   **`SymbolNavigationEngine`**: `get_call_graph`, `get_reverse_call_graph` (who calls this method), extension method discovery.
 *   **`ArchitecturalEngine`**: `find_circular_dependencies` (Tarjan's SCC), `convert_to_background_service`.
 *   **`DeadCodeEngine`**: Unused private members/constructors (with DI false-positive avoidance), unmatched event subscriptions (`+=` without `-=`).
 *   **`AsyncSafetyEngine`**: Flag `.Result`, `.Wait()`, `ConfigureAwait`, `find_missing_cancellation_tokens`; detect `Task.Yield`, `Task.Delay`, `Task.Delay(0)`, and sequential `await` patterns better served by `Task.WhenAll`.
-*   **`DependencyInjectionEngine`**: Analyze service lifetimes and DI correctness.
+*   **`DependencyInjectionEngine`**: Analyze service lifetimes, DI correctness, and `find_services_not_registered` — heuristically detects constructor-injected services that are never registered in the DI container (catches the missing-registration bug class).
+*   **`DiscoveryEngine`**: `find_all_throw_sites` (find every throw across a file/project/solution, filterable by exception type), `find_object_creation_sites` (find every `new T()` for a named type), `get_public_api_surface` (enumerate all public types/methods/properties in a project for API audits).
 *   **`SemanticSearchEngine`**: Cross-solution symbol and usage search.
 
-### 🔎 Quality & Anti-Patterns — 30 tools
+### 🔎 Quality & Anti-Patterns — 33 tools
 *   **`AntiPatternEngine`**: `find_mutable_public_properties`, `find_naming_violations`, `find_string_magic_values`, `analyze_exception_handling`.
 *   **`PerformanceEngine`**: Boxing detection, LINQ materialization, string concatenation in loops.
-*   **`SecurityEngine`**: SQL injection (dynamic/interpolated strings in SQL calls), hardcoded secrets (name-pattern matching), weak hash algorithms (MD5/SHA1), insecure `new Random()` in security-sensitive contexts.
+*   **`SecurityEngine`**: SQL injection (dynamic/interpolated strings in SQL calls, `check_for_sql_injection`), hardcoded secrets (name-pattern matching), weak hash algorithms (MD5/SHA1), insecure `new Random()` in security-sensitive contexts.
 *   **`TestingEngine`**: Missing assertions, test code smell detection.
 
 ### 🏭 Code Generation — 10 tools

@@ -200,6 +200,22 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Scans a file for potential SQL injection vulnerabilities.
+        
+        Detects calls to common SQL execution methods (ExecuteNonQuery, ExecuteReader,
+        ExecuteScalar, FromSqlRaw, Query, etc.) where the first argument is a dynamic
+        string — either an interpolated string with expressions ($"...{x}...") or string
+        concatenation involving a non-literal operand.
+        
+        Returns a list of SecurityIssueReport with IssueType='PossibleSqlInjection',
+        file path, line/column, and a description recommending parameterized queries.
+        Does NOT check CommandText property assignments.
+        """)]
+    public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string filePath)
+        => await _securityEngine.CheckForSqlInjectionAsync(filePath);
+
+    [McpServerTool]
+    [Description("""
         Analyzes control flow for an entire method body using Roslyn's semantic analysis.
         
         Unlike the raw line-based analyze_control_flow tool, this takes a method name — no

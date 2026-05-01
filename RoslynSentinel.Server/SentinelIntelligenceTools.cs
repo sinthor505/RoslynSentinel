@@ -21,6 +21,7 @@ public class SentinelIntelligenceTools
     private readonly ArchitecturalEngine _architecturalEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
+    private readonly DiscoveryEngine _discoveryEngine;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -38,6 +39,7 @@ public class SentinelIntelligenceTools
         ArchitecturalEngine architecturalEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         DependencyInjectionEngine dependencyInjectionEngine,
+        DiscoveryEngine discoveryEngine,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
@@ -55,6 +57,7 @@ public class SentinelIntelligenceTools
         _architecturalEngine = architecturalEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _dependencyInjectionEngine = dependencyInjectionEngine;
+        _discoveryEngine = discoveryEngine;
         _logger = logger;
     }
 
@@ -253,4 +256,35 @@ public async Task<List<string>> FindStructuralSmells(
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
     public async Task<string> MoveFileToNamespaceFolder(string filePath)
         => await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
+
+    [McpServerTool]
+    [Description("Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Useful for auditing error handling patterns, finding where specific exceptions are raised, and reviewing exception message quality. Use exceptionType to narrow to e.g. 'ArgumentNullException' or 'InvalidOperation'.")]
+    public async Task<List<ThrowSiteInfo>> FindAllThrowSites(
+        string? exceptionType = null,
+        string? filePath = null,
+        string? projectName = null)
+        => await _discoveryEngine.FindAllThrowSitesAsync(exceptionType, filePath, projectName);
+
+    [McpServerTool]
+    [Description("Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Useful for finding all places a class is instantiated, auditing factory usage, detecting missing factory patterns, or mapping the lifetime of objects. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context.")]
+    public async Task<List<ObjectCreationSite>> FindObjectCreationSites(
+        string typeName,
+        string? filePath = null,
+        string? projectName = null)
+        => await _discoveryEngine.FindObjectCreationSitesAsync(typeName, filePath, projectName);
+
+    [McpServerTool]
+    [Description("Returns the complete public API surface of a named project: all public types (classes, interfaces, records, structs), their public and protected methods, properties, and constructors. Each entry includes the type name, member name, full signature, kind (Class/Interface/Method/Property/Constructor/Record/Struct), virtuality/abstractness/sealed flags, and any XML documentation summary. Use includeMethods/includeProperties/includeTypes flags to filter output. Ideal for generating SDK documentation, comparing API surfaces across versions, or producing API review reports.")]
+    public async Task<List<ApiSurfaceEntry>> GetPublicApiSurface(
+        string projectName,
+        bool includeMethods = true,
+        bool includeProperties = true,
+        bool includeTypes = true)
+        => await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+
+    [McpServerTool]
+    [Description("Scans all constructor parameters in the solution (or a specific project) and identifies injected service types that appear to be missing from the DI container registrations. Detects interfaces (IFoo pattern) and common service-like types (ending in Service, Repository, Manager, Factory, Provider, Handler, Validator, Dispatcher). Framework-provided types (ILogger, IOptions, IConfiguration, etc.) are excluded. Returns consumer class name, file, line, the missing type, and the parameter name. Use to catch unregistered dependencies before runtime failures.")]
+    public async Task<List<UnregisteredServiceFinding>> FindServicesNotRegistered(
+        string? projectName = null)
+        => await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
 }
