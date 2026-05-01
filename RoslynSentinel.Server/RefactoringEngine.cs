@@ -704,7 +704,11 @@ public class RefactoringEngine
         var text = await document.GetTextAsync(ct);
         var pos = text.Lines[line-1].Start + (column - 1);
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
-        var symbol = model!.GetDeclaredSymbol(node, ct) ?? model.GetSymbolInfo(node, ct).Symbol;
+        // Walk up ancestors to find the nearest declaration symbol (FindNode may return a child token/identifier)
+        var symbol = node.AncestorsAndSelf()
+            .Select(n => model!.GetDeclaredSymbol(n, ct))
+            .FirstOrDefault(s => s != null)
+            ?? model!.GetSymbolInfo(node, ct).Symbol;
         if (symbol == null) return new Dictionary<string, string>();
 
         // Check for reflection usage
@@ -718,8 +722,8 @@ public class RefactoringEngine
                 
                 if (literals?.Any() == true)
                 {
-                    _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' is mentioned by string literal in {DocName} — possible reflection usage.", symbol.Name, doc.Name);
-                    return new Dictionary<string, string>();
+                    throw new InvalidOperationException(
+                        $"Potential Reflection Risk: symbol '{symbol.Name}' is referenced by string literal in {doc.Name} — possible reflection/dynamic usage. Delete manually after verifying.");
                 }
             }
         }

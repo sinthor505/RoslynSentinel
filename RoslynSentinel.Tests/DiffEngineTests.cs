@@ -19,7 +19,8 @@ public class DiffEngineTests
     [Test]
     public void ApplyDiff_SingleHunk_Addition_ShouldSucceed()
     {
-        var oldText = SourceText.From("line1\nline2\nline3");
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
         var diff = "@@ -1,3 +1,4 @@\n line1\n+added\n line2\n line3";
         
         var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
@@ -30,7 +31,8 @@ public class DiffEngineTests
     [Test]
     public void ApplyDiff_MultipleHunks_ShouldSucceed()
     {
-        var oldText = SourceText.From("line1\nline2\nline3\nline4\nline5");
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3" + nl + "line4" + nl + "line5");
         // Hunk 1 starts at 1, Hunk 2 starts at 4 (relative to original)
         var diff = "@@ -1,3 +1,4 @@\n line1\n+added1\n line2\n line3\n@@ -4,2 +5,3 @@\n line4\n+added2\n line5";
         

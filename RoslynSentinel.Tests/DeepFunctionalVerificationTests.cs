@@ -83,7 +83,7 @@ public class Service {
         var sourceText = "public class Target { public void DeadMethod() {} }";
         var col = sourceText.IndexOf("DeadMethod") + 1; // 1-based column
 
-        var ex = Assert.ThrowsAsync<Exception>(async () => 
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => 
             await _refactoringEngine.SafeDeleteSymbolAsync("Target.cs", 1, col));
         
         Assert.That(ex.Message, Does.Contain("Potential Reflection Risk"));
