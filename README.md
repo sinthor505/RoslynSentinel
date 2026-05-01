@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 198 MCP Tools across 53 Specialized Engines
+## 🚀 214 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -13,11 +13,11 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **Project/solution diagnostics**: `get_project_diagnostics`, `get_solution_diagnostics`, `split_project_by_folder`.
 *   **Namespace management**: `fix_mismatched_namespaces`, `move_file_to_namespace_folder`.
 
-### 🛠️ Refactoring — 56 tools ("The Surgical Suite")
-*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface.
-*   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable` — promote expressions to named locals/fields/parameters at a given line+column.
-*   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class, adding `virtual` and removing `override`.
-*   **`AdvancedRefactoringEngine`**: Replace string concatenation with interpolation; optimize `.Result`/`.Wait()`/`.GetAwaiter().GetResult()` to `await`.
+### 🛠️ Refactoring — 63 tools ("The Surgical Suite")
+*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface, `sync_interface_to_implementation` (adds public class members missing from the interface), `update_xml_docs_from_signature` (reconciles `<param>` tags with current parameter names).
+*   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable`, `introduce_parameter_object` (groups method parameters into a new `record` type; adds TODO for call-site updates).
+*   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class.
+*   **`AdvancedRefactoringEngine`**: Replace string concatenation with interpolation; optimize `.Result`/`.Wait()` to `await`.
 *   **`MappingEngine`**: DTO ↔ entity mapping generation, invert assignments.
 *   **`CodeFlowEngine`**: Reduce block nesting depth.
 *   **`AdvancedStructuralEngine`**: Replace constructor with factory.
@@ -40,16 +40,16 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
     - `add_constructor_parameter` — add a DI dependency in one shot: new private readonly field + ctor parameter + body assignment
     - `wrap_in_region` — surround a line range with `#region name` / `#endregion`
 
-### ⚡ Modernization — 23 tools (.NET 8/9/10 & C# 12/13/14)
-*   **`CodeStyleEngine`**: .NET 10 **Lock Modernization**, C# 14 **Field-Backed Properties**, **Implicit Span Cleanup**, Collection Expressions (`[]`).
-*   **`SyntaxUpgradeEngine`**: Modern Guard Clauses (`ThrowIfNull`), Switch Expressions, `upgrade_to_modern_guards`, `convert_switch_to_expression`, `cleanup_implicit_spans`.
+### ⚡ Modernization — 30 tools (.NET 8/9/10 & C# 12/13/14)
+*   **`CodeStyleEngine`**: .NET 10 **Lock Modernization**, C# 14 **Field-Backed Properties**, **Implicit Span Cleanup**, Collection Expressions (`[]`), `find_use_frozen_collections`.
+*   **`SyntaxUpgradeEngine`**: Modern Guard Clauses (`ThrowIfNull`), Switch Expressions, `upgrade_to_modern_guards`, `convert_switch_to_expression`, `cleanup_implicit_spans`, `use_exception_expressions` (converts `throw new ArgumentNullException(nameof(x))` → `ArgumentNullException.ThrowIfNull(x)` etc.), `upgrade_to_primary_constructor` (converts pure-assignment ctors to C# 12 primary constructors).
 *   **`ModernizationEngine`**: Class-to-Record / Record-to-Class (POCO modernization).
-*   **`IDEStyleEngine`**: Simplify member access chains; `use_object_initializers` — converts `new T()` + consecutive property assignments into object initializer syntax.
+*   **`IDEStyleEngine`**: Simplify member access chains; `use_object_initializers`.
 *   **`ImmutabilityEngine`**: Convert mutable classes to immutable (init-only / records).
 *   **`AsyncOptimizationEngine`**: `optimize_to_value_task`, `optimize_independent_awaits`, `generate_async_overload`.
 *   **`ModernLoggingEngine`**: Convert to source-generated logging.
 *   **`LogicOptimizationEngine`**: Simplify boolean expressions.
-*   **`AdvancedLogicEngine`**: `convert_static_to_extension`, `invert_boolean_logic`, `convert_foreach_to_for` — rewrite `foreach` over an indexed collection to an equivalent `for` loop with index variable.
+*   **`AdvancedLogicEngine`**: `convert_static_to_extension`, `invert_boolean_logic`, `convert_foreach_to_for`.
 
 ### 🔍 Intelligence & Analysis — 40 tools
 *   **`AnalysisEngine`**: Find large types/methods, duplicate methods, interface extraction candidates, **memory leak detection** (event subscription without `IDisposable`), **infinite loop detection**, **call tree generation**, **equality override generation** (`HashCode.Combine`).
@@ -57,19 +57,19 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`SymbolNavigationEngine`**: `get_call_graph`, `get_reverse_call_graph` (who calls this method), extension method discovery.
 *   **`ArchitecturalEngine`**: `find_circular_dependencies` (Tarjan's SCC), `convert_to_background_service`.
 *   **`DeadCodeEngine`**: Unused private members/constructors (with DI false-positive avoidance), unmatched event subscriptions (`+=` without `-=`).
-*   **`AsyncSafetyEngine`**: Flag `.Result`, `.Wait()`, `ConfigureAwait`, `find_missing_cancellation_tokens`; detect `Task.Yield`, `Task.Delay`, `Task.Delay(0)`, and sequential `await` patterns better served by `Task.WhenAll`.
-*   **`DependencyInjectionEngine`**: Analyze service lifetimes, DI correctness, and `find_services_not_registered` — heuristically detects constructor-injected services that are never registered in the DI container (catches the missing-registration bug class).
-*   **`DiscoveryEngine`**: `find_all_throw_sites` (find every throw across a file/project/solution, filterable by exception type), `find_object_creation_sites` (find every `new T()` for a named type), `get_public_api_surface` (enumerate all public types/methods/properties in a project for API audits).
+*   **`AsyncSafetyEngine`**: Flag `.Result`, `.Wait()`, `ConfigureAwait`, `find_missing_cancellation_tokens`; `find_configure_await_missing`, `find_blocking_calls_in_async`, `find_async_in_constructor`, `find_task_run_in_async`, `find_concurrent_collection_opportunities`, `find_unsafe_lazy_init`, `find_async_over_sync` (async methods with no real awaits), `find_unawaited_fire_and_forget`, `detect_valuetask_misuse` (double-await, deferred, `Task.WhenAll`, `.Result` on ValueTask).
+*   **`AsyncOptimizationEngine`**: `optimize_to_value_task` (with safety checks), `optimize_independent_awaits` (handles `var x = await` with dependency tracking), `generate_async_overload` (scaffold), `add_configure_await_false`, `remove_configure_await_false`, `convert_to_async_enumerable`, `add_cancellation_token_to_method` (adds CT + propagates to callees).
+*   **`ThreadSafetyEngine`**: `convert_lock_to_semaphore_slim`, `make_method_thread_safe` (optional `lockFieldName` param to avoid field collisions).
+*   **`DependencyInjectionEngine`**: Analyze service lifetimes, DI correctness, and `find_services_not_registered`.
+*   **`DiscoveryEngine`**: `find_all_throw_sites`, `find_object_creation_sites`, `get_public_api_surface`, `find_best_insertion_point` (returns optimal line to insert a field/ctor/property/method/event/nested type by convention), `find_todo_fixme_comments` (scans TODO/FIXME/HACK/BUG/REVIEW comments across file/project/solution, severity-ranked), `preview_rename_impact` (impact analysis before rename: count, files, test refs).
 *   **`SemanticSearchEngine`**: Cross-solution symbol and usage search.
 
-### 🔎 Quality & Anti-Patterns — 33 tools
-*   **`AntiPatternEngine`**: `find_mutable_public_properties`, `find_naming_violations`, `find_string_magic_values`, `analyze_exception_handling`.
+### 🔎 Quality & Anti-Patterns — 38 tools
+*   **`AntiPatternEngine`**: `find_mutable_public_properties`, `find_naming_violations`, `find_string_magic_values`, `analyze_exception_handling`, `find_long_parameter_list` (flags methods with ≥N params, skips DI-injection ctors), `find_primitive_obsession` (same primitive type 3+ times as distinct params), `find_inconsistent_async_suffix` (async methods missing "Async" or non-async methods with "Async" suffix).
 *   **`PerformanceEngine`**: Boxing detection, LINQ materialization, string concatenation in loops.
-*   **`SecurityEngine`**: SQL injection (dynamic/interpolated strings in SQL calls, `check_for_sql_injection`), hardcoded secrets (name-pattern matching), weak hash algorithms (MD5/SHA1), insecure `new Random()` in security-sensitive contexts.
+*   **`SecurityEngine`**: SQL injection, hardcoded secrets, weak hash algorithms, insecure `new Random()`.
 *   **`TestingEngine`**: Missing assertions, test code smell detection.
-*   **`AsyncSafetyEngine`** (new tools): `find_configure_await_missing`, `find_blocking_calls_in_async`, `find_async_in_constructor`, `find_task_run_in_async`, `find_concurrent_collection_opportunities`, `find_unsafe_lazy_init`.
-*   **`AsyncOptimizationEngine`** (new tools): `add_configure_await_false`, `remove_configure_await_false`, `convert_to_async_enumerable`.
-*   **`ThreadSafetyEngine`** (new tool): `convert_lock_to_semaphore_slim`.
+*   **`CodeStyleEngine`** (new): `find_use_frozen_collections` — detects `private static readonly Dictionary/HashSet` initialized inline that could be `FrozenDictionary`/`FrozenSet` for zero-allocation lookups.
 
 ### 🏭 Code Generation — 10 tools
 *   **`CodeGenerationEngine`**: Fluent builder, default config JSON, decorator class generation.
@@ -110,7 +110,7 @@ Roslyn Sentinel is meant for a **solution-enabled system**, not for generic glob
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by an exhaustive suite of **205 functional tests**, ensuring that every toggle and every transformation is verifiably correct.
+Roslyn Sentinel is backed by an exhaustive suite of **346 functional tests**, ensuring that every toggle and every transformation is verifiably correct.
 
 ```bash
 dotnet test
