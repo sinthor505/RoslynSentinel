@@ -177,4 +177,9 @@ public class SentinelModernizationTools
     [Description("Batches independent sequential await calls in a method into a single Task.WhenAll() for parallel execution.")]
     public async Task<string> OptimizeIndependentAwaits(string filePath, string methodName)
         => await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Converts a class with a simple assignment-only constructor into a C# 12 primary constructor. Removes the explicit constructor and its corresponding private readonly fields, then rewrites field references to use the parameter names directly. Only succeeds if every constructor statement is a field assignment.")]
+    public async Task<string> UpgradeToPrimaryConstructor(string filePath, string className)
+        => await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(filePath, className);
 }

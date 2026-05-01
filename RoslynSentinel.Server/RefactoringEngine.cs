@@ -1275,4 +1275,141 @@ public class RefactoringEngine
             _ => null
         };
     }
+
+    public async Task<string> SyncInterfaceToImplementationAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        // Find the class document
+        var classDocument = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (classDocument == null) return "// Class file not found.";
+
+        var classRoot = await classDocument.GetSyntaxRootAsync(ct);
+        if (classRoot == null) return "// Could not parse class file.";
+
+        var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) return "// Class not found.";
+
+        // Collect public non-static non-override methods and properties from the class
+        var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) &&
+                        !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) &&
+                        !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)))
+            .ToList();
+
+        var publicProperties = classNode.Members.OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) &&
+                        !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) &&
+                        !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)))
+            .ToList();
+
+        // Find the interface — first in same file, then in other documents
+        Document? interfaceDocument = null;
+        InterfaceDeclarationSyntax? interfaceNode = null;
+        SyntaxNode? interfaceRoot = null;
+
+        // Search same file first
+        interfaceNode = classRoot.DescendantNodes().OfType<InterfaceDeclarationSyntax>()
+            .FirstOrDefault(i => i.Identifier.Text == interfaceName);
+        if (interfaceNode != null)
+        {
+            interfaceDocument = classDocument;
+            interfaceRoot = classRoot;
+        }
+        else
+        {
+            // Search all documents
+            foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
+            {
+                if (doc == classDocument) continue;
+                var r = await doc.GetSyntaxRootAsync(ct);
+                if (r == null) continue;
+                var iface = r.DescendantNodes().OfType<InterfaceDeclarationSyntax>()
+                    .FirstOrDefault(i => i.Identifier.Text == interfaceName);
+                if (iface != null)
+                {
+                    interfaceDocument = doc;
+                    interfaceRoot = r;
+                    interfaceNode = iface;
+                    break;
+                }
+            }
+        }
+
+        if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
+            return "// Interface not found.";
+
+        // Collect existing interface member signatures (for deduplication)
+        var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>()
+            .Select(m => m.Identifier.Text + "|" + string.Join(",", m.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim())))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var existingPropertyNames = interfaceNode.Members.OfType<PropertyDeclarationSyntax>()
+            .Select(p => p.Identifier.Text)
+            .ToHashSet(StringComparer.Ordinal);
+
+        var newMembers = new List<MemberDeclarationSyntax>();
+
+        foreach (var method in publicMethods)
+        {
+            var sig = method.Identifier.Text + "|" +
+                      string.Join(",", method.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()));
+            if (existingMethodSigs.Contains(sig)) continue;
+
+            // Build interface method: return type + name + params, no body
+            var ifaceMethod = SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier)
+                .WithParameterList(method.ParameterList)
+                .WithTypeParameterList(method.TypeParameterList)
+                .WithConstraintClauses(method.ConstraintClauses)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithModifiers(SyntaxFactory.TokenList())
+                .NormalizeWhitespace();
+            newMembers.Add(ifaceMethod);
+        }
+
+        foreach (var prop in publicProperties)
+        {
+            if (existingPropertyNames.Contains(prop.Identifier.Text)) continue;
+
+            // Build interface property
+            var hasGetter = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true
+                            || prop.ExpressionBody != null;
+            var hasSetter = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) == true;
+            var hasInit = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration)) == true;
+
+            var accessors = new List<AccessorDeclarationSyntax>();
+            if (hasGetter)
+                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            if (hasSetter)
+                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            if (hasInit)
+                accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+
+            var ifaceProp = SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier)
+                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
+                .WithModifiers(SyntaxFactory.TokenList())
+                .NormalizeWhitespace();
+            newMembers.Add(ifaceProp);
+        }
+
+        if (newMembers.Count == 0)
+            return interfaceRoot.ToFullString(); // Already up to date
+
+        var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
+        var newInterfaceRoot = interfaceRoot.ReplaceNode(interfaceNode, newInterfaceNode);
+
+        // If interface is in a different file, indicate which file was updated
+        if (interfaceDocument != classDocument)
+        {
+            var updatedPath = interfaceDocument.FilePath ?? interfaceDocument.Name;
+            return $"// Updated file: {updatedPath}\n" + newInterfaceRoot.NormalizeWhitespace().ToFullString();
+        }
+
+        return newInterfaceRoot.NormalizeWhitespace().ToFullString();
+    }
 }

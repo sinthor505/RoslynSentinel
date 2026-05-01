@@ -261,4 +261,145 @@ public class GranularRefactoringEngine
         }
         return new Dictionary<string, string>();
     }
+
+    public async Task<string> IntroduceParameterObjectAsync(
+        string filePath,
+        string methodName,
+        string? newTypeName = null,
+        string[]? parameterNames = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) return "// File not found.";
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return "// Could not parse file.";
+
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null) return "// Method not found.";
+
+        var allParams = methodNode.ParameterList.Parameters.ToList();
+
+        // Separate CancellationToken params from the rest
+        var ctParams = allParams.Where(p => p.Type?.ToString().Contains("CancellationToken") == true).ToList();
+        var candidateParams = allParams.Where(p => !ctParams.Contains(p)).ToList();
+
+        // Determine which params to group
+        List<ParameterSyntax> groupedParams;
+        if (parameterNames != null && parameterNames.Length > 0)
+        {
+            var nameSet = new HashSet<string>(parameterNames, StringComparer.Ordinal);
+            groupedParams = candidateParams.Where(p => nameSet.Contains(p.Identifier.Text)).ToList();
+        }
+        else
+        {
+            groupedParams = candidateParams;
+        }
+
+        if (groupedParams.Count == 0)
+            return "// No parameters to group.";
+
+        // Generate record name
+        var recordName = newTypeName ?? (methodName + "Parameters");
+
+        // Build record properties: capitalize first letter
+        static string Capitalize(string s) => s.Length == 0 ? s : char.ToUpper(s[0]) + s.Substring(1);
+
+        var recordParams = groupedParams.Select(p =>
+            SyntaxFactory.Parameter(SyntaxFactory.Identifier(Capitalize(p.Identifier.Text)))
+                .WithType(p.Type!));
+
+        var recordDecl = SyntaxFactory.RecordDeclaration(
+                SyntaxFactory.Token(SyntaxKind.RecordKeyword),
+                SyntaxFactory.Identifier(recordName))
+            .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+            .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(recordParams)))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+        // Build new parameter list: (RecordName request, [CT params])
+        var requestParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("request"))
+            .WithType(SyntaxFactory.ParseTypeName(recordName + " "));
+
+        var remainingParams = candidateParams.Where(p => !groupedParams.Contains(p)).ToList();
+        var newParams = new List<ParameterSyntax> { requestParam };
+        newParams.AddRange(remainingParams);
+        newParams.AddRange(ctParams);
+        var newParamList = methodNode.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParams));
+
+        // Build param->property rewrite map: paramName -> request.ParamName
+        var rewriteMap = groupedParams.ToDictionary(
+            p => p.Identifier.Text,
+            p => $"request.{Capitalize(p.Identifier.Text)}");
+
+        // Add TODO comment to method
+        var todoComment = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}\r\n        ");
+
+        // Rewrite references in method body
+        SyntaxNode? newBody = null;
+        if (methodNode.Body != null)
+        {
+            var rewriter = new ParamToPropertyRewriter(rewriteMap);
+            newBody = rewriter.Visit(methodNode.Body);
+        }
+
+        var newMethodNode = methodNode.WithParameterList(newParamList);
+        if (newBody is BlockSyntax block)
+        {
+            var firstStmt = block.Statements.FirstOrDefault();
+            StatementSyntax todoStmt = SyntaxFactory.EmptyStatement()
+                .WithLeadingTrivia(SyntaxFactory.TriviaList(
+                    SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}")))
+                .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken));
+            var newStmts = block.Statements.Insert(0, todoStmt);
+            newMethodNode = newMethodNode.WithBody(block.WithStatements(newStmts));
+        }
+
+        var newRoot = root.ReplaceNode(methodNode, newMethodNode);
+
+        // Append record declaration to end of file
+        var compilationUnit = newRoot as CompilationUnitSyntax;
+        if (compilationUnit != null)
+        {
+            var recordMember = SyntaxFactory.GlobalStatement(
+                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("_placeholder_")));
+            // Actually append as a namespace member or top-level
+            // Find the namespace or use file-scoped namespace
+            var nsNode = compilationUnit.Members.OfType<NamespaceDeclarationSyntax>().LastOrDefault();
+            var fileScopeNs = compilationUnit.Members.OfType<FileScopedNamespaceDeclarationSyntax>().LastOrDefault();
+
+            if (nsNode != null)
+            {
+                var newNs = nsNode.AddMembers(recordDecl.NormalizeWhitespace());
+                newRoot = compilationUnit.ReplaceNode(nsNode, newNs);
+            }
+            else if (fileScopeNs != null)
+            {
+                var newNs = fileScopeNs.AddMembers(recordDecl.NormalizeWhitespace());
+                newRoot = compilationUnit.ReplaceNode(fileScopeNs, newNs);
+            }
+            else
+            {
+                // Top-level: add after the last type declaration
+                newRoot = compilationUnit.AddMembers(recordDecl.NormalizeWhitespace());
+            }
+        }
+
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class ParamToPropertyRewriter : CSharpSyntaxRewriter
+    {
+        private readonly Dictionary<string, string> _map;
+        public ParamToPropertyRewriter(Dictionary<string, string> map) { _map = map; }
+
+        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            var name = node.Identifier.Text;
+            if (_map.TryGetValue(name, out var replacement))
+                return SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node);
+            return base.VisitIdentifierName(node);
+        }
+    }
 }

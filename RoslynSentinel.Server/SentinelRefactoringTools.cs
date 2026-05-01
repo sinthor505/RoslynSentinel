@@ -646,4 +646,18 @@ public class SentinelRefactoringTools
         var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{regionName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{regionName}' in {Path.GetFileName(filePath)}.");
     }
+
+    [McpServerTool]
+    [Description("Adds to the interface any public methods or properties that exist in the class but are missing from the interface. Finds the interface in the same file or anywhere in the solution. Returns the updated source of the file containing the interface (prefixed with '// Updated file: path' if it differs from the class file).")]
+    public async Task<string> SyncInterfaceToImplementation(string filePath, string className, string interfaceName)
+        => await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
+
+    [McpServerTool]
+    [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only those specified in parameterNames) into a 'public record {NewTypeName}(...)'. Rewrites parameter references in the method body to 'request.PropertyName'. Appends the record to the end of the file. Adds a TODO comment in the method body reminding to update call sites.")]
+    public async Task<string> IntroduceParameterObject(
+        string filePath,
+        string methodName,
+        string? newTypeName = null,
+        string[]? parameterNames = null)
+        => await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
 }

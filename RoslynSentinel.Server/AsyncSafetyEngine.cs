@@ -166,23 +166,65 @@ public class AsyncSafetyEngine
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null) continue;
 
-            // Detect methods with 2+ sequential awaits that could be parallelized with Task.WhenAll
+            // Detect methods with 2+ sequential independent awaits that could be parallelized with Task.WhenAll
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 foreach (var block in method.DescendantNodes().OfType<BlockSyntax>())
                 {
-                    int awaitCount = block.Statements.Count(s =>
-                        s is ExpressionStatementSyntax e && e.Expression is AwaitExpressionSyntax
-                        || s is LocalDeclarationStatementSyntax ld
-                            && ld.Declaration.Variables.Any(v => v.Initializer?.Value is AwaitExpressionSyntax));
+                    // Collect all await statements from the block
+                    var awaitStatements = block.Statements
+                        .Where(s =>
+                            (s is ExpressionStatementSyntax e && e.Expression is AwaitExpressionSyntax) ||
+                            (s is LocalDeclarationStatementSyntax ld &&
+                             ld.Declaration.Variables.Count == 1 &&
+                             ld.Declaration.Variables[0].Initializer?.Value is AwaitExpressionSyntax))
+                        .ToList();
 
-                    if (awaitCount >= 2)
+                    if (awaitStatements.Count < 2) continue;
+
+                    // Count independent consecutive pairs
+                    int independentPairs = 0;
+                    for (int idx = 0; idx < awaitStatements.Count - 1; idx++)
+                    {
+                        var first = awaitStatements[idx];
+                        var second = awaitStatements[idx + 1];
+
+                        // Extract declared variable names from the first statement
+                        var declaredVarNames = new HashSet<string>();
+                        if (first is LocalDeclarationStatementSyntax firstLocal)
+                        {
+                            foreach (var v in firstLocal.Declaration.Variables)
+                                declaredVarNames.Add(v.Identifier.Text);
+                        }
+
+                        // Extract the second await expression
+                        ExpressionSyntax? secondAwaitExpression = null;
+                        if (second is ExpressionStatementSyntax secondExpr &&
+                            secondExpr.Expression is AwaitExpressionSyntax secondAwait1)
+                            secondAwaitExpression = secondAwait1.Expression;
+                        else if (second is LocalDeclarationStatementSyntax secondLocal &&
+                                 secondLocal.Declaration.Variables[0].Initializer?.Value is AwaitExpressionSyntax secondAwait2)
+                            secondAwaitExpression = secondAwait2.Expression;
+
+                        if (secondAwaitExpression == null) continue;
+
+                        // Check if the second await depends on any variable declared in the first
+                        bool dependent = secondAwaitExpression
+                            .DescendantNodes()
+                            .OfType<IdentifierNameSyntax>()
+                            .Any(id => declaredVarNames.Contains(id.Identifier.Text));
+
+                        if (!dependent)
+                            independentPairs++;
+                    }
+
+                    if (independentPairs >= 1)
                     {
                         var lineSpan = method.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(
                             document.FilePath ?? document.Name,
                             method.Identifier.Text,
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Method has {awaitCount} sequential awaits. If tasks are independent, consider Task.WhenAll() for parallelism."
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Method has {awaitStatements.Count} sequential awaits with independent pairs. Consider Task.WhenAll() for parallelism."
                         ));
                         break;
                     }
@@ -546,5 +588,183 @@ public class AsyncSafetyEngine
         }
 
         return false;
+    }
+
+    public async Task<List<AsyncSafetyReport>> DetectValueTaskMisuseAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var documents = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents)
+            : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+
+        var reports = new List<AsyncSafetyReport>();
+
+        foreach (var document in documents)
+        {
+            if (document == null) continue;
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            SemanticModel? semanticModel = null;
+            try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+
+            var docPath = document.FilePath ?? document.Name;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                var methodName = method.Identifier.Text;
+                if (method.Body == null && method.ExpressionBody == null) continue;
+
+                // Pattern A: double await on same variable
+                var awaitedIdentifiers = method.DescendantNodes()
+                    .OfType<AwaitExpressionSyntax>()
+                    .Select(a => a.Expression)
+                    .OfType<IdentifierNameSyntax>()
+                    .Select(id => id.Identifier.Text)
+                    .ToList();
+
+                var seen = new HashSet<string>();
+                foreach (var name in awaitedIdentifiers)
+                {
+                    if (!seen.Add(name))
+                    {
+                        var line = method.DescendantNodes()
+                            .OfType<AwaitExpressionSyntax>()
+                            .Where(a => a.Expression is IdentifierNameSyntax id2 && id2.Identifier.Text == name)
+                            .Skip(1).FirstOrDefault()?.GetLocation().GetLineSpan().StartLinePosition.Line + 1 ?? 0;
+                        reports.Add(new AsyncSafetyReport(docPath, methodName,
+                            $"Line {line}: ValueTask variable '{name}' is awaited more than once. ValueTask may only be awaited once."));
+                    }
+                }
+
+                // Collect local declarations of ValueTask type
+                var valueTaskLocals = new Dictionary<string, int>(); // name -> statement index in containing block
+
+                // Pattern B + C + D: walk all statements in the method body
+                var statements = method.Body?.Statements.ToList()
+                    ?? new List<StatementSyntax>();
+
+                for (int i = 0; i < statements.Count; i++)
+                {
+                    var stmt = statements[i];
+
+                    // Check for ValueTask local declarations
+                    if (stmt is LocalDeclarationStatementSyntax localDecl)
+                    {
+                        foreach (var variable in localDecl.Declaration.Variables)
+                        {
+                            var varName = variable.Identifier.Text;
+                            var isValueTask = false;
+
+                            // Semantic check
+                            if (semanticModel != null && variable.Initializer?.Value != null)
+                            {
+                                var typeInfo = semanticModel.GetTypeInfo(variable.Initializer.Value, cancellationToken);
+                                var typeName = typeInfo.Type?.ToDisplayString() ?? "";
+                                isValueTask = typeName == "System.Threading.Tasks.ValueTask" ||
+                                              typeName.StartsWith("System.Threading.Tasks.ValueTask<");
+                            }
+
+                            // Syntactic fallback: declared type is ValueTask or ValueTask<T>
+                            if (!isValueTask)
+                            {
+                                var declaredType = localDecl.Declaration.Type.ToString().Trim();
+                                isValueTask = declaredType == "ValueTask" || declaredType.StartsWith("ValueTask<");
+                            }
+
+                            if (isValueTask)
+                            {
+                                // Check if initializer is already awaited directly (fine)
+                                var initIsDirectAwait = variable.Initializer?.Value is AwaitExpressionSyntax;
+                                if (!initIsDirectAwait)
+                                {
+                                    valueTaskLocals[varName] = i;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // For each ValueTask local, check for deferred await (Pattern B)
+                foreach (var (varName, declIdx) in valueTaskLocals)
+                {
+                    for (int j = declIdx + 1; j < statements.Count; j++)
+                    {
+                        var stmt = statements[j];
+                        var awaitsHere = stmt.DescendantNodes()
+                            .OfType<AwaitExpressionSyntax>()
+                            .Any(a => a.Expression is IdentifierNameSyntax id3 && id3.Identifier.Text == varName);
+
+                        if (awaitsHere && j > declIdx + 1)
+                        {
+                            var lineNo = stmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                            reports.Add(new AsyncSafetyReport(docPath, methodName,
+                                $"Line {lineNo}: ValueTask '{varName}' stored and awaited deferred (with intervening statements). ValueTask may be consumed — use Task/await directly or .AsTask()."));
+                            break;
+                        }
+                    }
+                }
+
+                // Pattern C: Task.WhenAll(valueTaskVar)
+                foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (invocation.Expression is MemberAccessExpressionSyntax ma &&
+                        ma.Expression.ToString() == "Task" &&
+                        ma.Name.Identifier.Text == "WhenAll")
+                    {
+                        foreach (var arg in invocation.ArgumentList.Arguments)
+                        {
+                            var argName = arg.Expression is IdentifierNameSyntax argId ? argId.Identifier.Text : null;
+                            var isVtArg = false;
+
+                            if (semanticModel != null)
+                            {
+                                var ti = semanticModel.GetTypeInfo(arg.Expression, cancellationToken);
+                                var tn = ti.Type?.ToDisplayString() ?? "";
+                                isVtArg = tn == "System.Threading.Tasks.ValueTask" || tn.StartsWith("System.Threading.Tasks.ValueTask<");
+                            }
+                            else if (argName != null && valueTaskLocals.ContainsKey(argName))
+                            {
+                                isVtArg = true;
+                            }
+
+                            if (isVtArg)
+                            {
+                                var lineNo = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                                reports.Add(new AsyncSafetyReport(docPath, methodName,
+                                    $"Line {lineNo}: ValueTask passed to Task.WhenAll(). ValueTask is not a Task — call .AsTask() first."));
+                            }
+                        }
+                    }
+                }
+
+                // Pattern D: .Result on ValueTask
+                foreach (var memberAccess in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+                {
+                    if (memberAccess.Name.Identifier.Text != "Result") continue;
+
+                    var isVt = false;
+                    if (semanticModel != null)
+                    {
+                        var ti = semanticModel.GetTypeInfo(memberAccess.Expression, cancellationToken);
+                        var tn = ti.Type?.ToDisplayString() ?? "";
+                        isVt = tn == "System.Threading.Tasks.ValueTask" || tn.StartsWith("System.Threading.Tasks.ValueTask<");
+                    }
+                    else if (memberAccess.Expression is IdentifierNameSyntax rid && valueTaskLocals.ContainsKey(rid.Identifier.Text))
+                    {
+                        isVt = true;
+                    }
+
+                    if (isVt)
+                    {
+                        var lineNo = memberAccess.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        reports.Add(new AsyncSafetyReport(docPath, methodName,
+                            $"Line {lineNo}: .Result accessed on ValueTask. This is undefined behavior if the ValueTask is not yet completed — await it instead."));
+                    }
+                }
+            }
+        }
+
+        return reports;
     }
 }

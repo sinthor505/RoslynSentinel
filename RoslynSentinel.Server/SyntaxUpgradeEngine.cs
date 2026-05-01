@@ -143,6 +143,150 @@ public class SyntaxUpgradeEngine
         return root?.ToFullString() ?? "";
     }
 
+    public async Task<string> UpgradeToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "// File not found.";
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return "// Could not parse file.";
+
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) return "// Class not found.";
+
+        // Find the constructor that consists entirely of field assignments
+        var ctors = classNode.Members.OfType<ConstructorDeclarationSyntax>().ToList();
+        var ctor = ctors.FirstOrDefault(c => c.Body != null && c.Body.Statements.Count > 0 &&
+            c.Body.Statements.All(s => s is ExpressionStatementSyntax es && es.Expression is AssignmentExpressionSyntax));
+
+        if (ctor == null)
+            return "// Cannot convert: no eligible constructor (must have only assignment statements).";
+
+        if (ctor.Body!.Statements.Any(s =>
+        {
+            if (s is not ExpressionStatementSyntax es) return true;
+            if (es.Expression is not AssignmentExpressionSyntax asgn) return true;
+            // Right side must be a simple identifier (parameter name)
+            return asgn.Right is not IdentifierNameSyntax;
+        }))
+            return "// Cannot convert: constructor has non-assignment logic.";
+
+        // Build mapping: paramName -> fieldName (as in the class)
+        var paramToField = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var stmt in ctor.Body.Statements)
+        {
+            if (stmt is not ExpressionStatementSyntax es) continue;
+            if (es.Expression is not AssignmentExpressionSyntax asgn) continue;
+            var paramName = (asgn.Right as IdentifierNameSyntax)?.Identifier.Text;
+            if (paramName == null) continue;
+
+            string fieldName;
+            if (asgn.Left is MemberAccessExpressionSyntax ma && ma.Expression.ToString() == "this")
+                fieldName = ma.Name.Identifier.Text;
+            else if (asgn.Left is IdentifierNameSyntax fid)
+                fieldName = fid.Identifier.Text;
+            else
+                continue;
+
+            // Check this param exists in the ctor
+            if (ctor.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
+                paramToField[paramName] = fieldName;
+        }
+
+        if (paramToField.Count == 0)
+            return "// Cannot convert: could not map constructor parameters to fields.";
+
+        // Verify fields exist as private readonly in the class
+        var fieldToParam = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (param, field) in paramToField)
+        {
+            var fieldDecl = classNode.Members.OfType<FieldDeclarationSyntax>()
+                .FirstOrDefault(f =>
+                    f.Declaration.Variables.Any(v => v.Identifier.Text == field) &&
+                    f.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)));
+            if (fieldDecl == null) continue;
+            fieldToParam[field] = param;
+        }
+
+        if (fieldToParam.Count == 0)
+            return "// Cannot convert: no matching private readonly fields found.";
+
+        // Verify each mapped field is assigned exactly once (in this ctor only)
+        // and is not assigned in static initializers
+        foreach (var field in fieldToParam.Keys)
+        {
+            var assignmentCount = classNode.DescendantNodes()
+                .OfType<AssignmentExpressionSyntax>()
+                .Count(a =>
+                {
+                    var lhsName = a.Left is IdentifierNameSyntax id ? id.Identifier.Text :
+                                  a.Left is MemberAccessExpressionSyntax ma2 && ma2.Expression.ToString() == "this" ? ma2.Name.Identifier.Text : null;
+                    return lhsName == field;
+                });
+            if (assignmentCount > 1)
+                return $"// Cannot convert: field '{field}' is assigned multiple times.";
+        }
+
+        // Build the new primary constructor parameter list
+        // Start from existing ctor params, keeping only those that are mapped
+        var newParams = ctor.ParameterList.Parameters
+            .Where(p => paramToField.ContainsKey(p.Identifier.Text))
+            .ToList();
+
+        // Also keep params not mapped to fields
+        var unmappedParams = ctor.ParameterList.Parameters
+            .Where(p => !paramToField.ContainsKey(p.Identifier.Text))
+            .ToList();
+        newParams.AddRange(unmappedParams);
+
+        var paramListSyntax = SyntaxFactory.ParameterList(
+            SyntaxFactory.SeparatedList(newParams.Select(p => p.WithoutTrivia())));
+
+        // Rewrite field usages: _field -> param, field -> param  (within the class body except the ctor and field decls)
+        // Build a rewriter that substitutes fieldNames with parameter names
+        var rewriteMap = fieldToParam; // field -> param
+
+        // Remove the constructor and the field declarations
+        var fieldsToRemove = new HashSet<string>(fieldToParam.Keys);
+        var membersToRemove = new List<MemberDeclarationSyntax>();
+        membersToRemove.Add(ctor);
+        foreach (var fieldDecl in classNode.Members.OfType<FieldDeclarationSyntax>())
+        {
+            if (fieldDecl.Declaration.Variables.All(v => fieldsToRemove.Contains(v.Identifier.Text)))
+                membersToRemove.Add(fieldDecl);
+        }
+
+        var newMembers = classNode.Members.Where(m => !membersToRemove.Contains(m)).ToList();
+
+        // Rewrite identifiers: field references -> param names
+        var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers))
+            .WithIdentifier(classNode.Identifier)
+            .WithParameterList(paramListSyntax);
+
+        // Rewrite all IdentifierNameSyntax references of the field names to param names
+        var rewriter = new FieldToParamRewriter(rewriteMap);
+        newClassNode = (ClassDeclarationSyntax)rewriter.Visit(newClassNode);
+
+        var newRoot = root.ReplaceNode(classNode, newClassNode);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class FieldToParamRewriter : CSharpSyntaxRewriter
+    {
+        private readonly Dictionary<string, string> _map;
+        public FieldToParamRewriter(Dictionary<string, string> map) { _map = map; }
+
+        public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            var name = node.Identifier.Text;
+            if (_map.TryGetValue(name, out var replacement))
+                return node.WithIdentifier(SyntaxFactory.Identifier(replacement).WithTriviaFrom(node.Identifier));
+            return base.VisitIdentifierName(node);
+        }
+    }
+
     private class BracesRewriter : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)

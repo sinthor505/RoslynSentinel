@@ -26,6 +26,15 @@ public class AsyncOptimizationEngine
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null) throw new Exception("Method not found.");
 
+        // Safety checks
+        var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
+        if (awaitCount > 1)
+            return $"// WARNING: Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.\n{root!.ToFullString()}";
+
+        var hasTryCatch = methodNode.DescendantNodes().OfType<TryStatementSyntax>().Any();
+        if (hasTryCatch)
+            return $"// WARNING: Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.\n{root!.ToFullString()}";
+
         var returnTypeStr = methodNode.ReturnType.ToString();
         TypeSyntax newReturnType;
 
@@ -62,51 +71,120 @@ public class AsyncOptimizationEngine
         if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
-        // For demonstration of the tool's capability, we locate consecutive await statements
-        // that are just expression statements (not variable assignments) and group them.
+        // We locate consecutive await statements and group independent ones.
         
         var statements = methodNode.Body.Statements.ToList();
         var newStatements = new List<StatementSyntax>();
-        var currentBatch = new List<ExpressionSyntax>();
 
-        foreach (var statement in statements)
+        // Process statements looking for consecutive await groups
+        int i = 0;
+        while (i < statements.Count)
         {
-            if (statement is ExpressionStatementSyntax exprStmt && exprStmt.Expression is AwaitExpressionSyntax awaitExpr)
+            // Try to collect a batch of consecutive, independent awaits starting at i
+            var batch = new List<(StatementSyntax stmt, string? declaredVar, ExpressionSyntax awaitedExpr)>();
+            var declaredInBatch = new HashSet<string>();
+            int j = i;
+
+            while (j < statements.Count)
             {
-                currentBatch.Add(awaitExpr.Expression);
-            }
-            else
-            {
-                if (currentBatch.Count > 1)
+                var stmt = statements[j];
+                string? varName = null;
+                ExpressionSyntax? awaitedExpr = null;
+
+                if (stmt is ExpressionStatementSyntax exprStmt && exprStmt.Expression is AwaitExpressionSyntax awaitExpr1)
                 {
+                    awaitedExpr = awaitExpr1.Expression;
+                }
+                else if (stmt is LocalDeclarationStatementSyntax localDecl &&
+                         localDecl.Declaration.Variables.Count == 1 &&
+                         localDecl.Declaration.Variables[0].Initializer?.Value is AwaitExpressionSyntax awaitExpr2)
+                {
+                    varName = localDecl.Declaration.Variables[0].Identifier.Text;
+                    awaitedExpr = awaitExpr2.Expression;
+                }
+
+                if (awaitedExpr == null)
+                    break; // Not an await statement, end of batch
+
+                // Check if this await depends on any variable declared in the batch so far
+                bool dependent = awaitedExpr.DescendantNodesAndSelf()
+                    .OfType<IdentifierNameSyntax>()
+                    .Any(id => declaredInBatch.Contains(id.Identifier.Text));
+
+                if (dependent)
+                    break; // Dependent on previous batch member
+
+                batch.Add((stmt, varName, awaitedExpr));
+                if (varName != null) declaredInBatch.Add(varName);
+                j++;
+            }
+
+            if (batch.Count > 1)
+            {
+                // Check if all are expression statements (no var declarations) → use Task.WhenAll
+                bool allExpression = batch.All(b => b.declaredVar == null);
+
+                if (allExpression)
+                {
+                    // await Task.WhenAll(A(), B(), C())
                     var whenAll = SyntaxFactory.ExpressionStatement(
                         SyntaxFactory.AwaitExpression(
                             SyntaxFactory.InvocationExpression(
-                                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("WhenAll")),
-                                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(currentBatch.Select(SyntaxFactory.Argument))))));
+                                SyntaxFactory.MemberAccessExpression(
+                                    SyntaxKind.SimpleMemberAccessExpression,
+                                    SyntaxFactory.IdentifierName("Task"),
+                                    SyntaxFactory.IdentifierName("WhenAll")),
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SeparatedList(batch.Select(b => SyntaxFactory.Argument(b.awaitedExpr)))))));
                     newStatements.Add(whenAll);
                 }
-                else if (currentBatch.Count == 1)
+                else
                 {
-                    newStatements.Add(SyntaxFactory.ExpressionStatement(SyntaxFactory.AwaitExpression(currentBatch[0])));
+                    // Mixed or all declarations: use task variable hoisting
+                    // var aTask = A(); var bTask = B(); var a = await aTask; var b = await bTask;
+                    foreach (var (stmt, varName, awaitedExpr) in batch)
+                    {
+                        var taskVarName = (varName ?? "_task") + "Task";
+                        // var aTask = A();
+                        var taskVarDecl = SyntaxFactory.LocalDeclarationStatement(
+                            SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                            .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.VariableDeclarator(taskVarName)
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(awaitedExpr)))));
+                        newStatements.Add(taskVarDecl);
+                    }
+                    foreach (var (stmt, varName, awaitedExpr) in batch)
+                    {
+                        var taskVarName = (varName ?? "_task") + "Task";
+                        if (varName != null)
+                        {
+                            // var a = await aTask;
+                            var origDecl = (LocalDeclarationStatementSyntax)stmt;
+                            var awaitedTaskVar = SyntaxFactory.LocalDeclarationStatement(
+                                origDecl.Declaration.WithVariables(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        origDecl.Declaration.Variables[0]
+                                        .WithInitializer(SyntaxFactory.EqualsValueClause(
+                                            SyntaxFactory.AwaitExpression(
+                                                SyntaxFactory.IdentifierName(taskVarName)))))));
+                            newStatements.Add(awaitedTaskVar);
+                        }
+                        else
+                        {
+                            // await _taskTask; (expression statement)
+                            newStatements.Add(SyntaxFactory.ExpressionStatement(
+                                SyntaxFactory.AwaitExpression(
+                                    SyntaxFactory.IdentifierName(taskVarName))));
+                        }
+                    }
                 }
-                currentBatch.Clear();
-                newStatements.Add(statement);
+                i = j;
             }
-        }
-
-        if (currentBatch.Count > 1)
-        {
-             var whenAll = SyntaxFactory.ExpressionStatement(
-                        SyntaxFactory.AwaitExpression(
-                            SyntaxFactory.InvocationExpression(
-                                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("WhenAll")),
-                                SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(currentBatch.Select(SyntaxFactory.Argument))))));
-             newStatements.Add(whenAll);
-        }
-        else if (currentBatch.Count == 1)
-        {
-            newStatements.Add(SyntaxFactory.ExpressionStatement(SyntaxFactory.AwaitExpression(currentBatch[0])));
+            else
+            {
+                newStatements.Add(statements[i]);
+                i++;
+            }
         }
 
         var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(newStatements));
@@ -143,27 +221,29 @@ public class AsyncOptimizationEngine
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword))
             .AddParameterListParameters(ctParam);
 
-        // A naive body replacement: just wrap in Task.Run for demonstration.
-        // A true deep conversion rewrites File.ReadAllText to File.ReadAllTextAsync, etc.
-        var runBody = SyntaxFactory.Block(
-            SyntaxFactory.ReturnStatement(
-                SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("Run")),
-                    SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(SyntaxFactory.ParenthesizedLambdaExpression(methodNode.Body!)))))));
+        // Scaffold body - caller must replace placeholder with real async I/O
+        var placeholderStmt = SyntaxFactory.ExpressionStatement(
+            SyntaxFactory.AwaitExpression(
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.IdentifierName("Task"),
+                    SyntaxFactory.IdentifierName("CompletedTask"))))
+            .WithLeadingTrivia(SyntaxFactory.TriviaList(
+                SyntaxFactory.Comment("// placeholder - remove and implement properly"),
+                SyntaxFactory.CarriageReturnLineFeed));
 
-        if (returnTypeStr == "void")
-        {
-            runBody = SyntaxFactory.Block(
-            SyntaxFactory.ExpressionStatement(
-                SyntaxFactory.AwaitExpression(
-                SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("Run")),
-                    SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Argument(SyntaxFactory.ParenthesizedLambdaExpression(methodNode.Body!))))))));
-        }
+        var scaffoldBody = SyntaxFactory.Block(placeholderStmt)
+            .WithOpenBraceToken(
+                SyntaxFactory.Token(SyntaxKind.OpenBraceToken)
+                .WithTrailingTrivia(
+                    SyntaxFactory.TriviaList(
+                        SyntaxFactory.CarriageReturnLineFeed,
+                        SyntaxFactory.Comment("// TODO: Replace synchronous operations with their async equivalents"),
+                        SyntaxFactory.CarriageReturnLineFeed,
+                        SyntaxFactory.Comment("// e.g., File.ReadAllText → File.ReadAllTextAsync, DbCommand.ExecuteReader → ExecuteReaderAsync"),
+                        SyntaxFactory.CarriageReturnLineFeed)));
 
-        asyncMethod = asyncMethod.WithBody(runBody);
+        asyncMethod = asyncMethod.WithBody(scaffoldBody);
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
@@ -347,5 +427,129 @@ public class AsyncOptimizationEngine
 
         var newRoot = root!.ReplaceNode(methodNode, newMethod);
         return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddCancellationTokenToMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null) throw new Exception("Method not found.");
+
+        // Check if method already has a CancellationToken parameter
+        if (methodNode.ParameterList.Parameters.Any(p =>
+            p.Type?.ToString().Contains("CancellationToken") == true))
+            return root!.ToFullString();
+
+        // Build CancellationToken parameter
+        var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancellationToken"))
+            .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
+            .WithDefault(SyntaxFactory.EqualsValueClause(
+                SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
+
+        // Insert before any 'params' parameter, otherwise at end
+        var parameters = methodNode.ParameterList.Parameters.ToList();
+        var paramsIdx = parameters.FindIndex(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword)));
+        ParameterListSyntax newParamList;
+        if (paramsIdx >= 0)
+        {
+            parameters.Insert(paramsIdx, ctParam);
+            newParamList = methodNode.ParameterList.WithParameters(SyntaxFactory.SeparatedList(parameters));
+        }
+        else
+        {
+            newParamList = methodNode.ParameterList.AddParameters(ctParam);
+        }
+
+        SemanticModel? semanticModel = null;
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+
+        // Rewrite callees in method body
+        SyntaxNode bodyToRewrite = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody!;
+        var invocations = bodyToRewrite.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+
+        var replacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
+        foreach (var inv in invocations)
+        {
+            // Already has a CancellationToken argument? Skip
+            if (inv.ArgumentList.Arguments.Any(a =>
+                a.Expression.ToString().Contains("cancellationToken") ||
+                (a.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.Contains("cancellationToken"))))
+                continue;
+
+            bool shouldAdd = false;
+
+            if (semanticModel != null)
+            {
+                // Check all overloads for a CT parameter
+                var symbolInfo = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                var candidates = new List<ISymbol>();
+                if (symbolInfo.Symbol != null) candidates.Add(symbolInfo.Symbol);
+                candidates.AddRange(symbolInfo.CandidateSymbols);
+
+                foreach (var sym in candidates)
+                {
+                    if (sym is not IMethodSymbol methodSym) continue;
+                    // Check if any overload in the containing type accepts CT
+                    var containingType = methodSym.ContainingType;
+                    if (containingType != null)
+                    {
+                        var overloads = containingType.GetMembers(methodSym.Name).OfType<IMethodSymbol>();
+                        if (overloads.Any(o => o.Parameters.Any(p =>
+                            p.Type.ToDisplayString() == "System.Threading.CancellationToken")))
+                        {
+                            shouldAdd = true;
+                            break;
+                        }
+                    }
+                    // Also check the symbol itself
+                    if (methodSym.Parameters.Any(p => p.Type.ToDisplayString() == "System.Threading.CancellationToken"))
+                    {
+                        shouldAdd = true;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // Syntactic heuristic: methods ending in Async, or Task.Delay
+                var methodText = inv.Expression.ToString();
+                var isAsync = methodText.EndsWith("Async") ||
+                              (inv.Expression is MemberAccessExpressionSyntax ma2 &&
+                               ma2.Expression.ToString() == "Task" &&
+                               ma2.Name.Identifier.Text == "Delay");
+                shouldAdd = isAsync;
+            }
+
+            // Special case: Task.Delay(x) -> Task.Delay(x, cancellationToken)
+            if (inv.Expression is MemberAccessExpressionSyntax maDelay &&
+                maDelay.Expression.ToString() == "Task" &&
+                maDelay.Name.Identifier.Text == "Delay")
+                shouldAdd = true;
+
+            if (shouldAdd)
+            {
+                var ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
+                var newArgList = inv.ArgumentList.AddArguments(ctArg);
+                replacements[inv] = inv.WithArgumentList(newArgList);
+            }
+        }
+
+        var newMethodNode = methodNode.WithParameterList(newParamList);
+        if (replacements.Count > 0)
+        {
+            var newBody = bodyToRewrite.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
+            if (newBody is BlockSyntax block)
+                newMethodNode = newMethodNode.WithBody(block);
+            else if (newBody is ArrowExpressionClauseSyntax arrow)
+                newMethodNode = newMethodNode.WithExpressionBody(arrow);
+        }
+
+        var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
+        return newRoot.ToFullString();
     }
 }

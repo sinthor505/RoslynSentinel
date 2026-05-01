@@ -309,4 +309,14 @@ public class SentinelQualityTools
     [Description("Converts a method returning Task<List<T>>, Task<IEnumerable<T>>, or List<T> to IAsyncEnumerable<T>. Transforms 'results.Add(item)' patterns to 'yield return item', removes the list variable and return statement, and adds a CancellationToken parameter if missing.")]
     public async Task<string> ConvertToAsyncEnumerable(string filePath, string methodName)
         => await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Detects invalid ValueTask usage patterns: (A) double await on same variable, (B) ValueTask stored and deferred-awaited with intervening statements, (C) ValueTask passed to Task.WhenAll() without .AsTask(), (D) .Result accessed on ValueTask. Reports method name and line for each violation.")]
+    public async Task<List<AsyncSafetyReport>> DetectValueTaskMisuse(string filePath)
+        => await _asyncSafetyEngine.DetectValueTaskMisuseAsync(filePath);
+
+    [McpServerTool]
+    [Description("Adds 'CancellationToken cancellationToken = default' as the last parameter to a method and propagates it to async callees in the method body that have a CancellationToken overload. Also adds cancellationToken to Task.Delay() calls. Returns the updated source.")]
+    public async Task<string> AddCancellationTokenToMethod(string filePath, string methodName)
+        => await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
 }
