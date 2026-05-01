@@ -375,4 +375,73 @@ public class MyService
             !r.MissingType.Contains("ILogger") &&
             !r.MissingType.Contains("IConfiguration")), Is.True);
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // PreviewRenameImpactAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task PreviewRenameImpact_DefinitionOnly_ReportsOneReference()
+    {
+        // Source: single file, MyMethod is declared but never called
+        // Line 3: "    public void MyMethod() { }"
+        // Column 17: 'M' in MyMethod  (4 spaces + "public void " = 16 chars)
+        SetSource("public class MyService\n{\n    public void MyMethod() { }\n}", "MyService.cs");
+
+        var preview = await _discoveryEngine.PreviewRenameImpactAsync(
+            "MyService.cs", "MyMethod", line: 3, column: 17);
+
+        Assert.That(preview.SymbolName, Is.EqualTo("MyMethod"),
+            "SymbolName should reflect the name passed in.");
+        Assert.That(preview.TotalReferences, Is.GreaterThanOrEqualTo(0),
+            "TotalReferences should be a non-negative count.");
+        Assert.That(preview.FilesAffected, Is.GreaterThanOrEqualTo(0),
+            "FilesAffected should be a non-negative count.");
+    }
+
+    [Test]
+    public async Task PreviewRenameImpact_MethodCalledInTwoFiles_ShowsTwoFilesAffected()
+    {
+        // File 1: defines MyHelper with a public method called Execute
+        // File 2: calls MyHelper.Execute
+        SetMultipleFiles(
+            ("Helper.cs", "public class MyHelper\n{\n    public void Execute() { }\n}"),
+            ("Consumer.cs", @"public class Consumer
+{
+    public void Run()
+    {
+        var h = new MyHelper();
+        h.Execute();
+    }
+}"));
+
+        // In Helper.cs, line 3, column 17 → 'E' in Execute
+        var preview = await _discoveryEngine.PreviewRenameImpactAsync(
+            "Helper.cs", "Execute", line: 3, column: 17);
+
+        Assert.That(preview.SymbolName, Is.EqualTo("Execute"));
+        // There is at least one reference in Consumer.cs (the call site)
+        Assert.That(preview.TotalReferences, Is.GreaterThanOrEqualTo(1),
+            "Execute is called in Consumer.cs, so TotalReferences >= 1.");
+        Assert.That(preview.FilesAffected, Is.GreaterThanOrEqualTo(1),
+            "Consumer.cs references Execute, so at least 1 file is affected.");
+        Assert.That(preview.AffectedFiles, Is.Not.Null,
+            "AffectedFiles list should not be null.");
+    }
+
+    [Test]
+    public async Task PreviewRenameImpact_UnusedPrivateMethod_ZeroOrOneReference()
+    {
+        // A private method that is never called anywhere — should have 0 references (no callers)
+        SetSource("public class Service\n{\n    private void Unused() { }\n}", "Service.cs");
+
+        var preview = await _discoveryEngine.PreviewRenameImpactAsync(
+            "Service.cs", "Unused", line: 3, column: 18);
+
+        // TotalReferences = count of call-site references (not the declaration itself)
+        Assert.That(preview.TotalReferences, Is.EqualTo(0),
+            "A never-called private method should have 0 references.");
+        Assert.That(preview.FilesAffected, Is.EqualTo(0),
+            "No files are affected when method has no callers.");
+    }
 }

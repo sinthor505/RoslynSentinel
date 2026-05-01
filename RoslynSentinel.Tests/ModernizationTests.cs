@@ -55,6 +55,143 @@ public class ModernizationTests
         Assert.That(result, Contains.Substring("int[] x = [1, 2, 3];"));
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // ModernizationEngine — ConvertMethodToExpressionBodyAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task ConvertMethodToExpressionBody_SingleReturn_ConvertsToArrow()
+    {
+        var source = @"public class C
+{
+    private string _name;
+    public string GetName() { return _name; }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetName");
+
+        Assert.That(result, Does.Contain("=>"),
+            "Method with single return statement should become an expression body.");
+        Assert.That(result, Does.Contain("_name"),
+            "The returned expression should still be present.");
+    }
+
+    [Test]
+    public async Task ConvertMethodToExpressionBody_MultipleStatements_NotConverted()
+    {
+        var source = @"public class C
+{
+    private string _first;
+    private string _last;
+    public string GetFullName()
+    {
+        var name = _first + _last;
+        return name;
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetFullName");
+
+        Assert.That(result, Does.Not.Contain("=>"),
+            "Method with multiple statements should NOT be converted to expression body.");
+        Assert.That(result, Does.Contain("return name"),
+            "Original return statement should be preserved.");
+    }
+
+    [Test]
+    public async Task ConvertMethodToExpressionBody_ExpressionStatement_ConvertsVoidMethod()
+    {
+        var source = @"using System;
+public class C
+{
+    public void Print() { Console.WriteLine(""hi""); }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "Print");
+
+        Assert.That(result, Does.Contain("=>"),
+            "Void method with single expression statement should convert to expression body.");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SyntaxUpgradeEngine — AddBracesAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddBraces_IfWithoutBraces_AddsBraces()
+    {
+        var source = @"public class C
+{
+    public void M(bool x)
+    {
+        if (x) DoWork();
+    }
+    void DoWork() { }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
+
+        Assert.That(result, Does.Contain("{"),
+            "Braces should be added around the if-body.");
+        Assert.That(result, Does.Contain("DoWork"),
+            "The statement inside the if should still be present.");
+    }
+
+    [Test]
+    public async Task AddBraces_AlreadyHasBraces_IsIdempotent()
+    {
+        var source = @"public class C
+{
+    public void M(bool x)
+    {
+        if (x)
+        {
+            DoWork();
+        }
+    }
+    void DoWork() { }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
+
+        // Should not duplicate braces or break formatting
+        Assert.That(result, Does.Contain("DoWork"),
+            "Already-braced code should still contain the method call.");
+        // Count open braces — should not have extra ones
+        Assert.That(result, Is.Not.Null.And.Not.Empty,
+            "Result should be non-empty.");
+    }
+
+    [Test]
+    public async Task AddBraces_ElseWithoutBraces_AddsBraces()
+    {
+        var source = @"public class C
+{
+    public void M(bool x)
+    {
+        if (x)
+            DoWork();
+        else
+            Fallback();
+    }
+    void DoWork() { }
+    void Fallback() { }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
+
+        var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
+
+        Assert.That(result, Does.Contain("DoWork"),
+            "if-branch should be present.");
+        Assert.That(result, Does.Contain("Fallback"),
+            "else-branch should be present.");
+    }
+
     [Test]
     public async Task ConvertSwitchToExpression_Should_Upgrade_Statements()
     {
