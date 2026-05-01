@@ -110,7 +110,7 @@ Roslyn Sentinel is meant for a **solution-enabled system**, not for generic glob
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by an exhaustive suite of **390 functional tests**, ensuring that every toggle and every transformation is verifiably correct.
+Roslyn Sentinel is backed by an exhaustive suite of **393 functional tests** (zero failures), ensuring that every toggle and every transformation is verifiably correct.
 
 ```bash
 dotnet test
