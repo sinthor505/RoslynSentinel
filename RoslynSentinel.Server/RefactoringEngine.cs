@@ -650,6 +650,8 @@ public class RefactoringEngine
         var newContainer = container switch {
             ClassDeclarationSyntax c => (BaseTypeDeclarationSyntax)c.AddMembers(newMember),
             InterfaceDeclarationSyntax i => (BaseTypeDeclarationSyntax)i.AddMembers(newMember),
+            RecordDeclarationSyntax r => (BaseTypeDeclarationSyntax)r.AddMembers(newMember),
+            StructDeclarationSyntax s => (BaseTypeDeclarationSyntax)s.AddMembers(newMember),
             _ => container
         };
         return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
@@ -733,6 +735,172 @@ public class RefactoringEngine
         if (member == null) return new Dictionary<string, string>();
         
         return new Dictionary<string, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
+    }
+
+    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        // Idempotency check
+        var targetName = namespaceName.StartsWith("static ") ? namespaceName[7..] : namespaceName;
+        if (root.Usings.Any(u => u.Name?.ToString() == targetName))
+            return root.ToFullString();
+
+        UsingDirectiveSyntax newUsing;
+        if (namespaceName.StartsWith("static "))
+        {
+            newUsing = SyntaxFactory.UsingDirective(
+                    SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                    null,
+                    SyntaxFactory.ParseName(namespaceName[7..]))
+                .WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+        }
+        else
+        {
+            newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(namespaceName))
+                .WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+        }
+
+        var newRoot = root.AddUsings(newUsing);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddEnumValueAsync(string filePath, string enumName, string valueName, int? explicitValue = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var enumNode = root?.DescendantNodes().OfType<EnumDeclarationSyntax>().FirstOrDefault(e => e.Identifier.Text == enumName);
+        if (enumNode == null) return root?.ToFullString() ?? "";
+
+        var newMember = SyntaxFactory.EnumMemberDeclaration(valueName);
+        if (explicitValue.HasValue)
+        {
+            newMember = newMember.WithEqualsValue(
+                SyntaxFactory.EqualsValueClause(
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(explicitValue.Value))));
+        }
+
+        var newEnumNode = enumNode.AddMembers(newMember);
+        return root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> InsertMemberAfterAsync(string filePath, string containerName, string afterMemberName, string newMemberSource, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        if (container == null) return root?.ToFullString() ?? "";
+
+        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
+        if (newMember == null) return root?.ToFullString() ?? "";
+
+        if (container is TypeDeclarationSyntax typeDecl)
+        {
+            var membersList = typeDecl.Members.ToList();
+            var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
+            SyntaxList<MemberDeclarationSyntax> newMembers;
+            if (idx < 0)
+                newMembers = typeDecl.Members.Add(newMember);
+            else
+                newMembers = SyntaxFactory.List(membersList.Take(idx + 1).Append(newMember).Concat(membersList.Skip(idx + 1)));
+            var newContainer = typeDecl.WithMembers(newMembers);
+            return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        }
+
+        // Fallback: append
+        return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
+    }
+
+    public async Task<string> InsertMemberBeforeAsync(string filePath, string containerName, string beforeMemberName, string newMemberSource, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        if (container == null) return root?.ToFullString() ?? "";
+
+        var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
+        if (newMember == null) return root?.ToFullString() ?? "";
+
+        if (container is TypeDeclarationSyntax typeDecl)
+        {
+            var membersList = typeDecl.Members.ToList();
+            var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
+            SyntaxList<MemberDeclarationSyntax> newMembers;
+            if (idx < 0)
+                newMembers = typeDecl.Members.Add(newMember);
+            else
+                newMembers = SyntaxFactory.List(membersList.Take(idx).Append(newMember).Concat(membersList.Skip(idx)));
+            var newContainer = typeDecl.WithMembers(newMembers);
+            return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        }
+
+        return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
+    }
+
+    public async Task<string> AddAttributeAsync(string filePath, string targetName, string attributeSource, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var normalizedSource = attributeSource.Trim();
+        if (!normalizedSource.StartsWith("["))
+            normalizedSource = $"[{normalizedSource}]";
+        // Parse by embedding in a dummy class declaration
+        var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedSource}\npublic class __Dummy__ {{}}");
+        var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+        if (attrList == null) return root.ToFullString();
+
+        // Try member first, then type declaration
+        var memberNode = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax);
+        if (memberNode != null)
+        {
+            var newMember = memberNode.AddAttributeLists(attrList);
+            return root.ReplaceNode(memberNode, newMember).NormalizeWhitespace().ToFullString();
+        }
+
+        var typeNode = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == targetName);
+        if (typeNode != null)
+        {
+            var newType = typeNode.AddAttributeLists(attrList);
+            return root.ReplaceNode(typeNode, newType).NormalizeWhitespace().ToFullString();
+        }
+
+        return root.ToFullString();
+    }
+
+    public async Task<string> AddBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
+        if (container == null) return root?.ToFullString() ?? "";
+
+        // Idempotency check
+        if (container.BaseList?.Types.Any(t => t.ToString().Contains(baseTypeName)) == true)
+            return root!.ToFullString();
+
+        var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName));
+        var newContainer = container.AddBaseListTypes(baseType);
+        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
     }
 
     private string? GetMemberName(MemberDeclarationSyntax member)

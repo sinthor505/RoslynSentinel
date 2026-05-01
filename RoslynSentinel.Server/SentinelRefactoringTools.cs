@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
@@ -273,7 +275,7 @@ public class SentinelRefactoringTools
         => await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
 
     [McpServerTool]
-    [Description("Adds a new member (method, field, etc.) to an existing class or interface.")]
+    [Description("Adds a new member (method, field, etc.) to an existing class, interface, record, or struct.")]
     public async Task<string> AddMemberToClass(string filePath, string containerName, string newMemberSource) 
         => await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
 
@@ -281,6 +283,114 @@ public class SentinelRefactoringTools
     [Description("Removes a specific member from a class or interface by name.")]
     public async Task<string> RemoveMember(string filePath, string memberName) 
         => await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
+
+    [McpServerTool]
+    [Description("""
+        Adds a using directive to a file if not already present.
+        
+        Pass just the namespace name (e.g. "System.Linq", "Microsoft.Extensions.DependencyInjection").
+        For static usings, prefix with "static " (e.g. "static System.Math").
+        If the directive already exists, the file is returned unchanged.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddUsingDirective(string filePath, string namespaceName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddUsingDirectiveAsync(filePath, namespaceName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds a new value to an existing enum declaration.
+        
+        Specify the enum name and the new value name. Optionally provide an explicit integer value
+        (e.g. enumName="Status", valueName="Archived", explicitValue=99 produces 'Archived = 99').
+        If the enum is not found in the file, the file is returned unchanged.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddEnumValue(string filePath, string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Inserts a new member immediately after a named member in a type declaration.
+        
+        Finds the container type by name, then locates the member named afterMemberName and inserts
+        newMemberSource directly after it (e.g. insert a new method after an existing method).
+        If afterMemberName is not found, the new member is appended at the end of the type.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> InsertMemberAfter(string filePath, string containerName, string afterMemberName, string newMemberSource, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Insert member after '{afterMemberName}' in '{containerName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Inserts a new member immediately before a named member in a type declaration.
+        
+        Finds the container type by name, then locates the member named beforeMemberName and inserts
+        newMemberSource directly before it (e.g. insert a field before a constructor).
+        If beforeMemberName is not found, the new member is appended at the end of the type.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> InsertMemberBefore(string filePath, string containerName, string beforeMemberName, string newMemberSource, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Insert member before '{beforeMemberName}' in '{containerName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds an attribute to a named type or member.
+        
+        targetName is the class name or method/property name to decorate.
+        attributeSource is the attribute text with or without brackets (e.g. "[ApiController]" or "Required").
+        Complex attributes with arguments are supported (e.g. "[HttpGet(\"/api/items\")]").
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddAttribute(string filePath, string targetName, string attributeSource, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attributeSource);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add attribute '{attributeSource}' to '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{attributeSource}' to '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds a base type or interface to a type declaration.
+        
+        typeName is the class/record/struct/interface to modify; baseTypeName is what to add
+        (e.g. "IDisposable", "BaseController", "IMyService<string>").
+        If the type already inherits or implements baseTypeName, the file is returned unchanged.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add base type '{baseTypeName}' to '{typeName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{baseTypeName}' to the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
+    }
 
     [McpServerTool]
     [Description("Replaces a class constructor with a private constructor plus a public static Create() factory method.")]
