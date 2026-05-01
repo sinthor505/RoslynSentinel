@@ -862,4 +862,198 @@ public class AntiPatternEngine
 
         return findings;
     }
+
+    public async Task<List<AntiPatternFinding>> FindLongParameterListAsync(
+        string? filePath = null, string? projectName = null, int minParameters = 4, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<AntiPatternFinding>();
+        var diSuffixes = new[] { "Service", "Repository", "Options", "Factory" };
+
+        foreach (var doc in documents)
+        {
+            if (doc == null || doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+            {
+                var parameters = method.ParameterList.Parameters;
+                if (parameters.Count < minParameters) continue;
+
+                // For constructors: if ALL params end in DI suffixes, skip
+                if (method is ConstructorDeclarationSyntax)
+                {
+                    bool allDi = parameters.All(p =>
+                        p.Type != null && diSuffixes.Any(s => p.Type.ToString().EndsWith(s)));
+                    if (allDi) continue;
+                }
+
+                string memberName = method switch
+                {
+                    MethodDeclarationSyntax m => m.Identifier.Text,
+                    ConstructorDeclarationSyntax c => c.Identifier.Text + " (constructor)",
+                    _ => "<unknown>"
+                };
+
+                var lineSpan = method.GetLocation().GetLineSpan();
+                var paramNames = string.Join(", ", parameters.Select(p => p.Identifier.Text));
+                results.Add(new AntiPatternFinding(
+                    "LongParameterList",
+                    $"'{memberName}' has {parameters.Count} parameters ({paramNames}). Consider introducing a Parameter Object.",
+                    "Medium",
+                    doc.FilePath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    method.ParameterList.ToString()));
+            }
+        }
+        return results;
+    }
+
+    public async Task<List<AntiPatternFinding>> FindPrimitiveObsessionAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var primitiveTypes = new HashSet<string> { "string", "int", "long", "Guid", "bool", "String", "Int32", "Int64", "Boolean" };
+        var results = new List<AntiPatternFinding>();
+
+        foreach (var doc in documents)
+        {
+            if (doc == null || doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+            {
+                var parameters = method.ParameterList.Parameters
+                    .Where(p => p.Modifiers.All(m => !m.IsKind(SyntaxKind.ParamsKeyword)) && p.Type != null)
+                    .ToList();
+
+                var typeCounts = parameters
+                    .GroupBy(p => p.Type!.ToString())
+                    .Where(g => primitiveTypes.Contains(g.Key) && g.Count() >= 3)
+                    .ToList();
+
+                foreach (var group in typeCounts)
+                {
+                    string memberName = method switch
+                    {
+                        MethodDeclarationSyntax m => m.Identifier.Text,
+                        ConstructorDeclarationSyntax c => c.Identifier.Text + " (constructor)",
+                        _ => "<unknown>"
+                    };
+
+                    var paramNames = string.Join(", ", group.Select(p => p.Identifier.Text));
+                    var lineSpan = method.GetLocation().GetLineSpan();
+                    results.Add(new AntiPatternFinding(
+                        "PrimitiveObsession",
+                        $"'{memberName}' has {group.Count()} parameters of type '{group.Key}': {paramNames}. Consider a dedicated type.",
+                        "Medium",
+                        doc.FilePath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        method.ParameterList.ToString()));
+                }
+            }
+        }
+        return results;
+    }
+
+    public async Task<List<AntiPatternFinding>> FindInconsistentAsyncSuffixAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<AntiPatternFinding>();
+
+        static bool IsTaskReturning(MethodDeclarationSyntax m)
+        {
+            var ret = m.ReturnType.ToString();
+            return ret == "Task" || ret.StartsWith("Task<") || ret == "ValueTask" || ret.StartsWith("ValueTask<");
+        }
+
+        static bool IsAsync(MethodDeclarationSyntax m) =>
+            m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword)) || IsTaskReturning(m);
+
+        static bool IsEventHandler(MethodDeclarationSyntax m)
+        {
+            var name = m.Identifier.Text;
+            return name.StartsWith("On") || (m.ParameterList.Parameters.Count == 2 &&
+                m.ParameterList.Parameters[1].Type?.ToString().Contains("EventArgs") == true);
+        }
+
+        foreach (var doc in documents)
+        {
+            if (doc == null || doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (IsEventHandler(method)) continue;
+
+                var name = method.Identifier.Text;
+                bool isAsync = IsAsync(method);
+                bool hasAsyncSuffix = name.EndsWith("Async", StringComparison.Ordinal);
+
+                var lineSpan = method.GetLocation().GetLineSpan();
+
+                if (isAsync && !hasAsyncSuffix)
+                {
+                    results.Add(new AntiPatternFinding(
+                        "InconsistentAsyncSuffix",
+                        $"Method '{name}' is async/Task-returning but does not end with 'Async'. Rename to '{name}Async'.",
+                        "Low",
+                        doc.FilePath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        name));
+                }
+                else if (!isAsync && hasAsyncSuffix)
+                {
+                    results.Add(new AntiPatternFinding(
+                        "InconsistentAsyncSuffix",
+                        $"Method '{name}' ends with 'Async' but is not async and does not return Task/ValueTask. Remove 'Async' suffix.",
+                        "Low",
+                        doc.FilePath,
+                        lineSpan.StartLinePosition.Line + 1,
+                        name));
+                }
+            }
+        }
+        return results;
+    }
 }

@@ -767,4 +767,114 @@ public class AsyncSafetyEngine
 
         return reports;
     }
+
+    public async Task<List<AsyncSafetyReport>> FindAsyncOverSyncAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var documents = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents)
+            : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+
+        var reports = new List<AsyncSafetyReport>();
+        var noOpTargets = new HashSet<string> { "FromResult", "CompletedTask" };
+
+        foreach (var document in documents)
+        {
+            if (document == null) continue;
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword))))
+            {
+                if (method.Body == null && method.ExpressionBody == null) continue;
+
+                var awaitExprs = method.DescendantNodes().OfType<AwaitExpressionSyntax>().ToList();
+
+                if (!awaitExprs.Any())
+                {
+                    var lineSpan = method.GetLocation().GetLineSpan();
+                    reports.Add(new AsyncSafetyReport(
+                        document.FilePath ?? document.Name,
+                        method.Identifier.Text,
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method contains no await — remove async keyword and return Task.FromResult()/Task.CompletedTask directly."));
+                    continue;
+                }
+
+                // Check if ALL awaits are no-ops (Task.FromResult, Task.CompletedTask, ValueTask.FromResult)
+                bool allNoOp = awaitExprs.All(a =>
+                {
+                    if (a.Expression is InvocationExpressionSyntax inv &&
+                        inv.Expression is MemberAccessExpressionSyntax ma &&
+                        noOpTargets.Contains(ma.Name.Identifier.Text) &&
+                        (ma.Expression.ToString() == "Task" || ma.Expression.ToString() == "ValueTask"))
+                        return true;
+                    if (a.Expression is MemberAccessExpressionSyntax directMa &&
+                        directMa.Name.Identifier.Text == "CompletedTask" &&
+                        directMa.Expression.ToString() == "Task")
+                        return true;
+                    return false;
+                });
+
+                if (allNoOp)
+                {
+                    var lineSpan = method.GetLocation().GetLineSpan();
+                    reports.Add(new AsyncSafetyReport(
+                        document.FilePath ?? document.Name,
+                        method.Identifier.Text,
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: async method only awaits Task.FromResult/Task.CompletedTask — remove async keyword and return directly."));
+                }
+            }
+        }
+        return reports;
+    }
+
+    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForgetAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var documents = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents)
+            : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+
+        var reports = new List<AsyncSafetyReport>();
+
+        foreach (var document in documents)
+        {
+            if (document == null) continue;
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            foreach (var exprStmt in root.DescendantNodes().OfType<ExpressionStatementSyntax>())
+            {
+                // Must be a raw invocation, not await
+                if (exprStmt.Expression is not InvocationExpressionSyntax inv)
+                    continue;
+
+                // Skip if parent is an await expression
+                if (exprStmt.Expression is AwaitExpressionSyntax)
+                    continue;
+
+                // Get method name
+                string? methodName = null;
+                if (inv.Expression is MemberAccessExpressionSyntax ma)
+                    methodName = ma.Name.Identifier.Text;
+                else if (inv.Expression is IdentifierNameSyntax id)
+                    methodName = id.Identifier.Text;
+
+                if (methodName == null) continue;
+
+                // Syntactic heuristic: if method name ends in Async, it likely returns Task
+                if (!methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                var lineSpan = exprStmt.GetLocation().GetLineSpan();
+                reports.Add(new AsyncSafetyReport(
+                    document.FilePath ?? document.Name,
+                    containingMethod?.Identifier.Text ?? "<unknown>",
+                    $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' called without await — exceptions will be swallowed silently."));
+            }
+        }
+        return reports;
+    }
 }

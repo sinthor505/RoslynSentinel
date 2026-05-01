@@ -273,6 +273,96 @@ public class SyntaxUpgradeEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
+    public async Task<string> UseExceptionExpressionsAsync(string filePath, string methodName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null) return root.ToFullString();
+
+        var throwStmts = method.DescendantNodes().OfType<ThrowStatementSyntax>()
+            .Where(t => t.Expression != null)
+            .ToList();
+
+        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+
+        foreach (var throwStmt in throwStmts)
+        {
+            if (throwStmt.Expression is not ObjectCreationExpressionSyntax objCreate) continue;
+
+            var typeName = objCreate.Type.ToString();
+            var args = objCreate.ArgumentList?.Arguments ?? default;
+
+            if (typeName == "ArgumentNullException" && args.Count >= 1)
+            {
+                // throw new ArgumentNullException(nameof(x)) → ArgumentNullException.ThrowIfNull(x);
+                var nameofArg = args[0].Expression;
+                string? paramName = null;
+                if (nameofArg is InvocationExpressionSyntax nameofInv &&
+                    nameofInv.Expression is IdentifierNameSyntax nameofId &&
+                    nameofId.Identifier.Text == "nameof")
+                {
+                    paramName = nameofInv.ArgumentList.Arguments.FirstOrDefault()?.Expression.ToString();
+                }
+
+                if (paramName != null)
+                {
+                    var replacement = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("ArgumentNullException"),
+                                SyntaxFactory.IdentifierName("ThrowIfNull")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName(paramName))))))
+                        .WithLeadingTrivia(throwStmt.GetLeadingTrivia())
+                        .WithTrailingTrivia(throwStmt.GetTrailingTrivia());
+                    replacements[throwStmt] = replacement;
+                }
+            }
+            else if (typeName == "ArgumentOutOfRangeException" && args.Count >= 1)
+            {
+                var nameofArg = args[0].Expression;
+                string? paramName = null;
+                if (nameofArg is InvocationExpressionSyntax nameofInv &&
+                    nameofInv.Expression is IdentifierNameSyntax nameofId &&
+                    nameofId.Identifier.Text == "nameof")
+                {
+                    paramName = nameofInv.ArgumentList.Arguments.FirstOrDefault()?.Expression.ToString();
+                }
+
+                if (paramName != null)
+                {
+                    var replacement = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName("ArgumentOutOfRangeException"),
+                                SyntaxFactory.IdentifierName("ThrowIfNegative")),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName(paramName))))))
+                        .WithLeadingTrivia(throwStmt.GetLeadingTrivia())
+                        .WithTrailingTrivia(throwStmt.GetTrailingTrivia());
+                    replacements[throwStmt] = replacement;
+                }
+            }
+        }
+
+        if (!replacements.Any()) return root.ToFullString();
+
+        var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
+        return newRoot.ToFullString();
+    }
+
     private class FieldToParamRewriter : CSharpSyntaxRewriter
     {
         private readonly Dictionary<string, string> _map;

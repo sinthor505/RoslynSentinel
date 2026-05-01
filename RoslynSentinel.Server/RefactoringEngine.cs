@@ -1412,4 +1412,84 @@ public class RefactoringEngine
 
         return newInterfaceRoot.NormalizeWhitespace().ToFullString();
     }
+
+    public async Task<string> UpdateXmlDocsFromSignatureAsync(string filePath, string methodName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null) return root.ToFullString();
+
+        // Find the XML doc comment trivia preceding the method
+        var xmlTrivia = method.GetLeadingTrivia()
+            .FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                                  t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
+
+        if (xmlTrivia == default) return root.ToFullString(); // No XML doc — do nothing
+
+        var currentParams = method.ParameterList.Parameters
+            .Select(p => p.Identifier.Text)
+            .ToHashSet();
+
+        var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
+        if (xmlDoc == null) return root.ToFullString();
+
+        // Find existing param tags
+        var existingParamTags = xmlDoc.Content
+            .OfType<XmlElementSyntax>()
+            .Where(e => e.StartTag.Name.LocalName.Text == "param")
+            .ToList();
+
+        var existingParamNames = existingParamTags
+            .Select(e => e.StartTag.Attributes.OfType<XmlNameAttributeSyntax>().FirstOrDefault()?.Identifier.Identifier.Text ?? "")
+            .Where(n => !string.IsNullOrEmpty(n))
+            .ToHashSet();
+
+        // Params to add (in current signature but not in XML)
+        var toAdd = currentParams.Except(existingParamNames).ToList();
+        // Param tags to remove (in XML but not in current signature)
+        var toRemove = existingParamTags
+            .Where(e => {
+                var name = e.StartTag.Attributes.OfType<XmlNameAttributeSyntax>().FirstOrDefault()?.Identifier.Identifier.Text;
+                return name != null && !currentParams.Contains(name);
+            })
+            .ToList();
+
+        if (!toAdd.Any() && !toRemove.Any()) return root.ToFullString();
+
+        // Build updated XML doc content
+        var updatedContent = xmlDoc.Content.ToList();
+
+        // Remove stale param tags
+        foreach (var staleTag in toRemove)
+            updatedContent.Remove(staleTag);
+
+        // Add missing param tags
+        foreach (var paramName in toAdd)
+        {
+            var newTag = SyntaxFactory.XmlElement(
+                SyntaxFactory.XmlElementStartTag(
+                    SyntaxFactory.XmlName("param"))
+                    .AddAttributes(SyntaxFactory.XmlNameAttribute(paramName)),
+                SyntaxFactory.SingletonList<XmlNodeSyntax>(
+                    SyntaxFactory.XmlText($"The {paramName} parameter.")),
+                SyntaxFactory.XmlElementEndTag(SyntaxFactory.XmlName("param")));
+            updatedContent.Add(newTag);
+        }
+
+        var newXmlDoc = xmlDoc.WithContent(SyntaxFactory.List(updatedContent));
+        var newTrivia = SyntaxFactory.Trivia(newXmlDoc);
+
+        var newLeadingTrivia = method.GetLeadingTrivia().Replace(xmlTrivia, newTrivia);
+        var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
+        var newRoot = root.ReplaceNode(method, newMethod);
+        return newRoot.ToFullString();
+    }
 }

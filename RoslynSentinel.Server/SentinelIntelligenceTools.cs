@@ -287,4 +287,19 @@ public async Task<List<string>> FindStructuralSmells(
     public async Task<List<UnregisteredServiceFinding>> FindServicesNotRegistered(
         string? projectName = null)
         => await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
+
+    [McpServerTool]
+    [Description("Returns the best 1-based line number where a new member of the given kind should be inserted in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
+    public async Task<BestInsertionResult> FindBestInsertionPoint(string filePath, string containerName, string memberKind)
+        => await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind);
+
+    [McpServerTool]
+    [Description("Scans for TODO, FIXME, HACK, REVIEW, NOTE, BUG comments (case-insensitive) in a file, project, or entire solution. Sorted by severity: BUG/FIXME > HACK > TODO > REVIEW > NOTE.")]
+    public async Task<List<TodoCommentFinding>> FindTodoFixmeComments(string? filePath = null, string? projectName = null)
+        => await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Returns a rename impact preview: total references, files affected, whether test files are affected, and the affected file paths. Read-only — makes no changes.")]
+    public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, int line, int column)
+        => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, line, column);
 }

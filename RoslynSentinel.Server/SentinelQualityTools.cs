@@ -319,4 +319,34 @@ public class SentinelQualityTools
     [Description("Adds 'CancellationToken cancellationToken = default' as the last parameter to a method and propagates it to async callees in the method body that have a CancellationToken overload. Also adds cancellationToken to Task.Delay() calls. Returns the updated source.")]
     public async Task<string> AddCancellationTokenToMethod(string filePath, string methodName)
         => await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type.")]
+    public async Task<string> MakeMethodThreadSafe(string filePath, string methodName, string lockFieldName = "_lock")
+        => await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName);
+
+    [McpServerTool]
+    [Description("Finds async methods with no await expressions, or that only await Task.FromResult/Task.CompletedTask.")]
+    public async Task<List<AsyncSafetyReport>> FindAsyncOverSync(string filePath)
+        => await _asyncSafetyEngine.FindAsyncOverSyncAsync(filePath);
+
+    [McpServerTool]
+    [Description("Finds Task-returning methods called without await (fire-and-forget). Exceptions will be silently swallowed. Identified by 'Async' suffix heuristic.")]
+    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForget(string filePath)
+        => await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath);
+
+    [McpServerTool]
+    [Description("Finds methods/constructors with >= minParameters (default 4) parameters. Excludes DI-only constructors (all params end with Service/Repository/Options/Factory).")]
+    public async Task<List<AntiPatternFinding>> FindLongParameterList(string? filePath = null, string? projectName = null, int minParameters = 4)
+        => await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, minParameters);
+
+    [McpServerTool]
+    [Description("Finds methods/constructors where the same primitive type (string/int/long/Guid/bool) appears 3+ times as distinct parameters.")]
+    public async Task<List<AntiPatternFinding>> FindPrimitiveObsession(string? filePath = null, string? projectName = null)
+        => await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Finds async methods not ending with 'Async', and non-async methods that end with 'Async'. Excludes event handlers.")]
+    public async Task<List<AntiPatternFinding>> FindInconsistentAsyncSuffix(string? filePath = null, string? projectName = null)
+        => await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
 }

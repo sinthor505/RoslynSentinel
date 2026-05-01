@@ -172,6 +172,71 @@ public class CodeStyleEngine
         return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
 
+    public async Task<List<AntiPatternFinding>> FindUseFrozenCollectionsAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<AntiPatternFinding>();
+        var targetTypes = new[] { "Dictionary", "HashSet" };
+
+        foreach (var doc in documents)
+        {
+            if (doc == null || doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
+            {
+                // Must be private static readonly
+                var mods = field.Modifiers;
+                if (!mods.Any(SyntaxKind.PrivateKeyword)) continue;
+                if (!mods.Any(SyntaxKind.StaticKeyword)) continue;
+                if (!mods.Any(SyntaxKind.ReadOnlyKeyword)) continue;
+
+                var typeStr = field.Declaration.Type.ToString();
+                string? matchedType = null;
+                foreach (var t in targetTypes)
+                {
+                    if (typeStr.StartsWith(t + "<") || typeStr.StartsWith($"System.Collections.Generic.{t}<"))
+                    {
+                        matchedType = t;
+                        break;
+                    }
+                }
+                if (matchedType == null) continue;
+
+                // Must have an initializer
+                var hasInit = field.Declaration.Variables.Any(v => v.Initializer != null);
+                if (!hasInit) continue;
+
+                var frozenType = matchedType == "Dictionary" ? "FrozenDictionary" : "FrozenSet";
+                var lineSpan = field.GetLocation().GetLineSpan();
+                var varName = field.Declaration.Variables.First().Identifier.Text;
+
+                results.Add(new AntiPatternFinding(
+                    "UseFrozenCollection",
+                    $"Field '{varName}' is a private static readonly {matchedType} initialized inline. Consider using {frozenType} (System.Collections.Frozen) for better read performance.",
+                    "Low",
+                    doc.FilePath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    field.ToString().Trim()));
+            }
+        }
+        return results;
+    }
+
     private class DangerousLockRewriter : CSharpSyntaxRewriter
     {
         public bool MadeChanges { get; private set; }

@@ -16,7 +16,7 @@ public class ThreadSafetyEngine
     /// <summary>
     /// Adds a private lock object and wraps a method's body in a lock statement.
     /// </summary>
-    public async Task<string> MakeMethodThreadSafeAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<string> MakeMethodThreadSafeAsync(string filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -29,7 +29,29 @@ public class ThreadSafetyEngine
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (typeNode == null) throw new Exception("Type not found.");
 
-        var lockFieldName = "_lock";
+        // Check if a field with lockFieldName already exists
+        var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
+            .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == lockFieldName));
+
+        bool addLockField;
+        if (existingLockField != null)
+        {
+            var fieldType = existingLockField.Declaration.Type.ToString().Trim();
+            if (fieldType == "object")
+            {
+                // Reuse existing object lock field
+                addLockField = false;
+            }
+            else
+            {
+                throw new Exception($"Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.");
+            }
+        }
+        else
+        {
+            addLockField = true;
+        }
+
         var lockField = SyntaxFactory.FieldDeclaration(
             SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("object"))
             .WithVariables(SyntaxFactory.SingletonSeparatedList(
@@ -37,9 +59,6 @@ public class ThreadSafetyEngine
                 .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("object")).WithArgumentList(SyntaxFactory.ArgumentList()))))))
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
 
-        // Only add lock field if it doesn't exist
-        var existingLock = typeNode.Members.OfType<FieldDeclarationSyntax>().Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == lockFieldName));
-        
         var newBody = SyntaxFactory.Block(
             SyntaxFactory.LockStatement(
                 SyntaxFactory.IdentifierName(lockFieldName),
@@ -47,8 +66,8 @@ public class ThreadSafetyEngine
 
         var newMethod = method.WithBody(newBody);
         var newTypeNode = typeNode.ReplaceNode(method, newMethod);
-        
-        if (!existingLock)
+
+        if (addLockField)
         {
             newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
         }

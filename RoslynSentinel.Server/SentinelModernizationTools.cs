@@ -182,4 +182,14 @@ public class SentinelModernizationTools
     [Description("Converts a class with a simple assignment-only constructor into a C# 12 primary constructor. Removes the explicit constructor and its corresponding private readonly fields, then rewrites field references to use the parameter names directly. Only succeeds if every constructor statement is a field assignment.")]
     public async Task<string> UpgradeToPrimaryConstructor(string filePath, string className)
         => await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Finds private static readonly Dictionary<> and HashSet<> fields initialized inline. Suggests using FrozenDictionary/FrozenSet (System.Collections.Frozen) for better read performance.")]
+    public async Task<List<AntiPatternFinding>> FindUseFrozenCollections(string? filePath = null, string? projectName = null)
+        => await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Replaces throw new ArgumentNullException(nameof(x)) with ArgumentNullException.ThrowIfNull(x) and throw new ArgumentOutOfRangeException(nameof(x)) with ArgumentOutOfRangeException.ThrowIfNegative(x) in the specified method.")]
+    public async Task<string> UseExceptionExpressions(string filePath, string methodName)
+        => await _syntaxUpgradeEngine.UseExceptionExpressionsAsync(filePath, methodName);
 }

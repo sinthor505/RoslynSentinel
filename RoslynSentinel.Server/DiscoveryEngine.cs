@@ -4,6 +4,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
+public record BestInsertionResult(string FilePath, string ContainerName, string MemberKind, int InsertBeforeLine, string Reason);
+public record TodoCommentFinding(string FilePath, int Line, string Kind, string Text);
+public record RenameImpactPreview(string SymbolName, int TotalReferences, int FilesAffected, bool HasTestReferences, List<string> AffectedFiles);
+
 public record ThrowSiteInfo(
     string FilePath,
     int Line,
@@ -382,5 +386,174 @@ public class DiscoveryEngine
             return assignment.Left.ToString();
 
         return null;
+    }
+
+    public async Task<BestInsertionResult> FindBestInsertionPointAsync(
+        string filePath, string containerName, string memberKind, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) throw new Exception("Could not get syntax root.");
+
+        var container = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == containerName);
+        if (container == null) throw new Exception($"Type '{containerName}' not found.");
+
+        // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) → nested(6)
+        static int MemberOrder(MemberDeclarationSyntax m) => m switch
+        {
+            FieldDeclarationSyntax => 0,
+            ConstructorDeclarationSyntax => 1,
+            DestructorDeclarationSyntax => 2,
+            PropertyDeclarationSyntax => 3,
+            EventDeclarationSyntax => 4,
+            EventFieldDeclarationSyntax => 4,
+            MethodDeclarationSyntax => 5,
+            TypeDeclarationSyntax => 6,
+            _ => 7
+        };
+
+        int requestedOrder = memberKind.ToLowerInvariant() switch
+        {
+            "field" => 0,
+            "constructor" => 1,
+            "destructor" => 2,
+            "property" => 3,
+            "event" => 4,
+            "method" => 5,
+            "nestedtype" => 6,
+            _ => throw new Exception($"Unknown memberKind '{memberKind}'. Use: field, constructor, destructor, property, event, method, nestedtype")
+        };
+
+        var members = container.Members.ToList();
+        if (!members.Any())
+        {
+            // Empty type: insert after the opening brace
+            var openBrace = container.OpenBraceToken;
+            var lineSpan = openBrace.GetLocation().GetLineSpan();
+            return new BestInsertionResult(filePath, containerName, memberKind, lineSpan.StartLinePosition.Line + 2, "Empty type — inserting after opening brace");
+        }
+
+        // Find last member of same kind
+        var sameKindMembers = members.Where(m => MemberOrder(m) == requestedOrder).ToList();
+        if (sameKindMembers.Any())
+        {
+            var last = sameKindMembers.Last();
+            var lineSpan = last.GetLocation().GetLineSpan();
+            return new BestInsertionResult(filePath, containerName, memberKind, lineSpan.EndLinePosition.Line + 2, $"After last {memberKind}");
+        }
+
+        // Find first member of a higher kind
+        var higherKindMember = members.FirstOrDefault(m => MemberOrder(m) > requestedOrder);
+        if (higherKindMember != null)
+        {
+            var lineSpan = higherKindMember.GetLocation().GetLineSpan();
+            return new BestInsertionResult(filePath, containerName, memberKind, lineSpan.StartLinePosition.Line + 1, $"Before first {higherKindMember.GetType().Name}");
+        }
+
+        // All existing members are of a lower kind; insert at the end
+        var lastMember = members.Last();
+        var lastLineSpan = lastMember.GetLocation().GetLineSpan();
+        return new BestInsertionResult(filePath, containerName, memberKind, lastLineSpan.EndLinePosition.Line + 2, "After last member");
+    }
+
+    private static readonly string[] TodoKeywords = ["BUG", "FIXME", "HACK", "TODO", "REVIEW", "NOTE"];
+    private static readonly Dictionary<string, int> TodoSeverity = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["BUG"] = 0, ["FIXME"] = 1, ["HACK"] = 2, ["TODO"] = 3, ["REVIEW"] = 4, ["NOTE"] = 5
+    };
+
+    public async Task<List<TodoCommentFinding>> FindTodoFixmeCommentsAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<TodoCommentFinding>();
+
+        foreach (var doc in GetDocuments(solution, filePath, projectName))
+        {
+            if (doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var token in root.DescendantTokens(descendIntoTrivia: true))
+            {
+                foreach (var trivia in token.LeadingTrivia.Concat(token.TrailingTrivia))
+                {
+                    string? commentText = null;
+                    if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+                        trivia.IsKind(SyntaxKind.MultiLineCommentTrivia) ||
+                        trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia))
+                    {
+                        commentText = trivia.ToFullString();
+                    }
+
+                    if (commentText == null) continue;
+
+                    var lineSpan = trivia.GetLocation().GetLineSpan();
+                    var lineNum = lineSpan.StartLinePosition.Line + 1;
+
+                    foreach (var keyword in TodoKeywords)
+                    {
+                        if (commentText.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        {
+                            results.Add(new TodoCommentFinding(doc.FilePath, lineNum, keyword.ToUpperInvariant(), commentText.Trim()));
+                            break; // Only report one keyword per comment
+                        }
+                    }
+                }
+            }
+        }
+
+        return results
+            .OrderBy(r => TodoSeverity.TryGetValue(r.Kind, out var sev) ? sev : 99)
+            .ThenBy(r => r.FilePath)
+            .ThenBy(r => r.Line)
+            .ToList();
+    }
+
+    public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
+        string filePath, string symbolName, int line, int column, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) throw new Exception("File not found.");
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var sourceText = await document.GetTextAsync(ct);
+        var position = sourceText.Lines[line - 1].Start + column - 1;
+
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (semanticModel == null) throw new Exception("Could not get semantic model.");
+
+        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0))).Symbol
+                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)));
+
+        if (symbol == null) throw new Exception($"Symbol '{symbolName}' not found at {line}:{column}.");
+
+        var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var locations = references.SelectMany(r => r.Locations).ToList();
+
+        var affectedFiles = locations
+            .Select(l => l.Location.SourceTree?.FilePath ?? "")
+            .Where(f => !string.IsNullOrEmpty(f))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        bool hasTestRefs = affectedFiles.Any(f =>
+            f.Contains(".Tests", StringComparison.OrdinalIgnoreCase) ||
+            f.Contains("Test.", StringComparison.OrdinalIgnoreCase) ||
+            f.Contains("Tests.", StringComparison.OrdinalIgnoreCase));
+
+        return new RenameImpactPreview(
+            symbolName,
+            locations.Count,
+            affectedFiles.Count,
+            hasTestRefs,
+            affectedFiles);
     }
 }

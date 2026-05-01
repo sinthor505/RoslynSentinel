@@ -660,4 +660,9 @@ public class SentinelRefactoringTools
         string? newTypeName = null,
         string[]? parameterNames = null)
         => await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
+
+    [McpServerTool]
+    [Description("Regenerates XML doc param/returns tags to match the current method signature: adds tags for new parameters, removes tags for deleted parameters, and adds a <returns> tag if missing on a non-void method.")]
+    public async Task<string> UpdateXmlDocsFromSignature(string filePath, string methodName)
+        => await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName);
 }
