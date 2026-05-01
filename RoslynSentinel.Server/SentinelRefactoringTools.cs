@@ -431,4 +431,219 @@ public class SentinelRefactoringTools
         var id = _workspaceManager.StageChanges(changes, $"Pull up '{memberName}' from '{className}' to base class.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Pulls '{memberName}' from '{className}' up to its base class.");
     }
+
+    [McpServerTool]
+    [Description("""
+        Removes a named attribute from a type or member.
+        
+        targetName is the class/method/property name to modify.
+        attributeName is the attribute to remove, with or without the 'Attribute' suffix and brackets
+        (e.g. "Obsolete", "ObsoleteAttribute", or "[Obsolete]" — all match [Obsolete]).
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> RemoveAttribute(string filePath, string targetName, string attributeName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, attributeName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Remove attribute '{attributeName}' from '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{attributeName}' from '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Removes a base type or interface from a type declaration.
+        
+        typeName is the class/record/struct/interface to modify.
+        baseTypeName is the base type or interface to remove (e.g. "IDisposable", "BaseController").
+        If the type has no base list or does not implement/inherit baseTypeName, the file is returned unchanged.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> RemoveBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Remove base type '{baseTypeName}' from '{typeName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{baseTypeName}' from the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Changes the accessibility modifier of a type or member.
+        
+        targetName is the class/method/property/field name to modify.
+        accessibility must be one of: "public", "private", "internal", "protected",
+        "protected internal", or "private protected".
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> ChangeAccessibility(string filePath, string targetName, string accessibility, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds a modifier keyword to a type or member (idempotent).
+        
+        targetName is the class/method/property name to modify.
+        modifier is the keyword to add: virtual, abstract, sealed, static, readonly, override,
+        partial, async, new, extern, unsafe, volatile.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddModifier(string filePath, string targetName, string modifier, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add '{modifier}' modifier to '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{modifier}' to '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Removes a modifier keyword from a type or member (idempotent).
+        
+        targetName is the class/method/property name to modify.
+        modifier is the keyword to remove: virtual, abstract, sealed, static, readonly, override,
+        partial, async, new, extern, unsafe, volatile.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> RemoveModifier(string filePath, string targetName, string modifier, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Remove '{modifier}' modifier from '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{modifier}' from '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds or replaces a /// <summary>...</summary> XML doc comment on a type or member.
+        
+        targetName is the class/method/property name to document.
+        summaryText is the text content of the summary (single line).
+        If a summary already exists it will be replaced.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddSummaryComment(string filePath, string targetName, string summaryText, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Generates an auto-property and adds it to a type.
+        
+        containerName is the class/record/struct to modify; propertyName and propertyType specify the property.
+        accessibility defaults to "public". hasSetter=true generates { get; set; }; false generates { get; }.
+        isInit=true generates { get; init; } (requires hasSetter=true).
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddProperty(string filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, propertyName, propertyType, accessibility, hasSetter, isInit);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add property '{propertyName}' to '{containerName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{propertyType} {propertyName}' property to '{containerName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Generates a field declaration and adds it to a type.
+        
+        containerName is the class/struct to modify; fieldName and fieldType specify the field.
+        accessibility defaults to "private". isReadonly and isStatic add those modifiers.
+        initializer is an optional value expression (e.g. "42" or "new List<string>()").
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddField(string filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, fieldName, fieldType, accessibility, isReadonly, isStatic, initializer);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add field '{fieldName}' to '{containerName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{fieldType} {fieldName}' field to '{containerName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Reorders members of a class/struct/record by convention: fields, constructors, destructors,
+        properties, indexers, events, methods, operators, nested types.
+        
+        Within each category: static members come before instance members, then alphabetical by name.
+        containerName is the type whose members to sort.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> SortMembers(string filePath, string containerName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.SortMembersAsync(filePath, containerName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Sort members of '{containerName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Sorts members of '{containerName}' by convention in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Wraps a range of statements in a try/catch block.
+        
+        startLine and endLine are 1-based line numbers of the statements to wrap.
+        exceptionType defaults to "Exception"; catchVariableName defaults to "ex".
+        catchBody is an optional statement for the catch block body (e.g. "_logger.LogError(ex, \"msg\");").
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> WrapInTryCatch(string filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment.
+        
+        className is the target class; paramName and paramType define the parameter.
+        fieldName overrides the derived field name (defaults to _camelCase of paramName).
+        If the class has no constructor one is created. Expression-bodied constructors are converted to block bodies.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> AddConstructorParameter(string filePath, string className, string paramName, string paramType, string? fieldName = null, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("""
+        Wraps a line range with #region / #endregion preprocessor directives.
+        
+        startLine and endLine are 1-based line numbers. regionName is the label after #region.
+        This uses text manipulation rather than AST transformation.
+        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        """)]
+    public async Task<object> WrapInRegion(string filePath, int startLine, int endLine, string regionName, bool autoStage = true)
+    {
+        var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, regionName);
+        if (!autoStage) return updated;
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{regionName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{regionName}' in {Path.GetFileName(filePath)}.");
+    }
 }

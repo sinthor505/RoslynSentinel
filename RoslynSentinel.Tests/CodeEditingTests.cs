@@ -401,4 +401,585 @@ public class Worker : IWorker
         var count = System.Text.RegularExpressions.Regex.Matches(result, "IWorker").Count;
         Assert.That(count, Is.EqualTo(1), "IWorker should not be duplicated.");
     }
+
+    // ══════════════════════════════════════════════════════════════
+    // RemoveAttributeAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task RemoveAttribute_RemovesExistingAttribute()
+    {
+        SetSource(@"
+[Obsolete]
+public class Foo
+{
+    [Obsolete(""use Bar"")]
+    public void DoIt() { }
+}
+", "Foo.cs");
+
+        var result = await _engine.RemoveAttributeAsync("Foo.cs", "DoIt", "Obsolete");
+
+        Assert.That(result, Does.Not.Contain("[Obsolete("), "Attribute should be removed from method.");
+        Assert.That(result, Does.Contain("[Obsolete]"), "Class attribute should remain.");
+    }
+
+    [Test]
+    public async Task RemoveAttribute_NoOpWhenAbsent()
+    {
+        SetSource(@"
+public class Bar
+{
+    public void Run() { }
+}
+", "Bar.cs");
+
+        var result = await _engine.RemoveAttributeAsync("Bar.cs", "Run", "Obsolete");
+
+        Assert.That(result, Does.Contain("public void Run()"));
+        Assert.That(result, Does.Not.Contain("[Obsolete]"));
+    }
+
+    [Test]
+    public async Task RemoveAttribute_MatchesSuffixVariant()
+    {
+        SetSource(@"
+[ObsoleteAttribute]
+public class Baz { }
+", "Baz.cs");
+
+        var result = await _engine.RemoveAttributeAsync("Baz.cs", "Baz", "Obsolete");
+
+        Assert.That(result, Does.Not.Contain("[ObsoleteAttribute]"));
+        Assert.That(result, Does.Contain("public class Baz"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // RemoveBaseTypeAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task RemoveBaseType_RemovesOneInterface()
+    {
+        SetSource(@"
+public class Service : IService, IDisposable
+{
+    public void Run() { }
+    public void Dispose() { }
+}
+", "Service.cs");
+
+        var result = await _engine.RemoveBaseTypeAsync("Service.cs", "Service", "IDisposable");
+
+        Assert.That(result, Does.Contain("IService"), "IService should remain.");
+        Assert.That(result, Does.Not.Contain("IDisposable"), "IDisposable should be removed.");
+    }
+
+    [Test]
+    public async Task RemoveBaseType_RemovesOnlyBaseType_LeavesNoBaseList()
+    {
+        SetSource(@"
+public class Child : Parent
+{
+    public void Act() { }
+}
+", "Child.cs");
+
+        var result = await _engine.RemoveBaseTypeAsync("Child.cs", "Child", "Parent");
+
+        Assert.That(result, Does.Not.Contain(": Parent"), "Base list should be gone.");
+        Assert.That(result, Does.Contain("public class Child"), "Class declaration should remain.");
+    }
+
+    [Test]
+    public async Task RemoveBaseType_NoOpWhenNotPresent()
+    {
+        SetSource(@"
+public class Worker : IWorker { }
+", "Worker.cs");
+
+        var result = await _engine.RemoveBaseTypeAsync("Worker.cs", "Worker", "IDisposable");
+
+        Assert.That(result, Does.Contain(": IWorker"), "Base list should be unchanged.");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // ChangeAccessibilityAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task ChangeAccessibility_PublicToPrivate()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int Add(int a, int b) => a + b;
+}
+", "Calc.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", "private");
+
+        Assert.That(result, Does.Contain("private int Add"), "Method should now be private.");
+        Assert.That(result, Does.Not.Contain("public int Add"));
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_PrivateToPublic()
+    {
+        SetSource(@"
+public class Calc
+{
+    private int _value;
+}
+", "Calc.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "_value", "public");
+
+        Assert.That(result, Does.Contain("public int _value"));
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_ProtectedInternalToInternal()
+    {
+        SetSource(@"
+public class Base
+{
+    protected internal void Hook() { }
+}
+", "Base.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Base.cs", "Hook", "internal");
+
+        Assert.That(result, Does.Contain("internal void Hook"), "Should be internal.");
+        Assert.That(result, Does.Not.Contain("protected internal void Hook"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AddModifierAsync / RemoveModifierAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddModifier_AddsVirtualToMethod()
+    {
+        SetSource(@"
+public class Base
+{
+    public void Execute() { }
+}
+", "Base.cs");
+
+        var result = await _engine.AddModifierAsync("Base.cs", "Execute", "virtual");
+
+        Assert.That(result, Does.Contain("virtual"), "Method should now be virtual.");
+    }
+
+    [Test]
+    public async Task AddModifier_IsIdempotent()
+    {
+        SetSource(@"
+public class Base
+{
+    public virtual void Execute() { }
+}
+", "Base.cs");
+
+        var result = await _engine.AddModifierAsync("Base.cs", "Execute", "virtual");
+        var count = System.Text.RegularExpressions.Regex.Matches(result, @"\bvirtual\b").Count;
+
+        Assert.That(count, Is.EqualTo(1), "virtual should appear only once.");
+    }
+
+    [Test]
+    public async Task RemoveModifier_RemovesStatic()
+    {
+        SetSource(@"
+public class Helper
+{
+    public static void Go() { }
+}
+", "Helper.cs");
+
+        var result = await _engine.RemoveModifierAsync("Helper.cs", "Go", "static");
+
+        Assert.That(result, Does.Not.Contain("static void Go"));
+        Assert.That(result, Does.Contain("public void Go"));
+    }
+
+    [Test]
+    public async Task RemoveModifier_NoOpWhenAbsent()
+    {
+        SetSource(@"
+public class Helper
+{
+    public void Go() { }
+}
+", "Helper.cs");
+
+        var result = await _engine.RemoveModifierAsync("Helper.cs", "Go", "static");
+
+        Assert.That(result, Does.Contain("public void Go"));
+        Assert.That(result, Does.Not.Contain("static"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AddSummaryCommentAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddSummaryComment_AddsToMethod()
+    {
+        SetSource(@"
+public class Greeter
+{
+    public string Hello(string name) => $""Hello {name}"";
+}
+", "Greeter.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Greeter.cs", "Hello", "Returns a greeting.");
+
+        Assert.That(result, Does.Contain("/// <summary>"));
+        Assert.That(result, Does.Contain("Returns a greeting."));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_AddsToClass()
+    {
+        SetSource(@"
+public class Widget { }
+", "Widget.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Widget.cs", "Widget", "A reusable widget.");
+
+        Assert.That(result, Does.Contain("/// <summary>"));
+        Assert.That(result, Does.Contain("A reusable widget."));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_ReplacesExistingDocComment()
+    {
+        SetSource(@"
+public class Service
+{
+    /// <summary>
+    /// Old comment.
+    /// </summary>
+    public void Run() { }
+}
+", "Service.cs");
+
+        var result = await _engine.AddSummaryCommentAsync("Service.cs", "Run", "New comment.");
+
+        Assert.That(result, Does.Contain("New comment."));
+        Assert.That(result, Does.Not.Contain("Old comment."));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AddPropertyAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddProperty_ReadonlyProperty()
+    {
+        SetSource(@"
+public class Person { }
+", "Person.cs");
+
+        var result = await _engine.AddPropertyAsync("Person.cs", "Person", "Name", "string", hasSetter: false);
+
+        Assert.That(result, Does.Contain("string Name"));
+        Assert.That(result, Does.Contain("get;"));
+        Assert.That(result, Does.Not.Contain("set;"));
+    }
+
+    [Test]
+    public async Task AddProperty_ReadWriteProperty()
+    {
+        SetSource(@"
+public class Person { }
+", "Person.cs");
+
+        var result = await _engine.AddPropertyAsync("Person.cs", "Person", "Age", "int");
+
+        Assert.That(result, Does.Contain("int Age"));
+        Assert.That(result, Does.Contain("get;"));
+        Assert.That(result, Does.Contain("set;"));
+    }
+
+    [Test]
+    public async Task AddProperty_InitOnlyProperty()
+    {
+        SetSource(@"
+public class Record { }
+", "Record.cs");
+
+        var result = await _engine.AddPropertyAsync("Record.cs", "Record", "Id", "Guid", hasSetter: true, isInit: true);
+
+        Assert.That(result, Does.Contain("Guid Id"));
+        Assert.That(result, Does.Contain("init;"));
+        Assert.That(result, Does.Not.Contain("set;"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AddFieldAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddField_PrivateReadonly()
+    {
+        SetSource(@"
+public class Service { }
+", "Service.cs");
+
+        var result = await _engine.AddFieldAsync("Service.cs", "Service", "_logger", "ILogger", isReadonly: true);
+
+        Assert.That(result, Does.Contain("private"));
+        Assert.That(result, Does.Contain("readonly"));
+        Assert.That(result, Does.Contain("ILogger _logger"));
+    }
+
+    [Test]
+    public async Task AddField_PublicStaticWithInitializer()
+    {
+        SetSource(@"
+public class Config { }
+", "Config.cs");
+
+        var result = await _engine.AddFieldAsync("Config.cs", "Config", "MaxRetries", "int",
+            accessibility: "public", isStatic: true, initializer: "3");
+
+        Assert.That(result, Does.Contain("public"));
+        Assert.That(result, Does.Contain("static"));
+        Assert.That(result, Does.Contain("int MaxRetries"));
+        Assert.That(result, Does.Contain("= 3"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SortMembersAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task SortMembers_FieldsBeforeMethods()
+    {
+        SetSource(@"
+public class Repo
+{
+    public void Save() { }
+    private string _name;
+}
+", "Repo.cs");
+
+        var result = await _engine.SortMembersAsync("Repo.cs", "Repo");
+
+        var fieldIdx = result.IndexOf("_name", StringComparison.Ordinal);
+        var methodIdx = result.IndexOf("Save()", StringComparison.Ordinal);
+        Assert.That(fieldIdx, Is.LessThan(methodIdx), "Fields should appear before methods.");
+    }
+
+    [Test]
+    public async Task SortMembers_ConstructorBeforeProperties()
+    {
+        SetSource(@"
+public class Dto
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public Dto(string name) { Name = name; }
+}
+", "Dto.cs");
+
+        var result = await _engine.SortMembersAsync("Dto.cs", "Dto");
+
+        var ctorIdx = result.IndexOf("Dto(string name)", StringComparison.Ordinal);
+        var propIdx = result.IndexOf("Name", StringComparison.Ordinal);
+        Assert.That(ctorIdx, Is.LessThan(propIdx), "Constructor should appear before properties.");
+    }
+
+    [Test]
+    public async Task SortMembers_StaticBeforeInstance()
+    {
+        SetSource(@"
+public class Utils
+{
+    public void InstanceMethod() { }
+    public static void StaticMethod() { }
+}
+", "Utils.cs");
+
+        var result = await _engine.SortMembersAsync("Utils.cs", "Utils");
+
+        var staticIdx = result.IndexOf("StaticMethod()", StringComparison.Ordinal);
+        var instanceIdx = result.IndexOf("InstanceMethod()", StringComparison.Ordinal);
+        Assert.That(staticIdx, Is.LessThan(instanceIdx), "Static methods should come before instance methods.");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // WrapInTryCatchAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task WrapInTryCatch_WrapsSingleStatement()
+    {
+        SetSource(@"
+public class Processor
+{
+    public void Process()
+    {
+        DoWork();
+    }
+}
+", "Processor.cs");
+
+        var result = await _engine.WrapInTryCatchAsync("Processor.cs", 6, 6);
+
+        Assert.That(result, Does.Contain("try"));
+        Assert.That(result, Does.Contain("catch"));
+        Assert.That(result, Does.Contain("DoWork()"));
+    }
+
+    [Test]
+    public async Task WrapInTryCatch_WrapsMultipleStatements()
+    {
+        SetSource(@"
+public class Processor
+{
+    public void Process()
+    {
+        var a = 1;
+        var b = 2;
+        var c = a + b;
+    }
+}
+", "Processor.cs");
+
+        var result = await _engine.WrapInTryCatchAsync("Processor.cs", 6, 8);
+
+        Assert.That(result, Does.Contain("try"));
+        Assert.That(result, Does.Contain("var a = 1"));
+        Assert.That(result, Does.Contain("var b = 2"));
+        Assert.That(result, Does.Contain("var c = a + b"));
+    }
+
+    [Test]
+    public async Task WrapInTryCatch_WithCustomCatchBody()
+    {
+        SetSource(@"
+public class Handler
+{
+    public void Handle()
+    {
+        Execute();
+    }
+}
+", "Handler.cs");
+
+        var result = await _engine.WrapInTryCatchAsync("Handler.cs", 6, 6,
+            exceptionType: "InvalidOperationException",
+            catchVariableName: "ioe",
+            catchBody: "Console.WriteLine(ioe.Message);");
+
+        Assert.That(result, Does.Contain("InvalidOperationException"));
+        Assert.That(result, Does.Contain("ioe"));
+        Assert.That(result, Does.Contain("Console.WriteLine"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // AddConstructorParameterAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task AddConstructorParameter_AddsToExistingCtor()
+    {
+        SetSource(@"
+public class OrderService
+{
+    private readonly IProductRepo _productRepo;
+    public OrderService(IProductRepo productRepo)
+    {
+        _productRepo = productRepo;
+    }
+    public void Place() { }
+}
+", "OrderService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("OrderService.cs", "OrderService", "logger", "ILogger");
+
+        Assert.That(result, Does.Contain("ILogger logger"), "New param should be in ctor signature.");
+        Assert.That(result, Does.Contain("private readonly ILogger _logger"), "Field should be added.");
+        Assert.That(result, Does.Contain("_logger = logger"), "Assignment should be in body.");
+    }
+
+    [Test]
+    public async Task AddConstructorParameter_CreatesCtorWhenNoneExists()
+    {
+        SetSource(@"
+public class UserService
+{
+    public void Create() { }
+}
+", "UserService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("UserService.cs", "UserService", "repo", "IUserRepo");
+
+        Assert.That(result, Does.Contain("IUserRepo repo"), "New param should be in ctor.");
+        Assert.That(result, Does.Contain("private readonly IUserRepo _repo"), "Field should exist.");
+        Assert.That(result, Does.Contain("_repo = repo"), "Assignment should be in body.");
+    }
+
+    [Test]
+    public async Task AddConstructorParameter_UsesCustomFieldName()
+    {
+        SetSource(@"
+public class NotifyService { }
+", "NotifyService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("NotifyService.cs", "NotifyService",
+            "sender", "IEmailSender", fieldName: "_emailSender");
+
+        Assert.That(result, Does.Contain("private readonly IEmailSender _emailSender"));
+        Assert.That(result, Does.Contain("_emailSender = sender"));
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // WrapInRegionAsync
+    // ══════════════════════════════════════════════════════════════
+
+    [Test]
+    public async Task WrapInRegion_InsertsRegionDirectives()
+    {
+        SetSource(@"
+public class MyClass
+{
+    public void MethodA() { }
+    public void MethodB() { }
+}
+", "MyClass.cs");
+
+        var result = await _engine.WrapInRegionAsync("MyClass.cs", 4, 5, "Public Methods");
+
+        Assert.That(result, Does.Contain("#region Public Methods"));
+        Assert.That(result, Does.Contain("#endregion"));
+        Assert.That(result, Does.Contain("MethodA"));
+        Assert.That(result, Does.Contain("MethodB"));
+    }
+
+    [Test]
+    public async Task WrapInRegion_RegionAppearsInCorrectOrder()
+    {
+        SetSource(@"
+public class MyClass
+{
+    private int _x;
+    public void Run() { }
+}
+", "MyClass.cs");
+
+        var result = await _engine.WrapInRegionAsync("MyClass.cs", 5, 5, "Methods");
+
+        var regionIdx = result.IndexOf("#region Methods", StringComparison.Ordinal);
+        var runIdx = result.IndexOf("public void Run()", StringComparison.Ordinal);
+        var endRegionIdx = result.IndexOf("#endregion", StringComparison.Ordinal);
+
+        Assert.That(regionIdx, Is.LessThan(runIdx), "#region should precede the method.");
+        Assert.That(runIdx, Is.LessThan(endRegionIdx), "#endregion should follow the method.");
+    }
 }

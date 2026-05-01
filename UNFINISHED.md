@@ -63,4 +63,4 @@ These engine methods exist as stubs/no-ops and were not wrapped:
 - `AddRetryPolicy`, `RunSpecificRule`, `RunMicroRefactoring`
 - `ModernizationUpgradeEngine.ConvertSwitchToExpression` — duplicate name conflict with `SyntaxUpgradeEngine` version
 
-*Note (subsequent session — session 3): 8 new tools added (PullUpMember exposed, CheckForSqlInjection exposed, DiscoveryEngine created with FindAllThrowSites/FindObjectCreationSites/GetPublicApiSurface, FindServicesNotRegistered added to DependencyInjectionEngine, ConvertForEachToFor implemented, UseObjectInitializers implemented). 18 new tests added in DiscoveryEngineTests.cs and related files. Total: **224 passing tests, 170 MCP tools across 53 engines**.*
+*Note (session 4 — surgical code editing batch 2): 12 new MCP tools added via 13 new engine methods on `RefactoringEngine`: `RemoveAttribute`, `RemoveBaseType`, `ChangeAccessibility`, `AddModifier`, `RemoveModifier`, `AddSummaryComment`, `AddProperty`, `AddField`, `SortMembers`, `WrapInTryCatch`, `AddConstructorParameter`, `WrapInRegion`. 38 new tests added in `CodeEditingTests.cs`. Total: **277 passing tests, 188 MCP tools across 53 engines**.*

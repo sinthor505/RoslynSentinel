@@ -903,6 +903,366 @@ public class RefactoringEngine
         return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
     }
 
+    public async Task<string> RemoveAttributeAsync(string filePath, string targetName, string attributeName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var attrCore = attributeName.EndsWith("Attribute") ? attributeName[..^9] : attributeName;
+
+        bool AttrMatches(AttributeSyntax a)
+        {
+            var name = a.Name.ToString();
+            return name == attributeName || name == attrCore || name == attrCore + "Attribute";
+        }
+
+        SyntaxNode? target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax);
+        target ??= root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == targetName);
+
+        if (target is not MemberDeclarationSyntax memberTarget) return root.ToFullString();
+
+        var newAttrLists = memberTarget.AttributeLists
+            .Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a)))))
+            .Where(al => al.Attributes.Count > 0)
+            .ToList();
+
+        var newMember = memberTarget.WithAttributeLists(SyntaxFactory.List(newAttrLists));
+        return root.ReplaceNode(memberTarget, newMember).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> RemoveBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
+        if (container == null) return root?.ToFullString() ?? "";
+        if (container.BaseList == null) return root!.ToFullString();
+
+        var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
+        TypeDeclarationSyntax newContainer = remaining.Count == 0
+            ? container.WithBaseList(null)
+            : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
+
+        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> ChangeAccessibilityAsync(string filePath, string targetName, string accessibility, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        SyntaxKind[] newKinds = accessibility.ToLowerInvariant() switch
+        {
+            "public"             => [SyntaxKind.PublicKeyword],
+            "private"            => [SyntaxKind.PrivateKeyword],
+            "internal"           => [SyntaxKind.InternalKeyword],
+            "protected"          => [SyntaxKind.ProtectedKeyword],
+            "protected internal" => [SyntaxKind.ProtectedKeyword, SyntaxKind.InternalKeyword],
+            "private protected"  => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
+            _                    => [SyntaxKind.PublicKeyword]
+        };
+
+        var accessModifierKinds = new HashSet<SyntaxKind>
+        {
+            SyntaxKind.PublicKeyword, SyntaxKind.PrivateKeyword,
+            SyntaxKind.InternalKeyword, SyntaxKind.ProtectedKeyword
+        };
+
+        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        if (target == null) return root.ToFullString();
+
+        var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
+        var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
+        var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
+        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        if (target == null) return root.ToFullString();
+
+        var kind = SyntaxFacts.GetKeywordKind(modifier);
+        if (kind == SyntaxKind.None) kind = SyntaxFacts.GetContextualKeywordKind(modifier);
+        if (target.Modifiers.Any(m => m.IsKind(kind))) return root.ToFullString(); // idempotent
+
+        var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
+        var newModifiers = target.Modifiers.Add(token);
+        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> RemoveModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        if (target == null) return root.ToFullString();
+
+        var kind = SyntaxFacts.GetKeywordKind(modifier);
+        if (kind == SyntaxKind.None) kind = SyntaxFacts.GetContextualKeywordKind(modifier);
+        if (!target.Modifiers.Any(m => m.IsKind(kind))) return root.ToFullString(); // idempotent
+
+        var newModifiers = SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind)));
+        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddSummaryCommentAsync(string filePath, string targetName, string summaryText, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        if (target == null) return root.ToFullString();
+
+        var docText = $"/// <summary>\n/// {summaryText}\n/// </summary>\nvoid __Dummy__() {{}}";
+        var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
+        var docTrivia = parsedMember!.GetLeadingTrivia()
+            .Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
+            .ToList();
+
+        var stripped = target.GetLeadingTrivia()
+            .Where(t => !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
+            .ToList();
+
+        var newTrivia = SyntaxFactory.TriviaList(docTrivia.Concat(stripped));
+        return root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia)).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddPropertyAsync(string filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, CancellationToken ct = default)
+    {
+        var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
+        var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
+        return await AddMemberAsync(filePath, containerName, source, ct);
+    }
+
+    public async Task<string> AddFieldAsync(string filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, CancellationToken ct = default)
+    {
+        var parts = new System.Text.StringBuilder();
+        parts.Append(accessibility);
+        if (isStatic) parts.Append(" static");
+        if (isReadonly) parts.Append(" readonly");
+        parts.Append($" {fieldType} {fieldName}");
+        if (initializer != null) parts.Append($" = {initializer}");
+        parts.Append(';');
+        return await AddMemberAsync(filePath, containerName, parts.ToString(), ct);
+    }
+
+    public async Task<string> SortMembersAsync(string filePath, string containerName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        if (container == null) return root?.ToFullString() ?? "";
+
+        static int CategoryOf(MemberDeclarationSyntax m) => m switch
+        {
+            FieldDeclarationSyntax                                              => 0,
+            ConstructorDeclarationSyntax                                        => 1,
+            DestructorDeclarationSyntax                                         => 2,
+            PropertyDeclarationSyntax                                           => 3,
+            IndexerDeclarationSyntax                                            => 4,
+            EventDeclarationSyntax or EventFieldDeclarationSyntax               => 5,
+            MethodDeclarationSyntax                                             => 6,
+            OperatorDeclarationSyntax or ConversionOperatorDeclarationSyntax    => 7,
+            ClassDeclarationSyntax or RecordDeclarationSyntax
+                or StructDeclarationSyntax or InterfaceDeclarationSyntax
+                or EnumDeclarationSyntax                                        => 8,
+            _                                                                   => 9
+        };
+
+        static bool IsStatic(MemberDeclarationSyntax m) =>
+            m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
+
+        var sorted = container.Members
+            .OrderBy(CategoryOf)
+            .ThenBy(m => IsStatic(m) ? 0 : 1)
+            .ThenBy(m => GetMemberName(m) ?? "")
+            .ToList();
+
+        var newContainer = container.WithMembers(SyntaxFactory.List(sorted));
+        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> WrapInTryCatchAsync(string filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var tree = root.SyntaxTree;
+
+        int StatementStartLine(StatementSyntax s) =>
+            tree.GetLineSpan(s.FullSpan).StartLinePosition.Line + 1;
+        int StatementEndLine(StatementSyntax s) =>
+            tree.GetLineSpan(s.FullSpan).EndLinePosition.Line + 1;
+
+        // Find the smallest block that fully contains the line range
+        var block = root.DescendantNodes()
+            .OfType<BlockSyntax>()
+            .Where(b =>
+            {
+                var ls = tree.GetLineSpan(b.Span);
+                return ls.StartLinePosition.Line + 1 <= startLine &&
+                       ls.EndLinePosition.Line + 1 >= endLine;
+            })
+            .OrderBy(b => b.Span.Length)
+            .FirstOrDefault();
+        if (block == null) return root.ToFullString();
+
+        var targeted = block.Statements
+            .Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine)
+            .ToList();
+        if (targeted.Count == 0) return root.ToFullString();
+
+        var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
+        var catchDecl = SyntaxFactory.CatchDeclaration(
+            SyntaxFactory.ParseTypeName(exceptionType),
+            SyntaxFactory.Identifier(catchVariableName));
+
+        StatementSyntax? catchStmt = null;
+        if (catchBody != null)
+            catchStmt = SyntaxFactory.ParseStatement(catchBody);
+
+        var catchBlock = catchStmt != null
+            ? SyntaxFactory.Block(catchStmt)
+            : SyntaxFactory.Block();
+
+        var catchClause = SyntaxFactory.CatchClause(catchDecl, null, catchBlock);
+        var tryStatement = SyntaxFactory.TryStatement(tryBlock, SyntaxFactory.List([catchClause]), null);
+
+        var newStatements = block.Statements
+            .Select((s, i) =>
+            {
+                if (s == targeted[0]) return (StatementSyntax)tryStatement;
+                if (targeted.Contains(s)) return null;
+                return s;
+            })
+            .Where(s => s != null)
+            .Select(s => s!)
+            .ToList();
+
+        var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
+        return root.ReplaceNode(block, newBlock).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> AddConstructorParameterAsync(string filePath, string className, string paramName, string paramType, string? fieldName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) return root.ToFullString();
+
+        var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
+
+        var fieldDecl = (FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(
+            $"private readonly {paramType} {derivedFieldName};")!;
+
+        var assignmentStatement = SyntaxFactory.ParseStatement($"{derivedFieldName} = {paramName};");
+        var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
+            .WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
+
+        var ctor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+
+        ConstructorDeclarationSyntax newCtor;
+        if (ctor != null)
+        {
+            var newParams = ctor.ParameterList.Parameters.Count == 0
+                ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList([newParam]))
+                : ctor.ParameterList.AddParameters(newParam);
+
+            BlockSyntax body;
+            if (ctor.Body != null)
+                body = ctor.Body.AddStatements(assignmentStatement);
+            else
+            {
+                // expression body → convert to block
+                var exprStatement = SyntaxFactory.ExpressionStatement(ctor.ExpressionBody!.Expression);
+                body = SyntaxFactory.Block(exprStatement, assignmentStatement);
+            }
+
+            newCtor = ctor.WithParameterList(newParams).WithBody(body).WithExpressionBody(null).WithSemicolonToken(default);
+        }
+        else
+        {
+            var paramList = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList([newParam]));
+            var body = SyntaxFactory.Block(assignmentStatement);
+            newCtor = SyntaxFactory.ConstructorDeclaration(className)
+                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
+                .WithParameterList(paramList)
+                .WithBody(body);
+        }
+
+        var newMembers = new List<MemberDeclarationSyntax> { fieldDecl };
+        foreach (var m in classNode.Members)
+        {
+            if (ctor != null && m == ctor)
+                newMembers.Add(newCtor);
+            else
+                newMembers.Add(m);
+        }
+        if (ctor == null) newMembers.Add(newCtor);
+
+        var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers));
+        return root.ReplaceNode(classNode, newClassNode).NormalizeWhitespace().ToFullString();
+    }
+
+    public async Task<string> WrapInRegionAsync(string filePath, int startLine, int endLine, string regionName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+        var text = await document.GetTextAsync(ct);
+
+        var lines = text.Lines;
+        var sb = new System.Text.StringBuilder();
+        for (int i = 0; i < lines.Count; i++)
+        {
+            int lineNumber = i + 1; // 1-based
+            if (lineNumber == startLine)
+                sb.AppendLine($"#region {regionName}");
+            sb.AppendLine(lines[i].ToString());
+            if (lineNumber == endLine)
+                sb.AppendLine("#endregion");
+        }
+        return sb.ToString();
+    }
+
     private string? GetMemberName(MemberDeclarationSyntax member)
     {
         return member switch {

@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 176 MCP Tools across 53 Specialized Engines
+## 🚀 188 MCP Tools across 53 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -13,7 +13,7 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **Project/solution diagnostics**: `get_project_diagnostics`, `get_solution_diagnostics`, `split_project_by_folder`.
 *   **Namespace management**: `fix_mismatched_namespaces`, `move_file_to_namespace_folder`.
 
-### 🛠️ Refactoring — 44 tools ("The Surgical Suite")
+### 🛠️ Refactoring — 56 tools ("The Surgical Suite")
 *   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface.
 *   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable` — promote expressions to named locals/fields/parameters at a given line+column.
 *   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class, adding `virtual` and removing `override`.
@@ -28,8 +28,17 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
     - `remove_member` — remove a named member
     - `add_using_directive` — add `using X.Y.Z;` idempotently (supports `static` usings)
     - `add_enum_value` — append a named value (+optional explicit integer) to an enum
-    - `add_attribute` — attach `[ApiController]`, `[Required]`, etc. to any type or member
-    - `add_base_type` — add a base class or interface to a type's inheritance list (idempotent)
+    - `add_attribute` / `remove_attribute` — attach or remove `[ApiController]`, `[Required]`, etc. (matches with/without `Attribute` suffix)
+    - `add_base_type` / `remove_base_type` — add or remove a base class or interface (idempotent)
+    - `change_accessibility` — swap `public`/`private`/`internal`/`protected`/`protected internal`/`private protected` on any member or type
+    - `add_modifier` / `remove_modifier` — toggle `virtual`, `abstract`, `sealed`, `static`, `readonly`, `override`, `partial`, `async`, `new` (idempotent)
+    - `add_summary_comment` — add or replace `/// <summary>...</summary>` doc comment on any member or type
+    - `add_property` — generate an auto-property from name/type/accessibility/getter/setter/init flags
+    - `add_field` — generate a field from name/type/accessibility/readonly/static/initializer flags
+    - `sort_members` — reorder class members by convention: fields → constructors → properties → methods → nested types
+    - `wrap_in_try_catch` — wrap a line range in `try { } catch (ExceptionType ex) { }` with optional catch body
+    - `add_constructor_parameter` — add a DI dependency in one shot: new private readonly field + ctor parameter + body assignment
+    - `wrap_in_region` — surround a line range with `#region name` / `#endregion`
 
 ### ⚡ Modernization — 23 tools (.NET 8/9/10 & C# 12/13/14)
 *   **`CodeStyleEngine`**: .NET 10 **Lock Modernization**, C# 14 **Field-Backed Properties**, **Implicit Span Cleanup**, Collection Expressions (`[]`).
