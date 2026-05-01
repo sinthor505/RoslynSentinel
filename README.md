@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 218 MCP Tools across 55 Specialized Engines
+## 🚀 219 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -71,8 +71,9 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`TestingEngine`**: Missing assertions, test code smell detection.
 *   **`CodeStyleEngine`** (new): `find_use_frozen_collections` — detects `private static readonly Dictionary/HashSet` initialized inline that could be `FrozenDictionary`/`FrozenSet` for zero-allocation lookups.
 
-### 🏭 Code Generation — 10 tools
+### 🏭 Code Generation — 11 tools
 *   **`CodeGenerationEngine`**: Fluent builder, default config JSON, decorator class generation.
+*   **`ImplementInterfaceSafe`** *(new — use instead of built-in `implement_interface`)*: Generates correct `public` method/property stubs with `throw new NotImplementedException()` — **never adds `override`** (which is incorrect for interface implementations). Accepts `filePath`, `typeName`, `interfaceName`; optionally limit to specific `members`.
 *   **`ApiIntegrationEngine`**: `add_validation_to_poco` — add `[Required]`/`[Range]` annotations to plain objects.
 *   **`AsyncOptimizationEngine`**: Generate async method overloads.
 

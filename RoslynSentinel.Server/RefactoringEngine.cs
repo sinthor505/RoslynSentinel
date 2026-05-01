@@ -74,8 +74,96 @@ public class RefactoringEngine
 
     public async Task<Dictionary<string, string>> ChangeSignatureAsync(string filePath, string methodName, int[] newParameterOrder, CancellationToken ct = default)
     {
-        // Placeholder implementation for signature change
-        return new Dictionary<string, string>();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return new Dictionary<string, string>();
+
+        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (root == null || semanticModel == null) return new Dictionary<string, string>();
+
+        var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodDecl == null) return new Dictionary<string, string>();
+
+        var parameters = methodDecl.ParameterList.Parameters.ToList();
+        if (parameters.Count == 0) return new Dictionary<string, string>();
+
+        // Validate order array
+        if (newParameterOrder.Length != parameters.Count) return new Dictionary<string, string>();
+        if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count)) return new Dictionary<string, string>();
+        if (newParameterOrder.Distinct().Count() != parameters.Count) return new Dictionary<string, string>();
+
+        var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
+        var newParamList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(reorderedParams));
+        var updatedMethodDecl = methodDecl.WithParameterList(newParamList);
+        var updatedRoot = root.ReplaceNode(methodDecl, updatedMethodDecl);
+        var updatedDoc = document.WithSyntaxRoot(updatedRoot);
+
+        var pendingChanges = new Dictionary<string, string>
+        {
+            [filePath] = (await updatedDoc.GetTextAsync(ct)).ToString()
+        };
+
+        // Reorder arguments at all call sites
+        var symbol = semanticModel.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+        if (symbol != null)
+        {
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+            foreach (var reference in references)
+            {
+                foreach (var location in reference.Locations)
+                {
+                    if (location.IsImplicit || location.Document.FilePath == null) continue;
+                    var refDoc = location.Document;
+                    var refRoot = await refDoc.GetSyntaxRootAsync(ct);
+                    if (refRoot == null) continue;
+
+                    var span = location.Location.SourceSpan;
+                    var token = refRoot.FindToken(span.Start);
+                    var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    if (invocation == null) continue;
+
+                    var args = invocation.ArgumentList.Arguments.ToList();
+                    if (args.Count != parameters.Count) continue;
+
+                    var docPath = refDoc.FilePath!;
+                    // Work from the already-pending content if we've updated this doc
+                    string currentContent = pendingChanges.TryGetValue(docPath, out var prev) ? prev : (await refDoc.GetTextAsync(ct)).ToString();
+                    var currentRoot = SyntaxFactory.ParseCompilationUnit(currentContent);
+
+                    var targetInv = currentRoot.DescendantNodes()
+                        .OfType<InvocationExpressionSyntax>()
+                        .FirstOrDefault(inv => inv.Span == invocation.Span);
+                    if (targetInv == null) continue;
+
+                    var reorderedArgs = newParameterOrder.Select(i => args[i]).ToList();
+                    var newArgList = invocation.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(reorderedArgs));
+                    var updatedInv = targetInv.WithArgumentList(newArgList);
+                    pendingChanges[docPath] = currentRoot.ReplaceNode(targetInv, updatedInv).ToFullString();
+                }
+            }
+        }
+
+        // Format all changed files
+        var result = new Dictionary<string, string>();
+        foreach (var kvp in pendingChanges)
+        {
+            var doc = solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => d.FilePath == kvp.Key);
+            if (doc != null)
+            {
+                var formatted = await Formatter.FormatAsync(
+                    doc.WithSyntaxRoot(SyntaxFactory.ParseCompilationUnit(kvp.Value)), null, ct);
+                result[kvp.Key] = (await formatted.GetTextAsync(ct)).ToString();
+            }
+            else
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+        return result;
     }
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(
@@ -470,15 +558,59 @@ public class RefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null) return new Dictionary<string, string>();
 
-        var methods = classNode.Members.OfType<MethodDeclarationSyntax>().Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)));
-        var ifaceMembers = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(m.ReturnType, m.Identifier).WithParameterList(m.ParameterList).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))).ToArray();
-        var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMembers);
+        // Extract public instance methods (exclude static)
+        var methods = classNode.Members.OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
+                     && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)));
 
+        var ifaceMembers = methods.Select(m =>
+            (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(m.ReturnType, m.Identifier)
+                .WithTypeParameterList(m.TypeParameterList)
+                .WithParameterList(m.ParameterList)
+                .WithConstraintClauses(m.ConstraintClauses)
+                .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .NormalizeWhitespace()
+        ).ToArray();
+
+        var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName)
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+            .AddMembers(ifaceMembers);
+
+        // Wrap in namespace + usings to produce a compilable file
+        var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(u =>
+            u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+
+        CompilationUnitSyntax ifaceCompUnit;
+        if (ns != null)
+        {
+            BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax
+                ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(ifaceNode)
+                : SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(ifaceNode);
+            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
+        }
+        else
+        {
+            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(ifaceNode);
+        }
+
+        // Add interface to class's base list
         var newClass = classNode.AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName)));
-        var ifacePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{interfaceName}.cs");
-        var updatedOrig = root!.ReplaceNode(classNode, newClass);
+        var updatedOrig = root.ReplaceNode(classNode, newClass);
 
-        return new Dictionary<string, string> { { filePath, updatedOrig.ToFullString() }, { ifacePath, ifaceNode.NormalizeWhitespace().ToFullString() } };
+        var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
+
+        // Format the interface file
+        var ifaceDoc = document.Project.AddDocument($"{interfaceName}.cs", ifaceCompUnit);
+        var formattedIfaceDoc = await Formatter.FormatAsync(ifaceDoc, null, ct);
+        var ifaceContent = (await formattedIfaceDoc.GetTextAsync(ct)).ToString();
+
+        // Format the original file
+        var origDoc = document.WithSyntaxRoot(updatedOrig);
+        var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, ct);
+        var origContent = (await formattedOrigDoc.GetTextAsync(ct)).ToString();
+
+        return new Dictionary<string, string> { { filePath, origContent }, { ifacePath, ifaceContent } };
     }
 
     public async Task<RenameSymbolResult> RenameSymbolAsync(string filePath, string symbolName, string contextSnippet, string newName, CancellationToken ct = default)

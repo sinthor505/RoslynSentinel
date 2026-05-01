@@ -314,7 +314,7 @@ public class PersistentWorkspaceManager : IDisposable
         return new HealthComponents(
             RoslynAvailable: true,
             RoslynVersion: roslynVersion,
-            MsBuildFound: instances.Any(),
+            MsBuildFound: MSBuildLocator.IsRegistered || instances.Any(),
             MsBuildVersion: instances.FirstOrDefault()?.Version.ToString(),
             DotnetSdkAvailable: true, // We know it's available since we are running
             DotnetSdkVersion: Environment.Version.ToString()

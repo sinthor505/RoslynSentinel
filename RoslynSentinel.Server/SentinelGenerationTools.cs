@@ -92,4 +92,9 @@ public class SentinelGenerationTools
     [Description("Adds [Required] and [StringLength(100)] data annotations to all string properties in a POCO class.")]
     public async Task<string> AddValidationToPoco(string filePath, string className)
         => await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Generates stub implementations for all unimplemented members of an interface on a class. Unlike the built-in implement_interface, this never adds the 'override' keyword (which is incorrect for interface implementations). Pass filePath of the class file, className of the implementing class, and interfaceName of the interface to implement.")]
+    public async Task<string> ImplementInterfaceSafe(string filePath, string className, string interfaceName)
+        => await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
 }

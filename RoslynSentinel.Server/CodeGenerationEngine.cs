@@ -587,4 +587,92 @@ public class CodeGenerationEngine
             SuggestedFileName: decoratorClassName + ".cs"
         );
     }
+
+    public async Task<string> ImplementInterfaceAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return $"File '{filePath}' not found in solution.";
+
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null || semanticModel == null) return "Could not load semantic model.";
+
+        var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classDecl == null) return $"Class '{className}' not found in file.";
+
+        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
+        if (classSymbol == null) return "Could not get class symbol.";
+
+        var ifaceSymbol = classSymbol.AllInterfaces
+            .FirstOrDefault(i => i.Name == interfaceName ||
+                i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);
+        if (ifaceSymbol == null)
+            return $"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.";
+
+        var unimplemented = ifaceSymbol.GetMembers()
+            .Where(m => m.Kind == SymbolKind.Method || m.Kind == SymbolKind.Property)
+            .Where(m =>
+            {
+                var impl = classSymbol.FindImplementationForInterfaceMember(m);
+                return impl == null || !impl.ContainingType.Equals(classSymbol, SymbolEqualityComparer.Default);
+            })
+            .ToList();
+
+        if (!unimplemented.Any()) return $"All members of '{interfaceName}' are already implemented.";
+
+        var newMembers = new List<MemberDeclarationSyntax>();
+        foreach (var member in unimplemented)
+        {
+            if (member is IMethodSymbol method && method.MethodKind == MethodKind.Ordinary)
+            {
+                var returnTypeName = method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var returnType = SyntaxFactory.ParseTypeName(returnTypeName);
+                var methodParams = method.Parameters.Select(p =>
+                    SyntaxFactory.Parameter(SyntaxFactory.Identifier(p.Name))
+                        .WithType(SyntaxFactory.ParseTypeName(
+                            p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)).WithTrailingTrivia(SyntaxFactory.Space))
+                ).ToArray();
+
+                var body = SyntaxFactory.Block(
+                    SyntaxFactory.ThrowStatement(
+                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
+                            .WithArgumentList(SyntaxFactory.ArgumentList())));
+
+                var methodDecl = SyntaxFactory.MethodDeclaration(returnType, method.Name)
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                    .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(methodParams)))
+                    .WithBody(body)
+                    .NormalizeWhitespace();
+                newMembers.Add(methodDecl);
+            }
+            else if (member is IPropertySymbol prop)
+            {
+                var propType = SyntaxFactory.ParseTypeName(
+                    prop.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+                var accessors = new List<AccessorDeclarationSyntax>();
+                var throwBody = SyntaxFactory.Block(
+                    SyntaxFactory.ThrowStatement(
+                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
+                            .WithArgumentList(SyntaxFactory.ArgumentList())));
+                if (!prop.IsWriteOnly)
+                    accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(throwBody));
+                if (!prop.IsReadOnly)
+                    accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(throwBody));
+                var propDecl = SyntaxFactory.PropertyDeclaration(propType, prop.Name)
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
+                    .NormalizeWhitespace();
+                newMembers.Add(propDecl);
+            }
+        }
+
+        var newClass = classDecl.AddMembers(newMembers.ToArray());
+        var newRoot = root.ReplaceNode(classDecl, newClass);
+        var updatedDoc = document.WithSyntaxRoot(newRoot);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
 }

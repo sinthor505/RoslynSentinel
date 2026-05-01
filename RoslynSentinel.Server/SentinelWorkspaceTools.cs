@@ -113,7 +113,7 @@ public class SentinelWorkspaceTools
 
         if (!components.MsBuildFound)
         {
-            errors.Add(new HealthIssue("5001", "MSBuild not found. Install Visual Studio, Build Tools, or .NET SDK."));
+            warnings.Add(new HealthIssue("W5001", "MSBuild not found. If the workspace loaded successfully, this can be ignored.", null, "Install Visual Studio, Build Tools, or .NET SDK for full MSBuild support."));
         }
 
         if (workspace.SolutionLoaded && workspace.ProjectCount == 0)
