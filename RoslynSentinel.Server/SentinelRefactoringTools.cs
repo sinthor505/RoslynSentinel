@@ -164,14 +164,23 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Moves a type to its own file. If autoStage is true, returns a ChangeId instead of full content.")]
+    [Description("Moves a type to its own file. Returns a ChangeId for ApplyStagedChanges plus a ContentPreviews map showing what each affected file will contain after the move. Use autoStage=false to get the full raw file content dictionary instead.")]
     public async Task<object> MoveTypeToFile(string filePath, string typeName, bool autoStage = true) 
     {
         var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName);
         if (autoStage)
         {
             var id = _workspaceManager.StageChanges(changes, $"Move type '{typeName}' from '{Path.GetFileName(filePath)}'");
-            return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves '{typeName}' to its own file.");
+            return new
+            {
+                ChangeId = id,
+                Description = $"Moves '{typeName}' to its own file. Call ApplyStagedChanges(\"{id}\") to apply.",
+                AffectedFiles = changes.Keys.ToList(),
+                ContentPreviews = changes.ToDictionary(
+                    kvp => Path.GetFileName(kvp.Key),
+                    kvp => kvp.Value.Length > 1500 ? kvp.Value[..1500] + "\n// ... (truncated; use autoStage=false for full content)" : kvp.Value
+                )
+            };
         }
         return changes;
     }
@@ -237,14 +246,29 @@ public class SentinelRefactoringTools
         => await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
 
     [McpServerTool]
-    [Description("Atomically moves all secondary types in a file to their own files. If autoStage is true, returns a ChangeId.")]
+    [Description("Atomically moves all secondary types in a file to their own files. Returns a ChangeId for ApplyStagedChanges plus first-15-line previews of each affected file's new content.")]
     public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = true)
     {
         var changes = await _refactoringEngine.MoveAllTypesToFilesAsync(filePath);
         if (!autoStage) return changes;
         if (changes.Count == 0) return "No secondary types found to move.";
         var id = _workspaceManager.StageChanges(changes, $"Move all types to files in '{Path.GetFileName(filePath)}'");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves all secondary types in '{Path.GetFileName(filePath)}' to their own files.");
+        return new
+        {
+            ChangeId = id,
+            Description = $"Moves all secondary types in '{Path.GetFileName(filePath)}' to their own files. Call ApplyStagedChanges(\"{id}\") to apply.",
+            AffectedFiles = changes.Keys.Select(Path.GetFileName).ToList(),
+            ContentPreviews = changes.ToDictionary(
+                kvp => Path.GetFileName(kvp.Key)!,
+                kvp =>
+                {
+                    var lines = kvp.Value.Split('\n');
+                    return lines.Length > 15
+                        ? string.Join("\n", lines.Take(15)) + "\n// ... (truncated)"
+                        : kvp.Value;
+                }
+            )
+        };
     }
 
     [McpServerTool]
