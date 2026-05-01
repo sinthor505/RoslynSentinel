@@ -19,8 +19,8 @@ public class MassiveModernizationTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         
         var modern = new ModernizationEngine(_workspaceManager, config);
         var upgrade = new ModernizationUpgradeEngine(_workspaceManager);
@@ -28,10 +28,13 @@ public class MassiveModernizationTests
         var analysis = new AnalysisEngine(_workspaceManager, config);
         var logic = new LogicOptimizationEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
-        var healing = new CodeHealingEngine(_workspaceManager);
+        var healing = new CodeHealingEngine(_workspaceManager, config);
         var advLogic = new AdvancedLogicEngine(_workspaceManager);
+        var ideStyle = new IDEStyleEngine(_workspaceManager);
+        var immutability = new ImmutabilityEngine(_workspaceManager);
+        var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
         
-        _modernizationTools = new SentinelModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, _workspaceManager, config, NullLogger<SentinelModernizationTools>.Instance);
+        _modernizationTools = new SentinelModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<SentinelModernizationTools>.Instance);
     }
 
     [TearDown]

@@ -18,6 +18,8 @@ public class SentinelRefactoringTools
     private readonly AdvancedTypeEngine _advancedTypeEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
+    private readonly CodeFlowEngine _codeFlowEngine;
+    private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
@@ -34,6 +36,8 @@ public class SentinelRefactoringTools
         AdvancedTypeEngine advancedTypeEngine,
         StructuralRefinementEngine structuralRefinementEngine,
         CodeStyleEngine codeStyleEngine,
+        CodeFlowEngine codeFlowEngine,
+        AdvancedRefactoringEngine advancedRefactoringEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
@@ -49,6 +53,8 @@ public class SentinelRefactoringTools
         _advancedTypeEngine = advancedTypeEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _codeStyleEngine = codeStyleEngine;
+        _codeFlowEngine = codeFlowEngine;
+        _advancedRefactoringEngine = advancedRefactoringEngine;
         _workspaceManager = workspaceManager;
         _config = config;
         _logger = logger;
@@ -92,9 +98,10 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Extracts a selected block of code into a new private method.")]
-    public async Task<string> ExtractMethod(string filePath, int startLine, int endLine, string newMethodName) 
-        => await _refactoringEngine.ExtractMethodAsync(filePath, startLine, endLine, newMethodName);
+    [Description("Extracts a block of statements into a new private method. Provide startLine and endLine (1-based, line range only — no column precision needed), the exact physical text of those two lines (used to detect stale files before modifying), and a name for the new method. Data flow analysis automatically determines parameters and return type. Returns BeforeSnippet/CallSiteReplacement/ExtractedMethodText previews plus UpdatedSourceContent for staging.")]
+    public async Task<ExtractMethodResult> ExtractMethod(
+        string filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName)
+        => await _refactoringEngine.ExtractMethodAsync(filePath, startLine, startLineText, endLine, endLineText, newMethodName);
 
     [McpServerTool]
     [Description("Introduces a new private field based on a local expression.")]
@@ -127,12 +134,22 @@ public class SentinelRefactoringTools
         => await _advancedLogicEngine.ExtensionToStaticAsync(filePath, methodName);
 
     [McpServerTool]
-    [Description("Renames a symbol across the entire solution. If autoStage is true, returns a ChangeId instead of full content.")]
-    public async Task<object> RenameSymbol(string filePath, int line, int column, string newName, bool autoStage = true) 
+    [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
+                 "Pass 'symbolName' (the exact identifier to rename) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). " +
+                 "Example: symbolName=\"GetById\", contextSnippet=\"public async Task<Product?> GetById(\". " +
+                 "Returns an error if the snippet matches zero or multiple locations. " +
+                 "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
+    public async Task<object> RenameSymbol(string filePath, string symbolName, string contextSnippet, string newName, bool autoStage = true)
     {
-        var changes = await _refactoringEngine.RenameSymbolAsync(filePath, line, column, newName);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Rename symbol to '{newName}' starting from '{Path.GetFileName(filePath)}'.");
-        return changes;
+        var result = await _refactoringEngine.RenameSymbolAsync(filePath, symbolName, contextSnippet, newName);
+        if (result.Error != null)
+            return new { Error = result.Error };
+        if (autoStage)
+        {
+            var id = _workspaceManager.StageChanges(result.PendingChanges, $"Rename '{result.OldName}' to '{result.NewName}'");
+            return new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, StagingId = id, result.FileChanges };
+        }
+        return new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, result.FileChanges };
     }
 
     [McpServerTool]
@@ -214,8 +231,41 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Moves a nested type out to the containing namespace scope.")]
-    public async Task<string> MoveTypeToOuterScope(string filePath, string typeName) 
+    public async Task<string> MoveTypeToOuterScope(string filePath, string typeName)
         => await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
+
+    [McpServerTool]
+    [Description("Atomically moves all secondary types in a file to their own files. If autoStage is true, returns a ChangeId.")]
+    public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = true)
+    {
+        var changes = await _refactoringEngine.MoveAllTypesToFilesAsync(filePath);
+        if (!autoStage) return changes;
+        if (changes.Count == 0) return "No secondary types found to move.";
+        var id = _workspaceManager.StageChanges(changes, $"Move all types to files in '{Path.GetFileName(filePath)}'");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves all secondary types in '{Path.GetFileName(filePath)}' to their own files.");
+    }
+
+    [McpServerTool]
+    [Description("Atomically moves all secondary types in every file in a project to their own files. If autoStage is true, returns a ChangeId.")]
+    public async Task<object> MoveAllTypesToFilesInProject(string projectName, bool autoStage = true)
+    {
+        var changes = await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(projectName);
+        if (!autoStage) return changes;
+        if (changes.Count == 0) return $"No secondary types found in project '{projectName}'.";
+        var id = _workspaceManager.StageChanges(changes, $"Move all types to files in project '{projectName}'");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves all secondary types in project '{projectName}' to their own files.");
+    }
+
+    [McpServerTool]
+    [Description("Atomically moves all secondary types in every file across the entire solution to their own files. If autoStage is true, returns a ChangeId.")]
+    public async Task<object> MoveAllTypesToFilesInSolution(bool autoStage = true)
+    {
+        var changes = await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync();
+        if (!autoStage) return changes;
+        if (changes.Count == 0) return "No secondary types found in solution.";
+        var id = _workspaceManager.StageChanges(changes, "Move all types to files in solution");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), "Moves all secondary types across the entire solution to their own files.");
+    }
 
     [McpServerTool]
     [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
@@ -231,4 +281,24 @@ public class SentinelRefactoringTools
     [Description("Removes a specific member from a class or interface by name.")]
     public async Task<string> RemoveMember(string filePath, string memberName) 
         => await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
+
+    [McpServerTool]
+    [Description("Replaces a class constructor with a private constructor plus a public static Create() factory method.")]
+    public async Task<string> ReplaceConstructorWithFactory(string filePath, string className)
+        => await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Swaps left and right sides of all assignment statements within a line range.")]
+    public async Task<string> InvertAssignments(string filePath, int startLine, int endLine)
+        => await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine);
+
+    [McpServerTool]
+    [Description("Inverts a single-branch if statement to an early-return guard clause, reducing nesting depth.")]
+    public async Task<string> ReduceBlockDepth(string filePath, string methodName)
+        => await _codeFlowEngine.ReduceBlockDepthAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Adds .ConfigureAwait(false) to all await expressions in a file for library-safe async code.")]
+    public async Task<string> OptimizeTaskWait(string filePath)
+        => await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath);
 }

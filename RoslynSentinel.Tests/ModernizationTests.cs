@@ -20,7 +20,7 @@ public class ModernizationTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _modernEngine = new ModernizationEngine(_workspaceManager, config);
         _styleEngine = new CodeStyleEngine(_workspaceManager, config);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
     }
 
     [TearDown]

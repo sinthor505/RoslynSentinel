@@ -16,7 +16,7 @@ public class ExhaustiveRefactoringTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
     }
 

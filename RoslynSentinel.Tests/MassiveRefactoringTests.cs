@@ -18,7 +18,7 @@ public class MassiveRefactoringTests
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager);
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         
         var sr = new StructuralRefinementEngine(_workspaceManager);
         var standard = new StandardRefactoringEngine(_workspaceManager);
@@ -30,8 +30,10 @@ public class MassiveRefactoringTests
         var refinement = new RefinementEngine(_workspaceManager);
         var advType = new AdvancedTypeEngine(_workspaceManager);
         var style = new CodeStyleEngine(_workspaceManager, config);
+        var codeFlow = new CodeFlowEngine(_workspaceManager);
+        var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
         
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
+        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
     }
 
     [TearDown]
@@ -66,10 +68,10 @@ public class MassiveRefactoringTests
     {
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
         SetSource(source, $"C{id}.cs");
-        
-        int index = source.IndexOf($"OldM{id}") + 1;
-        var result = (Dictionary<string, string>)await _refactoringTools.RenameSymbol($"C{id}.cs", 1, index, $"NewM{id}", autoStage: false);
-        Assert.That(result.Values.Any(v => v.Contains($"NewM{id}")), Is.True);
+
+        var result = await _refactoringTools.RenameSymbol($"C{id}.cs", $"OldM{id}", $"void OldM{id}()", $"NewM{id}", autoStage: false);
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.That(json, Contains.Substring($"NewM{id}"));
     }
 
     [Test]

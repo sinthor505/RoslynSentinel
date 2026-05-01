@@ -7,6 +7,14 @@ namespace RoslynSentinel.Server;
 
 public record DependencyReport(string TypeName, string Status, string RecommendedLifetime);
 
+public record DiRegistration(
+    string Lifetime,
+    string ServiceType,
+    string? ImplementationType,
+    string FilePath,
+    int Line,
+    string CallSite);
+
 public class DependencyInjectionEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -54,6 +62,102 @@ public class DependencyInjectionEngine
         }
 
         return reports;
+    }
+
+    private static readonly HashSet<string> _lifetimeMethods = new(StringComparer.Ordinal)
+    {
+        "AddSingleton", "AddScoped", "AddTransient"
+    };
+
+    /// <summary>
+    /// Scans the solution (or a specific project/file) for DI registrations using a pure syntax-based approach.
+    /// </summary>
+    public async Task<List<DiRegistration>> FindDiRegistrationsAsync(
+        string? projectName = null,
+        string? filePath = null,
+        string? lifetimeFilter = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<DiRegistration>();
+
+        IEnumerable<Document> documents = solution.Projects
+            .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(p => p.Documents);
+
+        if (filePath != null)
+            documents = documents.Where(d => string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var doc in documents)
+        {
+            if (doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                string? methodName = invocation.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                    GenericNameSyntax gn => gn.Identifier.Text,
+                    _ => null
+                };
+
+                if (methodName == null || !_lifetimeMethods.Contains(methodName)) continue;
+
+                var lifetime = methodName switch
+                {
+                    "AddSingleton" => "Singleton",
+                    "AddScoped" => "Scoped",
+                    "AddTransient" => "Transient",
+                    _ => "Unknown"
+                };
+
+                if (lifetimeFilter != null && !lifetime.Equals(lifetimeFilter, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string serviceType = "Unknown";
+                string? implType = null;
+
+                // Generic form: AddSingleton<IFoo, Foo>() or AddSingleton<IFoo>()
+                TypeArgumentListSyntax? typeArgs = invocation.Expression switch
+                {
+                    MemberAccessExpressionSyntax { Name: GenericNameSyntax gn2 } => gn2.TypeArgumentList,
+                    GenericNameSyntax gn3 => gn3.TypeArgumentList,
+                    _ => null
+                };
+
+                if (typeArgs != null && typeArgs.Arguments.Count >= 1)
+                {
+                    serviceType = typeArgs.Arguments[0].ToString();
+                    if (typeArgs.Arguments.Count >= 2)
+                        implType = typeArgs.Arguments[1].ToString();
+                }
+                else
+                {
+                    // Non-generic form: AddSingleton(typeof(IFoo), typeof(Foo))
+                    var args = invocation.ArgumentList.Arguments;
+                    if (args.Count >= 1 && args[0].Expression is TypeOfExpressionSyntax t0)
+                        serviceType = t0.Type.ToString();
+                    if (args.Count >= 2 && args[1].Expression is TypeOfExpressionSyntax t1)
+                        implType = t1.Type.ToString();
+                }
+
+                var lineSpan = root.SyntaxTree.GetLineSpan(invocation.Span);
+                var callSite = invocation.ToString();
+                if (callSite.Length > 200) callSite = callSite[..200] + "...";
+
+                results.Add(new DiRegistration(
+                    lifetime,
+                    serviceType,
+                    implType,
+                    doc.FilePath,
+                    lineSpan.StartLinePosition.Line + 1,
+                    callSite));
+            }
+        }
+
+        return results;
     }
 
     /// <summary>

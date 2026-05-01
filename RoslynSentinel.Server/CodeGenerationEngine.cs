@@ -1,11 +1,33 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 using System.Text.Json;
 
 namespace RoslynSentinel.Server;
 
 public record GenerationResult(string FilePath, string Content);
+
+public record RepositoryInterfaceResult(
+    string InterfaceName,
+    string InterfaceCode,
+    string DiRegistrationSnippet,
+    string MockSetupSnippet
+);
+
+public record FluentBuilderResult(
+    string BuilderClassName,
+    string BuilderCode,
+    string UsageExample
+);
+
+public record DecoratorResult(
+    string ClassName,
+    string Namespace,
+    string SourceCode,
+    string SuggestedFileName
+);
 
 public class CodeGenerationEngine
 {
@@ -87,6 +109,111 @@ public class CodeGenerationEngine
 
     private string Capitalize(string name) => char.ToUpper(name[0]) + name.Substring(1);
 
+    public async Task<string> GenerateConstructorAsync(string filePath, string className, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) return string.Empty;
+
+        if (classNode.Members.OfType<ConstructorDeclarationSyntax>().Any())
+            return root!.ToFullString();
+
+        var fields = classNode.Members
+            .OfType<FieldDeclarationSyntax>()
+            .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)) ||
+                        f.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+            .SelectMany(f => f.Declaration.Variables.Select(v => (
+                Name: v.Identifier.Text,
+                Type: f.Declaration.Type.ToString())))
+            .ToList();
+
+        if (!fields.Any()) return root!.ToFullString();
+
+        var parameters = fields.Select(f =>
+        {
+            var paramName = f.Name.TrimStart('_');
+            paramName = char.ToLower(paramName[0]) + paramName.Substring(1);
+            return SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
+                .WithType(SyntaxFactory.ParseTypeName(f.Type + " "));
+        }).ToList();
+
+        var assignments = fields.Select(f =>
+        {
+            var paramName = f.Name.TrimStart('_');
+            paramName = char.ToLower(paramName[0]) + paramName.Substring(1);
+            return (StatementSyntax)SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.ThisExpression(),
+                        SyntaxFactory.IdentifierName(f.Name)),
+                    SyntaxFactory.IdentifierName(paramName)));
+        }).ToList();
+
+        var accessibility = classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
+            ? SyntaxKind.PublicKeyword : SyntaxKind.InternalKeyword;
+
+        var ctor = SyntaxFactory.ConstructorDeclaration(className)
+            .AddModifiers(SyntaxFactory.Token(accessibility))
+            .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)))
+            .WithBody(SyntaxFactory.Block(assignments));
+
+        var updatedClass = classNode.AddMembers(ctor);
+        var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot));
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
+
+    public async Task<string> GenerateToStringAsync(string filePath, string className, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
+
+        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) return string.Empty;
+
+        var alreadyOverrides = classNode.Members
+            .OfType<MethodDeclarationSyntax>()
+            .Any(m => m.Identifier.Text == "ToString" &&
+                      m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)));
+        if (alreadyOverrides) return root!.ToFullString();
+
+        var properties = classNode.Members
+            .OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            .Select(p => p.Identifier.Text)
+            .ToList();
+
+        if (!properties.Any()) return root!.ToFullString();
+
+        var parts = string.Join(", ", properties.Select(p => p + " = {" + p + "}"));
+        var returnStatement = "return $\"" + className + " {{ " + parts + " }}\";";
+
+        var method = SyntaxFactory.MethodDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword)),
+                "ToString")
+            .AddModifiers(
+                SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                SyntaxFactory.Token(SyntaxKind.OverrideKeyword))
+            .WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement(returnStatement)));
+
+        var updatedClass = classNode.AddMembers(method);
+        var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot));
+        return (await formatted.GetTextAsync(ct)).ToString();
+    }
+
     /// <summary>
     /// Scans a project for configuration usage (e.g. config["Key"]) and generates a JSON config file.
     /// </summary>
@@ -118,5 +245,303 @@ public class CodeGenerationEngine
         }
 
         return JsonSerializer.Serialize(configKeys, new JsonSerializerOptions { WriteIndented = true });
+    }
+
+    /// <summary>
+    /// Given a concrete repository class, generates: interface code, DI registration snippet, and Moq mock setup snippet.
+    /// </summary>
+    public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
+        string filePath, string className, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) throw new Exception($"File not found: {filePath}");
+
+        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) throw new Exception($"Class '{className}' not found.");
+
+        // Determine namespace
+        var ns = root?.DescendantNodes()
+            .OfType<BaseNamespaceDeclarationSyntax>()
+            .FirstOrDefault()?.Name.ToString() ?? "";
+
+        var interfaceName = "I" + className;
+
+        // Collect public instance methods
+        var publicMethods = classNode.Members
+            .OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
+                && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)))
+            .ToList();
+
+        // Collect public instance properties
+        var publicProperties = classNode.Members
+            .OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
+                && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)))
+            .ToList();
+
+        // Build interface code
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrEmpty(ns))
+        {
+            sb.AppendLine($"namespace {ns};");
+            sb.AppendLine();
+        }
+        sb.AppendLine($"/// <summary>Interface for <see cref=\"{className}\"/>.</summary>");
+        sb.AppendLine($"public interface {interfaceName}");
+        sb.AppendLine("{");
+
+        foreach (var prop in publicProperties)
+        {
+            var hasGetter = prop.AccessorList?.Accessors
+                .Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) ?? true;
+            var hasSetter = prop.AccessorList?.Accessors
+                .Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) ?? false;
+            var accessors = (hasGetter ? "get; " : "") + (hasSetter ? "set; " : "");
+            sb.AppendLine($"    {prop.Type} {prop.Identifier.Text} {{ {accessors}}}");
+        }
+
+        foreach (var method in publicMethods)
+        {
+            var typeParams = method.TypeParameterList?.ToString() ?? "";
+            var constraints = method.ConstraintClauses.Any()
+                ? " " + string.Join(" ", method.ConstraintClauses.Select(c => c.ToString()))
+                : "";
+            sb.AppendLine($"    {method.ReturnType} {method.Identifier.Text}{typeParams}{method.ParameterList}{constraints};");
+        }
+
+        sb.AppendLine("}");
+
+        // DI registration snippet
+        var diSnippet = $"services.AddScoped<{interfaceName}, {className}>();";
+
+        // Moq mock setup snippet
+        var mockName = "mock" + className;
+        var mockSb = new System.Text.StringBuilder();
+        mockSb.AppendLine($"var {mockName} = new Mock<{interfaceName}>();");
+        foreach (var method in publicMethods)
+        {
+            var methodName = method.Identifier.Text;
+            var returnType = method.ReturnType.ToString().Trim();
+            var paramPlaceholders = string.Join(", ", method.ParameterList.Parameters
+                .Select(p => $"It.IsAny<{p.Type}>()"));
+
+            if (returnType.StartsWith("Task<") && returnType.EndsWith(">"))
+            {
+                var inner = returnType[5..^1];
+                mockSb.AppendLine($"// {mockName}.Setup(x => x.{methodName}({paramPlaceholders})).ReturnsAsync(default({inner}));");
+            }
+            else if (returnType == "Task")
+            {
+                mockSb.AppendLine($"// {mockName}.Setup(x => x.{methodName}({paramPlaceholders})).Returns(Task.CompletedTask);");
+            }
+            else if (returnType != "void")
+            {
+                mockSb.AppendLine($"// {mockName}.Setup(x => x.{methodName}({paramPlaceholders})).Returns(default({returnType}));");
+            }
+        }
+
+        return new RepositoryInterfaceResult(
+            InterfaceName: interfaceName,
+            InterfaceCode: sb.ToString(),
+            DiRegistrationSnippet: diSnippet,
+            MockSetupSnippet: mockSb.ToString()
+        );
+    }
+
+    public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
+        string filePath, string className, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
+        if (document == null) throw new Exception($"File not found: {filePath}");
+
+        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null) throw new Exception($"Class '{className}' not found.");
+
+        var ns = root?.DescendantNodes()
+            .OfType<BaseNamespaceDeclarationSyntax>()
+            .FirstOrDefault()?.Name.ToString() ?? "";
+
+        var properties = classNode.Members
+            .OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
+                && p.AccessorList?.Accessors.Any(a =>
+                    a.IsKind(SyntaxKind.SetAccessorDeclaration) ||
+                    a.IsKind(SyntaxKind.InitAccessorDeclaration)) == true)
+            .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()))
+            .ToList();
+
+        var builderClassName = className + "Builder";
+        var sb = new System.Text.StringBuilder();
+
+        if (!string.IsNullOrEmpty(ns))
+        {
+            sb.AppendLine($"namespace {ns};");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"public class {builderClassName}");
+        sb.AppendLine("{");
+
+        foreach (var (name, type) in properties)
+        {
+            var fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
+            sb.AppendLine($"    private {type} {fieldName};");
+        }
+
+        if (properties.Any()) sb.AppendLine();
+
+        foreach (var (name, type) in properties)
+        {
+            var fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
+            var paramName = char.ToLower(name[0]) + name.Substring(1);
+            sb.AppendLine($"    public {builderClassName} With{name}({type} {paramName})");
+            sb.AppendLine("    {");
+            sb.AppendLine($"        {fieldName} = {paramName};");
+            sb.AppendLine("        return this;");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine($"    public {className} Build()");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        return new {className}");
+        sb.AppendLine("        {");
+        foreach (var (name, _) in properties)
+        {
+            var fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
+            sb.AppendLine($"            {name} = {fieldName},");
+        }
+        sb.AppendLine("        };");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+
+        var chainParts = properties.Take(3).Select(p =>
+        {
+            var paramName = char.ToLower(p.Name[0]) + p.Name.Substring(1);
+            return $".With{p.Name}({paramName})";
+        });
+        var instanceName = char.ToLower(className[0]) + className.Substring(1);
+        var usageExample = $"var {instanceName} = new {builderClassName}(){string.Join("", chainParts)}.Build();";
+
+        return new FluentBuilderResult(
+            BuilderClassName: builderClassName,
+            BuilderCode: sb.ToString(),
+            UsageExample: usageExample
+        );
+    }
+
+    // ── GenerateDecoratorClass ────────────────────────────────────────────────
+
+    public async Task<DecoratorResult?> GenerateDecoratorClassAsync(
+        string interfaceName,
+        string decoratorPrefix = "Logging",
+        string? projectName = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        var searchProjects = projectName != null
+            ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            : solution.Projects;
+
+        INamedTypeSymbol? interfaceSymbol = null;
+        foreach (var project in searchProjects)
+        {
+            var compilation = await project.GetCompilationAsync(ct);
+            if (compilation == null) continue;
+            interfaceSymbol = compilation
+                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, ct)
+                .OfType<INamedTypeSymbol>()
+                .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
+            if (interfaceSymbol != null) break;
+        }
+
+        if (interfaceSymbol == null) return null;
+
+        var ns = interfaceSymbol.ContainingNamespace?.IsGlobalNamespace == true
+            ? null : interfaceSymbol.ContainingNamespace?.ToDisplayString();
+
+        var decoratorClassName = decoratorPrefix + interfaceName.TrimStart('I') + "Decorator";
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("using System.Threading;");
+        sb.AppendLine("using System.Threading.Tasks;");
+        sb.AppendLine();
+        if (!string.IsNullOrEmpty(ns))
+        {
+            sb.AppendLine($"namespace {ns};");
+            sb.AppendLine();
+        }
+        sb.AppendLine($"/// <summary>");
+        sb.AppendLine($"/// {decoratorPrefix} decorator for <see cref=\"{interfaceName}\"/>.");
+        sb.AppendLine($"/// </summary>");
+        sb.AppendLine($"public class {decoratorClassName} : {interfaceName}");
+        sb.AppendLine("{");
+        sb.AppendLine($"    private readonly {interfaceName} _inner;");
+        sb.AppendLine();
+        sb.AppendLine($"    public {decoratorClassName}({interfaceName} inner)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        _inner = inner;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        foreach (var member in interfaceSymbol.GetMembers().Where(m => !m.IsImplicitlyDeclared))
+        {
+            if (member is IMethodSymbol method && method.MethodKind == MethodKind.Ordinary)
+            {
+                var returnType = method.ReturnType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                var typeParams = method.TypeParameters.Length > 0
+                    ? "<" + string.Join(", ", method.TypeParameters.Select(tp => tp.Name)) + ">"
+                    : "";
+                var paramList = string.Join(", ", method.Parameters.Select(p =>
+                    p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) + " " + p.Name));
+                var argList = string.Join(", ", method.Parameters.Select(p => p.Name));
+
+                sb.AppendLine($"    public {returnType} {method.Name}{typeParams}({paramList})");
+                sb.AppendLine("    {");
+                sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLower()} cross-cutting concern here");
+                if (returnType == "void")
+                    sb.AppendLine($"        _inner.{method.Name}{typeParams}({argList});");
+                else
+                    sb.AppendLine($"        return _inner.{method.Name}{typeParams}({argList});");
+                sb.AppendLine("    }");
+                sb.AppendLine();
+            }
+            else if (member is IPropertySymbol property)
+            {
+                var propType = property.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                sb.AppendLine($"    public {propType} {property.Name}");
+                sb.AppendLine("    {");
+                if (!property.IsWriteOnly)
+                {
+                    sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLower()} cross-cutting concern here");
+                    sb.AppendLine($"        get => _inner.{property.Name};");
+                }
+                if (!property.IsReadOnly)
+                {
+                    sb.AppendLine($"        set => _inner.{property.Name} = value;");
+                }
+                sb.AppendLine("    }");
+                sb.AppendLine();
+            }
+        }
+
+        sb.AppendLine("}");
+
+        return new DecoratorResult(
+            ClassName: decoratorClassName,
+            Namespace: ns ?? string.Empty,
+            SourceCode: sb.ToString(),
+            SuggestedFileName: decoratorClassName + ".cs"
+        );
     }
 }

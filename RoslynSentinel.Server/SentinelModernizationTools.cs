@@ -18,7 +18,11 @@ public class SentinelModernizationTools
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
     private readonly AdvancedLogicEngine _advancedLogicEngine;
+    private readonly IDEStyleEngine _ideStyleEngine;
+    private readonly ImmutabilityEngine _immutabilityEngine;
+    private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelModernizationTools> _logger;
 
     public SentinelModernizationTools(
@@ -31,6 +35,9 @@ public class SentinelModernizationTools
         CodeStyleEngine codeStyleEngine,
         CodeHealingEngine codeHealingEngine,
         AdvancedLogicEngine advancedLogicEngine,
+        IDEStyleEngine ideStyleEngine,
+        ImmutabilityEngine immutabilityEngine,
+        AsyncOptimizationEngine asyncOptimizationEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelModernizationTools> logger)
@@ -44,9 +51,43 @@ public class SentinelModernizationTools
         _codeStyleEngine = codeStyleEngine;
         _codeHealingEngine = codeHealingEngine;
         _advancedLogicEngine = advancedLogicEngine;
+        _ideStyleEngine = ideStyleEngine;
+        _immutabilityEngine = immutabilityEngine;
+        _asyncOptimizationEngine = asyncOptimizationEngine;
         _workspaceManager = workspaceManager;
+        _config = config;
         _logger = logger;
     }
+
+    [McpServerTool]
+    [Description("EPC33: Replaces Thread.Sleep with Task.Delay in async methods.")]
+    public async Task<string> FixThreadSleep(string filePath) 
+        => await _codeHealingEngine.FixThreadSleepAsync(filePath);
+
+    [McpServerTool]
+    [Description("IDE0011: Adds braces to single-line if, foreach, and while statements.")]
+    public async Task<string> AddBraces(string filePath) 
+        => await _syntaxUpgradeEngine.AddBracesAsync(filePath);
+
+    [McpServerTool]
+    [Description("IDE0019/20: Upgrades legacy type checks and casts to modern C# pattern matching (is string s).")]
+    public async Task<string> UpgradePatternMatching(string filePath) 
+        => await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath);
+
+    [McpServerTool]
+    [Description("IDE0056: Upgrades manual index calculations (Length - 1) to modern [^1] syntax.")]
+    public async Task<string> UseIndexFromEnd(string filePath) 
+        => await _codeStyleEngine.UseIndexFromEndAsync(filePath);
+
+    [McpServerTool]
+    [Description("IDE0340: Upgrades nameof(List<int>) to modern C# 14 nameof(List<>).")]
+    public async Task<string> UpgradeUnboundNameof(string filePath, int line, int column) 
+        => await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, line, column);
+
+    [McpServerTool]
+    [Description("C# 14: Upgrades manual backing fields to modern 'field' keyword auto-properties.")]
+    public async Task<string> UseFieldBackedProperties(string filePath) 
+        => await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
 
     [McpServerTool]
     [Description("Converts a class to a C# record.")]
@@ -64,24 +105,9 @@ public class SentinelModernizationTools
         => await _codeStyleEngine.SimplifyVerbosityAsync(filePath);
 
     [McpServerTool]
-    [Description("Simplifies redundant boolean logic globally in a file.")]
-    public async Task<string> SimplifyBooleanLogic(string filePath) 
-        => await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath);
-
-    [McpServerTool]
     [Description("Upgrades threading patterns (locks, semaphores) to modern/safe versions.")]
     public async Task<string> UpgradeThreadSafety(string filePath) 
-        => await _codeStyleEngine.UpgradeThreadSafetyAsync(filePath);
-
-    [McpServerTool]
-    [Description("Replaces lock(this) or lock(typeof(T)) with a private readonly object lock.")]
-    public async Task<string> FixDangerousLock(string filePath) 
         => await _codeStyleEngine.FixDangerousLockAsync(filePath);
-
-    [McpServerTool]
-    [Description("Wraps SemaphoreSlim.WaitAsync calls in a try-finally block with Release().")]
-    public async Task<string> EnsureSemaphoreFinally(string filePath) 
-        => await _codeStyleEngine.EnsureSemaphoreFinallyAsync(filePath);
 
     [McpServerTool]
     [Description("Replaces direct DateTime usage with modern TimeProvider abstractions for testability.")]
@@ -89,41 +115,66 @@ public class SentinelModernizationTools
         => await _codeStyleEngine.UseTimeProviderAsync(filePath);
 
     [McpServerTool]
-    [Description("Replaces generic throw new Exception calls with custom typed exceptions and generates the new class files. If autoStage is true, returns a ChangeId.")]
+    [Description("Replaces generic throw new Exception calls with custom typed exceptions and generates the new class files.")]
     public async Task<object> ModernizeExceptions(List<CodeHealingEngine.ExceptionTarget> targets, bool autoStage = true) 
     {
         var changes = await _codeHealingEngine.ModernizeExceptionsAsync(targets);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions with custom types.");
+        if (autoStage) return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions.");
         return changes;
     }
 
     [McpServerTool]
-    [Description("Upgrades legacy if-throw guard clauses to modern static Throw helpers (e.g. ArgumentNullException.ThrowIfNull).")]
-    public async Task<string> UpgradeToModernGuards(string filePath) 
+    [Description("ModernGuardClauses: Upgrades if-throw null checks to ArgumentNullException.ThrowIfNull / ArgumentException.ThrowIfNullOrEmpty.")]
+    public async Task<string> UpgradeToModernGuards(string filePath)
         => await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(filePath);
 
     [McpServerTool]
-    [Description("Replaces hardcoded string literals with nameof() expressions where applicable.")]
-    public async Task<string> UseNameofExpression(string filePath, int line, int column) 
-        => await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, line, column);
+    [Description("IfToSwitch: Converts a switch statement in a method to a switch expression.")]
+    public async Task<string> ConvertSwitchToExpression(string filePath, string methodName)
+        => await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName);
 
     [McpServerTool]
-    [Description("Upgrades properties with manual backing fields to modern C# 14 auto-properties using the 'field' keyword.")]
-    public async Task<string> UseFieldBackedProperties(string filePath) 
-        => await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
-
-    [McpServerTool]
-    [Description("Removes redundant .AsSpan() calls that are now handled natively by C# 14 implicit span conversions.")]
-    public async Task<string> CleanupImplicitSpans(string filePath) 
+    [Description("ImplicitSpanCleanup: Removes unnecessary .AsSpan() calls that are implicit in modern C#.")]
+    public async Task<string> CleanupImplicitSpans(string filePath)
         => await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
 
     [McpServerTool]
-    [Description("Modernizes logging patterns to use source-generated Log messages or structured logging.")]
-    public async Task<string> ModernizeLogging(string filePath, string className) 
+    [Description("Converts LogInformation/LogError/LogWarning calls in a class to high-performance [LoggerMessage] partial methods and makes the class partial.")]
+    public async Task<string> ConvertToSourceGeneratedLogging(string filePath, string className)
         => await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync(filePath, className);
 
     [McpServerTool]
-    [Description("Converts an async method to use a Polly-style retry loop.")]
-    public async Task<string> AddRetryPolicy(string filePath, int startLine, int endLine, int retryCount = 3) 
-        => await _codeHealingEngine.AddRetryPolicyAsync(filePath, startLine, endLine, retryCount);
+    [Description("Simplifies boolean expressions: rewrites 'x == true' to 'x', 'x == false' to '!x', and similar redundant patterns.")]
+    public async Task<string> SimplifyBooleanExpressions(string filePath)
+        => await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Removes redundant 'this.' member access qualifiers from an entire file.")]
+    public async Task<string> SimplifyMemberAccess(string filePath)
+        => await _ideStyleEngine.SimplifyMemberAccessAsync(filePath);
+
+    [McpServerTool]
+    [Description("Makes a class immutable: adds 'readonly' to all fields and converts property setters to 'init'.")]
+    public async Task<string> MakeClassImmutable(string filePath, string className)
+        => await _immutabilityEngine.MakeClassImmutableAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Converts a standard static method into an extension method by prepending 'this' to its first parameter.")]
+    public async Task<string> ConvertStaticToExtension(string filePath, string methodName)
+        => await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with '!' and removes double negations. Returns a file-to-content map of changed files.")]
+    public async Task<Dictionary<string, string>> InvertBooleanLogic(string filePath, string boolName)
+        => await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName);
+
+    [McpServerTool]
+    [Description("Converts a method's Task/Task<T> return type to ValueTask/ValueTask<T> for reduced heap allocation on hot paths.")]
+    public async Task<string> OptimizeToValueTask(string filePath, string methodName)
+        => await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Batches independent sequential await calls in a method into a single Task.WhenAll() for parallel execution.")]
+    public async Task<string> OptimizeIndependentAwaits(string filePath, string methodName)
+        => await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(filePath, methodName);
 }

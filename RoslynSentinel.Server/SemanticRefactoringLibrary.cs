@@ -103,8 +103,18 @@ public class SemanticRefactoringLibrary
             null,
             SyntaxFactory.Block(nodes));
 
-        var newBlock = parentBlock.ReplaceNodes(nodes, (old, _) => old == nodes[0] ? usingStatement : null);
-        var newRoot = root!.ReplaceNode(parentBlock, newBlock);
+        // Rebuild the parent block's statement list: replace the entire selected range
+        // with the single using statement. ReplaceNodes(delegate returning null) would crash Roslyn.
+        var origStatements = parentBlock.Statements.ToList();
+        int startIdx = origStatements.IndexOf(nodes[0]);
+        int endIdx   = origStatements.IndexOf(nodes[^1]);
+        var newStatements = new List<StatementSyntax>();
+        newStatements.AddRange(origStatements.Take(startIdx));
+        newStatements.Add(usingStatement);
+        newStatements.AddRange(origStatements.Skip(endIdx + 1));
+
+        var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
+        var newRoot  = root!.ReplaceNode(parentBlock, newBlock);
         
         return newRoot.NormalizeWhitespace().ToFullString();
     }

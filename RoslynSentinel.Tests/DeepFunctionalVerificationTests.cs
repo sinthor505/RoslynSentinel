@@ -22,11 +22,11 @@ public class DeepFunctionalVerificationTests
     {
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
         var config = new SentinelConfiguration();
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
-        _codeHealingEngine = new CodeHealingEngine(_workspaceManager);
+        _codeHealingEngine = new CodeHealingEngine(_workspaceManager, config);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
-        _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager);
+        _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager, config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, config);
     }

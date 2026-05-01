@@ -18,12 +18,13 @@ public class RefactoringTests
     [SetUp]
     public void Setup()
     {
+        var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager);
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         _refinementEngine = new RefinementEngine(_workspaceManager);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
         _granularEngine = new GranularRefactoringEngine(_workspaceManager);
-        _healingEngine = new CodeHealingEngine(_workspaceManager);
+        _healingEngine = new CodeHealingEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -65,15 +66,12 @@ public class RefactoringTests
     public async Task RenameSymbol_Should_UpdateAllReferences()
     {
         var sourceCode = "public class Service { public void OldName() {} public void Usage() { OldName(); } }";
-        // 'OldName' is at roughly line 1.
         _workspaceManager.SetTestSolution(CreateSolution(sourceCode, "Service.cs"));
 
-        // Searching for 'OldName' index to be safe
-        int index = sourceCode.IndexOf("OldName");
-        // Since it's a simple one-liner, line is 1
-        var results = await _refactoringEngine.RenameSymbolAsync("Service.cs", 1, index + 1, "NewName");
+        var results = await _refactoringEngine.RenameSymbolAsync("Service.cs", "OldName", "void OldName()", "NewName");
 
-        var updatedContent = results["Service.cs"];
+        Assert.That(results.Error, Is.Null, $"Rename failed: {results.Error}");
+        var updatedContent = results.PendingChanges["Service.cs"];
         Assert.That(updatedContent, Contains.Substring("public void NewName()"));
         Assert.That(updatedContent, Contains.Substring("NewName();"));
     }

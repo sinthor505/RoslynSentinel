@@ -18,6 +18,9 @@ public class SentinelIntelligenceTools
     private readonly ProjectStructureEngine _projectStructureEngine;
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
     private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
+    private readonly ArchitecturalEngine _architecturalEngine;
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;
+    private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -32,6 +35,9 @@ public class SentinelIntelligenceTools
         ProjectStructureEngine projectStructureEngine,
         AsyncSafetyEngine asyncSafetyEngine,
         HealthOrchestrationEngine healthOrchestrationEngine,
+        ArchitecturalEngine architecturalEngine,
+        SymbolNavigationEngine symbolNavigationEngine,
+        DependencyInjectionEngine dependencyInjectionEngine,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
@@ -46,6 +52,9 @@ public class SentinelIntelligenceTools
         _projectStructureEngine = projectStructureEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
         _healthOrchestrationEngine = healthOrchestrationEngine;
+        _architecturalEngine = architecturalEngine;
+        _symbolNavigationEngine = symbolNavigationEngine;
+        _dependencyInjectionEngine = dependencyInjectionEngine;
         _logger = logger;
     }
 
@@ -165,6 +174,83 @@ public async Task<List<string>> FindStructuralSmells(
 
     [McpServerTool]
     [Description("Scans a file for event subscriptions that are never unsubscribed, potential memory leaks.")]
-    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptions(string filePath) 
+    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptions(string filePath)
         => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Returns hover-style symbol info at a file position: kind, full signature, containing type/namespace, XML doc summary, accessibility, and definition location.")]
+    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, int line, int column)
+        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, line, column);
+
+    [McpServerTool]
+    [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
+    public async Task<List<ImplementationInfo>> FindAllImplementations(string typeName, string? projectName = null)
+        => await _symbolNavigationEngine.FindAllImplementationsAsync(typeName, projectName);
+
+    [McpServerTool]
+    [Description("Finds private, non-readonly fields that are only ever assigned inside constructors and could safely be marked readonly.")]
+    public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidates(string filePath)
+        => await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(filePath);
+
+    [McpServerTool]
+    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a specific project/file. Returns service type, implementation type, lifetime, and source location for each registration. Use lifetimeFilter to narrow results ('Singleton', 'Scoped', 'Transient').")]
+    public async Task<List<DiRegistration>> FindDiRegistrations(
+        string? projectName = null,
+        string? filePath = null,
+        string? lifetimeFilter = null)
+        => await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter);
+
+    [McpServerTool]
+    [Description("Returns all members of a type (methods, properties, fields, events) with full metadata: signature, accessibility, kind, IsInherited, IsOverride, IsAbstract, IsStatic, file path, and line. Set includeInherited=false to show only directly declared members.")]
+    public async Task<List<TypeMemberDetail>> GetTypeMembersDetail(
+        string typeName, string? projectName = null, bool includeInherited = true)
+        => await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
+
+    [McpServerTool]
+    [Description("Checks every class that implements an interface and reports which interface members each implementor has covered. Useful for finding partially-implemented interfaces across the solution.")]
+    public async Task<List<InterfaceImplementorCoverage>> VerifyInterfaceCompleteness(
+        string interfaceName, string? projectName = null)
+        => await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
+
+    [McpServerTool]
+    [Description("Finds all extension methods whose receiver type matches the given type (or its base types / interfaces). Returns method name, full signature, defining class, namespace, file path, and line.")]
+    public async Task<List<ExtensionMethodInfo>> FindExtensionMethods(
+        string targetTypeName, string? projectName = null)
+        => await _symbolNavigationEngine.FindExtensionMethodsAsync(targetTypeName, projectName);
+
+    [McpServerTool]
+    [Description("Analyzes class cohesion using an LCOM-based metric. Returns per-class analysis including field/method counts, LCOM score (0=cohesive, 1=disconnected), a rating (Excellent/Good/Poor/Very Poor), and informal suggestions for classes that could be split. Useful for identifying god classes and extraction opportunities.")]
+    public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesion(string filePath, string? className = null)
+        => await _metricsEngine.AnalyzeTypeCohesionAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
+    public async Task<List<CircularDependencyChain>> FindCircularDependencies(string? projectName = null)
+        => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
+
+    [McpServerTool]
+    [Description("Builds a forward call graph from a method: shows what that method calls, what those callees call, and so on up to maxDepth levels (default 3). Only follows calls into methods with source locations in the solution (not BCL/NuGet). Returns a CallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callees. Already-visited methods appear as leaf nodes to prevent cycles.")]
+    public async Task<CallGraphNode?> GetCallGraph(
+        string filePath, string methodName, int maxDepth = 3)
+        => await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
+
+    [McpServerTool]
+    [Description("Builds a reverse call graph (who calls this method): shows all methods that call the given method, what calls those, etc., up to maxDepth levels. Uses Roslyn SymbolFinder for accurate semantic reference resolution — not text search. Returns a ReverseCallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callers.")]
+    public async Task<ReverseCallGraphNode?> GetReverseCallGraph(string filePath, string methodName, int maxDepth = 3)
+        => await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
+
+    [McpServerTool]
+    [Description("Converts a class to a BackgroundService: adds BackgroundService base class, generates ExecuteAsync override, and adds Microsoft.Extensions.Hosting using directive.")]
+    public async Task<string> ConvertToBackgroundService(string filePath, string className)
+        => await _architecturalEngine.ConvertToBackgroundServiceAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Corrects the namespace declaration in a file to match its actual folder structure relative to the project root.")]
+    public async Task<string> FixMismatchedNamespaces(string filePath)
+        => await _projectStructureEngine.FixMismatchedNamespacesAsync(filePath);
+
+    [McpServerTool]
+    [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
+    public async Task<string> MoveFileToNamespaceFolder(string filePath)
+        => await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
 }

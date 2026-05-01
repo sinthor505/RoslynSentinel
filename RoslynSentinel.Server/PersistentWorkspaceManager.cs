@@ -14,8 +14,9 @@ public class PersistentWorkspaceManager : IDisposable
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
     private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
-    private readonly List<string> _externalChanges = new();
     private readonly List<string> _workspaceLoadErrors = new();
+    private readonly ConcurrentBag<string> _externalChanges = new();
+    private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<string, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
@@ -53,7 +54,9 @@ public class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public void ClearDrift()
     {
-        _externalChanges.Clear();
+        // ConcurrentBag has no Clear(); swap to a new instance atomically is not possible,
+        // so drain it with TryTake instead.
+        while (_externalChanges.TryTake(out _)) { }
     }
 
     public async Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default)
@@ -127,9 +130,12 @@ public class PersistentWorkspaceManager : IDisposable
 
     private async void OnDebounceTimerElapsed(object? state)
     {
-        await _solutionLock.WaitAsync();
+        if (_disposed) return;
+        bool acquired = false;
         try
         {
+            await _solutionLock.WaitAsync();
+            acquired = true;
             var changes = _pendingChanges.Keys.ToList();
             _pendingChanges.Clear();
 
@@ -191,13 +197,17 @@ public class PersistentWorkspaceManager : IDisposable
                 _currentSolution = _workspace.CurrentSolution;
             }
         }
+        catch (ObjectDisposedException)
+        {
+            // Timer fired after Dispose() — semaphore or workspace already gone, safe to ignore.
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error refreshing workspace.");
         }
         finally
         {
-            _solutionLock.Release();
+            if (acquired) _solutionLock.Release();
         }
     }
 
@@ -469,6 +479,7 @@ public class PersistentWorkspaceManager : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
         _workspace?.Dispose();
         _watcher?.Dispose();
         _debounceTimer.Dispose();

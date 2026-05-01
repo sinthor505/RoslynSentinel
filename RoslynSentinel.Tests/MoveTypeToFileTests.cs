@@ -14,8 +14,9 @@ public class MoveTypeToFileTests
     [SetUp]
     public void Setup()
     {
+        var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
-        _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager);
+        _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager, config);
     }
 
     [TearDown]

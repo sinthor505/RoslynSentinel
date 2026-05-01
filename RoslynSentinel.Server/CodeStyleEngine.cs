@@ -30,24 +30,31 @@ public class CodeStyleEngine
 
         if (newRoot != null && rewriter.MadeChanges)
         {
-            var classes = newRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
-            foreach (var @class in classes)
-            {
-                if (!@class.Members.OfType<FieldDeclarationSyntax>().Any(f => f.Declaration.Type.ToString().Contains("Lock") && f.Declaration.Variables.Any(v => v.Identifier.Text == "_lockObj")))
-                {
-                    var lockField = SyntaxFactory.FieldDeclaration(
-                        SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("Lock"))
-                        .AddVariables(SyntaxFactory.VariableDeclarator("_lockObj")
-                            .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("Lock")).WithArgumentList(SyntaxFactory.ArgumentList())))))
-                        .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
-                    
-                    var newClass = @class.WithMembers(@class.Members.Insert(0, lockField));
-                    newRoot = newRoot.ReplaceNode(@class, newClass);
+            var classesToUpdate = newRoot.DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .Where(c => !c.Members.OfType<FieldDeclarationSyntax>().Any(f =>
+                    f.Declaration.Type.ToString().Contains("Lock") &&
+                    f.Declaration.Variables.Any(v => v.Identifier.Text == "_lockObj")))
+                .ToList();
 
-                    if (!newRoot.Usings.Any(u => u.Name.ToString() == "System.Threading"))
-                    {
-                        newRoot = newRoot.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Threading")));
-                    }
+            if (classesToUpdate.Count > 0)
+            {
+                var lockField = SyntaxFactory.FieldDeclaration(
+                    SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("Lock"))
+                    .AddVariables(SyntaxFactory.VariableDeclarator("_lockObj")
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("Lock"))
+                            .WithArgumentList(SyntaxFactory.ArgumentList())))))
+                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+
+                newRoot = newRoot.ReplaceNodes(
+                    classesToUpdate,
+                    (_, current) => current.WithMembers(current.Members.Insert(0, lockField)));
+
+                if (!newRoot.Usings.Any(u => u.Name.ToString() == "System.Threading"))
+                {
+                    newRoot = newRoot.AddUsings(
+                        SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Threading")));
                 }
             }
         }
@@ -55,19 +62,9 @@ public class CodeStyleEngine
         return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
     }
 
-    public async Task<string> EnsureSemaphoreFinallyAsync(string filePath, CancellationToken ct = default)
-    {
-        if (!_config.IsFeatureEnabled("SemaphoreLeaks")) return string.Empty;
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
-        var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
-    }
-
     public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string propertyName, CancellationToken ct = default)
     {
-        // No explicit toggle yet for this surgical one, but we could add it.
+        if (!_config.IsFeatureEnabled("ConvertPropertyToMethod")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
@@ -107,7 +104,8 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
         var rewriter = new VerbosityRewriter(_config);
-        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
+        var newRoot = rewriter.Visit(root);
+        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
     }
 
     public async Task<string> UseCollectionExpressionsAsync(string filePath, CancellationToken ct = default)
@@ -119,7 +117,8 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
         var rewriter = new CollectionExpressionRewriter();
-        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
+        var newRoot = rewriter.Visit(root);
+        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
     }
 
     public async Task<string> UseTimeProviderAsync(string filePath, CancellationToken ct = default)
@@ -131,25 +130,27 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
         
-        var rewriter = new TimeAbstractionRewriter();
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        var providerField = classNode?.Members.OfType<FieldDeclarationSyntax>()
+            .FirstOrDefault(f => f.Declaration.Type.ToString().Contains("TimeProvider"));
+        var fieldName = providerField?.Declaration.Variables.FirstOrDefault()?.Identifier.Text ?? "_timeProvider";
+
+        var rewriter = new TimeAbstractionRewriter(fieldName);
         var cu = rewriter.Visit(root) as CompilationUnitSyntax;
         if (cu == null) return string.Empty;
 
-        var classNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-        if (classNode != null)
+        var newClassNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (newClassNode != null && providerField == null)
         {
-            var hasProvider = classNode.Members.OfType<FieldDeclarationSyntax>().Any(f => f.Declaration.Type.ToString().Contains("TimeProvider"));
-            if (!hasProvider)
-            {
-                var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("TimeProvider")).AddVariables(SyntaxFactory.VariableDeclarator("_timeProvider"))).AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
-                cu = cu.ReplaceNode(classNode, classNode.WithMembers(classNode.Members.Insert(0, field)));
-            }
+            var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("TimeProvider")).AddVariables(SyntaxFactory.VariableDeclarator(fieldName))).AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+            cu = cu.ReplaceNode(newClassNode, newClassNode.WithMembers(newClassNode.Members.Insert(0, field)));
         }
         return cu.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> SimplifyAllNamesAsync(string filePath, CancellationToken ct = default)
     {
+        if (!_config.IsFeatureEnabled("IDE0001")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
@@ -159,17 +160,17 @@ public class CodeStyleEngine
         return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> UseThrowExpressionsAsync(string filePath, CancellationToken ct = default)
+    public async Task<string> UseIndexFromEndAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ThrowExpressions")) return string.Empty;
+        if (!_config.IsFeatureEnabled("LengthMinusOneToIndex")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
         var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
+        if (root == null) return string.Empty;
+        var rewriter = new IndexFromEndRewriter();
+        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
-
-    public async Task<string> UpgradeThreadSafetyAsync(string filePath, CancellationToken ct = default) => "";
 
     private class DangerousLockRewriter : CSharpSyntaxRewriter
     {
@@ -189,10 +190,7 @@ public class CodeStyleEngine
 
         public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
-            if (node.Parent is VariableDeclarationSyntax vds && vds.Type.ToString() == node.Type.ToString())
-                return SyntaxFactory.ImplicitObjectCreationExpression(node.ArgumentList ?? SyntaxFactory.ArgumentList(), node.Initializer).WithTriviaFrom(node);
-            
-            if (node.Parent is EqualsValueClauseSyntax evc && evc.Parent is VariableDeclaratorSyntax vdr && vdr.Parent is VariableDeclarationSyntax vdsField && vdsField.Type.ToString() == node.Type.ToString())
+            if (node.Parent is EqualsValueClauseSyntax evc && evc.Parent is VariableDeclaratorSyntax vd && vd.Parent is VariableDeclarationSyntax vds2 && vds2.Type.ToString() == node.Type.ToString())
                 return SyntaxFactory.ImplicitObjectCreationExpression(node.ArgumentList ?? SyntaxFactory.ArgumentList(), node.Initializer).WithTriviaFrom(node);
 
             return base.VisitObjectCreationExpression(node);
@@ -200,7 +198,6 @@ public class CodeStyleEngine
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
             if (!_config.IsFeatureEnabled("NullConditionalAssignment")) return base.VisitIfStatement(node);
-
             if (node.Condition is BinaryExpressionSyntax be && be.IsKind(SyntaxKind.EqualsExpression) && be.Right.IsKind(SyntaxKind.NullLiteralExpression))
             {
                 var assignment = node.Statement is ExpressionStatementSyntax es && es.Expression is AssignmentExpressionSyntax asgn ? asgn : null;
@@ -222,12 +219,11 @@ public class CodeStyleEngine
             if (node.Initializer == null || node.Initializer.Expressions.Count == 0) return SyntaxFactory.CollectionExpression().WithTriviaFrom(node);
             return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node);
         }
+        
         public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
-            var typeStr = node.Type.ToString();
-            if ((typeStr.StartsWith("List<") || typeStr.StartsWith("HashSet<")) && (node.Initializer == null || node.Initializer.Expressions.Count >= 0))
+            if (node.Type.ToString().StartsWith("List<") && node.Initializer != null)
             {
-                if (node.Initializer == null) return SyntaxFactory.CollectionExpression().WithTriviaFrom(node);
                 return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node);
             }
             return base.VisitObjectCreationExpression(node);
@@ -236,20 +232,16 @@ public class CodeStyleEngine
 
     private class TimeAbstractionRewriter : CSharpSyntaxRewriter
     {
+        private readonly string _fieldName;
+        public TimeAbstractionRewriter(string fieldName) => _fieldName = fieldName;
+
         public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
         {
             var expr = node.Expression.ToString();
             if ((expr is "DateTime" or "DateTimeOffset") && node.Name.Identifier.Text is "UtcNow" or "Now" or "Today")
             {
-                var classNode = node.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-                var providerName = "_timeProvider";
-                if (classNode != null)
-                {
-                    var field = classNode.Members.OfType<FieldDeclarationSyntax>().FirstOrDefault(f => f.Declaration.Type.ToString().Contains("TimeProvider"));
-                    if (field != null) providerName = field.Declaration.Variables.First().Identifier.Text;
-                }
                 var method = node.Name.Identifier.Text == "UtcNow" ? "GetUtcNow()" : "GetLocalNow()";
-                return SyntaxFactory.ParseExpression($"{providerName}.{method}").WithTriviaFrom(node);
+                return SyntaxFactory.ParseExpression($"{_fieldName}.{method}").WithTriviaFrom(node);
             }
             return base.VisitMemberAccessExpression(node);
         }
@@ -261,6 +253,27 @@ public class CodeStyleEngine
         {
             if (node.Alias.Identifier.Text == "global") return node.Name;
             return base.VisitAliasQualifiedName(node);
+        }
+    }
+
+    private class IndexFromEndRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitElementAccessExpression(ElementAccessExpressionSyntax node)
+        {
+            if (node.ArgumentList.Arguments.Count == 1)
+            {
+                var arg = node.ArgumentList.Arguments[0].Expression;
+                if (arg is BinaryExpressionSyntax be && be.IsKind(SyntaxKind.SubtractExpression) && be.Right.ToString() == "1")
+                {
+                    var left = be.Left.ToString();
+                    if (left.EndsWith(".Length") || left.EndsWith(".Count"))
+                    {
+                        return node.WithArgumentList(SyntaxFactory.BracketedArgumentList(SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.Argument(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.IndexExpression, SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))))));
+                    }
+                }
+            }
+            return base.VisitElementAccessExpression(node);
         }
     }
 }

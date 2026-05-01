@@ -154,11 +154,27 @@ public class SentinelWorkspaceTools
         => await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
 
     [McpServerTool]
+    [Description("Validates a dictionary of proposed file changes in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying changes.")]
+    public async Task<DiagnosticReport> ValidateProposedChanges(Dictionary<string, string> changes)
+    {
+        return await _validationEngine.ValidateChangesAsync(changes);
+    }
+
+    [McpServerTool]
+    [Description("Validates a previously staged set of changes (from a refactoring tool) in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying staged changes.")]
+    public async Task<DiagnosticReport> ValidateStagedChanges(string changeId)
+    {
+        var changes = _workspaceManager.GetStagedChanges(changeId);
+        return await _validationEngine.ValidateChangesAsync(changes);
+    }
+
+    [McpServerTool]
     [Description("Applies a Unified Diff to a file and returns the resulting full content.")]
     public async Task<string> ApplyProposedDiff(string filePath, string unifiedDiff)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) throw new Exception("File not found.");
         var oldText = await document.GetTextAsync();
         return _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
@@ -218,4 +234,19 @@ public class SentinelWorkspaceTools
     [Description("Creates a new project and adds it to the current solution.")]
     public async Task<string> CreateProject(string projectName, string projectType = "console") 
         => await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+
+    [McpServerTool]
+    [Description("Gets all compiler errors and warnings for a specific project.")]
+    public async Task<DiagnosticSummary> GetProjectDiagnostics(string projectName)
+        => await _diagnosticEngine.GetProjectDiagnosticsAsync(projectName);
+
+    [McpServerTool]
+    [Description("Gets all compiler errors and warnings across the entire loaded solution.")]
+    public async Task<DiagnosticSummary> GetSolutionDiagnostics()
+        => await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+
+    [McpServerTool]
+    [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
+    public async Task<string> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
+        => await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
 }

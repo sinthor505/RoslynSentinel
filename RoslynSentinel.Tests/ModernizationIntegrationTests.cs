@@ -18,7 +18,7 @@ public class ModernizationIntegrationTests
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
-        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
     }
 

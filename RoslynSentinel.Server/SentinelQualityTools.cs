@@ -16,6 +16,7 @@ public class SentinelQualityTools
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly AnalysisEngine _analysisEngine;
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
+    private readonly AntiPatternEngine _antiPatternEngine;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -26,6 +27,7 @@ public class SentinelQualityTools
         LogicOptimizationEngine logicOptimizationEngine,
         AnalysisEngine analysisEngine,
         AsyncSafetyEngine asyncSafetyEngine,
+        AntiPatternEngine antiPatternEngine,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -35,6 +37,7 @@ public class SentinelQualityTools
         _logicOptimizationEngine = logicOptimizationEngine;
         _analysisEngine = analysisEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
+        _antiPatternEngine = antiPatternEngine;
         _logger = logger;
     }
 
@@ -52,6 +55,11 @@ public class SentinelQualityTools
     [Description("Generates a unit test skeleton for a class.")]
     public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className) 
         => await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
+
+    [McpServerTool]
+    [Description("Generates an xUnit+Moq test class scaffold for a given class. Auto-detects constructor parameters to create Mock<T> fields, instantiates the SUT, and adds one test method stub per public method with Arrange/Act/Assert comments.")]
+    public async Task<TestScaffoldResult> GenerateTestScaffold(string filePath, string className)
+        => await _testingEngine.GenerateTestScaffoldAsync(filePath, className);
 
     [McpServerTool]
     [Description("Analyzes execution paths for test coverage.")]
@@ -141,6 +149,14 @@ public class SentinelQualityTools
         => await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(filePath);
 
     [McpServerTool]
+    [Description("Detects common C# anti-patterns introduced by AI code generation: BlockingTaskWait (.Result/.Wait()/.GetAwaiter().GetResult()), AsyncVoidMethod (non-event-handler async void), StringConcatInLoop (string += in loops), CatchExceptionSwallow (empty catch blocks), DisposedObjectUsage (use after Dispose), MissingCancellationToken (public async methods with 3+ params lacking CancellationToken), MagicNumber (unexplained numeric literals). Optionally scope by filePath, projectName, or patternFilter array.")]
+    public async Task<List<AntiPatternFinding>> DetectAntiPatterns(
+        string? filePath = null,
+        string? projectName = null,
+        string[]? patternFilter = null)
+        => await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, patternFilter);
+
+    [McpServerTool]
     [Description("Analyzes a file for potential infinite loops.")]
     public async Task<List<string>> FindPossibleInfiniteLoops(string filePath) 
         => await _analysisEngine.FindPossibleInfiniteLoopsAsync(filePath);
@@ -156,7 +172,29 @@ public class SentinelQualityTools
         => await _securityEngine.FindHardcodedPathsAsync(filePath);
 
     [McpServerTool]
-    [Description("Scans a file for potential SQL injection vulnerabilities.")]
-    public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string filePath) 
-        => await _securityEngine.CheckForSqlInjectionAsync(filePath);
+    [Description("Finds public mutable properties (public setter) on non-DTO public classes. Reports classes that expose state directly rather than through controlled mutation. Classes whose names end with Request/Response/Dto/ViewModel/Model/Options/Settings/Config/Entity/Event/Command/Query are excluded. Scope to a file or project, or scan the whole solution.")]
+    public async Task<List<AntiPatternFinding>> FindMutablePublicProperties(
+        string? filePath = null, string? projectName = null)
+        => await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Checks C# naming conventions across a file, project, or solution. Reports: private fields not following '_camelCase', non-private methods not following PascalCase, and parameters not following camelCase. Returns AntiPatternFinding records with Pattern='NamingViolation', Severity='Low'.")]
+    public async Task<List<AntiPatternFinding>> FindNamingViolations(
+        string? filePath = null, string? projectName = null)
+        => await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Finds string literal magic values: the same string appearing 3+ times across a file, project, or solution. Returns value, occurrence count, suggested constant name (PascalCase), and all file/line locations. Excludes empty strings, nameof() args, attribute arguments, and strings shorter than 3 chars.")]
+    public async Task<List<MagicValueFinding>> FindStringMagicValues(string? filePath = null, string? projectName = null, int minOccurrences = 3)
+        => await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, minOccurrences);
+
+    [McpServerTool]
+    [Description("Finds async methods that lack a CancellationToken parameter but call at least one method that accepts one. These are methods that should be threading cancellation through but aren't. Returns method name, containing type, file/line, and the callee names that accept CancellationToken.")]
+    public async Task<List<MissingCancellationTokenFinding>> FindMissingCancellationTokens(string? filePath = null, string? projectName = null)
+        => await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Analyzes exception handling anti-patterns in a file: CatchAll (bare catch or catch Exception), EmptyRethrow (throw ex; loses stack trace), SwallowedException (catch with no rethrow/log/return), ExceptionAsControlFlow (catching FormatException etc. inside loops). Severity: High for CatchAll/EmptyRethrow, Medium for SwallowedException/ExceptionAsControlFlow.")]
+    public async Task<List<ExceptionHandlingFinding>> AnalyzeExceptionHandling(string filePath)
+        => await _antiPatternEngine.AnalyzeExceptionHandlingAsync(filePath);
 }

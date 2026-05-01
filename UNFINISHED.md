@@ -1,46 +1,60 @@
 # Unfinished Capabilities (Backlog)
 
-The following advanced capabilities require deep data-flow analysis or cross-file AST rewriting that is currently in the architectural planning phase.
+This document tracks the massive 300+ atomic refactoring and diagnostic targets currently planned for Roslyn Sentinel.
 
 ## 🚀 Future Architectural Vision: Intent-Based AST Commands
-
-The core goal of Roslyn Sentinel's evolution is to shift from the **String-Replacement Model** (where the AI sends raw C# strings) to an **Intent-Based AST Command Model**. 
-
-### The Problem
-AI agents currently provide raw C# strings during refactoring. This frequently leads to:
-1.  **Syntax Errors**: Truncated responses or missing braces/semicolons.
-2.  **Formatting Drift**: Inconsistent indentation or violation of `.editorconfig`.
-3.  **Trivia Loss**: Accidental deletion of comments and XML documentation.
-
-### The Solution: "Refactor Recipes"
-In the future, the AI will provide a structured manifest of logical changes. Roslyn will then perform the heavy-duty AST manipulation, ensuring structural perfection and metadata preservation.
-
-**Planned Recipe Ops:**
-- `InjectDependency`: Injects a private readonly field and adds it to the primary or standard constructor.
-- `AddGuard`: Injects a `ThrowIfNull` or range-check at the start of a specific member.
-- `WrapInTryCatch`: Wraps a specific range of statements in a try-catch with specific logging/re-throw logic.
-- `ApplyAttribute`: Adds an attribute to a class/method, automatically resolving the required `using` namespace.
+The server is transitioning to a "Refactor Recipe" model where AI agents issue high-level intents (e.g., `InjectDependency`, `AddGuard`, `WrapInTryCatch`) and Roslyn handles the structural manipulation, formatting, and trivia preservation.
 
 ---
 
-## 🛠️ Advanced AST Refactoring (Backlog)
-- **`PullUpMember` / `PushDownMember`**: Moves methods/fields through a type hierarchy while updating all references solution-wide.
-- **`InlineMethod` (Deep)**: Handles complex inlining for methods with multiple return points, local variable collisions, and generic parameters.
-- **`ExtractInterface` (Full)**: Automatically detects implementers and updates all variable declarations to use the new interface type instead of the concrete class.
-- **`OrganizeImports` (Solution-Wide)**: Implements custom grouping and sorting rules for `using` directives across 100+ files in one pass.
+## 🛠️ Advanced Refactoring Suite (Backlog)
 
-## ⚡ High-Level Optimization (Backlog)
-- **`UseSpanForParsing`**: Detects legacy string manipulation (Substring, Split, Regex) and upgrades it to zero-allocation `ReadOnlySpan<char>` and `Memory<T>`.
-- **`AutoParallelize`**: Scans sequential data processing loops and automatically converts them to `Parallel.ForEach` or `Task.WhenAll` if thread-safe.
-- **`VectorizeLoop`**: Identifies low-level numerical loops and suggests using **SIMD** (System.Runtime.Intrinsics) for hardware-accelerated performance.
+### **Easy Difficulty**
+- `ConvertIndexerToMethod`: Replaces indexer with `GetX(int index)` and `SetX(int index, T value)`.
+- `ConvertPropertyToAutoProperty`: Removes manual backing fields if logic is trivial.
+- `CopyType`: Creates a deep structural clone of a type in a new file.
+- `Add/Remove params`: Toggles the `params` modifier on the final array parameter.
+- `IDE0011 (Add Braces)`: Surgically adds braces to all single-line `if`, `foreach`, and `while` blocks.
+- `EPC33 (Sleep in Async)`: Detects and replaces `Thread.Sleep` with `Task.Delay` in async contexts.
 
-## 🔍 Advanced Analysis & Visuals (Backlog)
-- **`VisualDependencyGraph`**: Generates a Mermaid.js or Graphviz representation of the project and type dependency tree.
-- **`AOTCompatibilityAudit`**: Scans for patterns (Reflection, Dynamic) that would prevent **Native AOT** compilation.
+### **Medium Difficulty**
+- `ConvertInterfaceToAbstractClass`: Adds method bodies and basic inheritance structure.
+- `ReplaceConstructorWithFactoryMethod`: Moves instantiation logic to a static `Create` method.
+- `TransformParameters`: Wraps a group of parameters into a new Parameter Object (DTO).
+- `SpecificExceptionCatching`: Traces method calls to identify exact exception types and expands generic `catch(Exception)` blocks.
+- `LocalFunctionMigration`: Automatically moves anonymous lambdas into structured `local functions`.
+- `EPC26 (Tasks in Using)`: Detects unawaited tasks inside a `using` block that might outlive the disposal.
+
+### **Hard Difficulty**
+- `MoveInstanceMethod`: Moves a method to another type and updates every call site globally by resolving the new object reference.
+- `UseBaseTypeWherePossible`: Scans the entire solution to find where a variable declaration can be safely down-cast to a more generic base type/interface.
+- `UseSpanForParsing`: Refactors legacy string manipulation (Substrings/Regex) into high-performance `ReadOnlySpan<char>` logic.
+- `AutoParallelize`: Identifies CPU-bound sequential loops and converts them to `Parallel.ForEach`.
+- `InlineSQLValidation`: Cross-references string-embedded SQL against a provided schema for type and size consistency.
 
 ---
-*Note: The following 40+ items have been promoted to the core engine suite and are now fully functional:*
-*   **Modernization**: `.NET 10 Lock Modernization`, `C# 14 Field-Backed Properties`, `Implicit Span Cleanup`, `TimeProvider Injection`.
-*   **Logical**: `BooleanInversion (Solution-Wide)`, `FlattenIfsToSwitch`, `ConvertPropertyToMethods`.
-*   **Orchestration**: `Paged Health Reports`, `Feature Toggle System`, `Parallel Project Scanning`.
-*   **Quality**: `BoxingAllocation Detection`, `ReflectionUsage Audit`, `MismatchedAwait Safety`.
+
+## 🔍 IDE & Static Analysis Targets (Backlog)
+
+### **Modernization (C# 14 / .NET 10)**
+- `IDE0042`: Deconstruct variable declarations.
+- `IDE0050`: Convert anonymous types to Tuples.
+- `IDE0210`: Convert to top-level statements.
+- `IDE0250`: Automatically mark structs as `readonly`.
+- `IDE0340`: Use unbound generic types in `nameof`.
+
+### **Async/Wait Performance (EPC Suite)**
+- `EPC16`: Flag awaiting null-conditional expressions (NullRef risk).
+- `EPC18`: Flag implicit Task-to-String conversions.
+- `EPC31`: Prevent returning null for Task-like types.
+- `EPC32`: TaskCompletionSource configuration audits.
+
+---
+*Note: Over 30+ additional tools were promoted to core in this session by wrapping existing engine methods that had never been exposed as MCP tools: `SimplifyMemberAccess`, `MakeClassImmutable`, `OptimizeToValueTask`, `OptimizeIndependentAwaits`, `ReduceBlockDepth`, `OptimizeTaskWait`, `ReplaceConstructorWithFactory`, `InvertAssignments`, `GenerateDefaultConfigJson`, `GenerateAsyncOverload`, `AddValidationToPoco`, `GetProjectDiagnostics`, `GetSolutionDiagnostics`, `SplitProjectByFolder`, `ConvertToBackgroundService`, `FixMismatchedNamespaces`, `MoveFileToNamespaceFolder`, `UpgradeToModernGuards`, `ConvertSwitchToExpression`, `CleanupImplicitSpans`, `ConvertToSourceGeneratedLogging`, `SimplifyBooleanExpressions`, `ConvertStaticToExtension`, `InvertBooleanLogic`, plus 5 genuinely new tools: `GetReverseCallGraph`, `FindStringMagicValues`, `FindMissingCancellationTokens`, `AnalyzeExceptionHandling`, `GenerateDecoratorClass`. Total tool count is now 162.*
+
+## Still-Stub Methods (Skipped — no real implementation in engine)
+These engine methods exist as stubs/no-ops and were not wrapped:
+- `ConvertIfToSwitchExpression/Statement`, `ConvertForEachToFor`, `ConvertForToForEach`, `ConvertWhileToFor`
+- `InlineClassAsync`, `UseSpanForParsing`, `UseThrowExpressions`, `UseObjectInitializers`, `UseNullPropagation`
+- `AddRetryPolicy`, `RunSpecificRule`, `RunMicroRefactoring`
+- `ModernizationUpgradeEngine.ConvertSwitchToExpression` — duplicate name conflict with `SyntaxUpgradeEngine` version

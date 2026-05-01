@@ -12,26 +12,30 @@ var builder = Host.CreateApplicationBuilder(args);
 // --- Command Line Argument Parsing ---
 var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
 var solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution="))?.Replace("--solution=", "");
-var portArg = args.FirstOrDefault(a => a.StartsWith("--port="))?.Replace("--port=", "");
-var hostArg = args.FirstOrDefault(a => a.StartsWith("--host="))?.Replace("--host=", "") ?? "localhost";
 
 var activeModes = modeArg.Equals("all", StringComparison.OrdinalIgnoreCase) 
     ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
     : modeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-Console.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
+Console.Error.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
 
-// Configure Logging
+// --- Configure Logging (Redirection to File ONLY) ---
+// Clear default providers (especially Console which breaks MCP Stdio)
+builder.Logging.ClearProviders();
+
+var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "server.log");
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .Enrich.FromLogContext()
-    .WriteTo.File(@"E:\source\repos\RoslynSentinel\publish\logs\server.log", rollingInterval: RollingInterval.Day)
+    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
 builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
 builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-// --- Register Infrastructure ---
+try 
+{
+    // --- Register Infrastructure ---
 builder.Services.AddSingleton<SentinelConfiguration>(); // <--- Global Toggle Service
 builder.Services.AddSingleton<PersistentWorkspaceManager>();
 builder.Services.AddSingleton<DiffEngine>();
@@ -83,6 +87,8 @@ builder.Services.AddSingleton<GranularRefactoringEngine>();
 builder.Services.AddSingleton<ApiAutomationEngine>();
 builder.Services.AddSingleton<ControlFlowEngine>();
 builder.Services.AddSingleton<HealthOrchestrationEngine>();
+builder.Services.AddSingleton<SymbolNavigationEngine>();
+builder.Services.AddSingleton<AntiPatternEngine>();
 
 // --- Configure MCP Server Transport ---
 var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
@@ -127,9 +133,24 @@ if (!string.IsNullOrEmpty(solutionPath))
 {
     var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
     logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
-    _ = workspaceManager.LoadSolutionAsync(solutionPath);
+    _ = workspaceManager.LoadSolutionAsync(solutionPath)
+        .ContinueWith(
+            t => logger.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
+            TaskContinuationOptions.OnlyOnFaulted);
 }
 
 logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes}", string.Join(", ", activeModes));
 
 await host.RunAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Roslyn Sentinel failed to start.");
+    Console.Error.WriteLine($"FATAL STARTUP ERROR: {ex.Message}");
+    Console.Error.WriteLine(ex.StackTrace);
+    throw;
+}
+finally
+{
+    Log.CloseAndFlush();
+}

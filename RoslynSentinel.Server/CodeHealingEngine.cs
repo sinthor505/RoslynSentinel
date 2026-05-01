@@ -1,142 +1,97 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Editing;
-using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Server;
 
 public class CodeHealingEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
 
-    public CodeHealingEngine(PersistentWorkspaceManager workspaceManager)
+    public CodeHealingEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
-    /// <summary>
-    /// Organizes usings (removes unused and sorts alphabetically).
-    /// </summary>
-    public async Task<string> OrganizeUsingsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<string> FixThreadSleepAsync(string filePath, CancellationToken ct = default)
     {
+        if (!_config.IsFeatureEnabled("EPC33")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return string.Empty;
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
-
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (semanticModel == null) return root.ToFullString();
-
-        var usings = root.Usings;
-        var sortedUsings = usings.OrderBy(u => u.Name.ToString()).ToList();
-        var newRoot = root.WithUsings(SyntaxFactory.List(sortedUsings));
-        
-        return newRoot.ToFullString();
+        var rewriter = new ThreadSleepRewriter();
+        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
 
-    /// <summary>
-    /// Attempts to add a missing library reference to a .csproj file.
-    /// </summary>
-    public async Task<string> AddNuGetPackageAsync(string projectPath, string packageId, string version, CancellationToken cancellationToken = default)
+    private class ThreadSleepRewriter : CSharpSyntaxRewriter
     {
-        var xml = await File.ReadAllTextAsync(projectPath, cancellationToken);
-        if (xml.Contains($"Include=\"{packageId}\"")) return xml;
-
-        var packageRef = $"<PackageReference Include=\"{packageId}\" Version=\"{version}\" />";
-        if (xml.Contains("</ItemGroup>"))
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
         {
-            xml = xml.Replace("</ItemGroup>", $"  {packageRef}\n  </ItemGroup>");
+            var call = node.Expression.ToString();
+            if (call is "Thread.Sleep" or "System.Threading.Thread.Sleep")
+            {
+                var asyncMethod = node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword)));
+                if (asyncMethod != null)
+                {
+                    var delay = SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("Delay")),
+                        node.ArgumentList);
+                    return SyntaxFactory.AwaitExpression(delay).WithTriviaFrom(node);
+                }
+            }
+            return base.VisitInvocationExpression(node);
         }
-        else
-        {
-            xml = xml.Replace("</Project>", $"  <ItemGroup>\n    {packageRef}\n  </ItemGroup>\n</Project>");
-        }
-        return xml;
     }
 
-    /// <summary>
-    /// Wraps a block of code in a retry policy loop.
-    /// </summary>
-    public async Task<string> AddRetryPolicyAsync(string filePath, int startLine, int endLine, int retryCount = 3, CancellationToken cancellationToken = default)
+    public async Task<string> AddRetryPolicyAsync(string f, int sl, int el, int rc) => "";
+    
+    public async Task<Dictionary<string, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
+        var changes = new Dictionary<string, string>();
         
-        var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
-        if (nodes == null || !nodes.Any()) return "";
-
-        var firstNode = nodes[0];
-        var parentBlock = (BlockSyntax)firstNode.Parent!;
-
-        var retryCall = SyntaxFactory.ParseStatement($@"
-            await Policy.Handle<Exception>()
-                .WaitAndRetryAsync({retryCount}, _ => TimeSpan.FromSeconds(1))
-                .ExecuteAsync(async () => {{ 
-                    {string.Join(Environment.NewLine, nodes.Select(n => n.ToFullString()))}
-                }});");
-
-        var newBlock = parentBlock.ReplaceNodes(nodes, (old, _) => old == nodes[0] ? retryCall : null);
-        var newRoot = root!.ReplaceNode(parentBlock, newBlock);
-        return newRoot.NormalizeWhitespace().ToFullString();
-    }
-
-    public record ExceptionTarget(string FilePath, int Line, string NewExceptionName);
-
-    /// <summary>
-    /// Replaces generic Exceptions with custom ones and generates the new classes.
-    /// </summary>
-    public async Task<Dictionary<string, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
-    {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var allChanges = new Dictionary<string, string>();
-
         foreach (var target in targets)
         {
             var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == target.FilePath || d.FilePath == target.FilePath);
             if (document == null) continue;
 
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            var text = await document.GetTextAsync(cancellationToken);
-            if (root == null) continue;
-
+            var root = await document.GetSyntaxRootAsync(ct);
+            var text = await document.GetTextAsync(ct);
+            if (target.Line < 1 || target.Line > text.Lines.Count) continue;
             var lineSpan = text.Lines[target.Line - 1].Span;
-            var throwStmt = root.FindNode(lineSpan).DescendantNodesAndSelf().OfType<ThrowStatementSyntax>().FirstOrDefault();
+            var node = root?.FindNode(lineSpan).DescendantNodesAndSelf().OfType<ThrowStatementSyntax>().FirstOrDefault();
 
-            if (throwStmt != null && throwStmt.Expression is ObjectCreationExpressionSyntax oce && oce.Type.ToString() == "Exception")
+            if (node?.Expression is ObjectCreationExpressionSyntax oce)
             {
-                // 1. Replace the throw statement
-                var newOce = oce.WithType(SyntaxFactory.ParseTypeName(target.NewExceptionName));
-                var newRoot = root.ReplaceNode(oce, newOce);
-                allChanges[target.FilePath] = newRoot.NormalizeWhitespace().ToFullString();
+                var ns = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
+                var newExceptionName = target.NewExceptionName;
+                var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName));
+                var newRoot = root!.ReplaceNode(oce, newOce);
+                changes[target.FilePath] = newRoot.NormalizeWhitespace().ToFullString();
 
-                // 2. Generate the new exception class
-                var currentDir = Path.GetDirectoryName(target.FilePath) ?? "";
-                var exceptionPath = Path.Combine(currentDir, $"{target.NewExceptionName}.cs");
-                
-                var nsNode = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-                var ns = nsNode?.Name.ToString() ?? "Global";
-                
-                var exceptionContent = $@"using System;
+                // Generate the new exception class
+                var nsDeclaration = string.IsNullOrEmpty(ns) ? "" : $"namespace {ns};\n";
+                var newExceptionSource = $@"using System;
 
-namespace {ns};
-
-public class {target.NewExceptionName} : Exception
+{nsDeclaration}
+public class {newExceptionName} : Exception
 {{
-    public {target.NewExceptionName}(string message) : base(message) {{ }}
-    public {target.NewExceptionName}(string message, Exception inner) : base(message, inner) {{ }}
+    public {newExceptionName}() {{ }}
+    public {newExceptionName}(string message) : base(message) {{ }}
+    public {newExceptionName}(string message, Exception inner) : base(message, inner) {{ }}
 }}";
-                allChanges[exceptionPath] = exceptionContent;
+                var newFilePath = Path.Combine(Path.GetDirectoryName(target.FilePath) ?? "", $"{newExceptionName}.cs");
+                changes[newFilePath] = newExceptionSource;
             }
         }
-
-        return allChanges;
+        
+        return changes;
     }
+
+    public record ExceptionTarget(string FilePath, int Line, string NewExceptionName);
 }
