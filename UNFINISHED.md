@@ -52,6 +52,26 @@ The server is transitioning to a "Refactor Recipe" model where AI agents issue h
 ---
 *Note: Over 30+ additional tools were promoted to core in this session by wrapping existing engine methods that had never been exposed as MCP tools: `SimplifyMemberAccess`, `MakeClassImmutable`, `OptimizeToValueTask`, `OptimizeIndependentAwaits`, `ReduceBlockDepth`, `OptimizeTaskWait`, `ReplaceConstructorWithFactory`, `InvertAssignments`, `GenerateDefaultConfigJson`, `GenerateAsyncOverload`, `AddValidationToPoco`, `GetProjectDiagnostics`, `GetSolutionDiagnostics`, `SplitProjectByFolder`, `ConvertToBackgroundService`, `FixMismatchedNamespaces`, `MoveFileToNamespaceFolder`, `UpgradeToModernGuards`, `ConvertSwitchToExpression`, `CleanupImplicitSpans`, `ConvertToSourceGeneratedLogging`, `SimplifyBooleanExpressions`, `ConvertStaticToExtension`, `InvertBooleanLogic`, plus 5 genuinely new tools: `GetReverseCallGraph`, `FindStringMagicValues`, `FindMissingCancellationTokens`, `AnalyzeExceptionHandling`, `GenerateDecoratorClass`. Total tool count is now 162.*
 
+---
+
+## Session 12 — Regression Test Suite
+
+Added `RegressionTests.cs` with 25 targeted regression tests covering every known bug fix and untested edge case:
+- `ChangeSignature` call-site argument rewriting
+- `ExtractInterface` block-style namespace handling
+- `ConvertPropertySafe` virtual/override modifier preservation and contextSnippet disambiguation
+- `InterpolateStringSafe` const format string resolution (the exact MS bug scenario)
+- `MoveTypeToFile` interface/enum types; single-type-file boundary (engine bug fixed: same-path crash)
+- `FindCallersSafe` overload disambiguation via contextSnippet
+- `ImplementInterfaceSafe` partial implementation, property-only interfaces, read-only properties, override guard
+- `FormatDocumentPreview` hunk content structure and clean-file consistency
+- `GetDiagnosticsSummary` grouping and false-positive prevention
+
+**Engine bug fixed:** `MoveTypeToFileAsync` crashed with `ArgumentException` (duplicate key) when moving a type whose name matched the source filename (e.g., `Solo` in `Solo.cs`). Now returns empty dict as a no-op in that case.
+
+**Test count:** 448 passing, 0 failing.
+
+
 *Note (subsequent session): 24 stub engine methods were replaced with real implementations across 7 engines: `AsyncSafetyEngine` (`FindTaskYieldUsage`, `FindTaskDelayUsage`, `FindTaskDelayZeroUsage`, `FindTaskWhenAllUsage`), `SecurityEngine` (`AnalyzeSecurityAsync`, `CheckForSqlInjectionAsync`), `DeadCodeEngine` (`FindUnusedPrivateMembersAsync`, `FindUnusedConstructorsAsync`, `CheckForUnusedEventSubscriptionsAsync`), `AnalysisEngine` (`DetectMemoryLeaksAsync`, `FindPossibleInfiniteLoopsAsync`, `GenerateEqualityOverridesAsync`, `GenerateCallTreeAsync`), `GranularRefactoringEngine` (`IntroduceFieldAsync`, `IntroduceParameterAsync`, `IntroduceVariableAsync`), `AdvancedRefactoringEngine` (`ReplaceStringConcatWithInterpolationAsync`, `OptimizeTaskWaitAsync`), `RefinementEngine` (`PullUpMemberAsync`). 63 comprehensive tests were added in `NewImplementationsTests.cs`, bringing the total to 205 passing tests.*
 
 ## Still-Stub Methods (Skipped — no real implementation in engine)

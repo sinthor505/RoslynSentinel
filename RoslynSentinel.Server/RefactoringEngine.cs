@@ -448,6 +448,11 @@ public class RefactoringEngine
         var newPath = string.IsNullOrEmpty(sourceDirectory)
             ? $"{typeName}.cs"
             : Path.Combine(sourceDirectory, $"{typeName}.cs");
+
+        // Guard: if the type's name already matches the source file name, it's already in its own file — nothing to move
+        if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
+            return new Dictionary<string, string>();
+
         var updatedOrig = root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!;
 
         var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
