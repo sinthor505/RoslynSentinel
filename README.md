@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 214 MCP Tools across 55 Specialized Engines
+## 🚀 218 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -14,7 +14,7 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **Namespace management**: `fix_mismatched_namespaces`, `move_file_to_namespace_folder`.
 
 ### 🛠️ Refactoring — 63 tools ("The Surgical Suite")
-*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface, `sync_interface_to_implementation` (adds public class members missing from the interface), `update_xml_docs_from_signature` (reconciles `<param>` tags with current parameter names).
+*   **`RefactoringEngine`**: Rename (solution-wide), Safe-Delete (reflection-aware), Change Signature, Extract Method/Interface, `sync_interface_to_implementation`, `update_xml_docs_from_signature`, `convert_expression_body` (block↔expression form by member name), `extract_constant` (literal → named `const`), `analyze_control_flow` (always/sometimes/never-returns per method), `analyze_data_flow` (read/written/captured variables per method).
 *   **`GranularRefactoringEngine`**: `introduce_field`, `introduce_parameter`, `introduce_variable`, `introduce_parameter_object` (groups method parameters into a new `record` type; adds TODO for call-site updates).
 *   **`RefinementEngine`**: `pull_up_member` — move a method from derived class to base class.
 *   **`AdvancedRefactoringEngine`**: Replace string concatenation with interpolation; optimize `.Result`/`.Wait()` to `await`.
@@ -78,6 +78,29 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 
 ---
 
+## 🤖 AI-First Tool Design
+
+All tools that target a specific code location use a **`contextSnippet`** parameter — a verbatim substring from the source file — rather than `(line, column)` coordinates. An AI agent can paste a snippet it already sees in context without calculating any offset.
+
+```
+// Bad (requires coordinate math):
+IntroduceField(filePath, line: 47, column: 23, "newFieldName")
+
+// Good (AI pastes nearby text):
+IntroduceField(filePath, contextSnippet: "var result = _service.Get(", "newFieldName")
+```
+
+**Rules:**
+- If the snippet appears exactly once → position resolved, operation proceeds
+- If the snippet is not found → descriptive error returned
+- If the snippet matches multiple locations → error with count; provide a longer snippet
+
+This pattern is used by: `introduce_field`, `introduce_parameter`, `introduce_variable`, `safe_delete_symbol`, `get_blast_radius`, `get_symbol_info`, `preview_rename_impact`, `upgrade_unbound_nameof`, `extract_constant`, `convert_expression_body` (optional disambiguation), `analyze_control_flow` (optional disambiguation), `analyze_data_flow` (optional disambiguation).
+
+For line-range tools (`extract_method`, `wrap_in_try_catch`, `wrap_in_using`), provide `startLineText`/`endLineText` — the exact physical text of the first and last lines — as a staleness guard.
+
+---
+
 ## ⚙️ Feature Toggles & Rule Management
 
 Roslyn Sentinel features a global **Feature Toggle System**. This allows you to enable or disable any of the 300+ rules globally at runtime. This integration is absolute: if a rule is disabled, it will not be executed by the `get_comprehensive_health_report` nor by any surgical refactoring tool.
@@ -110,7 +133,7 @@ Roslyn Sentinel is meant for a **solution-enabled system**, not for generic glob
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by an exhaustive suite of **393 functional tests** (zero failures), ensuring that every toggle and every transformation is verifiably correct.
+Roslyn Sentinel is backed by an exhaustive suite of **397 functional tests** (zero failures), ensuring that every toggle and every transformation is verifiably correct.
 
 ```bash
 dotnet test
