@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 231 MCP Tools across 55 Specialized Engines
+## 🚀 236 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -81,14 +81,23 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`ApiIntegrationEngine`**: `add_validation_to_poco` — add `[Required]`/`[Range]` annotations to plain objects.
 *   **`AsyncOptimizationEngine`**: Generate async method overloads.
 
-### 🔧 MS Standard Tool Augmentations — 5 tools (use these instead of the built-in equivalents)
+### 🔧 MS Standard Tool Augmentations — 10 tools (use these instead of the built-in equivalents)
+
+**Original 5 — correctness fixes:**
 *   **`EncapsulateFieldSafe`**: Wraps a field in a property with a correctly-named `_camelCase` backing field. The built-in `encapsulate_field` generates self-referential code (`Field { get { return Field; } }` with same name).
 *   **`AnalyzeSwitchForPatternConversion`**: Pre-flight check — inspects a `switch` statement and reports whether pattern matching conversion is safe. Detects multi-assignment cases the MS tool silently mishandles.
 *   **`ConvertSwitchToPatternSafe`**: Converts a `switch` statement to a `switch` expression. Rejects multi-assignment cases (returns error) rather than generating broken code.
 *   **`InterpolateStringSmart`**: Converts `string.Format(...)` to an interpolated string. Unlike the built-in, resolves **const string format arguments** via the semantic model (the built-in fails on named consts).
 *   **`SortDeduplicateUsings`**: Sorts AND deduplicates `using` directives in one pass. The built-in `sort_usings` does not remove duplicates.
 
-All 5 augmented tools support `lineBefore`/`lineAfter` disambiguation.
+**New 5 — missing features + UX fixes:**
+*   **`FormatDocumentSafe`**: Adds true **preview support** to `format_document`. Default `preview=true` returns formatted content without writing. The built-in has no preview parameter at all.
+*   **`AnalyzeForeachForLinqConversion`**: **Pre-flight safety check** before using `convert_foreach_linq`. The built-in silently destroys data when a collection is populated before the foreach (it re-initializes with `new List<T>()`, losing prior `.Add()` calls). Always call this first; only proceed if `IsSafeToConvert=true`.
+*   **`GetWorkspaceHealth`**: Reports true workspace state (projects loaded, documents, errors). The built-in `diagnose` reports `healthy:false` even when all projects load correctly, because it tests MSBuild path existence rather than actual workspace state.
+*   **`PreviewAddMissingUsings`**: Shows which usings would be added **without writing to disk**. The built-in `add_missing_usings` with `preview:true` applies changes anyway — the flag is completely ignored.
+*   **`ExtractConstantSafe`**: Extracts a literal to a named constant using **contextSnippet** instead of line/column. The built-in requires exact 1-based char offsets and throws cryptic errors (`"Column 99 is beyond end of line"`) when they're off by even one character.
+
+All 10 augmented tools support `lineBefore`/`lineAfter` disambiguation.
 
 ---
 
@@ -121,7 +130,7 @@ IntroduceField(filePath,
 - If still ambiguous after both hints, an error is returned explaining which matches remain
 - If no match passes the filter, an error names which contextSnippet + context was checked
 
-This pattern is used by all position-based tools: `introduce_field`, `introduce_parameter`, `introduce_variable`, `safe_delete_symbol`, `get_blast_radius`, `get_symbol_info`, `preview_rename_impact`, `upgrade_unbound_nameof`, `extract_constant`, `convert_expression_body`, `analyze_control_flow`, `analyze_data_flow`, and the 5 MS augmented tools (`encapsulate_field_safe`, `analyze_switch_for_pattern`, `convert_switch_to_pattern_safe`, `interpolate_string_smart`, `sort_deduplicate_usings`).
+This pattern is used by all position-based tools: `introduce_field`, `introduce_parameter`, `introduce_variable`, `safe_delete_symbol`, `get_blast_radius`, `get_symbol_info`, `preview_rename_impact`, `upgrade_unbound_nameof`, `extract_constant`, `convert_expression_body`, `analyze_control_flow`, `analyze_data_flow`, and all 10 MS augmented tools (`encapsulate_field_safe`, `analyze_switch_for_pattern`, `convert_switch_to_pattern_safe`, `interpolate_string_smart`, `sort_deduplicate_usings`, `format_document_safe`, `analyze_foreach_for_linq_conversion`, `preview_add_missing_usings`, `extract_constant_safe`).
 
 For line-range tools (`extract_method`, `wrap_in_try_catch`, `wrap_in_using`), provide `startLineText`/`endLineText` — the exact physical text of the first and last lines — as a staleness guard.
 
