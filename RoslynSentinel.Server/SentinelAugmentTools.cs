@@ -210,4 +210,153 @@ public class SentinelAugmentTools
         _logger.LogInformation("SortAndDeduplicateUsings: {File}", filePath);
         return await _engine.SortAndDeduplicateUsingsAsync(filePath);
     }
+
+    // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        FORMAT_DOCUMENT_SAFE — Roslyn formatter with true preview support.
+
+        FIXES MS BUG: The standard format_document tool has no preview parameter at all.
+        Changes are always applied immediately. There is no way to see what would change
+        before committing.
+
+        This tool fixes that by defaulting preview=true:
+          • preview=true  (default) → returns formatted content WITHOUT writing to disk
+          • preview=false            → writes to disk and updates the in-memory workspace
+
+        Use preview=true first to verify the formatted output is as expected,
+        then call again with preview=false to apply.
+
+        Parameters:
+          filePath  — absolute path to the .cs file to format
+          preview   — true (default) = read-only, false = apply to disk
+        """)]
+    public async Task<MsAugmentResult> FormatDocumentSafe(string filePath, bool preview = true)
+    {
+        _logger.LogInformation("FormatDocumentSafe: {File} preview={Preview}", filePath, preview);
+        return await _engine.FormatDocumentSafeAsync(filePath, preview);
+    }
+
+    // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        ANALYZE_FOREACH_FOR_LINQ_CONVERSION — Pre-flight safety analysis for convert_foreach_linq.
+
+        FIXES MS BUG: The standard convert_foreach_linq tool silently destroys data.
+        When a collection is modified BEFORE the foreach (e.g., results.Add("header") before
+        the loop), the standard tool re-initializes the variable with 'new List<T>()',
+        discarding those pre-loop additions WITHOUT any warning.
+
+        ALWAYS call this tool before using convert_foreach_linq.
+        Only proceed with conversion if IsSafeToConvert=true.
+
+        Parameters:
+          filePath        — absolute path to the .cs file
+          contextSnippet  — a short snippet of the foreach statement (e.g., "foreach (var item in")
+          lineBefore      — optional: the line of code immediately before contextSnippet
+          lineAfter       — optional: the line of code immediately after contextSnippet
+
+        Returns: IsSafeToConvert, CollectionVariableName, StatementsBeforeForeach, BlockingReason,
+                 and a Recommendation.
+        """)]
+    public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversion(
+        string filePath, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
+        return await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+    }
+
+    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        GET_WORKSPACE_HEALTH — Targeted workspace health check that fixes false negatives.
+
+        FIXES MS BUG: The standard diagnose tool reports healthy:false even when all projects
+        load successfully, because it tests MSBuild path existence rather than actual workspace
+        state. A workspace with 86/86 projects loaded correctly can be falsely reported as
+        unhealthy.
+
+        This tool reads actual solution state directly:
+          • IsOperational  — true if workspace itself is functional (not throwing)
+          • HasLoadedSolution — true if a .sln or .csproj is currently loaded
+          • ProjectCount/DocumentCount — actual loaded counts from the workspace
+          • LoadErrors — non-fatal warnings that occurred during solution loading
+          • Summary — human-readable status
+
+        Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
+        been loaded yet — this is a normal state, not an error.
+        """)]
+    public async Task<WorkspaceHealthReport> GetWorkspaceHealth()
+    {
+        _logger.LogInformation("GetWorkspaceHealth called");
+        return await _engine.GetWorkspaceHealthAsync();
+    }
+
+    // ── 9. PreviewAddMissingUsings ────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        PREVIEW_ADD_MISSING_USINGS — Preview what usings would be added, without modifying the file.
+
+        FIXES MS BUG: The standard add_missing_usings tool with preview:true silently APPLIES
+        changes to the file on disk anyway — the preview flag is completely ignored. Files are
+        always modified regardless of what preview value you pass.
+
+        This tool performs the analysis in read-only mode:
+          • Finds CS0246/CS0103 diagnostics (unresolved type/name errors)
+          • Searches all projects in the solution for matching type declarations
+          • Returns the list of namespaces that WOULD be added
+          • Returns UpdatedContent — the file content WITH the usings added (for review)
+          • Does NOT write to disk under any circumstances
+
+        Prerequisites: A solution must be loaded (HasLoadedSolution=true from GetWorkspaceHealth).
+        The file must be part of the loaded solution.
+
+        Returns: SolutionRequired, UsingsToAdd, Warning, UpdatedContent.
+        """)]
+    public async Task<AddUsingsPreview> PreviewAddMissingUsings(string filePath)
+    {
+        _logger.LogInformation("PreviewAddMissingUsings: {File}", filePath);
+        return await _engine.PreviewAddMissingUsingsAsync(filePath);
+    }
+
+    // ── 10. ExtractConstantSafe ───────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        EXTRACT_CONSTANT_SAFE — Extract a literal to a named constant using context, not line/column.
+
+        FIXES MS BUG: The standard extract_constant tool requires exact 1-based line/column
+        coordinates. When these are even slightly wrong (off by one, trailing whitespace,
+        CRLF vs LF differences) it throws a cryptic error: "Column 99 is beyond end of line".
+        There is no human-readable guidance on how to fix the coordinates.
+
+        This tool uses contextSnippet to locate the literal — the same approach used by all
+        other safe Sentinel tools:
+          • No line/column arithmetic required
+          • Human-readable error messages when the literal cannot be found
+          • Replaces ALL identical literals in the file (not just the one occurrence)
+          • Inserts the constant as the first member of the containing type
+
+        Parameters:
+          filePath        — absolute path to the .cs file
+          contextSnippet  — the literal itself or a short surrounding snippet (e.g., '"hello world"')
+          constantName    — valid C# identifier for the constant (e.g., 'GreetingMessage')
+          lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
+          lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
+
+        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+                 or Success=false and Error with a human-readable explanation.
+        """)]
+    public async Task<MsAugmentResult> ExtractConstantSafe(
+        string filePath, string contextSnippet, string constantName,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        _logger.LogInformation("ExtractConstantSafe: {File} constant={Name}", filePath, constantName);
+        return await _engine.ExtractConstantSafeAsync(filePath, contextSnippet, constantName, lineBefore, lineAfter);
+    }
 }

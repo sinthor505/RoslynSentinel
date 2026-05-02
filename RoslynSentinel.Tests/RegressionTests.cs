@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Server;
+using System.IO;
 
 namespace RoslynSentinel.Tests;
 
@@ -1106,6 +1107,308 @@ public class RegressionTests
         Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
             "No duplicates → RemovedDuplicates must be 0");
         Assert.That(result.OriginalCount, Is.EqualTo(3));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 16. New Augmented Tools — FormatDocumentSafe, AnalyzeForeachForLinqConversion,
+    //     GetWorkspaceHealth, PreviewAddMissingUsings, ExtractConstantSafe
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // ── FormatDocumentSafe ────────────────────────────────────────────────────
+
+    [Test]
+    public async Task FormatDocumentSafe_Preview_DoesNotModifyDisk()
+    {
+        // Arrange: write a poorly-formatted file to disk
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string malformatted = "public class Foo{public void Bar(){int x=1;}}";
+            await File.WriteAllTextAsync(tempFile, malformatted);
+
+            var engine = CreateAugmentEngine();
+
+            // Act: preview=true (default)
+            var result = await engine.FormatDocumentSafeAsync(tempFile, preview: true);
+
+            // Assert: result is successful and returns formatted content
+            Assert.That(result.Success, Is.True, "FormatDocumentSafe preview should succeed");
+            Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty);
+
+            // File on disk must NOT have been changed
+            var diskContent = await File.ReadAllTextAsync(tempFile);
+            Assert.That(diskContent, Is.EqualTo(malformatted),
+                "preview=true must NOT modify the file on disk");
+
+            // UpdatedContent must differ from the malformatted input
+            Assert.That(result.UpdatedContent, Is.Not.EqualTo(malformatted),
+                "Formatted content should differ from malformatted input");
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    [Test]
+    public async Task FormatDocumentSafe_Apply_WritesFormattedContentToDisk()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string malformatted = "public class Bar{public int X{get{return 1;}}}";
+            await File.WriteAllTextAsync(tempFile, malformatted);
+
+            var engine = CreateAugmentEngine();
+
+            // Act: preview=false → should write to disk
+            var result = await engine.FormatDocumentSafeAsync(tempFile, preview: false);
+
+            Assert.That(result.Success, Is.True, "FormatDocumentSafe apply should succeed");
+
+            // File on disk must now equal the formatted result
+            var diskContent = await File.ReadAllTextAsync(tempFile);
+            Assert.That(diskContent, Is.EqualTo(result.UpdatedContent),
+                "After preview=false, disk content must match UpdatedContent");
+
+            // Formatted version should differ from malformatted input
+            Assert.That(diskContent, Is.Not.EqualTo(malformatted),
+                "Disk content should be formatted differently from the original");
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    // ── AnalyzeForeachForLinqConversion ───────────────────────────────────────
+
+    [Test]
+    public async Task AnalyzeForeachForLinq_NoModificationsBeforeForeach_ReportsSafe()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string source = """
+                using System.Collections.Generic;
+                public class Processor
+                {
+                    public List<string> Run(IEnumerable<string> items)
+                    {
+                        var results = new List<string>();
+                        foreach (var item in items)
+                        {
+                            results.Add(item.ToUpper());
+                        }
+                        return results;
+                    }
+                }
+                """;
+            await File.WriteAllTextAsync(tempFile, source);
+            var engine = CreateAugmentEngine();
+
+            var analysis = await engine.AnalyzeForeachForLinqConversionAsync(
+                tempFile, "foreach (var item in items)");
+
+            Assert.That(analysis.IsSafeToConvert, Is.True,
+                "No pre-foreach modifications → should be safe to convert");
+            Assert.That(analysis.CollectionVariableName, Is.EqualTo("results"));
+            Assert.That(analysis.StatementsBeforeForeach, Is.EqualTo(0));
+            Assert.That(analysis.BlockingReason, Is.Null);
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    [Test]
+    public async Task AnalyzeForeachForLinq_WithPreForeachModification_ReportsUnsafe()
+    {
+        // Demonstrates the MS bug: results.Add("header") would be silently dropped
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string source = """
+                using System.Collections.Generic;
+                public class Reporter
+                {
+                    public List<string> BuildReport(IEnumerable<string> data)
+                    {
+                        var results = new List<string>();
+                        results.Add("header");
+                        foreach (var line in data)
+                        {
+                            results.Add(line);
+                        }
+                        return results;
+                    }
+                }
+                """;
+            await File.WriteAllTextAsync(tempFile, source);
+            var engine = CreateAugmentEngine();
+
+            var analysis = await engine.AnalyzeForeachForLinqConversionAsync(
+                tempFile, "foreach (var line in data)");
+
+            Assert.That(analysis.IsSafeToConvert, Is.False,
+                "Pre-foreach Add() call should make this unsafe");
+            Assert.That(analysis.CollectionVariableName, Is.EqualTo("results"));
+            Assert.That(analysis.StatementsBeforeForeach, Is.GreaterThan(0),
+                "At least one statement references the collection before the foreach");
+            Assert.That(analysis.BlockingReason, Is.Not.Null.And.Not.Empty);
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    // ── GetWorkspaceHealth ────────────────────────────────────────────────────
+
+    [Test]
+    public async Task GetWorkspaceHealth_NoSolutionLoaded_IsOperationalTrue_HasLoadedSolutionFalse()
+    {
+        // Create a fresh workspace manager with NO solution loaded
+        using var freshManager = new PersistentWorkspaceManager(
+            NullLogger<PersistentWorkspaceManager>.Instance);
+        var engine = new MsToolAugmentEngine(freshManager);
+
+        var report = await engine.GetWorkspaceHealthAsync();
+
+        Assert.That(report.IsOperational, Is.True,
+            "Workspace without a loaded solution is still operational");
+        Assert.That(report.HasLoadedSolution, Is.False,
+            "No solution has been loaded in this workspace");
+        Assert.That(report.ProjectCount, Is.EqualTo(0));
+        Assert.That(report.DocumentCount, Is.EqualTo(0));
+        Assert.That(report.Summary, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task GetWorkspaceHealth_WithLoadedSolution_ReportsCorrectCounts()
+    {
+        SetSource("""
+            public class Alpha { }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var report = await engine.GetWorkspaceHealthAsync();
+
+        Assert.That(report.IsOperational, Is.True);
+        Assert.That(report.HasLoadedSolution, Is.True);
+        Assert.That(report.ProjectCount, Is.GreaterThanOrEqualTo(1));
+        Assert.That(report.DocumentCount, Is.GreaterThanOrEqualTo(1));
+        Assert.That(report.LoadErrors, Is.Not.Null);
+    }
+
+    // ── PreviewAddMissingUsings ───────────────────────────────────────────────
+
+    [Test]
+    public async Task PreviewAddMissingUsings_NoSolutionLoaded_ReturnsSolutionRequired()
+    {
+        using var freshManager = new PersistentWorkspaceManager(
+            NullLogger<PersistentWorkspaceManager>.Instance);
+        var engine = new MsToolAugmentEngine(freshManager);
+
+        var result = await engine.PreviewAddMissingUsingsAsync("SomeFile.cs");
+
+        Assert.That(result.SolutionRequired, Is.True,
+            "When no solution is loaded, SolutionRequired must be true");
+        Assert.That(result.UsingsToAdd, Is.Empty);
+    }
+
+    [Test]
+    public async Task PreviewAddMissingUsings_FileNotInSolution_ReturnsWarning()
+    {
+        SetSource("public class Foo { }");
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.PreviewAddMissingUsingsAsync("NonExistentFile.cs");
+
+        Assert.That(result.SolutionRequired, Is.False,
+            "Solution IS loaded — SolutionRequired should be false");
+        Assert.That(result.Warning, Is.Not.Null.And.Not.Empty,
+            "A warning should be returned when the file is not in the solution");
+    }
+
+    // ── ExtractConstantSafe ───────────────────────────────────────────────────
+
+    [Test]
+    public async Task ExtractConstantSafe_StringLiteral_InsertsConstDeclaration()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string source = """
+                public class Greeter
+                {
+                    public string Greet() => "hello world";
+                }
+                """;
+            await File.WriteAllTextAsync(tempFile, source);
+            var engine = CreateAugmentEngine();
+
+            var result = await engine.ExtractConstantSafeAsync(
+                tempFile, "\"hello world\"", "GreetingMessage");
+
+            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(result.UpdatedContent, Does.Contain("const string GreetingMessage"),
+                "Constant declaration must be present in the output");
+            Assert.That(result.UpdatedContent, Does.Contain("GreetingMessage"),
+                "All usages should be replaced with the constant name");
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    [Test]
+    public async Task ExtractConstantSafe_ReplacesAllIdenticalLiterals()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string source = """
+                public class Config
+                {
+                    public string GetHost() => "localhost";
+                    public string GetAltHost() => "localhost";
+                }
+                """;
+            await File.WriteAllTextAsync(tempFile, source);
+            var engine = CreateAugmentEngine();
+
+            var result = await engine.ExtractConstantSafeAsync(
+                tempFile, "\"localhost\"", "DefaultHost",
+                lineBefore: "public string GetHost() =>");
+
+            Assert.That(result.Success, Is.True, result.Error);
+            // After extraction there must be EXACTLY one string literal "localhost"
+            // — the one in the const declaration itself
+            var rawLiteralCount = CountStringOccurrences(result.UpdatedContent!, "\"localhost\"");
+            Assert.That(rawLiteralCount, Is.EqualTo(1),
+                "All occurrences of the literal except the const declaration should be replaced");
+            Assert.That(result.UpdatedContent, Does.Contain("const string DefaultHost"),
+                "Constant declaration must be present");
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    [Test]
+    public async Task ExtractConstantSafe_InvalidIdentifier_ReturnsFailure()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "public class X { void M() { var s = \"hi\"; } }");
+            var engine = CreateAugmentEngine();
+
+            var result = await engine.ExtractConstantSafeAsync(
+                tempFile, "\"hi\"", "123InvalidName");
+
+            Assert.That(result.Success, Is.False,
+                "An invalid identifier should produce a failure result");
+            Assert.That(result.Error, Is.Not.Null.And.Not.Empty);
+        }
+        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+    }
+
+    private static int CountStringOccurrences(string text, string value)
+    {
+        int count = 0, pos = 0;
+        while ((pos = text.IndexOf(value, pos, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            pos += value.Length;
+        }
+        return count;
     }
 }
 
