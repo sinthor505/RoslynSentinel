@@ -90,6 +90,7 @@ builder.Services.AddSingleton<HealthOrchestrationEngine>();
 builder.Services.AddSingleton<SymbolNavigationEngine>();
 builder.Services.AddSingleton<AntiPatternEngine>();
 builder.Services.AddSingleton<DiscoveryEngine>();
+builder.Services.AddSingleton<MsToolAugmentEngine>();
 
 // --- Configure MCP Server Transport ---
 var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
@@ -109,6 +110,8 @@ if (activeModes.Contains("Refactor"))
 {
     builder.Services.AddSingleton<SentinelRefactoringTools>();
     mcpBuilder.WithTools<SentinelRefactoringTools>();
+    builder.Services.AddSingleton<SentinelAugmentTools>();
+    mcpBuilder.WithTools<SentinelAugmentTools>();
 }
 if (activeModes.Contains("Modernize")) 
 {

@@ -722,4 +722,388 @@ public class RegressionTests
                 $"File {path} must contain the namespace");
         }
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 11. MsToolAugmentEngine — augmented replacements for buggy MS tools
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private MsToolAugmentEngine CreateAugmentEngine()
+        => new MsToolAugmentEngine(_workspaceManager);
+
+    // ── EncapsulateFieldSafe ──────────────────────────────────────────────────
+
+    [Test]
+    public async Task EncapsulateFieldSafe_BackingFieldUsesUnderscoreCamelCase()
+    {
+        // Bug: standard encapsulate_field generates "private int SuccessCount;"
+        // then "public int SuccessCount { get { return SuccessCount; } }" — self-reference!
+        // Our version must rename the backing field to _successCount.
+        SetSource("""
+            public class Counter
+            {
+                public int SuccessCount;
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "SuccessCount");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(result.UpdatedContent, Does.Contain("_successCount"),
+            "Backing field must be renamed to _successCount");
+        Assert.That(result.UpdatedContent, Does.Not.Contain("private int SuccessCount"),
+            "Original field name must not remain as the private backing field");
+    }
+
+    [Test]
+    public async Task EncapsulateFieldSafe_PropertyNameIsPascalCase()
+    {
+        SetSource("""
+            public class Counter
+            {
+                public int successCount;
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "successCount");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(result.UpdatedContent, Does.Contain("public int SuccessCount"),
+            "Property must be PascalCase");
+    }
+
+    [Test]
+    public async Task EncapsulateFieldSafe_PropertyGetterReferencesBackingField_NotItself()
+    {
+        // Core regression: property body must reference _fieldName, not FieldName
+        SetSource("""
+            public class Widget
+            {
+                public string Label;
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "Label");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        // The property getter must reference _label, not Label
+        Assert.That(result.UpdatedContent, Does.Contain("_label"),
+            "Property body must reference _label (backing field)");
+        // Ensure no self-referential: "return Label" would be the bug
+        Assert.That(result.UpdatedContent, Does.Not.Contain("get { return Label; }").And.Not.Contain("get => Label;"),
+            "Property must NOT be self-referential (that's the MS bug we're fixing)");
+    }
+
+    [Test]
+    public async Task EncapsulateFieldSafe_ExistingUsagesRewritten_ToNewFieldName()
+    {
+        // All references to the field in method bodies must also be updated to _fieldName
+        SetSource("""
+            public class Counter
+            {
+                public int Total;
+
+                public void Increment() { Total++; }
+                public int Get() => Total;
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "Total");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        // Method bodies must use _total now
+        Assert.That(result.UpdatedContent, Does.Contain("_total"),
+            "Usages in method bodies must reference the renamed backing field _total");
+    }
+
+    // ── AnalyzeSwitchForPatternConversion ─────────────────────────────────────
+
+    [Test]
+    public async Task AnalyzeSwitchForPatternConversion_SingleAssignPerCase_IsSafe()
+    {
+        // A switch where every case assigns exactly one variable → safe to convert
+        SetSource("""
+            public class Converter
+            {
+                public double Convert(string unit, double val)
+                {
+                    double factor;
+                    switch (unit)
+                    {
+                        case "g":  factor = 1.0; break;
+                        case "kg": factor = 1000.0; break;
+                        default:   factor = 0.0; break;
+                    }
+                    return val * factor;
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.AnalyzeSwitchForPatternConversionAsync("Test.cs", "switch (unit)");
+
+        Assert.That(result.IsSafeToConvert, Is.True,
+            "Single-assignment switch should be safe to convert");
+        Assert.That(result.BlockingReason, Is.Null.Or.Empty);
+    }
+
+    [Test]
+    public async Task AnalyzeSwitchForPatternConversion_MultiAssignPerCase_IsUnsafe()
+    {
+        // The MS bug: multi-assign per case causes silent data loss
+        SetSource("""
+            public class Converter
+            {
+                public void Convert(string unit, double raw)
+                {
+                    double totalOz, totalGrams;
+                    switch (unit)
+                    {
+                        case "g":
+                            totalOz = raw / 28.3495;
+                            totalGrams = raw;
+                            break;
+                        default:
+                            totalOz = 0; totalGrams = 0; break;
+                    }
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.AnalyzeSwitchForPatternConversionAsync("Test.cs", "switch (unit)");
+
+        Assert.That(result.IsSafeToConvert, Is.False,
+            "Multi-assignment switch must be flagged as unsafe");
+        Assert.That(result.BlockingReason, Is.Not.Null.And.Not.Empty,
+            "Must provide a blocking reason explaining the problem");
+    }
+
+    [Test]
+    public async Task AnalyzeSwitchForPatternConversion_ReturnsPerCase_IsSafe()
+    {
+        // Return-per-case is a valid pattern expression target
+        SetSource("""
+            public class Mapper
+            {
+                public string Map(int code)
+                {
+                    switch (code)
+                    {
+                        case 1: return "one";
+                        case 2: return "two";
+                        default: return "other";
+                    }
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.AnalyzeSwitchForPatternConversionAsync("Test.cs", "switch (code)");
+
+        Assert.That(result.IsSafeToConvert, Is.True,
+            "All-return switch should be safe to convert to switch expression");
+    }
+
+    // ── ConvertSwitchToPatternSafe ────────────────────────────────────────────
+
+    [Test]
+    public async Task ConvertSwitchToPatternSafe_MultiAssign_RejectsWithError()
+    {
+        // Critical: must NOT silently drop assignments (the MS bug)
+        SetSource("""
+            public class Converter
+            {
+                public void Convert(string unit, double raw)
+                {
+                    double totalOz = 0, totalGrams = 0;
+                    switch (unit)
+                    {
+                        case "g":
+                            totalOz = raw / 28.3;
+                            totalGrams = raw;
+                            break;
+                        default:
+                            totalOz = raw; totalGrams = raw * 28.3; break;
+                    }
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (unit)");
+
+        Assert.That(result.Success, Is.False,
+            "Must REJECT multi-assign switch — not silently corrupt it");
+        Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
+            "Must explain WHY conversion was rejected");
+    }
+
+    [Test]
+    public async Task ConvertSwitchToPatternSafe_SingleAssign_ConvertsCorrectly()
+    {
+        SetSource("""
+            public class Converter
+            {
+                public double GetFactor(string unit)
+                {
+                    double factor;
+                    switch (unit)
+                    {
+                        case "g":  factor = 1.0; break;
+                        case "kg": factor = 1000.0; break;
+                        default:   factor = 0.0; break;
+                    }
+                    return factor;
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (unit)");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(result.UpdatedContent, Does.Contain("switch"),
+            "Result must contain a switch expression");
+        Assert.That(result.UpdatedContent, Does.Contain("1.0"),
+            "Arms must preserve values");
+        // Must not still be a statement switch
+        Assert.That(result.UpdatedContent, Does.Not.Contain("break;"),
+            "Break statements must be gone in switch expression form");
+    }
+
+    // ── ConvertStringFormatToInterpolatedSmart ────────────────────────────────
+
+    [Test]
+    public async Task ConvertStringFormatToInterpolatedSmart_ConstFormatString_Converts()
+    {
+        // Standard tool fails on named constants — ours resolves via semantic model
+        SetSource("""
+            public class CacheService
+            {
+                private const string CacheKeyFmt = "user:{0}:profile";
+
+                public string GetKey(string userId)
+                {
+                    return string.Format(CacheKeyFmt, userId);
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.ConvertStringFormatToInterpolatedSmartAsync(
+            "Test.cs", "string.Format(CacheKeyFmt");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(result.UpdatedContent, Does.Contain("$\""),
+            "Result must be an interpolated string");
+        Assert.That(result.UpdatedContent, Does.Contain("userId"),
+            "Interpolated string must include the argument");
+    }
+
+    [Test]
+    public async Task ConvertStringFormatToInterpolatedSmart_LiteralFormatString_Converts()
+    {
+        // Also works on plain literals (same as standard tool, just our path)
+        SetSource("""
+            public class Logger
+            {
+                public string Format(string name, int count)
+                {
+                    return string.Format("Hello {0}, you have {1} items", name, count);
+                }
+            }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.ConvertStringFormatToInterpolatedSmartAsync(
+            "Test.cs", "string.Format(\"Hello");
+
+        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(result.UpdatedContent, Does.Contain("$\""),
+            "Result must be an interpolated string");
+        Assert.That(result.UpdatedContent, Does.Contain("name").And.Contain("count"),
+            "Both arguments must appear in interpolated string");
+    }
+
+    // ── SortAndDeduplicateUsings ──────────────────────────────────────────────
+
+    [Test]
+    public async Task SortAndDeduplicateUsings_DuplicatesAreRemoved()
+    {
+        // Standard sort_usings does NOT remove duplicates — ours does
+        SetSource("""
+            using System.Collections.Generic;
+            using System.Linq;
+            using System.Collections.Generic;
+            using System;
+            public class Foo { }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
+
+        Assert.That(result.RemovedDuplicates, Is.GreaterThan(0),
+            "Must report removed duplicate count");
+        Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty);
+
+        // Count occurrences of the duplicate using
+        var count = 0;
+        var idx = 0;
+        while ((idx = result.UpdatedContent!.IndexOf("System.Collections.Generic", idx, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            idx += "System.Collections.Generic".Length;
+        }
+        Assert.That(count, Is.EqualTo(1),
+            "System.Collections.Generic should appear exactly once after deduplication");
+    }
+
+    [Test]
+    public async Task SortAndDeduplicateUsings_SystemUsingsFirst()
+    {
+        // System.* usings must come before non-system usings after sort
+        SetSource("""
+            using Newtonsoft.Json;
+            using System.Collections.Generic;
+            using System;
+            using MyApp.Services;
+            public class Foo { }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
+
+        Assert.That(result.UpdatedContent, Is.Not.Null);
+        var systemIdx = result.UpdatedContent!.IndexOf("using System", StringComparison.Ordinal);
+        var newtonsoftIdx = result.UpdatedContent.IndexOf("using Newtonsoft", StringComparison.Ordinal);
+        var myAppIdx = result.UpdatedContent.IndexOf("using MyApp", StringComparison.Ordinal);
+
+        Assert.That(systemIdx, Is.LessThan(newtonsoftIdx),
+            "System usings must come before third-party usings");
+        Assert.That(systemIdx, Is.LessThan(myAppIdx),
+            "System usings must come before project usings");
+    }
+
+    [Test]
+    public async Task SortAndDeduplicateUsings_NoDuplicates_OriginalCountMatchesResult()
+    {
+        SetSource("""
+            using System;
+            using System.Collections.Generic;
+            using System.Linq;
+            public class Foo { }
+            """);
+
+        var engine = CreateAugmentEngine();
+        var result = await engine.SortAndDeduplicateUsingsAsync("Test.cs");
+
+        Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
+            "No duplicates → RemovedDuplicates must be 0");
+        Assert.That(result.OriginalCount, Is.EqualTo(3));
+    }
 }
+

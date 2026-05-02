@@ -75,6 +75,7 @@ public class DependencyInjectionTests
         services.AddSingleton<SymbolNavigationEngine>();
         services.AddSingleton<AntiPatternEngine>();
         services.AddSingleton<DiscoveryEngine>();
+        services.AddSingleton<MsToolAugmentEngine>();
 
         // 3. Register all tool classes
         services.AddSingleton<SentinelWorkspaceTools>();
@@ -83,6 +84,7 @@ public class DependencyInjectionTests
         services.AddSingleton<SentinelModernizationTools>();
         services.AddSingleton<SentinelQualityTools>();
         services.AddSingleton<SentinelGenerationTools>();
+        services.AddSingleton<SentinelAugmentTools>();
 
         _serviceProvider = services.BuildServiceProvider();
     }
