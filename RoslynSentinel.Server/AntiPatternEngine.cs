@@ -91,7 +91,10 @@ public class AntiPatternEngine
             var path = document.FilePath ?? document.Name;
 
             if (activePatterns.Contains("BlockingTaskWait"))
-                findings.AddRange(DetectBlockingTaskWait(root, path));
+            {
+                var model = await document.GetSemanticModelAsync(ct);
+                findings.AddRange(DetectBlockingTaskWait(root, path, model));
+            }
 
             if (activePatterns.Contains("AsyncVoidMethod"))
                 findings.AddRange(DetectAsyncVoidMethod(root, path));
@@ -117,9 +120,9 @@ public class AntiPatternEngine
 
     // ── BlockingTaskWait ──────────────────────────────────────────────────────
 
-    private static IEnumerable<AntiPatternFinding> DetectBlockingTaskWait(SyntaxNode root, string filePath)
+    private static IEnumerable<AntiPatternFinding> DetectBlockingTaskWait(SyntaxNode root, string filePath, SemanticModel? model = null)
     {
-        // .Result and .Wait() — flag all; false positives are rare for Task consumers
+        // .Result and .Wait() — use semantic model to verify Task/ValueTask type when available
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
             var name = ma.Name.Identifier.Text;
@@ -128,6 +131,24 @@ public class AntiPatternEngine
             // Skip if parent is an invocation whose callee has 'Result' as a method — e.g. IActionResult
             if (name == "Result" && ma.Parent is InvocationExpressionSyntax)
                 continue;
+
+            // Skip if .Result is on the left side of an assignment (property setter, not Task.Result read)
+            // e.g. context.Result = new UnauthorizedResult()
+            if (name == "Result" && ma.Parent is AssignmentExpressionSyntax assign && assign.Left == ma)
+                continue;
+
+            // Use semantic model to verify the expression is a Task/ValueTask type
+            if (name == "Result" && model != null)
+            {
+                var exprType = model.GetTypeInfo(ma.Expression).Type;
+                if (exprType != null)
+                {
+                    var fullName = exprType.OriginalDefinition.ToDisplayString();
+                    var isTask = fullName.StartsWith("System.Threading.Tasks.Task") ||
+                                 fullName.StartsWith("System.Threading.Tasks.ValueTask");
+                    if (!isTask) continue;
+                }
+            }
 
             var line = ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(ma.ToString());

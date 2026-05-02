@@ -19,7 +19,7 @@ public class PerformanceEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return new List<PerformanceIssueReport>();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return new List<PerformanceIssueReport>();

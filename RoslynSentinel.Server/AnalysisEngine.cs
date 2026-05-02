@@ -841,7 +841,8 @@ public class AnalysisEngine
             if (compilation == null) continue;
 
             var interfaces = compilation.GlobalNamespace.GetNamespaceMembers()
-                .SelectMany(n => n.GetTypeMembers()).Where(t => t.TypeKind == TypeKind.Interface);
+                .SelectMany(n => n.GetTypeMembers()).Where(t => t.TypeKind == TypeKind.Interface
+                    && t.DeclaringSyntaxReferences.Length > 0);
 
             foreach (var @interface in interfaces)
             {

@@ -175,7 +175,7 @@ public class TestingEngine
 
         foreach (var param in interfaceParams)
         {
-            var typeName = param.Type!.ToString();
+            var typeName = param.Type!.ToString().TrimEnd('?');
             sb.AppendLine($"        private Mock<{typeName}> {GetMockFieldName(typeName)};");
         }
         sb.AppendLine($"        private {className} _sut;");
@@ -185,10 +185,10 @@ public class TestingEngine
         sb.AppendLine("        {");
         foreach (var param in interfaceParams)
         {
-            var typeName = param.Type!.ToString();
+            var typeName = param.Type!.ToString().TrimEnd('?');
             sb.AppendLine($"            {GetMockFieldName(typeName)} = new Mock<{typeName}>();");
         }
-        var mockArgs = string.Join(", ", interfaceParams.Select(p => $"{GetMockFieldName(p.Type!.ToString())}.Object"));
+        var mockArgs = string.Join(", ", interfaceParams.Select(p => $"{GetMockFieldName(p.Type!.ToString().TrimEnd('?'))}.Object"));
         sb.AppendLine($"            _sut = new {className}({mockArgs});");
         sb.AppendLine("        }");
         sb.AppendLine();

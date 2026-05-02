@@ -112,7 +112,15 @@ public class SymbolNavigationEngine
         if (document == null) return null;
 
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+        int pos;
+        try
+        {
+            pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;
@@ -873,6 +881,21 @@ public class SymbolNavigationEngine
                 });
             if (decl != null)
                 symbol = model.GetDeclaredSymbol(decl, ct);
+        }
+
+        if (symbol == null)
+        {
+            // Fallback: try to find as a named type (e.g., user passed an interface name, not a member name)
+            foreach (var project in solution.Projects)
+            {
+                var compilation = await project.GetCompilationAsync(ct);
+                if (compilation == null) continue;
+                symbol = compilation
+                    .GetSymbolsWithName(symbolName, SymbolFilter.Type, ct)
+                    .OfType<INamedTypeSymbol>()
+                    .FirstOrDefault();
+                if (symbol != null) break;
+            }
         }
 
         if (symbol == null) return new List<ImplementationInfo>();
