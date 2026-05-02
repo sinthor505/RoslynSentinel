@@ -125,6 +125,12 @@ public class SymbolNavigationEngine
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;
 
+        // FindSymbolAtPositionAsync needs the cursor on an identifier token.
+        // Use ContextHelper.AdvanceToLastIdentifier to skip modifier keywords like 'public'.
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root != null)
+            pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
+
         var symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, ct);
         if (symbol == null) return null;
 

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Server;
@@ -86,6 +87,30 @@ public static class ContextHelper
         string fullSource, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
         => FindSnippetPosition(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
+
+    /// <summary>
+    /// After <see cref="FindSnippetPosition"/> returns a position, that position may land on a
+    /// modifier keyword (e.g., "public") rather than the declared identifier.
+    /// This helper scans the snippet span for identifier tokens and returns the position of the
+    /// <em>last</em> one (the declared name, not the return type).
+    /// Required before calling <c>SymbolFinder.FindSymbolAtPositionAsync</c>, which returns null
+    /// when the cursor is on a non-identifier token.
+    /// </summary>
+    public static int AdvanceToLastIdentifier(SyntaxNode root, int snippetStart, int snippetLength)
+    {
+        var startToken = root.FindToken(snippetStart);
+        if (startToken.IsKind(SyntaxKind.IdentifierToken))
+            return snippetStart;
+
+        var snippetEnd = snippetStart + snippetLength;
+        var ident = root.DescendantTokens()
+            .Where(t => t.SpanStart >= snippetStart && t.SpanStart < snippetEnd &&
+                        t.IsKind(SyntaxKind.IdentifierToken))
+            .Select(t => (SyntaxToken?)t)
+            .LastOrDefault();
+
+        return ident.HasValue ? ident.Value.SpanStart : snippetStart;
+    }
 
     /// <summary>
     /// Finds the SyntaxNode at the position identified by contextSnippet.

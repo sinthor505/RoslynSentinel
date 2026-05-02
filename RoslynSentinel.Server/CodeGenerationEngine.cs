@@ -405,22 +405,45 @@ public class CodeGenerationEngine
         if (document == null) throw new Exception($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception($"Class '{className}' not found.");
+
+        // Support both class and record declarations
+        MemberDeclarationSyntax? typeNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className) as MemberDeclarationSyntax
+            ?? root?.DescendantNodes().OfType<RecordDeclarationSyntax>()
+                   .FirstOrDefault(r => r.Identifier.Text == className);
+
+        if (typeNode == null) throw new Exception($"Class or record '{className}' not found in '{filePath}'.");
 
         var ns = root?.DescendantNodes()
             .OfType<BaseNamespaceDeclarationSyntax>()
             .FirstOrDefault()?.Name.ToString() ?? "";
 
-        var properties = classNode.Members
-            .OfType<PropertyDeclarationSyntax>()
+        // Collect properties: explicit body properties + primary constructor parameters (records)
+        var properties = new List<(string Name, string Type)>();
+
+        // Primary constructor parameters (records) — become positional init properties
+        if (typeNode is RecordDeclarationSyntax recordNode && recordNode.ParameterList != null)
+        {
+            foreach (var param in recordNode.ParameterList.Parameters)
+            {
+                if (param.Type != null && param.Identifier.Text.Length > 0)
+                    properties.Add((param.Identifier.Text, param.Type.ToString()));
+            }
+        }
+
+        // Explicit body properties (class or record with property bodies)
+        var bodyProps = typeNode.DescendantNodes().OfType<PropertyDeclarationSyntax>()
             .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
                 && p.AccessorList?.Accessors.Any(a =>
                     a.IsKind(SyntaxKind.SetAccessorDeclaration) ||
                     a.IsKind(SyntaxKind.InitAccessorDeclaration)) == true)
-            .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()))
-            .ToList();
+            .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()));
+        // Avoid duplicates from primary constructor params already added
+        foreach (var bp in bodyProps)
+        {
+            if (!properties.Any(p => p.Name == bp.Name))
+                properties.Add(bp);
+        }
 
         var builderClassName = className + "Builder";
         var sb = new System.Text.StringBuilder();

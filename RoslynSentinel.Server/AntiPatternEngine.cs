@@ -137,8 +137,10 @@ public class AntiPatternEngine
             if (name == "Result" && ma.Parent is AssignmentExpressionSyntax assign && assign.Left == ma)
                 continue;
 
-            // Use semantic model to verify the expression is a Task/ValueTask type
-            if (name == "Result" && model != null)
+            // Use semantic model to verify the expression is a Task/ValueTask type.
+            // Applies to both "Result" and "Wait" to prevent false positives on enum values
+            // like BoundedChannelFullMode.Wait or IActionResult assignments.
+            if (model != null)
             {
                 var exprType = model.GetTypeInfo(ma.Expression).Type;
                 if (exprType != null)
