@@ -132,6 +132,15 @@ if (activeModes.Contains("Generation"))
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
+// --- Pre-Warm MSBuildLocator (prevents 8s delay on first tools/list call) ---
+// MSBuildLocator.RegisterDefaults() in PersistentWorkspaceManager takes ~5-8s.
+// By forcing construction here (at startup), tools/list responds instantly.
+logger.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
+var warmupStart = System.Diagnostics.Stopwatch.StartNew();
+_ = host.Services.GetRequiredService<PersistentWorkspaceManager>();
+warmupStart.Stop();
+logger.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+
 // --- Auto-Load Solution if Provided ---
 if (!string.IsNullOrEmpty(solutionPath))
 {
