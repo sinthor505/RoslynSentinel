@@ -2,7 +2,7 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
-## 🚀 226 MCP Tools across 55 Specialized Engines
+## 🚀 231 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.
 
@@ -81,6 +81,15 @@ Roslyn Sentinel is built on a modular engine architecture, providing a vast libr
 *   **`ApiIntegrationEngine`**: `add_validation_to_poco` — add `[Required]`/`[Range]` annotations to plain objects.
 *   **`AsyncOptimizationEngine`**: Generate async method overloads.
 
+### 🔧 MS Standard Tool Augmentations — 5 tools (use these instead of the built-in equivalents)
+*   **`EncapsulateFieldSafe`**: Wraps a field in a property with a correctly-named `_camelCase` backing field. The built-in `encapsulate_field` generates self-referential code (`Field { get { return Field; } }` with same name).
+*   **`AnalyzeSwitchForPatternConversion`**: Pre-flight check — inspects a `switch` statement and reports whether pattern matching conversion is safe. Detects multi-assignment cases the MS tool silently mishandles.
+*   **`ConvertSwitchToPatternSafe`**: Converts a `switch` statement to a `switch` expression. Rejects multi-assignment cases (returns error) rather than generating broken code.
+*   **`InterpolateStringSmart`**: Converts `string.Format(...)` to an interpolated string. Unlike the built-in, resolves **const string format arguments** via the semantic model (the built-in fails on named consts).
+*   **`SortDeduplicateUsings`**: Sorts AND deduplicates `using` directives in one pass. The built-in `sort_usings` does not remove duplicates.
+
+All 5 augmented tools support `lineBefore`/`lineAfter` disambiguation.
+
 ---
 
 ## 🤖 AI-First Tool Design
@@ -98,9 +107,21 @@ IntroduceField(filePath, contextSnippet: "var result = _service.Get(", "newField
 **Rules:**
 - If the snippet appears exactly once → position resolved, operation proceeds
 - If the snippet is not found → descriptive error returned
-- If the snippet matches multiple locations → error with count; provide a longer snippet
+- If the snippet matches multiple locations → provide `lineBefore` and/or `lineAfter` to disambiguate
 
-This pattern is used by: `introduce_field`, `introduce_parameter`, `introduce_variable`, `safe_delete_symbol`, `get_blast_radius`, `get_symbol_info`, `preview_rename_impact`, `upgrade_unbound_nameof`, `extract_constant`, `convert_expression_body` (optional disambiguation), `analyze_control_flow` (optional disambiguation), `analyze_data_flow` (optional disambiguation).
+**Disambiguation with surrounding-line context** (available on all contextSnippet tools):
+```
+// When "var x = 0;" appears in multiple methods:
+IntroduceField(filePath,
+    contextSnippet: "var x = 0;",
+    lineBefore: "public void Method1()",   // verbatim text from the line above
+    lineAfter:  "{")                        // verbatim text from the line below
+```
+- `lineBefore` / `lineAfter` are trimmed and matched with `Contains` — indentation differences are ignored
+- If still ambiguous after both hints, an error is returned explaining which matches remain
+- If no match passes the filter, an error names which contextSnippet + context was checked
+
+This pattern is used by all position-based tools: `introduce_field`, `introduce_parameter`, `introduce_variable`, `safe_delete_symbol`, `get_blast_radius`, `get_symbol_info`, `preview_rename_impact`, `upgrade_unbound_nameof`, `extract_constant`, `convert_expression_body`, `analyze_control_flow`, `analyze_data_flow`, and the 5 MS augmented tools (`encapsulate_field_safe`, `analyze_switch_for_pattern`, `convert_switch_to_pattern_safe`, `interpolate_string_smart`, `sort_deduplicate_usings`).
 
 For line-range tools (`extract_method`, `wrap_in_try_catch`, `wrap_in_using`), provide `startLineText`/`endLineText` — the exact physical text of the first and last lines — as a staleness guard.
 
@@ -138,7 +159,7 @@ Roslyn Sentinel is meant for a **solution-enabled system**, not for generic glob
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by an exhaustive suite of **397 functional tests** (zero failures), ensuring that every toggle and every transformation is verifiably correct.
+Roslyn Sentinel is backed by an exhaustive suite of **466 functional tests** (zero failures), ensuring that every toggle and every transformation is verifiably correct.
 
 ```bash
 dotnet test
