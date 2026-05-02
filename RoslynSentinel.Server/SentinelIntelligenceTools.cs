@@ -73,9 +73,9 @@ public class SentinelIntelligenceTools
         => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
 
     [McpServerTool]
-    [Description("Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Returns all call sites and affected projects.")]
-    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet) 
-        => await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet);
+    [Description("Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns all call sites and affected projects.")]
+    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null) 
+        => await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Finds all methods in the solution that return a specific type.")]
@@ -181,9 +181,9 @@ public async Task<List<string>> FindStructuralSmells(
         => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath);
 
     [McpServerTool]
-    [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration.")]
-    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, string contextSnippet)
-        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet);
+    [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
+    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
+        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
@@ -299,9 +299,9 @@ public async Task<List<string>> FindStructuralSmells(
         => await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
 
     [McpServerTool]
-    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate.")]
-    public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null)
-        => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet);
+    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
+    public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("""
@@ -310,10 +310,11 @@ public async Task<List<string>> FindStructuralSmells(
         an optional contextSnippet to disambiguate overloads.
         symbolName: the method/property/field name to search for.
         contextSnippet: optional verbatim substring of the declaration (e.g. the method signature line).
+        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns CallerMethod, CallerType, FilePath, Line, and CodeSnippet for each call site.
         """)]
-    public async Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null)
-        => await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet);
+    public async Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("""
@@ -323,8 +324,9 @@ public async Task<List<string>> FindStructuralSmells(
         with an optional contextSnippet.
         symbolName: the interface member or virtual method name.
         contextSnippet: optional verbatim substring of the declaration to disambiguate overloads.
+        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns TypeName, FilePath, Line, and Kind for each implementing symbol.
         """)]
-    public async Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null)
-        => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet);
+    public async Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 }

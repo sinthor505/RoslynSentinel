@@ -633,7 +633,7 @@ public class RefactoringEngine
         return new Dictionary<string, string> { { filePath, origContent }, { ifacePath, ifaceContent } };
     }
 
-    public async Task<RenameSymbolResult> RenameSymbolAsync(string filePath, string symbolName, string contextSnippet, string newName, CancellationToken ct = default)
+    public async Task<RenameSymbolResult> RenameSymbolAsync(string filePath, string symbolName, string contextSnippet, string newName, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         static RenameSymbolResult Err(string msg, string n) =>
             new("", n, new Dictionary<string, string>(), new List<RenameFileChange>(), msg);
@@ -648,14 +648,19 @@ public class RefactoringEngine
         var text       = await document.GetTextAsync(ct);
         var fullSource = text.ToString();
 
-        // Locate contextSnippet — must match exactly once
+        // Locate contextSnippet — must match exactly once, or use lineBefore/lineAfter to disambiguate
         int firstIdx = fullSource.IndexOf(contextSnippet, StringComparison.Ordinal);
         if (firstIdx < 0)
             return Err($"Context snippet not found in file. Verify the snippet is copied verbatim from the source: \"{contextSnippet}\"", newName);
 
         int secondIdx = fullSource.IndexOf(contextSnippet, firstIdx + 1, StringComparison.Ordinal);
         if (secondIdx >= 0)
-            return Err($"Context snippet matches multiple locations in the file. Use a longer or more unique snippet to pin the symbol.", newName);
+        {
+            if (lineBefore == null && lineAfter == null)
+                return Err($"Context snippet matches multiple locations in the file. Use a longer or more unique snippet, or provide lineBefore/lineAfter to pin the symbol.", newName);
+            try { firstIdx = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
+            catch (InvalidOperationException ex) { return Err(ex.Message, newName); }
+        }
 
         // Find symbolName as a word-boundary identifier within the matched snippet
         int symOffset = FindIdentifierInSnippet(contextSnippet, symbolName);
@@ -865,7 +870,7 @@ public class RefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, CancellationToken ct = default)
+    public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("SafeDelete")) return new Dictionary<string, string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -874,7 +879,7 @@ public class RefactoringEngine
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
         // Walk up ancestors to find the nearest declaration symbol (FindNode may return a child token/identifier)
         var symbol = node.AncestorsAndSelf()
@@ -913,7 +918,7 @@ public class RefactoringEngine
         return new Dictionary<string, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
     }
 
-    public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, CancellationToken ct = default)
+    public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ConvertExpressionBody")) return "";
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -927,7 +932,7 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
             target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
         }
@@ -1004,7 +1009,7 @@ public class RefactoringEngine
         return (await formatted.GetTextAsync(ct)).ToString();
     }
 
-    public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = "private", CancellationToken ct = default)
+    public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractConstant")) return "";
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1014,8 +1019,7 @@ public class RefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
-        
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
         var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault()
             ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
@@ -1072,7 +1076,7 @@ public class RefactoringEngine
         return trackedRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, CancellationToken ct = default)
+    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1085,7 +1089,7 @@ public class RefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
             method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         }
@@ -1116,7 +1120,7 @@ public class RefactoringEngine
         );
     }
 
-    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(string filePath, string methodName, string? contextSnippet = null, CancellationToken ct = default)
+    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1129,7 +1133,7 @@ public class RefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
             method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         }

@@ -83,13 +83,17 @@ public class SentinelAugmentTools
           filePath       - Absolute path to the .cs file.
           contextSnippet - A verbatim substring from the switch keyword or governing
                            expression line, e.g. "switch (unit)" or "switch (rawUnit)".
+          lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                           disambiguate when the snippet matches multiple locations.
         """)]
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversion(
         string filePath,
-        string contextSnippet)
+        string contextSnippet,
+        string? lineBefore = null,
+        string? lineAfter = null)
     {
         _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
-        return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet);
+        return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
     // ── 3. ConvertSwitchToPatternSafe ─────────────────────────────────────────
@@ -125,16 +129,20 @@ public class SentinelAugmentTools
           filePath       - Absolute path to the .cs file.
           contextSnippet - A verbatim substring from the switch keyword or governing
                            expression, e.g. "switch (unit)".
+          lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                           disambiguate when the snippet matches multiple locations.
 
         Returns: UpdatedContent on success, or Error describing exactly why conversion
         was rejected.
         """)]
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafe(
         string filePath,
-        string contextSnippet)
+        string contextSnippet,
+        string? lineBefore = null,
+        string? lineAfter = null)
     {
         _logger.LogInformation("ConvertSwitchToPatternSafe in {File}", filePath);
-        return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet);
+        return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
     // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
@@ -163,16 +171,20 @@ public class SentinelAugmentTools
           filePath       - Absolute path to the .cs file.
           contextSnippet - A verbatim substring from the string.Format call, e.g.
                            "string.Format(CacheKeyFmt" or "Format(MyErrorTemplate,".
+          lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                           disambiguate when the snippet matches multiple locations.
 
         Returns: UpdatedContent with the interpolated string, or Error if the format
         string could not be resolved to a compile-time constant.
         """)]
     public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmart(
         string filePath,
-        string contextSnippet)
+        string contextSnippet,
+        string? lineBefore = null,
+        string? lineAfter = null)
     {
         _logger.LogInformation("ConvertStringFormatToInterpolatedSmart in {File}", filePath);
-        return await _engine.ConvertStringFormatToInterpolatedSmartAsync(filePath, contextSnippet);
+        return await _engine.ConvertStringFormatToInterpolatedSmartAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────

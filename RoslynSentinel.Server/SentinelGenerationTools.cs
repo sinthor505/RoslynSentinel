@@ -108,11 +108,12 @@ public class SentinelGenerationTools
                    "ToAutoProperty" (full property → auto-prop, moving backing field initializer to property).
         propertyName: the property to convert.
         contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
+        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns the updated file content.
         """)]
     public async Task<string> ConvertPropertySafe(
-        string filePath, string propertyName, string direction, string? contextSnippet = null)
-        => await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet);
+        string filePath, string propertyName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("""
@@ -121,8 +122,9 @@ public class SentinelGenerationTools
         via the semantic model, so it works even when the format string is a named const rather than a
         literal. Handles {0:format} format specifiers correctly.
         contextSnippet: verbatim substring identifying the string.Format call to convert (required).
+        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns the updated file content.
         """)]
-    public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet)
-        => await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet);
+    public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
+        => await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
 }

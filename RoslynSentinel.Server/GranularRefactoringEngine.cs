@@ -96,7 +96,7 @@ public class GranularRefactoringEngine
         return root?.ToFullString() ?? "";
     }
 
-    public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -106,7 +106,7 @@ public class GranularRefactoringEngine
         if (root == null) return "";
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();
@@ -148,7 +148,7 @@ public class GranularRefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -159,14 +159,13 @@ public class GranularRefactoringEngine
         if (root == null) return "";
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null) return root.ToFullString();
-
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         TypeSyntax paramType;
         if (semanticModel != null)
@@ -194,7 +193,7 @@ public class GranularRefactoringEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
-    public async Task<string> IntroduceVariableAsync(string filePath, string contextSnippet, string newVariableName, CancellationToken cancellationToken = default)
+    public async Task<string> IntroduceVariableAsync(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -204,7 +203,7 @@ public class GranularRefactoringEngine
         if (root == null) return "";
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
+        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();
@@ -212,7 +211,6 @@ public class GranularRefactoringEngine
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null) return root.ToFullString();
         if (containingStatement.Parent is not BlockSyntax block) return root.ToFullString();
-
         var varDecl = SyntaxFactory.LocalDeclarationStatement(
             SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
                 .WithVariables(SyntaxFactory.SingletonSeparatedList(

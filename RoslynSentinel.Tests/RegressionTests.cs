@@ -1,4 +1,5 @@
 #pragma warning disable CS8618
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Server;
 
@@ -20,6 +21,7 @@ namespace RoslynSentinel.Tests;
 ///  7. ImplementInterfaceSafe — partial implementation, property-only interfaces, no 'override'
 ///  8. FormatDocumentPreview — hunk content structure
 ///  9. DiagnosticEngine — grouping behaviour
+///  10. ContextHelper — snippet disambiguation with lineBefore/lineAfter
 /// </summary>
 [TestFixture]
 public class RegressionTests
@@ -1104,6 +1106,64 @@ public class RegressionTests
         Assert.That(result.RemovedDuplicates, Is.EqualTo(0),
             "No duplicates → RemovedDuplicates must be 0");
         Assert.That(result.OriginalCount, Is.EqualTo(3));
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 10. ContextHelper — snippet disambiguation with lineBefore/lineAfter
+// ══════════════════════════════════════════════════════════════════════════
+
+[TestFixture]
+public class ContextHelperDisambiguationTests
+{
+    private static SourceText Src(string code) => SourceText.From(code);
+
+    // ── single match — no hints required ─────────────────────────────────
+
+    [Test]
+    public void FindSnippetPosition_SingleMatch_ReturnsCorrectOffset()
+    {
+        var src = Src("int x = 1;\nint y = 2;");
+        var offset = ContextHelper.FindSnippetPosition(src, "int y");
+        Assert.That(offset, Is.EqualTo(11)); // after the first line + '\n'
+    }
+
+    // ── multiple matches, no hints → throws ──────────────────────────────
+
+    [Test]
+    public void FindSnippetPosition_MultipleMatches_NoHints_ThrowsAmbiguous()
+    {
+        var src = Src("int x = 1;\nint x = 2;");
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ContextHelper.FindSnippetPosition(src, "int x"));
+        Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase
+            .Or.Contain("2 matches").IgnoreCase);
+    }
+
+    // ── multiple matches, lineBefore disambiguates ────────────────────────
+
+    [Test]
+    public void FindSnippetPosition_MultipleMatches_LineBeforeDisambiguates()
+    {
+        var src = Src("// first block\nint x = 1;\n// second block\nint x = 2;");
+        // "int x" appears twice; lineBefore = "second block" selects the second
+        var offset = ContextHelper.FindSnippetPosition(src, "int x", lineBefore: "second block");
+        var linePos = src.Lines.GetLinePosition(offset);
+        Assert.That(linePos.Line, Is.EqualTo(3)); // 0-based line 3 = "int x = 2;"
+    }
+
+    // ── both hints match both occurrences → still ambiguous ──────────────
+
+    [Test]
+    public void FindSnippetPosition_MultipleMatches_BothHints_StillAmbiguous_Throws()
+    {
+        // lineBefore and lineAfter both appear identically near each occurrence
+        var src = Src("// same\nint x = 1;\n// end\n// same\nint x = 2;\n// end");
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => ContextHelper.FindSnippetPosition(src, "int x",
+                lineBefore: "same", lineAfter: "end"));
+        Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase
+            .Or.Contain("still ambiguous").IgnoreCase);
     }
 }
 

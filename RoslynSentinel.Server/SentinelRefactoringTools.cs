@@ -71,16 +71,25 @@ public class SentinelRefactoringTools
         return changes;
     }
 
+    private static string PreviewFileContent(string content)
+    {
+        var lines = content.Split('\n');
+        if (lines.Length <= 20) return content;
+        var head = lines.Take(10);
+        var tail = lines.TakeLast(10);
+        return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
+    }
+
     [McpServerTool]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
     public async Task<string> SyncTypeAndFilename(string filePath) 
         => await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
 
     [McpServerTool]
-    [Description("Safe deletes a symbol only if it has zero usages in the entire codebase. Provide contextSnippet: a verbatim substring from the symbol's declaration line. If autoStage is true, returns a ChangeId.")]
-    public async Task<object> SafeDeleteSymbol(string filePath, string contextSnippet, bool autoStage = true) 
+    [Description("Safe deletes a symbol only if it has zero usages in the entire codebase. Provide contextSnippet: a verbatim substring from the symbol's declaration line. Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. If autoStage is true, returns a ChangeId.")]
+    public async Task<object> SafeDeleteSymbol(string filePath, string contextSnippet, bool autoStage = true, string? lineBefore = null, string? lineAfter = null) 
     {
-        var changes = await _refactoringEngine.SafeDeleteSymbolAsync(filePath, contextSnippet);
+        var changes = await _refactoringEngine.SafeDeleteSymbolAsync(filePath, contextSnippet, lineBefore, lineAfter);
         if (autoStage) return _workspaceManager.StageChanges(changes, $"Safe delete symbol in '{Path.GetFileName(filePath)}'.");
         return changes;
     }
@@ -106,14 +115,14 @@ public class SentinelRefactoringTools
         => await _refactoringEngine.ExtractMethodAsync(filePath, startLine, startLineText, endLine, endLineText, newMethodName);
 
     [McpServerTool]
-    [Description("Introduces a new private readonly field from an expression. Provide contextSnippet: a verbatim substring from the expression (e.g., the expression text itself or the surrounding assignment). The expression type is inferred from semantics.")]
-    public async Task<string> IntroduceField(string filePath, string contextSnippet, string newFieldName) 
-        => await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newFieldName);
+    [Description("Introduces a new private readonly field from an expression. Provide contextSnippet: a verbatim substring from the expression (e.g., the expression text itself or the surrounding assignment). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. The expression type is inferred from semantics.")]
+    public async Task<string> IntroduceField(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null) 
+        => await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newFieldName, lineBefore, lineAfter);
 
     [McpServerTool]
-    [Description("Introduces a new method parameter from an expression. Provide contextSnippet: a verbatim substring uniquely identifying the expression. Updates the method signature (single-file only — call sites in other files not updated).")]
-    public async Task<string> IntroduceParameter(string filePath, string contextSnippet, string newParamName) 
-        => await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newParamName);
+    [Description("Introduces a new method parameter from an expression. Provide contextSnippet: a verbatim substring uniquely identifying the expression. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Updates the method signature (single-file only — call sites in other files not updated).")]
+    public async Task<string> IntroduceParameter(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null) 
+        => await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newParamName, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Inlines a private field by replacing all usages with its initializer value.")]
@@ -139,11 +148,12 @@ public class SentinelRefactoringTools
     [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
                  "Pass 'symbolName' (the exact identifier to rename) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). " +
                  "Example: symbolName=\"GetById\", contextSnippet=\"public async Task<Product?> GetById(\". " +
+                 "Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. " +
                  "Returns an error if the snippet matches zero or multiple locations. " +
                  "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
-    public async Task<object> RenameSymbol(string filePath, string symbolName, string contextSnippet, string newName, bool autoStage = true)
+    public async Task<object> RenameSymbol(string filePath, string symbolName, string contextSnippet, string newName, bool autoStage = true, string? lineBefore = null, string? lineAfter = null)
     {
-        var result = await _refactoringEngine.RenameSymbolAsync(filePath, symbolName, contextSnippet, newName);
+        var result = await _refactoringEngine.RenameSymbolAsync(filePath, symbolName, contextSnippet, newName, lineBefore, lineAfter);
         if (result.Error != null)
             return new { Error = result.Error };
         if (autoStage)
@@ -164,7 +174,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Moves a type to its own file. Returns a ChangeId for ApplyStagedChanges plus a ContentPreviews map showing what each affected file will contain after the move. Use autoStage=false to get the full raw file content dictionary instead.")]
+    [Description("Moves a type to its own file. Returns a ChangeId for ApplyStagedChanges plus a ContentPreviews map showing first 10 + last 10 lines of each affected file for structural confirmation. Use autoStage=false to get the full raw file content dictionary instead.")]
     public async Task<object> MoveTypeToFile(string filePath, string typeName, bool autoStage = true) 
     {
         var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName);
@@ -178,7 +188,7 @@ public class SentinelRefactoringTools
                 AffectedFiles = changes.Keys.ToList(),
                 ContentPreviews = changes.ToDictionary(
                     kvp => Path.GetFileName(kvp.Key),
-                    kvp => kvp.Value.Length > 1500 ? kvp.Value[..1500] + "\n// ... (truncated; use autoStage=false for full content)" : kvp.Value
+                    kvp => PreviewFileContent(kvp.Value)
                 )
             };
         }
@@ -211,9 +221,9 @@ public class SentinelRefactoringTools
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
     [McpServerTool]
-    [Description("Introduces a new local variable based on a selected expression and replaces usages. Provide contextSnippet: a verbatim substring uniquely identifying the expression to extract.")]
-    public async Task<string> IntroduceVariable(string filePath, string contextSnippet, string newVariableName) 
-        => await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newVariableName);
+    [Description("Introduces a new local variable based on a selected expression and replaces usages. Provide contextSnippet: a verbatim substring uniquely identifying the expression to extract. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
+    public async Task<string> IntroduceVariable(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null) 
+        => await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newVariableName, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Inlines a local temporary variable into all its usages within the scope.")]
@@ -260,13 +270,7 @@ public class SentinelRefactoringTools
             AffectedFiles = changes.Keys.Select(Path.GetFileName).ToList(),
             ContentPreviews = changes.ToDictionary(
                 kvp => Path.GetFileName(kvp.Key)!,
-                kvp =>
-                {
-                    var lines = kvp.Value.Split('\n');
-                    return lines.Length > 15
-                        ? string.Join("\n", lines.Take(15)) + "\n// ... (truncated)"
-                        : kvp.Value;
-                }
+                kvp => PreviewFileContent(kvp.Value)
             )
         };
     }
@@ -695,34 +699,38 @@ public class SentinelRefactoringTools
                  "direction: 'ToExpressionBody' or 'ToBlockBody'. " +
                  "memberName: the method/property name. " +
                  "contextSnippet: optional verbatim substring to disambiguate overloads. " +
+                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns the updated file content.")]
-    public async Task<string> ConvertExpressionBody(string filePath, string memberName, string direction, string? contextSnippet = null)
-        => await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet);
+    public async Task<string> ConvertExpressionBody(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Extracts a literal expression to a named constant in the containing type. " +
                  "contextSnippet: a verbatim substring containing or surrounding the literal (e.g., '= 42;' or '\"hello world\"'). " +
                  "constantName: the name for the new constant. " +
                  "visibility: 'private' (default), 'protected', 'internal', or 'public'. " +
+                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns the updated file content.")]
-    public async Task<string> ExtractConstant(string filePath, string contextSnippet, string constantName, string visibility = "private")
-        => await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility);
+    public async Task<string> ExtractConstant(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null)
+        => await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Analyzes control flow of a method: shows whether it always/sometimes/never returns, lists all return points, and identifies exit paths (throws, breaks, continues). " +
                  "methodName: the method to analyze. " +
                  "contextSnippet: optional snippet to disambiguate overloads. " +
+                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns: AlwaysReturns, SometimesReturns, ReturnStatements, ThrowStatements, HasInfiniteLoop.")]
-    public async Task<ControlFlowSummary> AnalyzeControlFlow(string filePath, string methodName, string? contextSnippet = null)
-        => await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, contextSnippet);
+    public async Task<ControlFlowSummary> AnalyzeControlFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Analyzes data flow of a method body: identifies variables read before assignment, variables that flow out, write-only variables (possible bugs), and captured closure variables. " +
                  "methodName: the method to analyze. " +
                  "contextSnippet: optional snippet to disambiguate overloads. " +
+                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns: ReadBeforeAssignment, WrittenInside, ReadInside, CapturedVariables, DataFlowWarnings.")]
-    public async Task<DataFlowSummary> AnalyzeDataFlow(string filePath, string methodName, string? contextSnippet = null)
-        => await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, contextSnippet);
+    public async Task<DataFlowSummary> AnalyzeDataFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("""

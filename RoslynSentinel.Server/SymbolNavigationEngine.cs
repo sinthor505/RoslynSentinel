@@ -104,7 +104,7 @@ public class SymbolNavigationEngine
         _logger = logger;
     }
 
-    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, CancellationToken ct = default)
+    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -112,7 +112,7 @@ public class SymbolNavigationEngine
         if (document == null) return null;
 
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
 
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;
@@ -753,6 +753,8 @@ public class SymbolNavigationEngine
         string filePath,
         string symbolName,
         string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -767,7 +769,7 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
         if (contextSnippet != null)
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, ct);
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
         }
         else
         {
@@ -842,6 +844,8 @@ public class SymbolNavigationEngine
         string filePath,
         string symbolName,
         string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -856,7 +860,7 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
         if (contextSnippet != null)
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, ct);
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
         }
         else
         {

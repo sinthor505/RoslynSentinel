@@ -172,7 +172,7 @@ public class MsToolAugmentEngine
     /// tool to avoid silent data loss.
     /// </summary>
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversionAsync(
-        string filePath, string contextSnippet, CancellationToken ct = default)
+        string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -187,7 +187,7 @@ public class MsToolAugmentEngine
         SwitchStatementSyntax? sw = null;
         try
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
             var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
             sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().FirstOrDefault();
         }
@@ -235,9 +235,9 @@ public class MsToolAugmentEngine
     /// where cases assign to multiple variables — preventing silent data loss.
     /// </summary>
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(
-        string filePath, string contextSnippet, CancellationToken ct = default)
+        string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, ct);
+        var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, ct);
         if (!analysis.IsSafeToConvert)
             return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.");
 
@@ -246,11 +246,9 @@ public class MsToolAugmentEngine
         var root = (await doc.GetSyntaxRootAsync(ct))!;
         var text = await doc.GetTextAsync(ct);
 
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet);
+        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
         var sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().First();
-
-        // Determine the single assigned variable (or detect return/throw patterns)
         string? targetVariable = null;
         bool isReturnSwitch = true;
 
@@ -356,7 +354,7 @@ public class MsToolAugmentEngine
     /// (e.g., <c>string.Format(MyConst, arg1, arg2)</c>).
     /// </summary>
     public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmartAsync(
-        string filePath, string contextSnippet, CancellationToken ct = default)
+        string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -369,7 +367,7 @@ public class MsToolAugmentEngine
 
         // Find the string.Format invocation
         int pos;
-        try { pos = ContextHelper.FindSnippetPosition(text, contextSnippet); }
+        try { pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
         catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))

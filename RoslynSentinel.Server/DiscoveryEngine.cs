@@ -517,7 +517,7 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        string filePath, string symbolName, string? contextSnippet = null, CancellationToken ct = default)
+        string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -527,7 +527,7 @@ public class DiscoveryEngine
         var sourceText = await document.GetTextAsync(ct);
         int position;
         if (contextSnippet != null)
-            position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet);
+            position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         else
         {
             // Find first occurrence of symbolName

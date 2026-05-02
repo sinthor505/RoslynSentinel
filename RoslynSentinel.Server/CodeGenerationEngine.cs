@@ -687,6 +687,8 @@ public class CodeGenerationEngine
         string propertyName,
         string direction,
         string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -700,8 +702,8 @@ public class CodeGenerationEngine
         PropertyDeclarationSyntax? propNode = null;
         if (contextSnippet != null)
         {
-            var srcText = (await document.GetTextAsync(ct)).ToString();
-            var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet);
+            var srcText = await document.GetTextAsync(ct);
+            var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet, lineBefore, lineAfter);
             propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf()
                 .OfType<PropertyDeclarationSyntax>()
@@ -848,6 +850,8 @@ public class CodeGenerationEngine
     public async Task<string> InterpolateStringAsync(
         string filePath,
         string contextSnippet,
+        string? lineBefore = null,
+        string? lineAfter = null,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -858,8 +862,8 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
 
-        var srcText = (await document.GetTextAsync(ct)).ToString();
-        var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet);
+        var srcText = await document.GetTextAsync(ct);
+        var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet, lineBefore, lineAfter);
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
             .AncestorsAndSelf()
