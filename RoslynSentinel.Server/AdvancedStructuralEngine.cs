@@ -112,19 +112,33 @@ public class AdvancedStructuralEngine
         if (document == null) return new Dictionary<string, string>();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        
+        // Search for the class anywhere in the tree (handles both nested and file-scope types)
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
 
         if (classNode != null)
         {
+            // Find members to move - be more flexible with matching
             var membersToMove = classNode.Members.Where(m => 
-                (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) ||
-                (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
+            {
+                if (m is MethodDeclarationSyntax meth)
+                    return memberNames.Contains(meth.Identifier.Text);
+                if (m is PropertyDeclarationSyntax prop)
+                    return memberNames.Contains(prop.Identifier.Text);
+                if (m is FieldDeclarationSyntax field)
+                    return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
+                return false;
+            }).ToList();
 
-            var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
-                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                .WithMembers(SyntaxFactory.List(membersToMove));
+            // Only create the new class if we found members to move
+            if (membersToMove.Count > 0)
+            {
+                var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                    .WithMembers(SyntaxFactory.List(membersToMove));
 
-            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClassNode.NormalizeWhitespace().ToFullString() } };
+                return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClassNode.NormalizeWhitespace().ToFullString() } };
+            }
         }
         return new Dictionary<string, string>();
     }
