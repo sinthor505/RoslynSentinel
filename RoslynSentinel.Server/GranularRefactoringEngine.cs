@@ -249,8 +249,11 @@ public class GranularRefactoringEngine
         var paramRef = SyntaxFactory.IdentifierName(newParamName).WithTriviaFrom(expression);
 
         var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingMethod });
-        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, paramRef);
-        var currentMethod = newRoot.GetCurrentNode(containingMethod)!;
+        var currentExpression = trackedRoot.GetCurrentNode(expression);
+        if (currentExpression == null) return root.ToFullString();
+        var newRoot = trackedRoot.ReplaceNode(currentExpression, paramRef);
+        var currentMethod = newRoot.GetCurrentNode(containingMethod);
+        if (currentMethod == null) return root.ToFullString();
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
         newRoot = newRoot.ReplaceNode(currentMethod, updatedMethod);
 
