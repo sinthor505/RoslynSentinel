@@ -922,7 +922,8 @@ public class RefactoringEngine
         if (refs.Any(r => r.Locations.Any()))
         {
             _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
-            return new Dictionary<string, string>();
+            // Return error message, not empty dict - symbol is used so deletion is unsafe
+            return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {refs.Sum(r => r.Locations.Count())} location(s)." } };
         }
         
         var member = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
