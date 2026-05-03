@@ -56,13 +56,13 @@ public static class ContextHelper
             {
                 if (lineIndex == 0) return false;
                 var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
-                if (!prevLine.Contains(lbTrimmed, StringComparison.Ordinal)) return false;
+                if (!MatchLine(prevLine, lbTrimmed)) return false;
             }
             if (laTrimmed != null)
             {
                 if (lineIndex >= sourceText.Lines.Count - 1) return false;
                 var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
-                if (!nextLine.Contains(laTrimmed, StringComparison.Ordinal)) return false;
+                if (!MatchLine(nextLine, laTrimmed)) return false;
             }
             return true;
         }).ToList();
@@ -87,6 +87,49 @@ public static class ContextHelper
         string fullSource, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
         => FindSnippetPosition(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
+
+    /// <summary>
+    /// Non-throwing variant of <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/>.
+    /// Returns <c>-1</c> and sets <paramref name="error"/> to the diagnostic message when the snippet
+    /// cannot be found or is ambiguous. Use this when the caller wants to fall back or surface the
+    /// error as a return value rather than propagate an exception.
+    /// </summary>
+    public static int TryFindSnippetPosition(
+        SourceText sourceText, string contextSnippet, out string? error,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        try
+        {
+            error = null;
+            return FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            error = ex.Message;
+            return -1;
+        }
+    }
+
+    /// <summary>String overload of <see cref="TryFindSnippetPosition(SourceText, string, out string?, string?, string?)"/>.</summary>
+    public static int TryFindSnippetPosition(
+        string fullSource, string contextSnippet, out string? error,
+        string? lineBefore = null, string? lineAfter = null)
+        => TryFindSnippetPosition(SourceText.From(fullSource), contextSnippet, out error, lineBefore, lineAfter);
+
+    /// <summary>
+    /// Checks if a source line contains the pattern. Falls back to a quote-normalized comparison
+    /// to handle AI-provided snippets where `\"` wasn't unescaped (e.g., from JSON context).
+    /// </summary>
+    private static bool MatchLine(string sourceLine, string pattern)
+    {
+        if (sourceLine.Contains(pattern, StringComparison.Ordinal)) return true;
+        // Normalize JSON escape sequences and retry
+        var normalized = pattern
+            .Replace("\\\"", "\"")
+            .Replace("\\'", "'")
+            .Replace("\\\\", "\\");
+        return normalized != pattern && sourceLine.Contains(normalized, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// After <see cref="FindSnippetPosition"/> returns a position, that position may land on a

@@ -323,21 +323,24 @@ public class AnalysisEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (root == null || classNode == null) throw new Exception($"Class '{className}' not found.");
 
-        // Gather field names (private fields, skipping backing fields for auto-props)
-        var fieldNames = classNode.Members.OfType<FieldDeclarationSyntax>()
-            .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text))
+        // Gather fields with their types (private fields, skipping backing fields for auto-props)
+        var fieldsWithTypes = classNode.Members.OfType<FieldDeclarationSyntax>()
+            .SelectMany(f => f.Declaration.Variables.Select(v =>
+                (Name: v.Identifier.Text, Type: f.Declaration.Type.ToString())))
             .ToList();
 
-        // If no explicit fields, fall back to auto-property names
-        if (fieldNames.Count == 0)
+        // If no explicit fields, fall back to auto-property names and types
+        if (fieldsWithTypes.Count == 0)
         {
-            fieldNames = classNode.Members.OfType<PropertyDeclarationSyntax>()
+            fieldsWithTypes = classNode.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(p => p.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
-                .Select(p => p.Identifier.Text)
+                .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()))
                 .ToList();
         }
 
-        if (fieldNames.Count == 0) throw new Exception($"Class '{className}' has no fields or properties to generate equality from.");
+        if (fieldsWithTypes.Count == 0) throw new Exception($"Class '{className}' has no fields or properties to generate equality from.");
+
+        var fieldNames = fieldsWithTypes.Select(f => f.Name).ToList();
 
         // Build: obj is ClassName other
         ExpressionSyntax body = SyntaxFactory.IsPatternExpression(
@@ -346,15 +349,25 @@ public class AnalysisEngine
                 SyntaxFactory.IdentifierName(className),
                 SyntaxFactory.SingleVariableDesignation(SyntaxFactory.Identifier("other"))));
 
-        // Chain: && field == other.field
-        foreach (var name in fieldNames)
+        // Chain: && field == other.field  (or SequenceEqual for collection types)
+        foreach (var (name, typeName) in fieldsWithTypes)
         {
-            var equality = SyntaxFactory.BinaryExpression(
-                SyntaxKind.EqualsExpression,
-                SyntaxFactory.IdentifierName(name),
-                SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                    SyntaxFactory.IdentifierName("other"),
-                    SyntaxFactory.IdentifierName(name)));
+            ExpressionSyntax equality;
+            if (IsCollectionType(typeName))
+            {
+                // Use Enumerable.SequenceEqual for collection types (reference equality is wrong)
+                equality = SyntaxFactory.ParseExpression(
+                    $"Enumerable.SequenceEqual({name} ?? Enumerable.Empty<{GetElementType(typeName)}>(), other.{name} ?? Enumerable.Empty<{GetElementType(typeName)}>())");
+            }
+            else
+            {
+                equality = SyntaxFactory.BinaryExpression(
+                    SyntaxKind.EqualsExpression,
+                    SyntaxFactory.IdentifierName(name),
+                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("other"),
+                        SyntaxFactory.IdentifierName(name)));
+            }
             body = SyntaxFactory.BinaryExpression(SyntaxKind.LogicalAndExpression,
                 body.WithTrailingTrivia(SyntaxFactory.Space),
                 equality);
@@ -438,6 +451,31 @@ public class AnalysisEngine
         var newClass = classNode.AddMembers(equalsMethod, getHashMethod);
         var updatedRoot = root.ReplaceNode(classNode, newClass);
         return updatedRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private static bool IsCollectionType(string typeName)
+    {
+        var t = typeName.Trim().TrimEnd('?');
+        return t.EndsWith("[]")
+            || t.StartsWith("List<")
+            || t.StartsWith("IList<")
+            || t.StartsWith("IEnumerable<")
+            || t.StartsWith("ICollection<")
+            || t.StartsWith("IReadOnlyList<")
+            || t.StartsWith("IReadOnlyCollection<")
+            || t.StartsWith("HashSet<")
+            || t.StartsWith("SortedSet<")
+            || t.StartsWith("Collection<");
+    }
+
+    private static string GetElementType(string typeName)
+    {
+        var t = typeName.Trim().TrimEnd('?');
+        if (t.EndsWith("[]")) return t[..^2];
+        var open = t.IndexOf('<');
+        var close = t.LastIndexOf('>');
+        if (open >= 0 && close > open) return t[(open + 1)..close];
+        return "object";
     }
 
     public async Task<List<string>> DetectMemoryLeaksAsync(string filePath, CancellationToken cancellationToken = default)
@@ -599,15 +637,60 @@ public class AnalysisEngine
         foreach (var target in targets)
         {
             if (target.SemanticModel == null) continue;
+
+            // Pre-collect all variables in this document that feed Task.WhenAll/WhenAny
+            var whenAllVars = new HashSet<string>();
+            foreach (var whenAllInv in target.Root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var invName = whenAllInv.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                    IdentifierNameSyntax id => id.Identifier.Text,
+                    _ => null
+                };
+                if (invName is "WhenAll" or "WhenAny")
+                {
+                    foreach (var arg in whenAllInv.ArgumentList.Arguments)
+                    {
+                        if (arg.Expression is IdentifierNameSyntax argId)
+                            whenAllVars.Add(argId.Identifier.Text);
+                    }
+                }
+            }
+
             var invocations = target.Root.DescendantNodes().OfType<InvocationExpressionSyntax>();
 
             foreach (var invocation in invocations)
             {
                 var symbol = target.SemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
-                if (symbol != null && symbol.ReturnType.Name == "Task" && invocation.Parent is not AwaitExpressionSyntax)
-                {
-                     results.Add($"Potential mismatched await in {target.Document.Name} at line {invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Call to '{symbol.Name}' is not awaited.");
-                }
+                if (symbol == null || symbol.ReturnType.Name != "Task") continue;
+                if (invocation.Parent is AwaitExpressionSyntax) continue;
+
+                // Skip: assigned to a discard (  _ = SomeAsync()  )
+                if (invocation.Parent is AssignmentExpressionSyntax assign &&
+                    assign.Left is IdentifierNameSyntax discardId &&
+                    discardId.Identifier.Text == "_")
+                    continue;
+
+                // Skip: the invocation IS the return expression (expression-bodied or return statement).
+                // e.g.  public Task<T> FooAsync() => Task.FromResult(x);
+                //        return Task.FromResult(x);
+                // These are not fire-and-forget — the Task is propagated to the caller.
+                if (invocation.Parent is ArrowExpressionClauseSyntax) continue;
+                if (invocation.Parent is ReturnStatementSyntax) continue;
+
+                // Skip: the invocation IS the entire body of a lambda expression.
+                // Covers Moq setup chains: .Setup(x => x.FooAsync(...)).ReturnsAsync(...)
+                // and similar fluent API patterns where the Task is implicitly returned.
+                if (invocation.Parent is SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax) continue;
+
+                // Skip: assigned to a local variable that is later passed to Task.WhenAll/WhenAny
+                if (invocation.Parent is EqualsValueClauseSyntax evc &&
+                    evc.Parent is VariableDeclaratorSyntax vd &&
+                    whenAllVars.Contains(vd.Identifier.Text))
+                    continue;
+
+                results.Add($"Potential mismatched await in {target.Document.Name} at line {invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Call to '{symbol.Name}' is not awaited.");
             }
         }
         return results;

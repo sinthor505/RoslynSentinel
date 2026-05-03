@@ -26,7 +26,7 @@ public class PerformanceEngine
 
         var issues = new List<PerformanceIssueReport>();
 
-        // 1. Find String Concatenations (especially in loops)
+        // 1. Find String Concatenations (especially in loops) — literal-based: "str" + x
         var stringConcats = root.DescendantNodes().OfType<BinaryExpressionSyntax>()
             .Where(b => b.IsKind(SyntaxKind.AddExpression) && 
                        (b.Left.IsKind(SyntaxKind.StringLiteralExpression) || b.Right.IsKind(SyntaxKind.StringLiteralExpression)));
@@ -38,6 +38,53 @@ public class PerformanceEngine
             {
                 var loc = concat.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "StringConcatenationInLoop", "Avoid using '+' for string concatenation inside a loop. Use StringBuilder instead."));
+            }
+        }
+
+        // 1b. string += in loops (compound assignment) — use semantic model for type check
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var assignConcats = root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+            .Where(a => a.IsKind(SyntaxKind.AddAssignmentExpression));
+
+        foreach (var assign in assignConcats)
+        {
+            var inLoop = assign.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax);
+            if (!inLoop) continue;
+
+            // Use semantic model if available, otherwise fall back to literal heuristic
+            bool isStringAssign = false;
+            if (semanticModel != null)
+            {
+                var typeInfo = semanticModel.GetTypeInfo(assign.Left, cancellationToken);
+                isStringAssign = typeInfo.Type?.SpecialType == SpecialType.System_String;
+            }
+            else
+            {
+                isStringAssign = assign.Right.IsKind(SyntaxKind.StringLiteralExpression)
+                    || assign.Right.IsKind(SyntaxKind.InterpolatedStringExpression);
+            }
+
+            if (isStringAssign)
+            {
+                var loc = assign.GetLocation().GetLineSpan().StartLinePosition;
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "StringConcatenationInLoop", "Avoid using '+=' for string concatenation inside a loop. Use StringBuilder instead."));
+            }
+        }
+
+        // 1c. .ToList() / .ToArray() calls inside loops
+        var toListOrArray = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
+                          (ma.Name.Identifier.Text == "ToList" || ma.Name.Identifier.Text == "ToArray") &&
+                          inv.ArgumentList.Arguments.Count == 0);
+
+        foreach (var inv in toListOrArray)
+        {
+            var inLoop = inv.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax);
+            if (inLoop)
+            {
+                var methodName = ((MemberAccessExpressionSyntax)inv.Expression).Name.Identifier.Text;
+                var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "AllocationInLoop", $"Avoid calling .{methodName}() inside a loop — it allocates a new collection on every iteration. Move it outside the loop."));
             }
         }
 

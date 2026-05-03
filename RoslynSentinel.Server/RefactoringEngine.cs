@@ -583,13 +583,20 @@ public class RefactoringEngine
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
                      && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)));
 
+        // Build interface methods with proper leading trivia (newline + indent) for formatting
         var ifaceMembers = methods.Select(m =>
-            (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(m.ReturnType, m.Identifier)
+            (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(
+                    m.ReturnType.WithoutTrivia(),
+                    m.Identifier)
                 .WithTypeParameterList(m.TypeParameterList)
                 .WithParameterList(m.ParameterList)
                 .WithConstraintClauses(m.ConstraintClauses)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                .NormalizeWhitespace()
+                .WithLeadingTrivia(SyntaxFactory.TriviaList(
+                    SyntaxFactory.CarriageReturnLineFeed,
+                    SyntaxFactory.Whitespace("    ")))
+                .WithTrailingTrivia(SyntaxFactory.TriviaList(
+                    SyntaxFactory.CarriageReturnLineFeed))
         ).ToArray();
 
         var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName)
@@ -614,16 +621,19 @@ public class RefactoringEngine
             ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(ifaceNode);
         }
 
-        // Add interface to class's base list
-        var newClass = classNode.AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName)));
+        // Add interface to class's base list (only if not already present)
+        var alreadyImplements = classNode.BaseList?.Types
+            .Any(t => t.Type.ToString() == interfaceName) == true;
+        var newClass = alreadyImplements
+            ? classNode
+            : classNode.AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName)));
         var updatedOrig = root.ReplaceNode(classNode, newClass);
 
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
 
-        // Format the interface file
-        var ifaceDoc = document.Project.AddDocument($"{interfaceName}.cs", ifaceCompUnit);
-        var formattedIfaceDoc = await Formatter.FormatAsync(ifaceDoc, null, ct);
-        var ifaceContent = (await formattedIfaceDoc.GetTextAsync(ct)).ToString();
+        // Format the interface file using NormalizeWhitespace for reliable member separation.
+        // Formatter.FormatAsync with null workspace options can flatten all members onto one line.
+        var ifaceContent = ifaceCompUnit.NormalizeWhitespace(elasticTrivia: false).ToFullString();
 
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
@@ -879,7 +889,8 @@ public class RefactoringEngine
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
+        if (pos < 0) return new Dictionary<string, string>();
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
         // Walk up ancestors to find the nearest declaration symbol (FindNode may return a child token/identifier)
         var symbol = node.AncestorsAndSelf()
@@ -932,7 +943,8 @@ public class RefactoringEngine
         MemberDeclarationSyntax? target = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+            if (pos < 0) return $"Error: {snippetError}";
             target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
         }
@@ -947,7 +959,7 @@ public class RefactoringEngine
             target = candidates.FirstOrDefault();
         }
 
-        if (target == null) return "";
+        if (target == null) return $"Error: Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.";
 
         SyntaxNode newTarget;
         if (direction == "ToExpressionBody")
@@ -962,7 +974,7 @@ public class RefactoringEngine
                         .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(ret.Expression))
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
                 }
-                else return root.ToFullString();
+                else return $"Error: Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted.";
             }
             else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
             {
@@ -974,9 +986,9 @@ public class RefactoringEngine
                         .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(pret.Expression))
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
                 }
-                else return root.ToFullString();
+                else return $"Error: Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement.";
             }
-            else return root.ToFullString();
+            else return $"Error: Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body.";
         }
         else // ToBlockBody
         {
@@ -1000,7 +1012,7 @@ public class RefactoringEngine
                     .WithSemicolonToken(default)
                     .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getter)));
             }
-            else return root.ToFullString();
+            else return $"Error: Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property).";
         }
 
         var newRoot = root.ReplaceNode(target, newTarget.NormalizeWhitespace());
@@ -1019,7 +1031,8 @@ public class RefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        if (pos < 0) return $"Error: {snippetError}";
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
         var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault()
             ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
@@ -1089,9 +1102,10 @@ public class RefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-            method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
-                .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
+            if (pos >= 0)
+                method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                    .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         }
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
@@ -1133,9 +1147,10 @@ public class RefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-            method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
-                .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
+            if (pos >= 0)
+                method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
+                    .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         }
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);

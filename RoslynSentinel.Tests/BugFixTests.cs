@@ -1153,3 +1153,152 @@ public class TargetDto
             "Should not have double space (trailing space in type name)");
     }
 }
+
+[TestFixture]
+public class Bug11RegressionTests
+{
+    private PersistentWorkspaceManager _workspaceManager = null!;
+    private RefactoringEngine _refactoringEngine = null!;
+    private CodeGenerationEngine _codeGenerationEngine = null!;
+    private PerformanceEngine _performanceEngine = null!;
+    private SyntaxUpgradeEngine _syntaxUpgradeEngine = null!;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        var config = new SentinelConfiguration();
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _performanceEngine = new PerformanceEngine(_workspaceManager);
+        _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+
+    private void SetSource(string src, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, src)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // Bug 3: ConvertPropertySafe crash on bad contextSnippet → now returns error string
+    [Test]
+    public async Task ConvertPropertySafe_WithBadContextSnippet_ReturnsErrorString()
+    {
+        const string src = @"public class MyClass
+{
+    public string Name { get; set; }
+}";
+        SetSource(src, "MyClass.cs");
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync(
+            "MyClass.cs", "Name", "ToFullProperty",
+            contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+
+        Assert.That(result, Does.StartWith("Error:"),
+            "Should return an error string when snippet is not found");
+    }
+
+    // Bug: ConvertExpressionBody with non-existent member → now returns error string
+    [Test]
+    public async Task ConvertExpressionBody_WithNonExistentMember_ReturnsErrorString()
+    {
+        const string src = @"public class MyClass
+{
+    public string Name { get; set; }
+}";
+        SetSource(src, "MyClass.cs");
+        var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            "MyClass.cs", "NonExistentMethod", "ToExpressionBody");
+
+        Assert.That(result, Does.StartWith("Error:"),
+            "Should return an error string when the named member does not exist");
+    }
+
+    // Bug: ConvertExpressionBody on multi-statement method → now returns error string
+    [Test]
+    public async Task ConvertExpressionBody_WithMultiStatementMethod_ReturnsErrorString()
+    {
+        const string src = @"public class MyClass
+{
+    public string GetName()
+    {
+        var x = ""hello"";
+        return x;
+    }
+}";
+        SetSource(src, "MyClass.cs");
+        var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            "MyClass.cs", "GetName", "ToExpressionBody");
+
+        Assert.That(result, Does.StartWith("Error:"),
+            "Should return an error string when method has multiple statements");
+    }
+
+    // Bug: ConvertExpressionBody ToBlockBody on already-block-body → now returns error string
+    [Test]
+    public async Task ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ReturnsErrorString()
+    {
+        const string src = @"public class MyClass
+{
+    public string GetName()
+    {
+        return ""hello"";
+    }
+}";
+        SetSource(src, "MyClass.cs");
+        var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+            "MyClass.cs", "GetName", "ToBlockBody");
+
+        Assert.That(result, Does.StartWith("Error:"),
+            "Should return an error string when converting ToBlockBody but already a block body");
+    }
+
+    // Bug 2: PerformanceEngine missing += in loop
+    [Test]
+    public async Task AnalyzePerformance_FindsPlusAssignInLoop()
+    {
+        const string src = @"public class Builder
+{
+    public string Build(string[] items)
+    {
+        string result = """";
+        foreach (var item in items)
+        {
+            result += item;
+        }
+        return result;
+    }
+}";
+        SetSource(src, "Builder.cs");
+        var issues = await _performanceEngine.AnalyzePerformanceAsync("Builder.cs");
+
+        Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r =>
+            r.IssueType == "StringConcatenationInLoop"),
+            "Should detect '+=' string concatenation inside loop");
+    }
+
+    // Bug 2: PerformanceEngine missing .ToList()/.ToArray() in loop
+    [Test]
+    public async Task AnalyzePerformance_FindsToListInLoop()
+    {
+        const string src = @"using System.Linq;
+public class Processor
+{
+    public void Process(int[][] batches)
+    {
+        foreach (var batch in batches)
+        {
+            var list = batch.Where(x => x > 0).ToList();
+        }
+    }
+}";
+        SetSource(src, "Processor.cs");
+        var issues = await _performanceEngine.AnalyzePerformanceAsync("Processor.cs");
+
+        Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r =>
+            r.IssueType == "AllocationInLoop"),
+            "Should detect .ToList() allocation inside loop");
+    }
+}

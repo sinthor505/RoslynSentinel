@@ -590,8 +590,11 @@ public class SymbolNavigationEngine
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;
 
-        var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        // Prefer class method over interface method when both exist in the same file
+        var methodDecls = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodDecl = methodDecls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
+            ?? methodDecls.FirstOrDefault();
         if (methodDecl == null) return null;
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
@@ -686,8 +689,11 @@ public class SymbolNavigationEngine
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null) return null;
 
-        var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        // Prefer class method over interface method when both exist in the same file
+        var methodDecls2 = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodDecl = methodDecls2.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
+            ?? methodDecls2.FirstOrDefault();
         if (methodDecl == null) return null;
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
@@ -787,14 +793,18 @@ public class SymbolNavigationEngine
         }
         else
         {
-            var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .FirstOrDefault(m => m switch
+            // Collect all matching declarations, preferring class members over interface members
+            // to avoid returning empty results when the same method exists in both IFoo and Foo.
+            var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                .Where(m => m switch
                 {
                     MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
                     PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
                     FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
                     _ => false
-                });
+                }).ToList();
+            var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
+                ?? decls.FirstOrDefault();
             if (decl != null)
                 symbol = model.GetDeclaredSymbol(decl, ct);
         }

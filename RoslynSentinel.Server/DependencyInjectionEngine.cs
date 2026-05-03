@@ -221,8 +221,27 @@ public class DependencyInjectionEngine
 
     private static readonly HashSet<string> _frameworkProvidedTypes = new(StringComparer.OrdinalIgnoreCase)
     {
-        "ILogger", "IOptions", "IConfiguration", "IHostEnvironment",
-        "IServiceProvider", "IHttpClientFactory", "IMemoryCache", "IDistributedCache"
+        // Microsoft.Extensions.Logging
+        "ILogger", "ILoggerFactory", "ILoggerProvider",
+        // Microsoft.Extensions.Options
+        "IOptions", "IOptionsMonitor", "IOptionsSnapshot", "IOptionsFactory",
+        // Microsoft.Extensions.Configuration
+        "IConfiguration", "IConfigurationRoot", "IConfigurationSection",
+        // Microsoft.Extensions.Hosting
+        "IHostEnvironment", "IWebHostEnvironment", "IHostApplicationLifetime",
+        "IHostLifetime", "IApplicationLifetime",
+        // Microsoft.Extensions.DependencyInjection
+        "IServiceProvider", "IServiceScopeFactory", "IServiceScope",
+        // Microsoft.Extensions.Http
+        "IHttpClientFactory",
+        // Microsoft.Extensions.Caching
+        "IMemoryCache", "IDistributedCache", "IHybridCache",
+        // Microsoft.AspNetCore
+        "IHttpContextAccessor", "IHttpContextFactory", "IActionContextAccessor",
+        // Aspire / cloud infra (registered via extension methods, not Add<T,U>)
+        "IConnection", "IConnectionMultiplexer",
+        // Feature flags (Aspire/OpenFeature pattern)
+        "IFeatureManager", "IVariantFeatureManager",
     };
 
     private static readonly HashSet<string> _serviceNameSuffixes = new(StringComparer.OrdinalIgnoreCase)

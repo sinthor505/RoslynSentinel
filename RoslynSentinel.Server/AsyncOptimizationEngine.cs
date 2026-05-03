@@ -64,11 +64,11 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return "// Error: File not found in the loaded solution.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
+        if (methodNode == null || methodNode.Body == null) return $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).";
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
         // We locate consecutive await statements and group independent ones.
@@ -433,19 +433,20 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return "// Error: File not found in the loaded solution.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) throw new Exception("Method not found.");
+        if (methodNode == null) return $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source.";
 
         // Check if method already has a CancellationToken parameter
         if (methodNode.ParameterList.Parameters.Any(p =>
             p.Type?.ToString().Contains("CancellationToken") == true))
             return root!.ToFullString();
 
-        // Build CancellationToken parameter
+        // Build CancellationToken parameter (trailing space is intentional: it becomes
+        // the whitespace trivia that separates the type name from the parameter identifier)
         var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancellationToken"))
             .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
             .WithDefault(SyntaxFactory.EqualsValueClause(

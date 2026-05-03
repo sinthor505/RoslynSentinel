@@ -13,11 +13,13 @@ public record AntiPatternFinding(
     string Snippet
 );
 
+public record MagicValueLocation(string FilePath, int Line, string Snippet);
+
 public record MagicValueFinding(
     string Value,
     int OccurrenceCount,
     string SuggestedConstantName,
-    List<(string FilePath, int Line, string Snippet)> Locations
+    List<MagicValueLocation> Locations
 );
 
 public record MissingCancellationTokenFinding(
@@ -629,7 +631,7 @@ public class AntiPatternEngine
         else
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
 
-        var occurrences = new Dictionary<string, List<(string FilePath, int Line, string Snippet)>>(StringComparer.Ordinal);
+        var occurrences = new Dictionary<string, List<MagicValueLocation>>(StringComparer.Ordinal);
 
         foreach (var document in documents)
         {
@@ -651,6 +653,10 @@ public class AntiPatternEngine
                 var value = literal.Token.ValueText;
                 if (string.IsNullOrWhiteSpace(value) || value.Length < 3) continue;
 
+                // Skip SQL parameter tokens like @UserId, @Email (ADO.NET parameterized queries)
+                if (value.Length > 1 && value[0] == '@' && value.Skip(1).All(c => char.IsLetterOrDigit(c) || c == '_'))
+                    continue;
+
                 // Skip inside nameof()
                 if (literal.Ancestors().OfType<InvocationExpressionSyntax>()
                     .Any(inv => inv.Expression is IdentifierNameSyntax id && id.Identifier.Text == "nameof"))
@@ -667,10 +673,10 @@ public class AntiPatternEngine
 
                 if (!occurrences.TryGetValue(value, out var list))
                 {
-                    list = new List<(string, int, string)>();
+                    list = new List<MagicValueLocation>();
                     occurrences[value] = list;
                 }
-                list.Add((docPath, line, snippet));
+                list.Add(new MagicValueLocation(docPath, line, snippet));
             }
         }
 

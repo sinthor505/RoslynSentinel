@@ -123,6 +123,9 @@ public class SecurityEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return new List<SecurityIssueReport>();
 
+        // Get semantic model to check if interpolation expressions are compile-time constants
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+
         var reports = new List<SecurityIssueReport>();
 
         // Method names that take a SQL string as their first argument
@@ -148,7 +151,7 @@ public class SecurityEngine
             {
                 bool suspect = arg.Expression switch
                 {
-                    InterpolatedStringExpressionSyntax s => s.Contents.OfType<InterpolationSyntax>().Any(),
+                    InterpolatedStringExpressionSyntax s => HasNonConstInterpolation(s, semanticModel, cancellationToken),
                     BinaryExpressionSyntax b => IsDynamicStringConcat(b),
                     _ => false
                 };
@@ -165,6 +168,18 @@ public class SecurityEngine
         }
 
         return reports;
+    }
+
+    /// <summary>Returns true only if any interpolation in the string is a non-constant (runtime) expression.</summary>
+    private static bool HasNonConstInterpolation(InterpolatedStringExpressionSyntax s, SemanticModel? semanticModel, CancellationToken ct)
+    {
+        foreach (var interp in s.Contents.OfType<InterpolationSyntax>())
+        {
+            if (semanticModel == null) return true; // no model — assume dynamic
+            var constVal = semanticModel.GetConstantValue(interp.Expression, ct);
+            if (!constVal.HasValue) return true; // not a compile-time constant → suspect
+        }
+        return false; // all interpolations are constants — safe
     }
 
     private static bool IsDynamicStringConcat(BinaryExpressionSyntax bin)

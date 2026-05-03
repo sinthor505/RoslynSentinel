@@ -445,6 +445,12 @@ public class CodeGenerationEngine
                 properties.Add(bp);
         }
 
+        if (properties.Count == 0)
+            throw new InvalidOperationException(
+                $"No settable public properties or primary constructor parameters found on '{className}'. " +
+                $"GenerateFluentBuilder is designed for POCOs and records with settable properties, not " +
+                $"DI-injected classes. Consider exposing public properties or using a record type.");
+
         var builderClassName = className + "Builder";
         var sb = new System.Text.StringBuilder();
 
@@ -726,7 +732,8 @@ public class CodeGenerationEngine
         if (contextSnippet != null)
         {
             var srcText = await document.GetTextAsync(ct);
-            var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet, lineBefore, lineAfter);
+            var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
+            if (pos < 0) return $"Error: {snippetError}";
             propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf()
                 .OfType<PropertyDeclarationSyntax>()

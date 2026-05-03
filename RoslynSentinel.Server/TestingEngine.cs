@@ -102,8 +102,13 @@ public class TestingEngine
         foreach (var method in publicMethods)
         {
             var testName = $"{method.Identifier.Text}_Should_ReturnExpectedResult_When_ValidInput";
+            bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+            bool returnsTask = method.ReturnType.ToString().StartsWith("Task");
+            bool needsAsync = isAsync || returnsTask;
             sb.AppendLine($"        {testAttribute}");
-            sb.AppendLine($"        public void {testName}()");
+            sb.AppendLine(needsAsync
+                ? $"        public async Task {testName}()"
+                : $"        public void {testName}()");
             sb.AppendLine("        {");
             sb.AppendLine("            // Arrange");
             sb.AppendLine("            ");
@@ -207,8 +212,14 @@ public class TestingEngine
                 ? $"{methodName}_Overload{methodNameUsage[methodName]}_ShouldBehaveCorrectly"
                 : $"{methodName}_ShouldBehaveCorrectly";
 
+            bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+            bool returnsTask = method.ReturnType.ToString().StartsWith("Task");
+            bool needsAsync = isAsync || returnsTask;
+
             sb.AppendLine("        [Fact]");
-            sb.AppendLine($"        public void {testName}()");
+            sb.AppendLine(needsAsync
+                ? $"        public async Task {testName}()"
+                : $"        public void {testName}()");
             sb.AppendLine("        {");
             sb.AppendLine("            // Arrange");
             sb.AppendLine();

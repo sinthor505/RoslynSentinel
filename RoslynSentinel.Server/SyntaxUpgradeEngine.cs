@@ -27,6 +27,11 @@ public class SyntaxUpgradeEngine
 
         var rewriter = new ModernGuardRewriter();
         var newRoot = rewriter.Visit(root);
+
+        // Return no-op message when no guard clause patterns were found to upgrade
+        if (!rewriter.ChangesMade)
+            return "// No if-throw guard clause patterns found to upgrade in this file.";
+
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
@@ -69,7 +74,8 @@ public class SyntaxUpgradeEngine
 
         var root = await document.GetSyntaxRootAsync(ct);
         var text = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        if (pos < 0) return $"Error: {snippetError}";
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
             .DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression));
 
@@ -392,6 +398,8 @@ public class SyntaxUpgradeEngine
 
     private class ModernGuardRewriter : CSharpSyntaxRewriter
     {
+        public bool ChangesMade { get; private set; }
+
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
             var throwStmt = node.Statement is ThrowStatementSyntax t ? t : 
@@ -405,6 +413,7 @@ public class SyntaxUpgradeEngine
 
                 if (type == "ArgumentNullException" && node.Condition is BinaryExpressionSyntax be && be.IsKind(SyntaxKind.EqualsExpression) && be.Right.IsKind(SyntaxKind.NullLiteralExpression))
                 {
+                    ChangesMade = true;
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentNullException"), SyntaxFactory.IdentifierName("ThrowIfNull")),
                         SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(varName)))))).WithTriviaFrom(node);
@@ -425,6 +434,7 @@ public class SyntaxUpgradeEngine
 
                     if (helper != null)
                     {
+                        ChangesMade = true;
                         var argName = be2.Left.ToString();
                         var argsList = new List<ArgumentSyntax> { SyntaxFactory.Argument(SyntaxFactory.IdentifierName(argName)) };
                         if (helper.Contains("Greater") || helper.Contains("Less"))
@@ -440,6 +450,7 @@ public class SyntaxUpgradeEngine
 
                 if (type == "ArgumentException" && node.Condition is InvocationExpressionSyntax ies && ies.Expression.ToString().Contains("IsNullOrEmpty"))
                 {
+                    ChangesMade = true;
                     var argName = ies.ArgumentList.Arguments.FirstOrDefault()?.Expression.ToString() ?? varName;
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentException"), SyntaxFactory.IdentifierName("ThrowIfNullOrEmpty")),

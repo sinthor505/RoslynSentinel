@@ -23,11 +23,19 @@ public class MappingEngine
         if (document == null) throw new Exception("File not found.");
 
         var compilation = await document.Project.GetCompilationAsync(cancellationToken);
-        var fromSymbol = compilation?.GetTypeByMetadataName(fromType);
-        var toSymbol = compilation?.GetTypeByMetadataName(toType);
+
+        // Try fully-qualified name first, then fall back to simple name search
+        var fromSymbol = compilation?.GetTypeByMetadataName(fromType)
+            ?? compilation?.GetSymbolsWithName(n => n == fromType || n == fromType.Split('.').Last(), SymbolFilter.Type)
+                .OfType<INamedTypeSymbol>().FirstOrDefault();
+        var toSymbol = compilation?.GetTypeByMetadataName(toType)
+            ?? compilation?.GetSymbolsWithName(n => n == toType || n == toType.Split('.').Last(), SymbolFilter.Type)
+                .OfType<INamedTypeSymbol>().FirstOrDefault();
 
         if (fromSymbol == null || toSymbol == null)
-            throw new Exception($"Could not resolve symbols for {fromType} or {toType}. Ensure they are in the solution.");
+            return $"// Could not resolve symbols for '{fromType}' or '{toType}'.\n" +
+                   $"// Tip: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified metadata name\n" +
+                   $"// (e.g. 'MyApp.Commands.CreateRecipeCommand').  Ensure the types are in the loaded solution.";
 
         var fromProps = fromSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
         var toProps = toSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
