@@ -413,6 +413,14 @@ public class GranularRefactoringEngine
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null) return "// Method not found.";
 
+        // Check if method implements an interface
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        IMethodSymbol? methodSymbol = null;
+        if (semanticModel != null)
+        {
+            methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
+        }
+
         var allParams = methodNode.ParameterList.Parameters.ToList();
 
         // Separate CancellationToken params from the rest
@@ -489,7 +497,38 @@ public class GranularRefactoringEngine
             newMethodNode = newMethodNode.WithBody(block.WithStatements(newStmts));
         }
 
-        var newRoot = root.ReplaceNode(methodNode, newMethodNode);
+        // If method is on an interface, also update interface definition
+        var classNode = methodNode.Parent as ClassDeclarationSyntax;
+        var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
+        
+        SyntaxNode newRoot = root;
+        
+        if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
+        {
+            // Update interface method
+            var newInterface = interfaceNode.ReplaceNode(methodNode, newMethodNode);
+            newRoot = root.ReplaceNode(interfaceNode, newInterface);
+        }
+        else if (classNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
+        {
+            // Check if method implements an interface
+            if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
+            {
+                // Method implements interface — add warning but update the implementation
+                newRoot = root.ReplaceNode(methodNode, newMethodNode);
+                // Append warning comment
+                var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";
+                return warning + newRoot.NormalizeWhitespace().ToFullString();
+            }
+            else
+            {
+                newRoot = root.ReplaceNode(methodNode, newMethodNode);
+            }
+        }
+        else
+        {
+            newRoot = root.ReplaceNode(methodNode, newMethodNode);
+        }
 
         // Append record declaration to end of file
         var compilationUnit = newRoot as CompilationUnitSyntax;

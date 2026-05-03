@@ -854,6 +854,24 @@ public class RefactoringEngine
         var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
         if (member == null) return root?.ToFullString() ?? "";
+
+        // Check for usages using SymbolFinder before removing
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (semanticModel != null)
+        {
+            var symbol = semanticModel.GetDeclaredSymbol(member, ct);
+            if (symbol != null)
+            {
+                var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+                var usageCount = references.Sum(r => r.Locations.Count());
+                
+                if (usageCount > 0)
+                {
+                    return $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}";
+                }
+            }
+        }
+
         return root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString();
     }
 

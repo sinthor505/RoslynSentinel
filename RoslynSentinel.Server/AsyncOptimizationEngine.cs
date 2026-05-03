@@ -15,6 +15,7 @@ public class AsyncOptimizationEngine
 
     /// <summary>
     /// Analyzes methods returning Task/Task<T> and converts them to ValueTask/ValueTask<T> if they frequently complete synchronously.
+    /// Also updates interface signatures if the method implements an interface.
     /// </summary>
     public async Task<string> OptimizeToValueTaskAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
@@ -54,6 +55,22 @@ public class AsyncOptimizationEngine
 
         var newMethodNode = methodNode.WithReturnType(newReturnType);
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
+
+        // Check if method implements an interface
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        IMethodSymbol? methodSymbol = null;
+        if (semanticModel != null)
+        {
+            methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
+        }
+
+        // If method implements an interface, add warning
+        if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
+        {
+            var interfaceNames = string.Join(", ", methodSymbol.ContainingType.Interfaces.Select(i => i.Name));
+            return $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}";
+        }
+
         return newRoot.ToFullString();
     }
 

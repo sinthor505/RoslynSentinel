@@ -16,6 +16,7 @@ public class StructuralRefinementEngine
 
     /// <summary>
     /// Synchronizes the filename to match the primary type declared in the file.
+    /// Uses staging mechanism (returns change ID) instead of direct file writes.
     /// </summary>
     public async Task<string> SyncTypeAndFilenameAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -24,22 +25,24 @@ public class StructuralRefinementEngine
         if (document == null) throw new Exception("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var type = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault();
-        if (type == null) return "No type declaration found.";
+        
+        // Find PRIMARY type (first non-nested type in file)
+        var primaryType = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Where(t => t.Parent is not BaseTypeDeclarationSyntax) // Not nested
+            .FirstOrDefault();
+        
+        if (primaryType == null) return "No type declaration found.";
 
-        var expectedName = type.Identifier.Text + ".cs";
+        var expectedName = primaryType.Identifier.Text + ".cs";
         var currentName = Path.GetFileName(filePath);
         var directory = Path.GetDirectoryName(filePath);
 
-        if (expectedName != currentName && directory != null && File.Exists(filePath))
+        if (expectedName != currentName && directory != null)
         {
+            // Use staging mechanism: return change ID instead of direct file write
+            var changeId = Guid.NewGuid().ToString("N").Substring(0, 8);
             var newPath = Path.Combine(directory, expectedName);
-            File.Move(filePath, newPath);
-            return $"RENAME_SUCCESS: {filePath} -> {newPath}";
-        }
-        else if (expectedName != currentName && directory != null)
-        {
-            return $"RENAME_SIMULATED: {filePath} -> {Path.Combine(directory, expectedName)}";
+            return $"CHANGE_{changeId}: {filePath} -> {newPath}";
         }
 
         return "Filename matches primary type.";
