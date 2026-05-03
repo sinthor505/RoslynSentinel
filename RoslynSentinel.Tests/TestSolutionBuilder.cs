@@ -46,9 +46,14 @@ public static class TestSolutionBuilder
             references.Add(MetadataReference.CreateFromFile(objectAssembly));
         }
 
+        // Create a mock project FilePath for test purposes
+        var projectPath = Path.Combine(Path.GetTempPath(), "TestProj", $"{projectName}.csproj");
+        
         var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
             .WithMetadataReferences(references)
-            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
+            .WithFilePath(projectPath)
+            .WithDefaultNamespace(projectName);
 
         var solution = workspace.CurrentSolution.AddProject(projectInfo);
 

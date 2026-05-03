@@ -1302,3 +1302,247 @@ public class Processor
             "Should detect .ToList() allocation inside loop");
     }
 }
+
+/// <summary>
+/// Regression tests for 5 high-priority bugs: BUG-70, 71, 72, 73, 74
+/// </summary>
+[TestFixture]
+public class Bug70_74RegressionTests
+{
+    private PersistentWorkspaceManager _workspaceManager;
+    private SentinelConfiguration _config;
+    private ProjectStructureEngine _projectStructureEngine;
+    private GranularRefactoringEngine _granularRefactoringEngine;
+    private RefactoringEngine _refactoringEngine;
+    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private CodeGenerationEngine _codeGenerationEngine;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _config = new SentinelConfiguration();
+        _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
+        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+
+    private void SetSource(string source, string fileName = "Test.cs", string projectName = "TestProj")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    private void SetMultipleFiles(string projectName, params (string name, string content)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(projectName, files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUG-70: MoveFileToNamespaceFolderAsync — Wrong Path Computation
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath()
+    {
+        const string source = @"namespace TestProj.Controllers;
+
+public class ProductsController
+{
+    public void GetProducts() { }
+}";
+        SetSource(source, "ProductsController.cs");
+        
+        // Debug: Check solution state
+        var sol = _workspaceManager.CurrentSolution;
+        var doc = sol?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "ProductsController.cs");
+        if (doc != null)
+        {
+            System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePath={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
+        }
+        
+        // Pass just the filename - the engine will look it up
+        var result = await _projectStructureEngine.MoveFileToNamespaceFolderAsync("ProductsController.cs");
+
+        System.Diagnostics.Debug.WriteLine($"Result: '{result}'");
+
+        // Expected: should contain "Controllers" (project-relative path)
+        // Since file is in root and namespace is TestProj.Controllers, it should suggest moving to Controllers folder
+        Assert.That(result, Is.Not.Empty,
+            $"Should return a path suggestion. Got: '{result}'");
+        Assert.That(result, Does.Contain("Controllers"),
+            "Path should include Controllers folder");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUG-71: InterpolateStringSafe — Server Crash on Named Const Format Strings
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task BUG_71_InterpolateStringSafe_NamedConstFormatString_NoServerCrash()
+    {
+        const string source = @"namespace App;
+
+public class MyClass
+{
+    private const string CacheKeyFmt = ""key_{0}"";
+    
+    public void Test(int id)
+    {
+        var result = string.Format(CacheKeyFmt, id);
+    }
+}";
+        SetSource(source, "MyClass.cs");
+        
+        // Get the actual document from the solution
+        var solution = _workspaceManager.CurrentSolution;
+        var document = solution?.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == "MyClass.cs");
+        
+        if (document?.FilePath == null)
+            Assert.Inconclusive("Document not found in test solution");
+        
+        var result = await _codeGenerationEngine.InterpolateStringAsync(
+            document.FilePath,
+            "string.Format(CacheKeyFmt",
+            lineBefore: null,
+            lineAfter: null);
+
+        // Should not crash and should either:
+        // 1. Return an error message (not crash)
+        // 2. Return the interpolated string
+        Assert.That(result, Is.Not.Null,
+            "Should handle named const without crashing");
+        Assert.That(result.Length, Is.GreaterThan(0),
+            "Should return non-empty result (error or success)");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUG-72: IntroduceField — Field Initialized with Local Parameter (Uncompilable)
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer()
+    {
+        const string source = @"namespace App;
+
+public class MyClass
+{
+    public void DoSomething(Item item)
+    {
+        var key = item.Id;
+        var value = ProcessKey(key);
+    }
+
+    private int ProcessKey(int k) => k * 2;
+}
+
+public class Item { public int Id { get; set; } }";
+        SetSource(source, "MyClass.cs");
+        
+        var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "MyClass.cs");
+        var result = await _granularRefactoringEngine.IntroduceFieldAsync(
+            filePath,
+            "item.Id",
+            "_itemId",
+            lineBefore: "var key = ",
+            lineAfter: null);
+
+        // Should either:
+        // 1. Not include initializer (since parameter is out of scope)
+        // 2. Return error
+        // NOT: "private SomeType _field = item;" (uncompilable)
+        Assert.That(result, Does.Not.Contain("_itemId = item.Id;"),
+            "Should not create initializer with parameter reference");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUG-73: SafeDeleteSymbol — Returns ChangeId for Empty Staged Changes
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ReturnsErrorNotChangeId()
+    {
+        SetMultipleFiles("TestProj",
+            ("ImportHistoryDto.cs", @"namespace App;
+
+public class ImportHistoryDto
+{
+    public int Id { get; set; }
+}"),
+            ("Service.cs", @"namespace App;
+
+public class MyService
+{
+    public ImportHistoryDto GetImportHistory()
+    {
+        return new ImportHistoryDto { Id = 1 };
+    }
+}"));
+        
+        var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "ImportHistoryDto.cs");
+        var result = await _refactoringEngine.SafeDeleteSymbolAsync(
+            filePath,
+            "public class ImportHistoryDto",
+            lineBefore: null,
+            lineAfter: null);
+
+        // Should return empty dict or error (not staged changeId) since the symbol IS used
+        Assert.That(result, Is.Empty.Or.Null,
+            "Should return empty/error since symbol is used, not a ChangeId");
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // BUG-74: ExtractClass — Generates Empty Class for File-Scope Types
+    // ──────────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task BUG_74_ExtractClass_FileScopeType_CopiesMembers()
+    {
+        const string source = @"namespace App;
+
+public class ImportJobStatus
+{
+    public int Id { get; set; }
+    public string Status { get; set; }
+
+    public void Reset() { Status = ""idle""; }
+}";
+        SetSource(source, "ImportJobStatus.cs");
+        
+        // Get the actual document from the solution
+        var solution = _workspaceManager.CurrentSolution;
+        var document = solution?.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == "ImportJobStatus.cs");
+        
+        if (document?.FilePath == null)
+            Assert.Inconclusive("Document not found in test solution");
+        
+        var result = await _advancedStructuralEngine.ExtractClassAsync(
+            document.FilePath,
+            "ImportJobStatus",
+            "ImportJobStatusHelper",
+            ["Id", "Status"]);
+
+        // Should copy the members, not create empty class
+        Assert.That(result, Is.Not.Empty,
+            "Should extract members to new class");
+        
+        if (result.Values.Any())
+        {
+            var newClassContent = result.Values.First();
+            Assert.That(newClassContent, Does.Contain("Id"),
+                "Should copy Id property");
+            Assert.That(newClassContent, Does.Contain("Status"),
+                "Should copy Status property");
+            Assert.That(newClassContent, Does.Not.Match("public class ImportJobStatusHelper\\s*\\{\\s*\\}"),
+                "Should not create empty class");
+        }
+    }
+}
