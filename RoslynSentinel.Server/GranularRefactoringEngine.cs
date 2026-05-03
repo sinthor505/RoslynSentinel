@@ -33,24 +33,30 @@ public class GranularRefactoringEngine
         var field = root?.DescendantNodes().OfType<FieldDeclarationSyntax>()
             .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
 
-        if (field != null && field.Declaration.Variables[0].Initializer != null)
+        // If field not found or has no initializer, return error
+        if (field == null)
         {
-            var value = field.Declaration.Variables[0].Initializer!.Value;
-            var usages = root!.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
-            
-            var trackedRoot = root.TrackNodes(new SyntaxNode[] { field });
-            var usagesInTracked = trackedRoot.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
-            
-            var newRoot = trackedRoot.ReplaceNodes(usagesInTracked, (old, _) => value.WithTriviaFrom(old));
-            var newField = newRoot.GetCurrentNode(field);
-            if (newField != null)
-            {
-                newRoot = newRoot.RemoveNode(newField, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
-            }
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return $"// ERROR: Field '{fieldName}' not found.\n" + (root?.ToFullString() ?? "");
         }
 
-        return root?.ToFullString() ?? "";
+        if (field.Declaration.Variables[0].Initializer == null)
+        {
+            return $"// ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment.\n" + root!.ToFullString();
+        }
+
+        var value = field.Declaration.Variables[0].Initializer!.Value;
+        var usages = root!.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
+        
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { field });
+        var usagesInTracked = trackedRoot.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
+        
+        var newRoot = trackedRoot.ReplaceNodes(usagesInTracked, (old, _) => value.WithTriviaFrom(old));
+        var newField = newRoot.GetCurrentNode(field);
+        if (newField != null)
+        {
+            newRoot = newRoot.RemoveNode(newField, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+        }
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> InlineParameterAsync(string filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)

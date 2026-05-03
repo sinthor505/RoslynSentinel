@@ -1707,6 +1707,140 @@ public class TargetDto
         Assert.That(result, Does.Not.Contain("CancellationToken  "),
             "Should not have double space (trailing space in type name)");
     }
+
+    // --- BUG-67: add_validation_to_poco must add actual annotations, not just using ---
+
+    [Test]
+    public async Task BUG_67_AddValidationToPoco_AddsAnnotations_NotJustUsing()
+    {
+        const string code = @"public class User
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public string Email { get; set; }
+}";
+        
+        SetSource(code, "User.cs");
+        var engine = new ApiIntegrationEngine(_workspaceManager);
+        var result = await engine.AddValidationToPocoAsync("User.cs", "User");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return non-empty result");
+        // Should have using
+        Assert.That(result, Does.Contain("using System.ComponentModel.DataAnnotations"),
+            "Should add using directive");
+        // Should have actual [Required] attributes
+        Assert.That(result, Does.Contain("[Required]"),
+            "Should add [Required] attributes");
+        // Should have [StringLength] for string properties
+        Assert.That(result, Does.Contain("[StringLength"),
+            "Should add [StringLength] attributes for string properties");
+        // Should have [Range] for numeric properties
+        Assert.That(result, Does.Contain("[Range"),
+            "Should add [Range] attributes for numeric properties");
+    }
+
+    [Test]
+    public async Task BUG_67_AddValidationToPoco_StringProperty_Gets_RequiredAndStringLength()
+    {
+        const string code = @"public class Product
+{
+    public string SKU { get; set; }
+}";
+        
+        SetSource(code, "Product.cs");
+        var engine = new ApiIntegrationEngine(_workspaceManager);
+        var result = await engine.AddValidationToPocoAsync("Product.cs", "Product");
+        
+        // String property should get [Required] and [StringLength]
+        Assert.That(result, Does.Contain("[Required]"),
+            "String property should have [Required]");
+        Assert.That(result, Does.Contain("[StringLength(256)"),
+            "String property should have [StringLength(256)]");
+    }
+
+    [Test]
+    public async Task BUG_67_AddValidationToPoco_IntProperty_Gets_Range()
+    {
+        const string code = @"public class Widget
+{
+    public int Quantity { get; set; }
+}";
+        
+        SetSource(code, "Widget.cs");
+        var engine = new ApiIntegrationEngine(_workspaceManager);
+        var result = await engine.AddValidationToPocoAsync("Widget.cs", "Widget");
+        
+        // Int property should get [Range]
+        Assert.That(result, Does.Contain("[Range(0, 2147483647)"),
+            "Int property should have [Range(0, int.MaxValue)]");
+    }
+
+    // --- Bug: inline_field — must error when field has no initializer ---
+
+    [Test]
+    public async Task InlineField_NoInitializer_ReturnsError()
+    {
+        const string code = @"public class Service
+{
+    private string _config;
+    
+    public void UseConfig()
+    {
+        System.Console.WriteLine(_config);
+    }
+}";
+        
+        SetSource(code, "Service.cs");
+        var engine = new GranularRefactoringEngine(_workspaceManager);
+        var result = await engine.InlineFieldAsync("Service.cs", "_config");
+        
+        // Should error or explain why inlining failed
+        Assert.That(result, Does.Contain("ERROR"),
+            "Should return error message when field has no initializer");
+        Assert.That(result, Does.Contain("Cannot inline"),
+            "Should explain the inlining cannot proceed");
+    }
+
+    [Test]
+    public async Task InlineField_WithInitializer_InlinesSuccessfully()
+    {
+        const string code = @"public class Service
+{
+    private string _config = ""default"";
+    
+    public void UseConfig()
+    {
+        System.Console.WriteLine(_config);
+    }
+}";
+        
+        SetSource(code, "Service.cs");
+        var engine = new GranularRefactoringEngine(_workspaceManager);
+        var result = await engine.InlineFieldAsync("Service.cs", "_config");
+        
+        // Should successfully inline (replace field reference with its value)
+        Assert.That(result, Does.Not.Contain("ERROR"),
+            "Should not error when field has initializer");
+        Assert.That(result, Does.Not.Contain("private string _config"),
+            "Should remove field declaration after inlining");
+        Assert.That(result, Does.Contain("\"default\""),
+            "Should inline the field value");
+    }
+
+    [Test]
+    public async Task InlineField_FieldNotFound_ReturnsError()
+    {
+        const string code = @"public class Service { }";
+        
+        SetSource(code, "Service.cs");
+        var engine = new GranularRefactoringEngine(_workspaceManager);
+        var result = await engine.InlineFieldAsync("Service.cs", "NonExistentField");
+        
+        Assert.That(result, Does.Contain("ERROR"),
+            "Should return error when field not found");
+        Assert.That(result, Does.Contain("not found"),
+            "Should explain that field was not found");
+    }
 }
 
 [TestFixture]
