@@ -1028,9 +1028,18 @@ public class CodeGenerationEngine
         }
         else if (semanticModel != null)
         {
-            var constVal = semanticModel.GetConstantValue(formatArgExpr, ct);
-            if (constVal.HasValue && constVal.Value is string s)
-                formatString = s;
+            try
+            {
+                var constVal = semanticModel.GetConstantValue(formatArgExpr, ct);
+                if (constVal.HasValue && constVal.Value is string s)
+                    formatString = s;
+            }
+            catch (Exception ex)
+            {
+                // If constant value resolution fails (e.g., invalid const reference),
+                // return a graceful error instead of crashing
+                return $"Error: Could not resolve format string constant. Details: {ex.Message}";
+            }
         }
 
         if (formatString == null)
