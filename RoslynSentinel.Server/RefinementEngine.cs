@@ -26,7 +26,8 @@ public class RefinementEngine
         if (document == null) return new Dictionary<string, string> { { "error", $"File '{filePath}' not found." } };
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (root == null) return new Dictionary<string, string> { { "error", $"Failed to get syntax root for '{filePath}'." } };
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null) return new Dictionary<string, string> { { "error", $"Class '{className}' not found." } };
 
         var member = classNode.Members.FirstOrDefault(m => 
@@ -53,7 +54,8 @@ public class RefinementEngine
         if (baseDoc == null) return new Dictionary<string, string> { { "error", $"Base class source document not found at '{baseFile}'." } };
 
         var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
-        var baseClassNode = baseRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+        if (baseRoot == null) return new Dictionary<string, string> { { "error", $"Failed to get syntax root for base class file '{baseFile}'." } };
+        var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
         if (baseClassNode == null) return new Dictionary<string, string> { { "error", $"Base class '{baseType.Name}' not found in '{baseFile}'." } };
 
@@ -75,9 +77,10 @@ public class RefinementEngine
             _ => member
         };
 
-        var newDerivedRoot = root!.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+        var newDerivedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        if (newDerivedRoot == null) return new Dictionary<string, string> { { "error", "Failed to remove member from derived class." } };
         var newBaseClassNode = baseClassNode.AddMembers(memberForBase);
-        var newBaseRoot = baseRoot!.ReplaceNode(baseClassNode, newBaseClassNode);
+        var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
 
         return new Dictionary<string, string>
         {
