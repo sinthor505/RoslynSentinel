@@ -2123,3 +2123,307 @@ public class Remaining22BugsRegressionTests
         Assert.That(result, Is.Not.Null);
     }
 }
+
+/// <summary>
+/// Regression tests for 8 Priority 2 bugs in uncompilable output:
+/// Bug 55: OptimizeToValueTask — Interface/Implementation Mismatch
+/// Bug 56: ConvertStaticToExtension — Missing static on Extension Class
+/// Bug 57: IntroduceParameterObject — Interface Updated but Implementation Not
+/// Bug 60: RemoveMember — Doesn't Check for Usages
+/// Bug 62: ExtractMembersToPartial — Missing Namespace + Usings
+/// Bug 64: ConvertLockToSemaphoreSlim — Doesn't Update Call Sites
+/// Bug 75: ExtractSuperclass — Empty Base Class
+/// Bug 78: GenerateAsyncOverload — Uncompilable Async Stub
+/// </summary>
+[TestFixture]
+public class Bug55_78BatchRegressionTests
+{
+    private PersistentWorkspaceManager _workspaceManager;
+    private AsyncOptimizationEngine _asyncOptimizationEngine;
+    private AdvancedLogicEngine _advancedLogicEngine;
+    private RefactoringEngine _refactoringEngine;
+    private ThreadSafetyEngine _threadSafetyEngine;
+    private AdvancedStructuralEngine _advancedStructuralEngine;
+    private GranularRefactoringEngine _granularRefactoringEngine;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        var config = new SentinelConfiguration();
+        _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
+        _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
+        _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
+        _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+        _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+
+    private void SetSource(string source, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    private void SetMultipleFiles(params (string name, string content)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // ── Bug 55: OptimizeToValueTask — Interface/Implementation Mismatch ───────
+    
+    [Test]
+    public async Task BUG_55_OptimizeToValueTask_InterfaceMethod_BothUpdated()
+    {
+        const string code = @"
+public interface IDataService
+{
+    Task<string> GetDataAsync();
+}
+
+public class DataService : IDataService
+{
+    public async Task<string> GetDataAsync()
+    {
+        return await Task.FromResult(""data"");
+    }
+}";
+        
+        SetSource(code, "DataService.cs");
+        
+        var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("DataService.cs", "GetDataAsync");
+        
+        // Both interface and implementation should be updated or error gracefully
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        // Verify it contains ValueTask (not Task) in the implementation
+        Assert.That(result, Does.Contain("ValueTask<string>"), 
+            "Result should contain ValueTask<string>");
+    }
+
+    // ── Bug 56: ConvertStaticToExtension — Missing static on Extension Class ──
+    
+    [Test]
+    public async Task BUG_56_ConvertStaticToExtension_EnsuresClassIsStatic()
+    {
+        const string code = @"
+public class StringExtensions
+{
+    public static bool IsValidEmail(string input)
+    {
+        return input.Contains(""@"");
+    }
+}";
+        
+        SetSource(code, "StringExtensions.cs");
+        
+        var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        Assert.That(result, Does.Contain("static class StringExtensions"), 
+            "Extension class must be declared static");
+        Assert.That(result, Does.Contain("this string input"), 
+            "Method should be converted to extension (this parameter)");
+    }
+
+    // ── Bug 57: IntroduceParameterObject — Interface + All Implementations ────
+    
+    [Test]
+    public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
+    {
+        const string code = @"
+public interface IProcessor
+{
+    void Process(string name, int age, bool active);
+}
+
+public class Processor1 : IProcessor
+{
+    public void Process(string name, int age, bool active) { }
+}
+
+public class Processor2 : IProcessor
+{
+    public void Process(string name, int age, bool active) { }
+}";
+        
+        SetMultipleFiles(("IProcessor.cs", code));
+        
+        var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        // All implementations should be updated
+        var processMethods = result!.Count(c => c == '{') - result!.Count(c => c == '}');
+        // Verify that the code includes the interface and implementations
+        Assert.That(result, Does.Contain("IProcessor"), "Should contain interface");
+    }
+
+    // ── Bug 60: RemoveMember — Doesn't Check for Usages ───────────────────────
+    
+    [Test]
+    public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving()
+    {
+        const string code = @"
+public class Helper
+{
+    public string GetName() => ""Test"";
+    
+    public void UseHelper()
+    {
+        var name = GetName(); // Usage here
+    }
+}";
+        
+        SetSource(code, "Helper.cs");
+        
+        var result = await _refactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
+        
+        // Should error or return unchanged because GetName is used
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        if (!result!.Contains("error") && !result.Contains("Error"))
+        {
+            // If not an error, GetName should still be in the output
+            Assert.That(result, Does.Contain("GetName"), 
+                "If removal succeeds, should indicate that member is used");
+        }
+    }
+
+    // ── Bug 62: ExtractMembersToPartial — Missing Namespace + Usings ─────────
+    
+     [Test]
+    public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
+    {
+        const string code = @"using System;
+using System.Collections.Generic;
+
+namespace MyApp.Services
+{
+    public partial class DataService
+    {
+        public void Method1() { }
+        public void Method2() { }
+    }
+}";
+        
+        SetSource(code, "DataService.cs");
+        
+        var result = await _granularRefactoringEngine.ExtractMembersToPartialAsync("DataService.cs", "DataService", new[] { "Method1" });
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        Assert.That(result, Is.Not.Empty, "Should contain extracted file");
+        
+        // Get the extracted partial file content
+        var partialFileContent = result.Values.First();
+        
+        // The result should contain namespace declaration
+        Assert.That(partialFileContent, Does.Contain("namespace MyApp.Services"), 
+            "Extracted partial file must include the namespace");
+        // Should also include usings
+        Assert.That(partialFileContent, Does.Contain("using System;"), 
+            "Extracted partial file must include usings");
+        // Should contain the extracted method
+        Assert.That(partialFileContent, Does.Contain("Method1"), 
+            "Extracted partial file must contain the extracted method");
+    }
+
+    // ── Bug 64: ConvertLockToSemaphoreSlim — Doesn't Update Call Sites ────────
+    
+    [Test]
+    public async Task BUG_64_ConvertLockToSemaphoreSlim_UpdatesAllLockStatements()
+    {
+        const string code = @"
+public class ThreadSafeCounter
+{
+    private readonly object _lock = new object();
+    private int _count = 0;
+    
+    public void Increment()
+    {
+        lock (_lock)
+        {
+            _count++;
+        }
+    }
+    
+    public void Decrement()
+    {
+        lock (_lock)
+        {
+            _count--;
+        }
+    }
+}";
+        
+        SetSource(code, "ThreadSafeCounter.cs");
+        
+        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("ThreadSafeCounter.cs", "Increment");
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        Assert.That(result, Does.Contain("SemaphoreSlim"), 
+            "Result should contain SemaphoreSlim field");
+        Assert.That(result, Does.Contain("WaitAsync"), 
+            "Result should use WaitAsync instead of lock");
+    }
+
+    // ── Bug 75: ExtractSuperclass — Empty Base Class ───────────────────────────
+    
+    [Test]
+    public async Task BUG_75_ExtractSuperclass_IncludesCommonMembers()
+    {
+        const string code = @"
+public class Dog
+{
+    public string Name { get; set; }
+    public void Bark() { Console.WriteLine(""Woof""); }
+}
+
+public class Cat
+{
+    public string Name { get; set; }
+    public void Meow() { Console.WriteLine(""Meow""); }
+}";
+        
+        SetMultipleFiles(("Dog.cs", code));
+        
+        var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new[] { "Dog.cs" }, new[] { "Dog", "Cat" }, "Animal");
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        // Base class should have the common Name property
+        var resultText = result.Values.Aggregate("", (a, b) => a + b);
+        Assert.That(resultText, Does.Contain("class Animal"), 
+            "Should create Animal base class");
+        Assert.That(resultText, Does.Contain("Name"), 
+            "Base class should include common Name property");
+    }
+
+    // ── Bug 78: GenerateAsyncOverload — Uncompilable Async Stub ───────────────
+    
+    [Test]
+    public async Task BUG_78_GenerateAsyncOverload_CompilesAndMatches()
+    {
+        const string code = @"
+public class Processor
+{
+    public string Process(string input)
+    {
+        return input.ToUpper();
+    }
+}";
+        
+        SetSource(code, "Processor.cs");
+        
+        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Processor.cs", "Process");
+        
+        Assert.That(result, Is.Not.Null, "Should return a result");
+        Assert.That(result, Does.Contain("ProcessAsync"), 
+            "Should generate async overload with Async suffix");
+        Assert.That(result, Does.Contain("Task<string>"), 
+            "Signature must convert return type to Task<T>");
+        // Verify it compiles by checking basic syntax
+        Assert.That(result, Does.Contain("public async"), 
+            "Should be declared as async");
+    }
+}

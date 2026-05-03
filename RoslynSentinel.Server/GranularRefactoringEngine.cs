@@ -348,11 +348,49 @@ public class GranularRefactoringEngine
                 (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) ||
                 (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
 
+            // Extract namespace
+            var namespaceDeclOpt = root?.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
+            var fileScopedNamespaceOpt = root?.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
+            var namespaceName = namespaceDeclOpt?.Name.ToString() ?? fileScopedNamespaceOpt?.Name.ToString();
+
+            // Extract usings
+            var usings = root?.ChildNodes().OfType<UsingDirectiveSyntax>().ToList() ?? new List<UsingDirectiveSyntax>();
+
+            // Build new partial class
             var newClassNode = SyntaxFactory.ClassDeclaration(className)
-                .WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
+                .WithModifiers(SyntaxFactory.TokenList(
+                    SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                    SyntaxFactory.Token(SyntaxKind.PartialKeyword)))
                 .WithMembers(SyntaxFactory.List(membersToMove));
 
-            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), newClassNode.NormalizeWhitespace().ToFullString() } };
+            // Build new compilation unit with usings and namespace
+            CompilationUnitSyntax newCompilationUnit = SyntaxFactory.CompilationUnit();
+
+            if (usings.Any())
+            {
+                newCompilationUnit = newCompilationUnit.WithUsings(SyntaxFactory.List(usings));
+            }
+
+            if (!string.IsNullOrEmpty(namespaceName))
+            {
+                var namespaceDecl = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(namespaceName))
+                    .WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode));
+                newCompilationUnit = newCompilationUnit.WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(namespaceDecl));
+            }
+            else
+            {
+                newCompilationUnit = newCompilationUnit.WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode));
+            }
+
+            // Format with proper newlines
+            var formattedCode = newCompilationUnit.NormalizeWhitespace().ToFullString();
+            // Ensure proper spacing after usings before namespace
+            if (usings.Any() && !string.IsNullOrEmpty(namespaceName))
+            {
+                formattedCode = formattedCode.Replace(";namespace", ";\n\nnamespace");
+            }
+
+            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), formattedCode } };
         }
         return new Dictionary<string, string>();
     }
