@@ -52,7 +52,8 @@ public class ProjectStructureEngine
     public async Task<string> MoveFileToNamespaceFolderAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -62,11 +63,22 @@ public class ProjectStructureEngine
         var ns = nsNode.Name.ToString();
         var project = document.Project;
         var projectDir = Path.GetDirectoryName(project.FilePath);
+        var defaultNamespace = project.DefaultNamespace ?? project.Name;
         
         if (projectDir == null) return "";
 
-        var relativePath = ns.Replace('.', Path.DirectorySeparatorChar);
-        var expectedDir = Path.Combine(projectDir, relativePath);
+        // Strip the default namespace from the beginning of the file's namespace
+        // to get the relative folder path (project-relative, not solution-relative)
+        var relativeFolderNamespace = ns;
+        if (ns.StartsWith(defaultNamespace))
+        {
+            relativeFolderNamespace = ns.Substring(defaultNamespace.Length).TrimStart('.');
+        }
+
+        var relativePath = relativeFolderNamespace.Replace('.', Path.DirectorySeparatorChar);
+        var expectedDir = relativePath.Length > 0 
+            ? Path.Combine(projectDir, relativePath) 
+            : projectDir;
         var expectedPath = Path.Combine(expectedDir, Path.GetFileName(filePath));
 
         if (filePath != expectedPath)
