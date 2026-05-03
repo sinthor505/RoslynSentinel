@@ -204,23 +204,53 @@ public class GranularRefactoringEngine
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
-        var token = root.FindToken(position);
-        var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+
+        // Primary: find an expression whose span starts at position and whose text matches
+        // the snippet — handles compound expressions like "a + b".
+        var trimmedSnippet = contextSnippet.Trim();
+        var expression = root.DescendantNodes()
+            .OfType<ExpressionSyntax>()
+            .Where(e => e.SpanStart == position && e.ToString().Trim() == trimmedSnippet)
+            .FirstOrDefault()
+            // Fallback: walk from the token at the position up to the first expression.
+            ?? root.FindToken(position).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+
         if (expression == null) return root.ToFullString();
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null) return root.ToFullString();
         if (containingStatement.Parent is not BlockSyntax block) return root.ToFullString();
+
+        // If the expression IS the entire initializer of an existing local var declaration, the
+        // variable is already introduced — extracting it would produce `var x = x;` (a duplicate).
+        if (containingStatement is LocalDeclarationStatementSyntax existingDecl &&
+            existingDecl.Declaration.Variables.Count == 1 &&
+            existingDecl.Declaration.Variables[0].Initializer?.Value?.IsEquivalentTo(expression) == true)
+        {
+            var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
+            return $"// '{existingName}' is already a local variable — nothing to introduce.";
+        }
+
         var varDecl = SyntaxFactory.LocalDeclarationStatement(
             SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
                 .WithVariables(SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.VariableDeclarator(newVariableName)
                         .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))));
 
-        var varRef = SyntaxFactory.IdentifierName(newVariableName).WithTriviaFrom(expression);
+        // If the extracted expression is the sole content of a parenthesized expression,
+        // replace the outer parens too — avoids spurious "(sum) * c" when extracting "a + b"
+        // from "(a + b) * c". A bare identifier never needs parens (highest precedence).
+        SyntaxNode nodeToReplace = expression;
+        if (expression.Parent is ParenthesizedExpressionSyntax parenParent &&
+            parenParent.Expression == expression)
+        {
+            nodeToReplace = parenParent;
+        }
 
-        var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingStatement, block });
-        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(expression)!, varRef);
+        var varRef = SyntaxFactory.IdentifierName(newVariableName).WithTriviaFrom(nodeToReplace);
+
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { nodeToReplace, containingStatement, block });
+        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(nodeToReplace)!, varRef);
         var currentStatement = newRoot.GetCurrentNode(containingStatement)!;
         var currentBlock = newRoot.GetCurrentNode(block)!;
         var idx = currentBlock.Statements.IndexOf(currentStatement);
