@@ -153,11 +153,18 @@ public class GranularRefactoringEngine
             fieldType = SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
         }
 
+        // Check if expression is safe to use as a class field initializer
+        // (doesn't reference method parameters or local variables)
+        var isInitializerSafe = IsExpressionClassScopeSafe(expression, semanticModel, cancellationToken);
+
+        var variableDeclarator = isInitializerSafe
+            ? SyntaxFactory.VariableDeclarator(newFieldName)
+                .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia()))
+            : SyntaxFactory.VariableDeclarator(newFieldName);
+
         var fieldDeclaration = SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(fieldType)
-                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.VariableDeclarator(newFieldName)
-                            .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))))
+                    .WithVariables(SyntaxFactory.SingletonSeparatedList(variableDeclarator)))
             .WithModifiers(SyntaxFactory.TokenList(
                 SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
                 SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
@@ -171,6 +178,36 @@ public class GranularRefactoringEngine
         newRoot = newRoot.ReplaceNode(currentClass, newClass);
 
         return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private static bool IsExpressionClassScopeSafe(ExpressionSyntax expression, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    {
+        // Check all identifiers in the expression to see if they reference method parameters or local variables
+        var identifiers = expression.DescendantNodes().OfType<IdentifierNameSyntax>();
+        
+        if (semanticModel == null)
+            // If no semantic model, be conservative and assume it's not safe
+            return identifiers.Count() == 0;
+
+        foreach (var identifier in identifiers)
+        {
+            try
+            {
+                var symbolInfo = semanticModel.GetSymbolInfo(identifier, cancellationToken);
+                var symbol = symbolInfo.Symbol;
+                
+                // Check if this identifier refers to a method parameter or local variable
+                if (symbol is IParameterSymbol or ILocalSymbol)
+                    return false;
+            }
+            catch
+            {
+                // If we can't determine the symbol, be conservative
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
