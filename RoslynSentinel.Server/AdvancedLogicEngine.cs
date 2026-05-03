@@ -126,7 +126,19 @@ public class AdvancedLogicEngine
             {
                 var newParam = firstParam.WithModifiers(firstParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ThisKeyword)));
                 var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
-                return root!.ReplaceNode(methodNode, newMethod).NormalizeWhitespace().ToFullString();
+                var updatedRoot = root!.ReplaceNode(methodNode, newMethod);
+
+                // Also ensure the containing class is marked as static
+                // Find the class in the updated root
+                var classNode = updatedRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault(c => c.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName));
+                if (classNode != null && !classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                {
+                    var newClass = classNode.WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword)));
+                    updatedRoot = updatedRoot.ReplaceNode(classNode, newClass);
+                }
+
+                return updatedRoot.NormalizeWhitespace().ToFullString();
             }
         }
         return root?.ToFullString() ?? "";
