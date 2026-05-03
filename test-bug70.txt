@@ -1,0 +1,33 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  RoslynSentinel.Server -> E:\source\repos\RoslynSentinel\RoslynSentinel.Server\bin\Debug\net10.0\RoslynSentinel.Server.dll
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\DeepFunctionalVerificationTests.cs(77,25): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(36,24): warning CS8600: Converting null literal or possible null value to non-nullable type. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(40,13): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+  RoslynSentinel.Tests -> E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll
+Test run for E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+  Failed BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath [310 ms]
+  Error Message:
+     Should return a path suggestion. Got: ''
+Assert.That(result, Is.Not.Empty)
+  Expected: not <empty>
+  But was:  <string.Empty>
+
+  Stack Trace:
+     at RoslynSentinel.Tests.Bug70_74RegressionTests.BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath() in E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs:line 1380
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+
+1)    at RoslynSentinel.Tests.Bug70_74RegressionTests.BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath() in E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs:line 1380
+   at System.Runtime.CompilerServices.AsyncMethodBuilderCore.Start[TStateMachine](TStateMachine& stateMachine)
+   at RoslynSentinel.Tests.Bug70_74RegressionTests.BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath()
+
+
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: 310 ms - RoslynSentinel.Tests.dll (net10.0)

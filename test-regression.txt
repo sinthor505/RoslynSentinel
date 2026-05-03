@@ -1,0 +1,8 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  RoslynSentinel.Server -> E:\source\repos\RoslynSentinel\RoslynSentinel.Server\bin\Debug\net10.0\RoslynSentinel.Server.dll
+  RoslynSentinel.Tests -> E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll
+Test run for E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5, Duration: 989 ms - RoslynSentinel.Tests.dll (net10.0)

@@ -1,0 +1,22 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  RoslynSentinel.Server -> E:\source\repos\RoslynSentinel\RoslynSentinel.Server\bin\Debug\net10.0\RoslynSentinel.Server.dll
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\DeepFunctionalVerificationTests.cs(77,25): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1363,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1402,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1518,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(36,24): warning CS8600: Converting null literal or possible null value to non-nullable type. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(40,13): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+
+Build FAILED.
+
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\DeepFunctionalVerificationTests.cs(77,25): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(36,24): warning CS8600: Converting null literal or possible null value to non-nullable type. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\MoveTypeToFileTests.cs(40,13): warning CS8602: Dereference of a possibly null reference. [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1363,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1402,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\BugFixTests.cs(1518,42): error CS1061: 'PersistentWorkspaceManager' does not contain a definition for 'GetSolution' and no accessible extension method 'GetSolution' accepting a first argument of type 'PersistentWorkspaceManager' could be found (are you missing a using directive or an assembly reference?) [E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj]
+    3 Warning(s)
+    3 Error(s)
+
+Time Elapsed 00:00:01.46
