@@ -361,14 +361,15 @@ public class AsyncOptimizationEngine
         if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null) return $"// Error: Method '{methodName}' not found.";
 
         var returnTypeStr = methodNode.ReturnType.ToString().Trim();
 
         if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
-            return root!.ToFullString();
+            return root.ToFullString();
 
         string? innerType = null;
         if (returnTypeStr.StartsWith("Task<List<") && returnTypeStr.EndsWith(">>"))
@@ -461,7 +462,7 @@ public class AsyncOptimizationEngine
             newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
         }
 
-        var newRoot = root!.ReplaceNode(methodNode, newMethod);
+        var newRoot = root.ReplaceNode(methodNode, newMethod);
         return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
@@ -477,14 +478,15 @@ public class AsyncOptimizationEngine
         if (document == null) return "// Error: File not found in the loaded solution.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        if (root == null) return "// Error: Failed to get syntax root.";
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null) return $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source.";
 
         // Check if method already has a CancellationToken parameter
         if (methodNode.ParameterList.Parameters.Any(p =>
             p.Type?.ToString().Contains("CancellationToken") == true))
-            return root!.ToFullString();
+            return root.ToFullString();
 
         // Build CancellationToken parameter (trailing space is intentional: it becomes
         // the whitespace trivia that separates the type name from the parameter identifier)

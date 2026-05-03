@@ -25,7 +25,8 @@ public class CodeFlowEngine
         if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         
         if (methodNode == null || methodNode.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
 
@@ -64,12 +65,12 @@ public class CodeFlowEngine
 
                 var newBody = SyntaxFactory.Block(newStatements);
                 var newMethodNode = methodNode.WithBody(newBody);
-                var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
+                var newRoot = root.ReplaceNode(methodNode, newMethodNode);
                 return newRoot.NormalizeWhitespace().ToFullString();
             }
         }
 
-        return root!.ToFullString(); // No optimization could be safely applied
+        return root.ToFullString(); // No optimization could be safely applied
         }
         catch (Exception ex)
         {

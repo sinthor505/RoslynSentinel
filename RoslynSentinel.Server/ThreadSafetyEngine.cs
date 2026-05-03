@@ -25,7 +25,8 @@ public class ThreadSafetyEngine
         if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null || method.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
 
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
@@ -74,7 +75,7 @@ public class ThreadSafetyEngine
             newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
         }
 
-        var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
+        var newRoot = root.ReplaceNode(typeNode, newTypeNode);
         return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
@@ -96,7 +97,8 @@ public class ThreadSafetyEngine
         if (document == null) throw new Exception("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        if (root == null) throw new Exception("Failed to get syntax root.");
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null || method.Body == null) throw new Exception("Method or body not found.");
 
@@ -104,7 +106,7 @@ public class ThreadSafetyEngine
         if (typeNode == null) throw new Exception("Type not found.");
 
         var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
-        if (!lockStatements.Any()) return root!.ToFullString();
+        if (!lockStatements.Any()) return root.ToFullString();
 
         const string semaphoreName = "_semaphore";
         var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
@@ -170,7 +172,7 @@ public class ThreadSafetyEngine
             newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
         }
 
-        var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
+        var newRoot = root.ReplaceNode(typeNode, newTypeNode);
         return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
