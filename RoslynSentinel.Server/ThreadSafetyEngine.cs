@@ -85,8 +85,8 @@ public class ThreadSafetyEngine
     }
 
     /// <summary>
-    /// Converts lock statements inside a method to async-safe SemaphoreSlim pattern.
-    /// Adds a SemaphoreSlim field and replaces lock with await _semaphore.WaitAsync() + try/finally.
+    /// Converts lock statements inside a method and ALL other methods to async-safe SemaphoreSlim pattern.
+    /// Adds a SemaphoreSlim field and replaces all lock statements with await _semaphore.WaitAsync() + try/finally.
     /// </summary>
     public async Task<string> ConvertLockToSemaphoreSlimAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
@@ -105,18 +105,30 @@ public class ThreadSafetyEngine
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (typeNode == null) throw new Exception("Type not found.");
 
+        // Find the lock object being used in this method
         var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
         if (!lockStatements.Any()) return root.ToFullString();
+
+        // Get the lock object identifier (e.g., "_lock")
+        var lockExpression = lockStatements.First().Expression.ToString().Trim();
+
+        // Find ALL lock statements in the entire type that use the same lock object
+        var allLockStatementsInType = typeNode.DescendantNodes().OfType<LockStatementSyntax>()
+            .Where(ls => ls.Expression.ToString().Trim() == lockExpression)
+            .ToList();
+
+        if (!allLockStatementsInType.Any()) return root.ToFullString();
 
         const string semaphoreName = "_semaphore";
         var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
             .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
 
-        var newMethodBody = method.Body.ReplaceNodes(lockStatements, (orig, _) =>
+        // Build the conversion function for lock statements
+        Func<LockStatementSyntax, SyntaxNode> convertLock = (lockStmt) =>
         {
-            var bodyStatements = orig.Statement is BlockSyntax blk
+            var bodyStatements = lockStmt.Statement is BlockSyntax blk
                 ? blk.Statements
-                : SyntaxFactory.SingletonList<StatementSyntax>(orig.Statement);
+                : SyntaxFactory.SingletonList<StatementSyntax>(lockStmt.Statement);
 
             var waitAsync = SyntaxFactory.ExpressionStatement(
                 SyntaxFactory.AwaitExpression(
@@ -139,20 +151,33 @@ public class ThreadSafetyEngine
                 SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
 
             return SyntaxFactory.Block(waitAsync, tryFinally);
-        });
+        };
 
-        var newMethod = method.WithBody(newMethodBody);
-        if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
+        // Replace all lock statements in the type
+        var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
+
+        // Find method names that contain locks (before replacement, using original typeNode)
+        var methodNamesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+            .Select(m => m.Identifier.Text)
+            .ToHashSet();
+
+        // Make ALL methods that contained locks async (find them in newTypeNode by name)
+        var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+        foreach (var meth in methodsInNewType)
         {
-            newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-            var retStr = newMethod.ReturnType.ToString().Trim();
-            if (retStr == "void")
-                newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
-            else if (!retStr.StartsWith("Task"))
-                newMethod = newMethod.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
+            if (methodNamesWithLocks.Contains(meth.Identifier.Text) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
+            {
+                var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+                var retStr = newMeth.ReturnType.ToString().Trim();
+                if (retStr == "void")
+                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
+                else if (!retStr.StartsWith("Task"))
+                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
+                
+                newTypeNode = newTypeNode.ReplaceNode(meth, newMeth);
+            }
         }
-
-        TypeDeclarationSyntax newTypeNode = typeNode.ReplaceNode(method, newMethod);
 
         if (!hasSemaphore)
         {

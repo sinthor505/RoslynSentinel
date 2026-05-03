@@ -106,11 +106,11 @@ public class ModernLoggingEngine
             }
         }
 
+        // First, replace invocations in the class, then add generated methods
+        newClassNode = newClassNode.ReplaceNodes(replaceMap.Keys, (oldNode, _) => replaceMap[oldNode]);
         newClassNode = newClassNode.AddMembers(generatedMethods.ToArray());
+        
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
-
-        // Replace the invocations in the new root
-        newRoot = newRoot.ReplaceNodes(replaceMap.Keys, (oldNode, _) => replaceMap[oldNode]);
 
         return newRoot.NormalizeWhitespace().ToFullString();
     }

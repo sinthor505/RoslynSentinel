@@ -336,7 +336,54 @@ public class GranularRefactoringEngine
 
     public async Task<string> MoveTypeToOuterScopeAsync(string filePath, string nestedTypeName, CancellationToken cancellationToken = default)
     {
-        return "";
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) return $"// Error: File '{filePath}' not found.";
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return $"// Error: Failed to get syntax root.";
+
+        // Find the type
+        var nestedType = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == nestedTypeName);
+        
+        if (nestedType == null) 
+            return $"// Error: Type '{nestedTypeName}' not found.";
+
+        // Check if type is actually nested (parent is a type, not namespace/file scope)
+        var parentType = nestedType.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (parentType == null)
+            return $"// Error: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope.";
+
+        // Type is nested, move it out
+        var newRoot = root.RemoveNode(nestedType, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        if (newRoot == null) return root.ToFullString();
+
+        // Find the namespace or file scope and add the type there
+        var ns = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
+        var fileScopedNs = root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
+
+        if (ns != null)
+        {
+            var newNs = ns.AddMembers(nestedType);
+            newRoot = newRoot!.ReplaceNode(ns, newNs);
+        }
+        else if (fileScopedNs != null)
+        {
+            var newFileScopedNs = fileScopedNs.AddMembers(nestedType);
+            newRoot = newRoot!.ReplaceNode(fileScopedNs, newFileScopedNs);
+        }
+        else
+        {
+            // Add at compilation unit level
+            var compilationUnit = root as CompilationUnitSyntax;
+            if (compilationUnit != null)
+            {
+                newRoot = compilationUnit.AddMembers(nestedType);
+            }
+        }
+
+        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
     }
 
     public async Task<Dictionary<string, string>> ExtractMembersToPartialAsync(string filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
