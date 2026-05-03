@@ -19,7 +19,8 @@ public record RepositoryInterfaceResult(
 public record FluentBuilderResult(
     string BuilderClassName,
     string BuilderCode,
-    string UsageExample
+    string UsageExample,
+    string? Error = null
 );
 
 public record DecoratorResult(
@@ -108,6 +109,57 @@ public class CodeGenerationEngine
     }
 
     private string Capitalize(string name) => char.ToUpper(name[0]) + name.Substring(1);
+
+    /// <summary>
+    /// Returns true if <paramref name="receiverSyntax"/> is typed as IConfiguration (or variant).
+    /// Uses semantic type resolution first; falls back to syntactic declaration text and identifier-name heuristics
+    /// so test workspaces without full NuGet references still work.
+    /// </summary>
+    private static bool IsConfigurationReceiver(
+        ExpressionSyntax receiverSyntax,
+        SemanticModel semanticModel,
+        HashSet<string> configTypeNames,
+        SyntaxNode root,
+        CancellationToken ct)
+    {
+        // Primary: semantic type info
+        var resolved = semanticModel.GetTypeInfo(receiverSyntax, ct).Type;
+        if (resolved != null)
+            return configTypeNames.Contains(resolved.Name);
+
+        // Fallback 1: look at the declared type text of the identifier in the syntax tree
+        if (receiverSyntax is IdentifierNameSyntax id)
+        {
+            var receiverName = id.Identifier.Text;
+
+            // Search parameter declarations, local variable declarations, and field declarations
+            foreach (var paramSyntax in root.DescendantNodes().OfType<ParameterSyntax>())
+            {
+                if (paramSyntax.Identifier.Text == receiverName && paramSyntax.Type != null)
+                {
+                    var typeName = paramSyntax.Type.ToString();
+                    if (configTypeNames.Any(n => typeName.Contains(n))) return true;
+                }
+            }
+
+            foreach (var varDecl in root.DescendantNodes().OfType<VariableDeclarationSyntax>())
+            {
+                foreach (var v in varDecl.Variables)
+                {
+                    if (v.Identifier.Text == receiverName)
+                    {
+                        var typeName = varDecl.Type.ToString();
+                        if (configTypeNames.Any(n => typeName.Contains(n))) return true;
+                    }
+                }
+            }
+
+            // Fallback 2: naming convention (config, configuration, _config, appConfiguration, etc.)
+            return receiverName.IndexOf("onfig", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        return false;
+    }
 
     public async Task<string> GenerateConstructorAsync(string filePath, string className, CancellationToken ct = default)
     {
@@ -266,28 +318,75 @@ public class CodeGenerationEngine
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project == null) throw new Exception("Project not found.");
 
-        var configKeys = new Dictionary<string, object>();
+        var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
+
+        // IConfiguration type names to recognise the receiver
+        var configTypeNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "IConfiguration", "IConfigurationRoot", "IConfigurationSection",
+            "ConfigurationManager"
+        };
+        // Method names used to read config values
+        var getValueMethodNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "GetValue", "GetSection", "GetConnectionString", "GetChildren",
+            "Get", "GetRequired", "GetRequiredSection"
+        };
 
         foreach (var document in project.Documents)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null) continue;
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            if (semanticModel == null) continue;
 
-            // Look for config["Key"] or config.GetValue<T>("Key")
-            var accessors = root.DescendantNodes().OfType<ElementAccessExpressionSyntax>();
-            foreach (var access in accessors)
+            // Pattern 1: config["Key"] — only when receiver is IConfiguration
+            foreach (var access in root.DescendantNodes().OfType<ElementAccessExpressionSyntax>())
             {
-                if (access.ArgumentList.Arguments.Count == 1 && 
-                    access.ArgumentList.Arguments[0].Expression is LiteralExpressionSyntax literal &&
-                    literal.IsKind(SyntaxKind.StringLiteralExpression))
-                {
-                    var key = literal.Token.ValueText;
-                    if (!configKeys.ContainsKey(key)) configKeys[key] = "TODO: Set default value";
-                }
+                if (access.ArgumentList.Arguments.Count != 1) continue;
+                if (access.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax lit) continue;
+                if (!lit.IsKind(SyntaxKind.StringLiteralExpression)) continue;
+                if (!IsConfigurationReceiver(access.Expression, semanticModel, configTypeNames, root, cancellationToken)) continue;
+
+                collectedKeys.Add(lit.Token.ValueText);
+            }
+
+            // Pattern 2: config.GetValue<T>("Key"), config.GetSection("Key"), etc.
+            foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
+                if (!getValueMethodNames.Contains(ma.Name.Identifier.Text)) continue;
+                if (inv.ArgumentList.Arguments.Count == 0) continue;
+
+                if (inv.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax keyLit) continue;
+                if (!keyLit.IsKind(SyntaxKind.StringLiteralExpression)) continue;
+                if (!IsConfigurationReceiver(ma.Expression, semanticModel, configTypeNames, root, cancellationToken)) continue;
+
+                collectedKeys.Add(keyLit.Token.ValueText);
             }
         }
 
-        return JsonSerializer.Serialize(configKeys, new JsonSerializerOptions { WriteIndented = true });
+        // Build nested JSON hierarchy: "Kroger:ClientId" → { "Kroger": { "ClientId": "TODO" } }
+        var root2 = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var key in collectedKeys)
+        {
+            var parts = key.Split(':');
+            var current = root2;
+            for (int i = 0; i < parts.Length - 1; i++)
+            {
+                if (!current.TryGetValue(parts[i], out var child) || child is not Dictionary<string, object> childDict)
+                {
+                    childDict = new Dictionary<string, object>(StringComparer.Ordinal);
+                    current[parts[i]] = childDict;
+                }
+                current = childDict;
+            }
+            var leafKey = parts[^1];
+            if (!current.ContainsKey(leafKey))
+                current[leafKey] = "TODO: Set default value";
+        }
+
+        return JsonSerializer.Serialize(root2, new JsonSerializerOptions { WriteIndented = true });
     }
 
     /// <summary>
@@ -402,7 +501,9 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
-        if (document == null) throw new Exception($"File not found: {filePath}");
+        if (document == null)
+            return new FluentBuilderResult("", "", "",
+                Error: $"File not found: '{filePath}'. Verify the path and ensure the solution is loaded.");
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
 
@@ -412,7 +513,9 @@ public class CodeGenerationEngine
             ?? root?.DescendantNodes().OfType<RecordDeclarationSyntax>()
                    .FirstOrDefault(r => r.Identifier.Text == className);
 
-        if (typeNode == null) throw new Exception($"Class or record '{className}' not found in '{filePath}'.");
+        if (typeNode == null)
+            return new FluentBuilderResult("", "", "",
+                Error: $"Class or record '{className}' not found in '{filePath}'. Check spelling and that the file contains this type.");
 
         var ns = root?.DescendantNodes()
             .OfType<BaseNamespaceDeclarationSyntax>()
@@ -448,7 +551,7 @@ public class CodeGenerationEngine
         if (properties.Count == 0)
             throw new InvalidOperationException(
                 $"No settable public properties or primary constructor parameters found on '{className}'. " +
-                $"GenerateFluentBuilder is designed for POCOs and records with settable properties, not " +
+                $"generate_fluent_builder is designed for POCOs and records with settable properties, not " +
                 $"DI-injected classes. Consider exposing public properties or using a record type.");
 
         var builderClassName = className + "Builder";
@@ -542,7 +645,12 @@ public class CodeGenerationEngine
         var ns = interfaceSymbol.ContainingNamespace?.IsGlobalNamespace == true
             ? null : interfaceSymbol.ContainingNamespace?.ToDisplayString();
 
-        var decoratorClassName = decoratorPrefix + interfaceName.TrimStart('I') + "Decorator";
+        // Strip the leading 'I' from interface name only when it follows the IXxx interface naming convention
+        // Use Substring(1) not TrimStart('I') to avoid stripping multiple I chars (IInventory → nventory)
+        var baseName = interfaceName.Length > 1 && interfaceName[0] == 'I' && char.IsUpper(interfaceName[1])
+            ? interfaceName.Substring(1)
+            : interfaceName;
+        var decoratorClassName = decoratorPrefix + baseName + "Decorator";
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine("using System.Threading;");
@@ -893,7 +1001,9 @@ public class CodeGenerationEngine
         if (root == null) return string.Empty;
 
         var srcText = await document.GetTextAsync(ct);
-        var pos = ContextHelper.FindSnippetPosition(srcText, contextSnippet, lineBefore, lineAfter);
+        var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        if (pos < 0)
+            return $"Error: {snippetError}";
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
             .AncestorsAndSelf()

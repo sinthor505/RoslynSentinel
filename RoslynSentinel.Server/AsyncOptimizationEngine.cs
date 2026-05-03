@@ -144,7 +144,7 @@ public class AsyncOptimizationEngine
                     // var aTask = A(); var bTask = B(); var a = await aTask; var b = await bTask;
                     foreach (var (stmt, varName, awaitedExpr) in batch)
                     {
-                        var taskVarName = (varName ?? "_task") + "Task";
+                        var taskVarName = DeriveTaskVarName(varName, awaitedExpr);
                         // var aTask = A();
                         var taskVarDecl = SyntaxFactory.LocalDeclarationStatement(
                             SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
@@ -155,7 +155,7 @@ public class AsyncOptimizationEngine
                     }
                     foreach (var (stmt, varName, awaitedExpr) in batch)
                     {
-                        var taskVarName = (varName ?? "_task") + "Task";
+                        var taskVarName = DeriveTaskVarName(varName, awaitedExpr);
                         if (varName != null)
                         {
                             // var a = await aTask;
@@ -190,6 +190,39 @@ public class AsyncOptimizationEngine
         var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(newStatements));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
         return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    /// <summary>
+    /// Derives a task variable name from the result variable name or awaited expression.
+    /// e.g. varName="item" → "itemTask"; varName=null, method="GetItemAsync" → "getItemTask"
+    /// </summary>
+    private static string DeriveTaskVarName(string? varName, ExpressionSyntax awaitedExpr)
+    {
+        if (varName != null)
+            return varName + "Task";
+
+        // Try to extract method name from the invocation
+        if (awaitedExpr is InvocationExpressionSyntax inv)
+        {
+            string? methodName = inv.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                IdentifierNameSyntax id => id.Identifier.Text,
+                _ => null
+            };
+            if (methodName != null)
+            {
+                // Strip trailing "Async" suffix, then camelCase
+                var baseName = methodName.EndsWith("Async", StringComparison.Ordinal)
+                    ? methodName[..^5]
+                    : methodName;
+                if (baseName.Length == 0) baseName = methodName;
+                var camel = char.ToLowerInvariant(baseName[0]) + baseName[1..];
+                return camel + "Task";
+            }
+        }
+
+        return "voidTask";
     }
 
     /// <summary>
@@ -321,14 +354,16 @@ public class AsyncOptimizationEngine
     /// </summary>
     public async Task<string> ConvertToAsyncEnumerableAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) throw new Exception("Method not found.");
+        if (methodNode == null) return $"// Error: Method '{methodName}' not found.";
 
         var returnTypeStr = methodNode.ReturnType.ToString().Trim();
 
@@ -343,7 +378,8 @@ public class AsyncOptimizationEngine
         else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
             innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
 
-        if (innerType == null) return root!.ToFullString();
+        if (innerType == null)
+            return $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>.";
 
         var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
         var newMethod = methodNode.WithReturnType(newReturnType.WithTrailingTrivia(SyntaxFactory.Space));
@@ -427,6 +463,11 @@ public class AsyncOptimizationEngine
 
         var newRoot = root!.ReplaceNode(methodNode, newMethod);
         return newRoot.NormalizeWhitespace().ToFullString();
+        }
+        catch (Exception ex)
+        {
+            return $"// Error: {ex.Message}";
+        }
     }
 
     public async Task<string> AddCancellationTokenToMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)

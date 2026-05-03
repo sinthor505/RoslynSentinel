@@ -124,7 +124,7 @@ public class AdvancedStructuralEngine
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                 .WithMembers(SyntaxFactory.List(membersToMove));
 
-            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClassNode.ToFullString() } };
+            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClassNode.NormalizeWhitespace().ToFullString() } };
         }
         return new Dictionary<string, string>();
     }
@@ -132,10 +132,11 @@ public class AdvancedStructuralEngine
     /// <summary>
     /// Inlines a class by moving all its members to a target class and removing the original.
     /// </summary>
-    public async Task<Dictionary<string, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
+    public Task<Dictionary<string, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
-        // 1. Move members from source class in sourceFile to target class in targetFile
-        // 2. Delete source class file
-        return new Dictionary<string, string>();
+        throw new InvalidOperationException(
+            $"inline_class is not yet implemented. To manually inline '{className}': " +
+            $"copy its members to the target class in '{Path.GetFileName(targetFilePath)}' " +
+            $"and remove the source file '{Path.GetFileName(sourceFilePath)}'.");
     }
 }

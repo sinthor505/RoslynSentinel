@@ -82,12 +82,37 @@ public class GranularRefactoringEngine
 
         if (method != null && method.ParameterList.Parameters.Count == 1)
         {
+            // C# does not support static indexers
+            if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                return $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers.\n" + root!.ToFullString();
+
+            // Build getter body from block body or expression body
+            BlockSyntax getterBody;
+            if (method.Body != null)
+            {
+                getterBody = method.Body;
+            }
+            else if (method.ExpressionBody != null)
+            {
+                getterBody = SyntaxFactory.Block(
+                    SyntaxFactory.ReturnStatement(method.ExpressionBody.Expression));
+            }
+            else
+            {
+                return root?.ToFullString() ?? "";
+            }
+
+            // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
+            var validModifiers = method.Modifiers
+                .Where(m => !m.IsKind(SyntaxKind.StaticKeyword) && !m.IsKind(SyntaxKind.AbstractKeyword) && !m.IsKind(SyntaxKind.ExternKeyword))
+                .ToArray();
+
             var parameter = method.ParameterList.Parameters[0];
             var indexer = SyntaxFactory.IndexerDeclaration(method.ReturnType)
-                .AddModifiers(method.Modifiers.ToArray())
+                .AddModifiers(validModifiers)
                 .WithParameterList(SyntaxFactory.BracketedParameterList(SyntaxFactory.SingletonSeparatedList(parameter)))
                 .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(
-                    SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(method.Body))));
+                    SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(getterBody))));
 
             var newRoot = root!.ReplaceNode(method, indexer);
             return newRoot.NormalizeWhitespace().ToFullString();
@@ -159,7 +184,9 @@ public class GranularRefactoringEngine
         if (root == null) return "";
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+        var position = ContextHelper.TryFindSnippetPosition(sourceText, contextSnippet, out var paramSnippetError, lineBefore, lineAfter);
+        if (position < 0)
+            return $"// Error: {paramSnippetError}";
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null) return root.ToFullString();

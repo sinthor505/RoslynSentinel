@@ -18,16 +18,18 @@ public class ThreadSafetyEngine
     /// </summary>
     public async Task<string> MakeMethodThreadSafeAsync(string filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || method.Body == null) throw new Exception("Method or body not found.");
+        if (method == null || method.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
 
         var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        if (typeNode == null) throw new Exception("Type not found.");
+        if (typeNode == null) return $"// Error: Containing type not found for method '{methodName}'.";
 
         // Check if a field with lockFieldName already exists
         var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
@@ -44,7 +46,7 @@ public class ThreadSafetyEngine
             }
             else
             {
-                throw new Exception($"Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.");
+                return $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.";
             }
         }
         else
@@ -74,6 +76,11 @@ public class ThreadSafetyEngine
 
         var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
         return newRoot.NormalizeWhitespace().ToFullString();
+        }
+        catch (Exception ex)
+        {
+            return $"// Error: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -82,6 +89,8 @@ public class ThreadSafetyEngine
     /// </summary>
     public async Task<string> ConvertLockToSemaphoreSlimAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) throw new Exception("File not found.");
@@ -163,5 +172,10 @@ public class ThreadSafetyEngine
 
         var newRoot = root!.ReplaceNode(typeNode, newTypeNode);
         return newRoot.NormalizeWhitespace().ToFullString();
+        }
+        catch (Exception ex)
+        {
+            return $"// Error converting lock to SemaphoreSlim: {ex.Message}";
+        }
     }
 }

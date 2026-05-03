@@ -1188,9 +1188,11 @@ public class Standalone
     public void Feature() { }
 }", "Standalone.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
-            "A class with no explicit base class (only System.Object) should throw.");
+        Dictionary<string, string> result = null!;
+        Assert.DoesNotThrowAsync(async () =>
+            result = await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
+            "A class with no explicit base class should return an error dict, not throw.");
+        Assert.That(result, Contains.Key("error"));
     }
 
     [Test]

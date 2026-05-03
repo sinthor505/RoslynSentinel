@@ -121,7 +121,7 @@ public class AdvancedTypeEngine
                 .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
                 .AddMembers(properties.ToArray());
 
-            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClass.ToFullString() } };
+            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClass.NormalizeWhitespace().ToFullString() } };
         }
 
         return new Dictionary<string, string>();

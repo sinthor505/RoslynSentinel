@@ -24,7 +24,8 @@ public record SymbolHoverInfo(
     string Accessibility,
     string? DefinedInFile,
     int? DefinedAtLine,
-    List<string> Modifiers
+    List<string> Modifiers,
+    string? Error = null
 );
 
 public record ImplementationInfo(
@@ -109,30 +110,53 @@ public class SymbolNavigationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return null;
+        if (document == null)
+            return ErrorHoverInfo($"File not found: '{filePath}'");
 
-        var text = await document.GetTextAsync(ct);
-        int pos;
+        // Primary: use GetDeclaredSymbol/GetSymbolInfo (declaration-based — more reliable for class/method/property lookups)
+        ISymbol? symbol = null;
         try
         {
-            pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("matched") || ex.Message.Contains("No match"))
+        {
+            return ErrorHoverInfo($"Snippet not found: {ex.Message}");
         }
         catch (InvalidOperationException)
         {
-            return null;
+            // fallthrough to position-based approach
         }
 
-        var model = await document.GetSemanticModelAsync(ct);
-        if (model == null) return null;
+        // Fallback: position-based lookup using SymbolFinder (handles usage sites)
+        if (symbol == null)
+        {
+            var text = await document.GetTextAsync(ct);
+            int pos;
+            try
+            {
+                pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ErrorHoverInfo(ex.Message);
+            }
 
-        // FindSymbolAtPositionAsync needs the cursor on an identifier token.
-        // Use ContextHelper.AdvanceToLastIdentifier to skip modifier keywords like 'public'.
-        var root = await document.GetSyntaxRootAsync(ct);
-        if (root != null)
-            pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
+            var model = await document.GetSemanticModelAsync(ct);
+            if (model == null)
+                return ErrorHoverInfo("Could not obtain semantic model for file.");
 
-        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, ct);
-        if (symbol == null) return null;
+            // SymbolFinder needs the cursor on an identifier token
+            var root = await document.GetSyntaxRootAsync(ct);
+            if (root != null)
+                pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
+
+            symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, ct);
+        }
+
+        if (symbol == null)
+            return ErrorHoverInfo($"No symbol found at snippet '{contextSnippet}'. " +
+                "Try a snippet that includes the identifier directly (e.g. the method name or property name).");
 
         var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
         int? symLine = null;
@@ -213,6 +237,21 @@ public class SymbolNavigationEngine
             Modifiers: modifiers
         );
     }
+
+    private static SymbolHoverInfo ErrorHoverInfo(string error) =>
+        new SymbolHoverInfo(
+            Name: string.Empty,
+            Kind: "Error",
+            FullSignature: string.Empty,
+            ContainingType: null,
+            ContainingNamespace: null,
+            Documentation: null,
+            Accessibility: "Unknown",
+            DefinedInFile: null,
+            DefinedAtLine: null,
+            Modifiers: new List<string>(),
+            Error: error
+        );
 
     public async Task<List<ImplementationInfo>> FindAllImplementationsAsync(
         string typeName, string? projectName = null, CancellationToken ct = default)
@@ -728,10 +767,31 @@ public class SymbolNavigationEngine
 
         if (depth >= maxDepth || !visited.Add(fullKey)) return node;
 
-        var references = await SymbolFinder.FindReferencesAsync(method, solution, ct);
+        // Search direct references to this method AND any corresponding interface method declarations.
+        // This ensures callers that use the interface type (e.g. IService.Method()) are included.
+        var allReferences = new List<ReferencedSymbol>(
+            await SymbolFinder.FindReferencesAsync(method, solution, ct));
+
+        var containingType = method.ContainingType;
+        if (containingType != null)
+        {
+            foreach (var iface in containingType.AllInterfaces)
+            {
+                foreach (var ifaceMethod in iface.GetMembers(method.Name).OfType<IMethodSymbol>())
+                {
+                    var impl = containingType.FindImplementationForInterfaceMember(ifaceMethod) as IMethodSymbol;
+                    if (impl != null && SymbolEqualityComparer.Default.Equals(impl.OriginalDefinition, method.OriginalDefinition))
+                    {
+                        var ifaceRefs = await SymbolFinder.FindReferencesAsync(ifaceMethod, solution, ct);
+                        allReferences.AddRange(ifaceRefs);
+                    }
+                }
+            }
+        }
+
         var seenCallers = new HashSet<string>();
 
-        foreach (var referencedSymbol in references)
+        foreach (var referencedSymbol in allReferences)
         {
             foreach (var location in referencedSymbol.Locations)
             {

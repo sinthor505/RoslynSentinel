@@ -73,6 +73,11 @@ public class CodeStyleEngine
         var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
         if (prop == null) return root?.ToFullString() ?? "";
 
+        // Only works for properties declared directly inside a class (not an interface or struct)
+        var classNode = prop.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (classNode == null)
+            return $"// ERROR: '{propertyName}' must be in a class — this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "");
+
         var type = prop.Type;
         var fieldName = $"_{propertyName.ToLower()}";
         
@@ -88,7 +93,6 @@ public class CodeStyleEngine
         var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(type).AddVariables(SyntaxFactory.VariableDeclarator(fieldName)))
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
 
-        var classNode = prop.Ancestors().OfType<ClassDeclarationSyntax>().First();
         var newClass = classNode.RemoveNode(prop, SyntaxRemoveOptions.KeepNoTrivia)!
             .AddMembers(field, getter, setter);
 

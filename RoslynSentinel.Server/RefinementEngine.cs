@@ -19,41 +19,43 @@ public class RefinementEngine
     /// </summary>
     public async Task<Dictionary<string, string>> PullUpMemberAsync(string filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return new Dictionary<string, string> { { "error", $"File '{filePath}' not found." } };
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null) return new Dictionary<string, string> { { "error", $"Class '{className}' not found." } };
 
         var member = classNode.Members.FirstOrDefault(m => 
             (m is MethodDeclarationSyntax meth && meth.Identifier.Text == memberName) ||
             (m is PropertyDeclarationSyntax prop && prop.Identifier.Text == memberName));
 
-        if (member == null) throw new Exception("Member not found.");
+        if (member == null) return new Dictionary<string, string> { { "error", $"Member '{memberName}' not found in class '{className}'." } };
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode);
         var baseType = classSymbol?.BaseType;
 
         if (baseType == null || baseType.SpecialType == SpecialType.System_Object)
-            throw new Exception("No base class found to pull up to.");
+            return new Dictionary<string, string> { { "error", "No base class found to pull up to." } };
 
         var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
-        if (baseFile == null) throw new Exception("Base class source file not found.");
+        if (baseFile == null) return new Dictionary<string, string> { { "error", "Base class source file not found." } };
 
         if (baseType.DeclaringSyntaxReferences.Length == 0)
-            throw new Exception("Base class is in an external assembly and cannot be modified.");
+            return new Dictionary<string, string> { { "error", "Base class is in an external assembly and cannot be modified." } };
 
         var baseDoc = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == baseFile);
-        if (baseDoc == null) throw new Exception($"Base class source document not found at '{baseFile}'.");
+        if (baseDoc == null) return new Dictionary<string, string> { { "error", $"Base class source document not found at '{baseFile}'." } };
 
         var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
         var baseClassNode = baseRoot?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
-        if (baseClassNode == null) throw new Exception($"Base class '{baseType.Name}' not found in '{baseFile}'.");
+        if (baseClassNode == null) return new Dictionary<string, string> { { "error", $"Base class '{baseType.Name}' not found in '{baseFile}'." } };
 
         // Remove 'override', add 'virtual' (if not already abstract/virtual)
         SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
@@ -82,6 +84,11 @@ public class RefinementEngine
             { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
             { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
         };
+        }
+        catch (Exception ex)
+        {
+            return new Dictionary<string, string> { { "error", ex.Message } };
+        }
     }
 
     /// <summary>
@@ -97,7 +104,8 @@ public class RefinementEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (method == null || semanticModel == null) return root?.ToFullString() ?? "";
+        if (method == null || semanticModel == null)
+            return $"// Error: Method '{methodName}' not found in file '{filePath}'.";
 
         ExpressionSyntax? expressionToInline = null;
         if (method.ExpressionBody != null)
@@ -109,28 +117,37 @@ public class RefinementEngine
             expressionToInline = ret.Expression;
         }
 
-        if (expressionToInline == null) return root!.ToFullString();
+        if (expressionToInline == null)
+            return $"// Error: Cannot inline '{methodName}': only expression-body methods or single-return-statement methods can be inlined. The method has a complex body with multiple statements.";
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
-        if (methodSymbol == null) return root!.ToFullString();
+        if (methodSymbol == null)
+            return $"// Error: Cannot inline '{methodName}': failed to resolve the method's semantic symbol.";
 
         var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, cancellationToken);
-        var updatedRoot = root;
 
+        // Collect ALL invocation nodes from the ORIGINAL root before any replacements.
+        // Replacing nodes one-at-a-time in a loop invalidates previously computed SourceSpan
+        // positions — the batch approach (ReplaceNodes) avoids span mismatches entirely.
+        var callSiteNodes = new List<InvocationExpressionSyntax>();
         foreach (var referencedSymbol in references)
         {
             foreach (var location in referencedSymbol.Locations)
             {
                 if (location.Document.Id == document.Id)
                 {
-                    var node = updatedRoot!.FindNode(location.Location.SourceSpan).AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    var node = root!.FindNode(location.Location.SourceSpan)
+                        .AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     if (node != null)
-                    {
-                        updatedRoot = updatedRoot.ReplaceNode(node, expressionToInline.WithTriviaFrom(node));
-                    }
+                        callSiteNodes.Add(node);
                 }
             }
         }
+
+        // Batch-replace all call sites at once so tree spans remain consistent
+        var updatedRoot = root!.ReplaceNodes(
+            callSiteNodes,
+            (original, _) => expressionToInline.WithTriviaFrom(original));
 
         updatedRoot = updatedRoot!.RemoveNode(updatedRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().First(m => m.Identifier.Text == methodName), SyntaxRemoveOptions.KeepUnbalancedDirectives);
         

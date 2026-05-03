@@ -18,14 +18,16 @@ public class CodeFlowEngine
     /// </summary>
     public async Task<string> ReduceBlockDepthAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) return $"// Error: File '{filePath}' not found.";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         
-        if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
+        if (methodNode == null || methodNode.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
 
         // Look for: 
         // void Method() { 
@@ -68,5 +70,10 @@ public class CodeFlowEngine
         }
 
         return root!.ToFullString(); // No optimization could be safely applied
+        }
+        catch (Exception ex)
+        {
+            return $"// Error: {ex.Message}";
+        }
     }
 }

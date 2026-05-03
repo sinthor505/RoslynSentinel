@@ -133,8 +133,10 @@ public class NewToolTests
             public class Foo { }
             """);
 
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
+        string result = null!;
+        Assert.DoesNotThrowAsync(async () =>
+            result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
+        Assert.That(result, Does.StartWith("Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

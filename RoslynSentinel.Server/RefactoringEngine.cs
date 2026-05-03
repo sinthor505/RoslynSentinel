@@ -817,7 +817,8 @@ public class RefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
         var root = await document.GetSyntaxRootAsync(ct);
-        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>().FirstOrDefault(m => GetMemberName(m) == memberName);
+        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
         if (member == null) return root?.ToFullString() ?? "";
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
         if (newMember == null) return root?.ToFullString() ?? "";
@@ -850,7 +851,8 @@ public class RefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
         var root = await document.GetSyntaxRootAsync(ct);
-        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>().FirstOrDefault(m => GetMemberName(m) == memberName);
+        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
         if (member == null) return root?.ToFullString() ?? "";
         return root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString();
     }

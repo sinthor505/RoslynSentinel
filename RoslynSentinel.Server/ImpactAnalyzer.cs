@@ -9,7 +9,8 @@ public record ImpactReport(
     string SymbolKind,
     List<ReferenceInfo> References,
     int TotalCallSites,
-    int AffectedProjectsCount
+    int AffectedProjectsCount,
+    string? Error = null
 );
 
 public record ReferenceInfo(
@@ -32,6 +33,8 @@ public class ImpactAnalyzer
 
     public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
+      try
+      {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
@@ -39,7 +42,7 @@ public class ImpactAnalyzer
 
         if (document == null)
         {
-            throw new Exception($"Document not found: {filePath}");
+            return new ImpactReport("", "", [], 0, 0, Error: $"Document not found: {filePath}");
         }
 
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
@@ -47,7 +50,7 @@ public class ImpactAnalyzer
         
         if (syntaxRoot == null || semanticModel == null)
         {
-            throw new Exception("Could not retrieve syntax root or semantic model.");
+            return new ImpactReport("", "", [], 0, 0, Error: "Could not retrieve syntax root or semantic model.");
         }
 
         // Find the symbol at the given position
@@ -56,7 +59,7 @@ public class ImpactAnalyzer
         // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
         position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);
         var token = syntaxRoot.FindToken(position);
-        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(semanticModel, position, solution.Workspace, cancellationToken);
+        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
 
         if (symbol == null)
         {
@@ -71,7 +74,7 @@ public class ImpactAnalyzer
 
         if (symbol == null)
         {
-            throw new Exception("No symbol found at the specified position.");
+            return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.");
         }
 
         _logger.LogInformation("Analyzing impact for symbol: {SymbolName} ({Kind})", symbol.Name, symbol.Kind);
@@ -109,6 +112,11 @@ public class ImpactAnalyzer
             referenceInfos.Count,
             affectedProjects.Count
         );
+      }
+      catch (Exception ex)
+      {
+          return new ImpactReport("", "", [], 0, 0, Error: ex.Message);
+      }
     }
 
     public async Task<ImpactReport> FindDerivedTypesAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)

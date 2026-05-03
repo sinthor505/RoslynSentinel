@@ -76,8 +76,10 @@ public class ToolGapsTests
         SetSource(
             "public class C { private readonly System.Threading.SemaphoreSlim _lock = new(1,1); public void DoWork() { int x = 1; } }",
             "C.cs");
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
+        string result = null!;
+        Assert.DoesNotThrowAsync(async () =>
+            result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
+        Assert.That(result, Does.StartWith("// Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -11,7 +11,8 @@ public record TestScaffoldResult(
     string ClassName,
     string TestClassName,
     string Namespace,
-    string Code
+    string Code,
+    string? Error = null
 );
 
 public class TestingEngine
@@ -134,15 +135,15 @@ public class TestingEngine
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
 
-        if (document == null) throw new Exception($"File not found: {filePath}");
+        if (document == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", "Could not parse syntax root.");
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
 
-        if (classNode == null) throw new Exception($"Class '{className}' not found in {filePath}");
+        if (classNode == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}");
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var testClassName = $"{className}Tests";
@@ -181,9 +182,9 @@ public class TestingEngine
         foreach (var param in interfaceParams)
         {
             var typeName = param.Type!.ToString().TrimEnd('?');
-            sb.AppendLine($"        private Mock<{typeName}> {GetMockFieldName(typeName)};");
+            sb.AppendLine($"        private Mock<{typeName}> {GetMockFieldName(typeName)} = null!;");
         }
-        sb.AppendLine($"        private {className} _sut;");
+        sb.AppendLine($"        private {className} _sut = null!;");
         sb.AppendLine();
 
         sb.AppendLine($"        public {testClassName}()");
@@ -253,15 +254,27 @@ public class TestingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return "";
 
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        bool isStaticClass = classNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) == true;
+
         var sb = new StringBuilder();
         sb.AppendLine("using BenchmarkDotNet.Attributes;");
         sb.AppendLine();
         sb.AppendLine($"public class {className}Benchmarks");
         sb.AppendLine("{");
-        sb.AppendLine($"    private readonly {className} _instance = new();");
-        sb.AppendLine();
-        sb.AppendLine("    [Benchmark]");
-        sb.AppendLine($"    public void Benchmark_{methodName}() => _instance.{methodName}();");
+        if (isStaticClass)
+        {
+            sb.AppendLine("    [Benchmark]");
+            sb.AppendLine($"    public void Benchmark_{methodName}() => {className}.{methodName}();");
+        }
+        else
+        {
+            sb.AppendLine($"    private readonly {className} _instance = new();");
+            sb.AppendLine();
+            sb.AppendLine("    [Benchmark]");
+            sb.AppendLine($"    public void Benchmark_{methodName}() => _instance.{methodName}();");
+        }
         sb.AppendLine("}");
 
         return sb.ToString();

@@ -42,8 +42,7 @@ public class ApiAutomationEngine
 
         foreach (var method in methods)
         {
-            var returnType = method.ReturnType.ToString().Replace("ActionResult", "Task").Replace("ActionResult<", "").Replace(">", "");
-            if (returnType == "void") returnType = "Task";
+            var returnType = ExtractClientReturnType(method.ReturnType.ToString());
             
             sb.AppendLine($"    public async {returnType} {method.Identifier.Text}Async()");
             sb.AppendLine("    {");
@@ -55,5 +54,31 @@ public class ApiAutomationEngine
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    private static string ExtractClientReturnType(string rawReturn)
+    {
+        // Task<ActionResult<X>> → Task<X>  (handles nested generics like Dictionary<string,int>)
+        if (rawReturn.StartsWith("Task<ActionResult<") && rawReturn.EndsWith(">>"))
+            return "Task<" + rawReturn.Substring(18, rawReturn.Length - 20) + ">";
+
+        // Task<ActionResult> / Task<IActionResult> → Task
+        if (rawReturn is "Task<ActionResult>" or "Task<IActionResult>")
+            return "Task";
+
+        // ActionResult<X> → Task<X>
+        if (rawReturn.StartsWith("ActionResult<") && rawReturn.EndsWith(">"))
+            return "Task<" + rawReturn.Substring(13, rawReturn.Length - 14) + ">";
+
+        // ActionResult / IActionResult / void → Task
+        if (rawReturn is "ActionResult" or "IActionResult" or "void")
+            return "Task";
+
+        // Already Task<X> or Task → keep as-is
+        if (rawReturn.StartsWith("Task"))
+            return rawReturn;
+
+        // Wrap synchronous return types
+        return $"Task<{rawReturn}>";
     }
 }

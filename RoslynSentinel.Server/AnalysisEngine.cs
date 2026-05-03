@@ -323,20 +323,22 @@ public class AnalysisEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (root == null || classNode == null) throw new Exception($"Class '{className}' not found.");
 
-        // Gather fields with their types (private fields, skipping backing fields for auto-props)
+        // Gather fields with their types (private instance fields only — skip const, static, backing fields)
         var fieldsWithTypes = classNode.Members.OfType<FieldDeclarationSyntax>()
+            .Where(f => !f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword) || m.IsKind(SyntaxKind.StaticKeyword)))
             .SelectMany(f => f.Declaration.Variables.Select(v =>
                 (Name: v.Identifier.Text, Type: f.Declaration.Type.ToString())))
             .ToList();
 
-        // If no explicit fields, fall back to auto-property names and types
-        if (fieldsWithTypes.Count == 0)
-        {
-            fieldsWithTypes = classNode.Members.OfType<PropertyDeclarationSyntax>()
-                .Where(p => p.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
-                .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()))
-                .ToList();
-        }
+        // Prefer auto-properties when available — they represent the class's semantic identity
+        var propertyFields = classNode.Members.OfType<PropertyDeclarationSyntax>()
+            .Where(p => !p.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
+                        p.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true)
+            .Select(p => (Name: p.Identifier.Text, Type: p.Type.ToString()))
+            .ToList();
+
+        if (propertyFields.Count > 0)
+            fieldsWithTypes = propertyFields;
 
         if (fieldsWithTypes.Count == 0) throw new Exception($"Class '{className}' has no fields or properties to generate equality from.");
 

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Net;
 
 namespace RoslynSentinel.Server;
 
@@ -22,6 +23,7 @@ public class SemanticSearchEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<SearchResult>();
+        var decodedReturnType = WebUtility.HtmlDecode(returnType.Trim());
 
         foreach (var project in solution.Projects)
         {
@@ -29,7 +31,7 @@ public class SemanticSearchEngine
             {
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
                 var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                    .Where(m => m.ReturnType.ToString().Contains(returnType));
+                    .Where(m => m.ReturnType.ToString().Trim().Contains(decodedReturnType, StringComparison.OrdinalIgnoreCase));
 
                 if (methods != null)
                 {

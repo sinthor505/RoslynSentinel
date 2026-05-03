@@ -119,7 +119,17 @@ public class PerformanceEngine
             }
         }
 
-        return issues;
+        // Deduplicate by (filePath, line, issueType) — chained string concat expressions
+        // produce one node per '+' operator, all pointing to adjacent lines on the same expression.
+        var seen = new HashSet<(string, int, string)>();
+        var deduped = new List<PerformanceIssueReport>();
+        foreach (var issue in issues)
+        {
+            var key = (issue.FilePath, issue.Line, issue.IssueType);
+            if (seen.Add(key))
+                deduped.Add(issue);
+        }
+        return deduped;
     }
 
     public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(string filePath, CancellationToken cancellationToken = default)
