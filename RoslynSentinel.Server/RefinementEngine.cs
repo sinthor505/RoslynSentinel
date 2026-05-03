@@ -101,8 +101,9 @@ public class RefinementEngine
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (method == null || semanticModel == null)
             return $"// Error: Method '{methodName}' not found in file '{filePath}'.";
@@ -136,7 +137,7 @@ public class RefinementEngine
             {
                 if (location.Document.Id == document.Id)
                 {
-                    var node = root!.FindNode(location.Location.SourceSpan)
+                    var node = root.FindNode(location.Location.SourceSpan)
                         .AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     if (node != null)
                         callSiteNodes.Add(node);
@@ -145,12 +146,12 @@ public class RefinementEngine
         }
 
         // Batch-replace all call sites at once so tree spans remain consistent
-        var updatedRoot = root!.ReplaceNodes(
+        var updatedRoot = root.ReplaceNodes(
             callSiteNodes,
             (original, _) => expressionToInline.WithTriviaFrom(original));
 
-        updatedRoot = updatedRoot!.RemoveNode(updatedRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().First(m => m.Identifier.Text == methodName), SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        updatedRoot = updatedRoot.RemoveNode(updatedRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().First(m => m.Identifier.Text == methodName), SyntaxRemoveOptions.KeepUnbalancedDirectives);
         
-        return updatedRoot!.NormalizeWhitespace().ToFullString();
+        return updatedRoot.NormalizeWhitespace().ToFullString();
     }
 }
