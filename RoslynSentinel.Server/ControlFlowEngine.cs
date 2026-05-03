@@ -48,11 +48,18 @@ public class ControlFlowEngine
         if (document == null) return new PathCoverageReport(methodName, new List<string>());
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        // Get ALL overloads, not just the first one
+        var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName)
+            .ToList() ?? [];
 
         var branches = new List<string>();
-        if (method != null)
+        
+        // Analyze all overloads
+        foreach (var method in methods)
         {
+            if (method == null) continue;
+            
             var ifs = method.DescendantNodes().OfType<IfStatementSyntax>();
             foreach (var ifNode in ifs)
             {
@@ -67,6 +74,14 @@ public class ControlFlowEngine
                 {
                     branches.Add($"Switch Case: {string.Join(", ", section.Labels)}");
                 }
+            }
+
+            // Also handle ternary operators (ConditionalExpressionSyntax) for expression-bodied methods
+            var ternaries = method.DescendantNodes().OfType<ConditionalExpressionSyntax>();
+            foreach (var ternary in ternaries)
+            {
+                branches.Add($"Ternary: {ternary.Condition} (True Path)");
+                branches.Add($"Ternary: {ternary.Condition} (False Path)");
             }
         }
 

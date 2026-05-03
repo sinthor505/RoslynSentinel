@@ -467,6 +467,14 @@ public class DiscoveryEngine
         ["BUG"] = 0, ["FIXME"] = 1, ["HACK"] = 2, ["TODO"] = 3, ["REVIEW"] = 4, ["NOTE"] = 5
     };
 
+    private static bool ContainsKeywordWithWordBoundary(string text, string keyword)
+    {
+        // Use regex to match whole words only (word boundary check)
+        // This prevents "BUG" from matching in "DEBUGGING"
+        var pattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(keyword)}\b";
+        return System.Text.RegularExpressions.Regex.IsMatch(text, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
     public async Task<List<TodoCommentFinding>> FindTodoFixmeCommentsAsync(
         string? filePath = null, string? projectName = null, CancellationToken ct = default)
     {
@@ -499,7 +507,7 @@ public class DiscoveryEngine
 
                     foreach (var keyword in TodoKeywords)
                     {
-                        if (commentText.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                        if (ContainsKeywordWithWordBoundary(commentText, keyword))
                         {
                             results.Add(new TodoCommentFinding(doc.FilePath, lineNum, keyword.ToUpperInvariant(), commentText.Trim()));
                             break; // Only report one keyword per comment

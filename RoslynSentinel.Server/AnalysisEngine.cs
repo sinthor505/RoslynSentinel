@@ -270,8 +270,44 @@ public class AnalysisEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-
+        
+        // Parse methodName which may be in format "ClassName.MethodName" or just "MethodName"
+        string? className = null;
+        string actualMethodName = methodName;
+        
+        if (methodName.Contains("."))
+        {
+            var parts = methodName.Split('.');
+            if (parts.Length == 2)
+            {
+                className = parts[0];
+                actualMethodName = parts[1];
+            }
+        }
+        
+        // Find the method(s) matching the criteria
+        IEnumerable<MethodDeclarationSyntax> candidateMethods = 
+            root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Identifier.Text == actualMethodName) ?? Enumerable.Empty<MethodDeclarationSyntax>();
+        
+        // If className was provided, filter to implementations in that class
+        if (className != null)
+        {
+            candidateMethods = candidateMethods.Where(m => 
+            {
+                var classNode = m.Parent;
+                while (classNode != null && classNode is not ClassDeclarationSyntax && classNode is not StructDeclarationSyntax)
+                    classNode = classNode.Parent;
+                
+                if (classNode is ClassDeclarationSyntax classDecl)
+                    return classDecl.Identifier.Text == className;
+                if (classNode is StructDeclarationSyntax structDecl)
+                    return structDecl.Identifier.Text == className;
+                return false;
+            });
+        }
+        
+        var methodNode = candidateMethods.FirstOrDefault();
         if (methodNode == null || semanticModel == null) return "Method not found.";
         
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);

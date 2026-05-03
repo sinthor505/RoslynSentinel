@@ -1871,17 +1871,52 @@ public class RefactoringEngine
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null) return root.ToFullString();
 
+        var currentParams = method.ParameterList.Parameters
+            .Select(p => p.Identifier.Text)
+            .ToList();
+
         // Find the XML doc comment trivia preceding the method
         var xmlTrivia = method.GetLeadingTrivia()
             .FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
                                   t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
 
-        if (xmlTrivia == default) return root.ToFullString(); // No XML doc — do nothing
+        // If no XML doc exists, generate one
+        if (xmlTrivia == default)
+        {
+            // Generate new XML doc
+            var lines = new List<XmlNodeSyntax>();
+            
+            // Add <summary> tag
+            lines.Add(SyntaxFactory.XmlElement(
+                SyntaxFactory.XmlElementStartTag(SyntaxFactory.XmlName("summary")),
+                SyntaxFactory.SingletonList<XmlNodeSyntax>(
+                    SyntaxFactory.XmlText("Description of " + methodName)),
+                SyntaxFactory.XmlElementEndTag(SyntaxFactory.XmlName("summary"))));
+            
+            // Add <param> tags
+            foreach (var param in currentParams)
+            {
+                lines.Add(SyntaxFactory.XmlElement(
+                    SyntaxFactory.XmlElementStartTag(SyntaxFactory.XmlName("param"))
+                        .AddAttributes(SyntaxFactory.XmlNameAttribute(param)),
+                    SyntaxFactory.SingletonList<XmlNodeSyntax>(
+                        SyntaxFactory.XmlText($"The {param} parameter.")),
+                    SyntaxFactory.XmlElementEndTag(SyntaxFactory.XmlName("param"))));
+            }
 
-        var currentParams = method.ParameterList.Parameters
-            .Select(p => p.Identifier.Text)
-            .ToHashSet();
+            // Create the documentation comment
+            var newXmlDoc = SyntaxFactory.DocumentationCommentTrivia(
+                SyntaxKind.MultiLineDocumentationCommentTrivia,
+                SyntaxFactory.List(lines.Cast<XmlNodeSyntax>()));
+            
+            var newTrivia = SyntaxFactory.Trivia(newXmlDoc);
+            var newLeadingTrivia = method.GetLeadingTrivia().Insert(0, newTrivia);
+            var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
+            var newRoot = root.ReplaceNode(method, newMethod);
+            return newRoot.ToFullString();
+        }
 
+        // XML doc exists — update it
         var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
         if (xmlDoc == null) return root.ToFullString();
 
@@ -1928,13 +1963,13 @@ public class RefactoringEngine
             updatedContent.Add(newTag);
         }
 
-        var newXmlDoc = xmlDoc.WithContent(SyntaxFactory.List(updatedContent));
-        var newTrivia = SyntaxFactory.Trivia(newXmlDoc);
+        var updatedXmlDoc = xmlDoc.WithContent(SyntaxFactory.List(updatedContent));
+        var updatedTrivia = SyntaxFactory.Trivia(updatedXmlDoc);
 
-        var newLeadingTrivia = method.GetLeadingTrivia().Replace(xmlTrivia, newTrivia);
-        var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
-        var newRoot = root.ReplaceNode(method, newMethod);
-        return newRoot.ToFullString();
+        var updatedLeadingTrivia = method.GetLeadingTrivia().Replace(xmlTrivia, updatedTrivia);
+        var updatedMethod = method.WithLeadingTrivia(updatedLeadingTrivia);
+        var updatedRoot = root.ReplaceNode(method, updatedMethod);
+        return updatedRoot.ToFullString();
     }
 
     /// <summary>

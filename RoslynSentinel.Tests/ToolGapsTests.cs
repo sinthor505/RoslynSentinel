@@ -433,8 +433,9 @@ public class C {
             "public class C { public void M(string name) {} }",
             "C.cs");
         var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("C.cs", "M");
-        // Returns source unchanged when no XML docs present
+        // Should now GENERATE XML docs when they're missing (BUG-59 fix)
         Assert.That(result, Does.Contain("public void M"));
-        Assert.That(result, Does.Not.Contain("<param"));
+        Assert.That(result, Does.Contain("<summary>"), "Should generate XML docs when missing");
+        Assert.That(result, Does.Contain("<param name=\"name\">"), "Should generate param tags");
     }
 }
