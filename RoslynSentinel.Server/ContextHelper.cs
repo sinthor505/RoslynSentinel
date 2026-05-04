@@ -196,7 +196,7 @@ public static class ContextHelper
     /// <summary>
     /// C# reserved keywords that cannot be used as variable names (in non-verbatim form).
     /// </summary>
-    private static readonly HashSet<string> ReservedKeywords = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> ReservedKeywords = new(StringComparer.Ordinal)
     {
         "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", 
         "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else", 
@@ -231,7 +231,7 @@ public static class ContextHelper
         var camelCaseName = char.ToLowerInvariant(baseName[0]) + baseName.Substring(1);
 
         // Collect all identifiers in the scope (variables, parameters, fields, etc.)
-        var existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var existingNames = new HashSet<string>(StringComparer.Ordinal);
 
         // Add all declared variables in this scope
         var descendants = scope.DescendantNodes();

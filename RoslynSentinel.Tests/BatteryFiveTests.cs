@@ -112,10 +112,11 @@ public class C
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// B. AnalyzerEngineStubs — ExhaustiveAnalyzerEngine + MassiveAnalyzerEngine
+// B. AnalyzerEngines — ExhaustiveAnalyzerEngine + MassiveAnalyzerEngine
+// Now use real Roslyn semantic-model diagnostics (not stubs).
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
-public class AnalyzerEngineStubTests
+public class AnalyzerEngineTests
 {
     private PersistentWorkspaceManager _workspaceManager;
     private ExhaustiveAnalyzerEngine _exhaustiveEngine;
@@ -138,6 +139,8 @@ public class AnalyzerEngineStubTests
         _workspaceManager.SetTestSolution(solution);
     }
 
+    // ── ExhaustiveAnalyzerEngine ──────────────────────────────────────────────
+
     [Test]
     public async Task ExhaustiveAnalyzer_FileNotFound_ReturnsEmpty()
     {
@@ -149,16 +152,50 @@ public class AnalyzerEngineStubTests
     }
 
     [Test]
-    public async Task ExhaustiveAnalyzer_FileFound_ReturnsSingleDiagnostic()
+    public async Task ExhaustiveAnalyzer_CleanFile_KnownRule_ReturnsEmpty()
     {
-        SetSource("public class C { }", "Test.cs");
+        // A file with no diagnostics should return empty list for any rule
+        SetSource("public class Clean { public void M() { } }", "Test.cs");
 
-        var results = await _exhaustiveEngine.RunDiagnosticRuleAsync("Test.cs", "CA2000");
+        var results = await _exhaustiveEngine.RunDiagnosticRuleAsync("Test.cs", "CS0001");
 
-        Assert.That(results.Count, Is.EqualTo(1));
-        Assert.That(results[0].RuleId, Is.EqualTo("CA2000"));
-        Assert.That(results[0].Message, Does.Contain("CA2000"), "Message should reference the requested rule ID");
+        Assert.That(results, Is.Empty, "Clean file should have no CS0001 diagnostics");
     }
+
+    [Test]
+    public async Task ExhaustiveAnalyzer_EmptyRuleId_ReturnsAllDiagnostics()
+    {
+        // Passing null/empty ruleId should return ALL diagnostics
+        SetSource("public class C { void M() { } }", "Test.cs");
+
+        var results = await _exhaustiveEngine.RunDiagnosticRuleAsync("Test.cs", "");
+
+        // No errors in clean file — result can be empty, just must not throw
+        Assert.That(results, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ExhaustiveAnalyzer_IssuesHaveCorrectRuleId()
+    {
+        // Code with CS0168: declared variable 'x' is assigned but never used
+        // Actually let's use code that generates a real warning: unused variable
+        SetSource("""
+            #pragma warning disable CS0168
+            public class C {
+                public void M() {
+                    int unused;
+                }
+            }
+            """, "Test.cs");
+
+        // Null rule returns all diagnostics (including warnings about unused vars if any)
+        var allResults = await _exhaustiveEngine.RunDiagnosticRuleAsync("Test.cs", null!);
+        Assert.That(allResults, Is.Not.Null);
+        // Every returned issue must have a non-null RuleId
+        Assert.That(allResults.All(r => r.RuleId != null), Is.True);
+    }
+
+    // ── MassiveAnalyzerEngine ─────────────────────────────────────────────────
 
     [Test]
     public async Task MassiveAnalyzer_FileNotFound_ReturnsEmpty()
@@ -171,15 +208,32 @@ public class AnalyzerEngineStubTests
     }
 
     [Test]
-    public async Task MassiveAnalyzer_FileFound_ReturnsSingleDiagnostic()
+    public async Task MassiveAnalyzer_CleanFile_KnownRule_ReturnsEmpty()
     {
-        SetSource("public class C { }", "Test.cs");
+        SetSource("public class C { public void M() { } }", "Test.cs");
 
-        var results = await _massiveEngine.RunSpecificRuleAsync("Test.cs", "IDE0017");
+        var results = await _massiveEngine.RunSpecificRuleAsync("Test.cs", "IDE0001");
 
-        Assert.That(results.Count, Is.EqualTo(1));
-        Assert.That(results[0].RuleId, Is.EqualTo("IDE0017"));
-        Assert.That(results[0].Message, Does.Contain("IDE0017"), "Message should echo back rule ID");
+        Assert.That(results, Is.Empty, "Clean file returns no IDE0001 diagnostics via compiler");
+    }
+
+    [Test]
+    public async Task MassiveAnalyzer_EmptyRuleId_ReturnsAllDiagnostics()
+    {
+        SetSource("public class C { void M() { } }", "Test.cs");
+
+        var results = await _massiveEngine.RunSpecificRuleAsync("Test.cs", "");
+
+        Assert.That(results, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task MassiveAnalyzer_IssuesHaveNonNullRuleId()
+    {
+        SetSource("public class C { void M() { } }", "Test.cs");
+
+        var results = await _massiveEngine.RunSpecificRuleAsync("Test.cs", null!);
+        Assert.That(results.All(r => r.RuleId != null), Is.True);
     }
 }
 

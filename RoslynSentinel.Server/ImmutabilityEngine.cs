@@ -30,8 +30,15 @@ public class ImmutabilityEngine
         {
             if (member is FieldDeclarationSyntax field)
             {
+                // const fields cannot have readonly — skip them
+                if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)))
+                    return field;
                 if (!field.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
-                    return field.AddModifiers(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+                    return field.AddModifiers(
+                        SyntaxFactory.Token(
+                            SyntaxFactory.TriviaList(),
+                            SyntaxKind.ReadOnlyKeyword,
+                            SyntaxFactory.TriviaList(SyntaxFactory.Space)));
             }
             else if (member is PropertyDeclarationSyntax prop)
             {

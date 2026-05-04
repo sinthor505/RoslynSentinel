@@ -99,8 +99,9 @@ public class MassiveAnalyzerEngineTests
     }
 
     [Test]
-    public async Task RunSpecificRule_KnownFile_ReturnsAtLeastOneResult()
+    public async Task RunSpecificRule_CleanFile_NonExistentRule_ReturnsEmpty()
     {
+        // Real implementation: "SIMULATED" isn't a real rule → clean file returns empty
         const string source = @"
 public class Analyzer
 {
@@ -111,18 +112,51 @@ public class Analyzer
 
         var issues = await _engine.RunSpecificRuleAsync("Analyzer.cs", "SIMULATED");
 
-        Assert.That(issues, Has.Count.GreaterThanOrEqualTo(1),
-            "known file should produce at least one (simulated) result");
+        Assert.That(issues, Is.Empty, "non-existent rule ID should return no results for a clean file");
     }
 
     [Test]
-    public async Task RunSpecificRule_ResultsHaveNonNullFilePath()
+    public async Task RunSpecificRule_FileWithTypeError_CS0029_IsDetected()
+    {
+        // CS0029: Cannot implicitly convert type 'string' to 'int'
+        const string source = @"
+public class Broken
+{
+    public void M() { int x = ""bad""; }
+}";
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+            [("Broken.cs", source)]));
+
+        var issues = await _engine.RunSpecificRuleAsync("Broken.cs", "CS0029");
+
+        Assert.That(issues, Is.Not.Empty, "type mismatch should produce CS0029");
+        Assert.That(issues.All(i => i.RuleId == "CS0029"), Is.True);
+    }
+
+    [Test]
+    public async Task RunSpecificRule_AllDiagnostics_EmptyRuleId()
+    {
+        const string source = @"
+public class Broken
+{
+    public void M() { int x = ""bad""; }
+}";
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+            [("Broken.cs", source)]));
+
+        var issues = await _engine.RunSpecificRuleAsync("Broken.cs", "");
+
+        Assert.That(issues, Is.Not.Empty, "broken file should return all diagnostics when rule filter is empty");
+    }
+
+    [Test]
+    public async Task RunSpecificRule_ResultsHaveNonNullRuleId()
     {
         const string source = "public class Foo {}";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Foo.cs", source)]));
 
-        var issues = await _engine.RunSpecificRuleAsync("Foo.cs", "SIMULATED");
+        var issues = await _engine.RunSpecificRuleAsync("Foo.cs", null!);
 
         foreach (var issue in issues)
             Assert.That(issue.RuleId, Is.Not.Null.And.Not.Empty, "every issue must have a RuleId");

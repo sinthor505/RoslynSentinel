@@ -23,7 +23,10 @@ public class DocumentationEngine
         if (root == null) return string.Empty;
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !m.HasStructuredTrivia);
+            .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
+                     && !m.GetLeadingTrivia().Any(t =>
+                            t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+                            t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
 
         var newRoot = root.ReplaceNodes(methods, (oldMethod, newMethod) =>
         {

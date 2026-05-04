@@ -135,7 +135,7 @@ public class DeadCodeEngine
                 var symbol = semanticModel.GetDeclaredSymbol(variable, cancellationToken);
                 if (symbol == null) continue;
 
-                if (!dataFlow.ReadInside.Contains(symbol) && !dataFlow.WrittenInside.Contains(symbol))
+                if (!dataFlow.ReadInside.Contains(symbol))
                 {
                     var lineSpan = variable.GetLocation().GetLineSpan();
                     reports.Add(new DeadCodeReport(

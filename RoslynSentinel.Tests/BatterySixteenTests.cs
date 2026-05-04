@@ -91,8 +91,9 @@ public class ExhaustiveAnalyzerEngineTests
     }
 
     [Test]
-    public async Task RunDiagnosticRule_KnownFile_ReturnsAtLeastOnePlaceholderIssue()
+    public async Task RunDiagnosticRule_CleanFile_NonExistentRule_ReturnsEmpty()
     {
+        // Real implementation: a clean file has no "CS9999" diagnostics
         const string source = @"
 public class Foo
 {
@@ -103,21 +104,43 @@ public class Foo
 
         var issues = await _engine.RunDiagnosticRuleAsync("Foo.cs", "CS9999");
 
-        Assert.That(issues, Has.Count.GreaterThanOrEqualTo(1),
-            "known file should produce at least one (placeholder) issue");
+        Assert.That(issues, Is.Empty, "clean file has no CS9999 diagnostics");
     }
 
     [Test]
-    public async Task RunDiagnosticRule_IssuesHaveFilePath()
+    public async Task RunDiagnosticRule_FileWithTypeError_CS0029_IsDetected()
     {
-        const string source = "public class Foo {}";
+        // CS0029: Cannot implicitly convert type 'string' to 'int'
+        const string source = @"
+public class Broken
+{
+    public void M() { int x = ""bad""; }
+}";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Foo.cs", source)]));
+            [("Broken.cs", source)]));
 
-        var issues = await _engine.RunDiagnosticRuleAsync("Foo.cs", "CS9999");
+        var issues = await _engine.RunDiagnosticRuleAsync("Broken.cs", "CS0029");
 
-        foreach (var issue in issues)
-            Assert.That(issue.RuleId, Is.Not.Null.And.Not.Empty, "every issue must have a RuleId");
+        Assert.That(issues, Is.Not.Empty, "type mismatch should produce CS0029");
+        Assert.That(issues.All(i => i.RuleId == "CS0029"), Is.True);
+    }
+
+    [Test]
+    public async Task RunDiagnosticRule_AllDiagnostics_EmptyRuleId()
+    {
+        // Passing empty ruleId should return ALL diagnostics on the file
+        const string source = @"
+public class Broken
+{
+    public void M() { int x = ""bad""; }
+}";
+        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+            [("Broken.cs", source)]));
+
+        var issues = await _engine.RunDiagnosticRuleAsync("Broken.cs", "");
+
+        Assert.That(issues, Is.Not.Empty, "broken file should have at least one diagnostic when rule filter is empty");
+        Assert.That(issues.All(i => i.RuleId != null), Is.True, "every issue must have a non-null RuleId");
     }
 }
 

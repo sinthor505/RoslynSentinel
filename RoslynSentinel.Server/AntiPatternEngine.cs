@@ -354,9 +354,8 @@ public class AntiPatternEngine
             if (!returnType.StartsWith("Task") && !returnType.StartsWith("ValueTask")) continue;
 
             var parameters = method.ParameterList.Parameters;
-            // Skip zero-parameter methods only — even 1-parameter public async methods
-            // should accept CancellationToken so callers can cancel long-running operations.
-            if (parameters.Count < 1) continue;
+            // Zero-parameter public async methods should still accept CancellationToken
+            // so callers can cancel long-running operations — do NOT skip them.
 
             var hasCt = parameters.Any(p =>
                 p.Type?.ToString() is string t &&

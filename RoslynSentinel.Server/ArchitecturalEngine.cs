@@ -53,7 +53,11 @@ public class ArchitecturalEngine
             .AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier("stoppingToken")).WithType(SyntaxFactory.ParseTypeName("CancellationToken")))
             .WithBody(SyntaxFactory.Block(
                 SyntaxFactory.WhileStatement(
-                    SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.IdentifierName("stoppingToken.IsCancellationRequested")),
+                    SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression,
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.IdentifierName("stoppingToken"),
+                            SyntaxFactory.IdentifierName("IsCancellationRequested"))),
                     SyntaxFactory.Block(
                         SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("await Task.Delay(1000, stoppingToken)"))
                     ))));

@@ -14,8 +14,10 @@ public class ExhaustiveAnalyzerEngine
     }
 
     /// <summary>
-    /// Executes a specific analyzer rule on a file and returns the diagnostics.
-    /// This allows us to scale to 100s of distinct tool endpoints.
+    /// Runs the Roslyn compiler diagnostic pipeline on <paramref name="filePath"/>
+    /// and returns any diagnostics whose ID matches <paramref name="ruleId"/>.
+    /// For compiler rules (CS*) the semantic model diagnostics are used directly.
+    /// Pass an empty or null <paramref name="ruleId"/> to return ALL diagnostics.
     /// </summary>
     public async Task<List<AnalyzerIssue>> RunDiagnosticRuleAsync(string filePath, string ruleId, CancellationToken cancellationToken = default)
     {
@@ -23,8 +25,20 @@ public class ExhaustiveAnalyzerEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return new List<AnalyzerIssue>();
 
-        // In a production scenario, we'd invoke the actual Roslyn Analyzer engine here.
-        // For the purpose of hitting the 300+ tool goal, we provide the endpoint mapping.
-        return new List<AnalyzerIssue> { new AnalyzerIssue(ruleId, $"Diagnostic scan for {ruleId} completed.", 1) };
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null) return new List<AnalyzerIssue>();
+
+        var rawDiagnostics = semanticModel.GetDiagnostics(null, cancellationToken);
+
+        bool allRules = string.IsNullOrEmpty(ruleId);
+
+        var results = new List<AnalyzerIssue>();
+        foreach (var d in rawDiagnostics)
+        {
+            if (!allRules && !string.Equals(d.Id, ruleId, StringComparison.OrdinalIgnoreCase)) continue;
+            var line = d.Location.GetLineSpan().StartLinePosition.Line + 1;
+            results.Add(new AnalyzerIssue(d.Id, $"[{d.Severity}] {d.GetMessage()}", line));
+        }
+        return results;
     }
 }

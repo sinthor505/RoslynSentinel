@@ -30,7 +30,7 @@ public class InstrumentationEngine
             SyntaxFactory.CatchDeclaration(SyntaxFactory.ParseTypeName(exceptionType), SyntaxFactory.Identifier("ex")),
             null,
             SyntaxFactory.Block(
-                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("throw")) // Simple rethrow as default
+                SyntaxFactory.ThrowStatement() // Rethrow the caught exception
             ));
 
         var tryStatement = SyntaxFactory.TryStatement(
@@ -66,7 +66,7 @@ public class InstrumentationEngine
             var catchBlock = SyntaxFactory.CatchClause(
                 SyntaxFactory.CatchDeclaration(SyntaxFactory.ParseTypeName(exceptionType), SyntaxFactory.Identifier("ex")),
                 null,
-                SyntaxFactory.Block(SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("throw")))
+                SyntaxFactory.Block(SyntaxFactory.ThrowStatement())
             );
 
             var tryStatement = SyntaxFactory.TryStatement(
@@ -96,7 +96,7 @@ public class InstrumentationEngine
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
 
-        if (!root.Usings.Any(u => u.Name.ToString() == "System.Diagnostics"))
+        if (!root.Usings.Any(u => u.Name?.ToString() == "System.Diagnostics"))
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Diagnostics")));
         }

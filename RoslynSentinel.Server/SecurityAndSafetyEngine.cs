@@ -93,7 +93,8 @@ public class SecurityAndSafetyEngine
 
             // Abstract/extern/partial methods have no body to analyse
             var body = method.Body;
-            if (body == null) continue;
+            var exprBody = method.ExpressionBody?.Expression;
+            if (body == null && exprBody == null) continue;
 
             foreach (var param in method.ParameterList.Parameters)
             {
@@ -115,16 +116,26 @@ public class SecurityAndSafetyEngine
 
                 var paramName = param.Identifier.Text;
 
-                // Skip if the parameter is not actually used in the body
+                // Skip if the parameter is not actually used in the body/expression
                 // (unused params can't cause a null dereference in this method)
                 // Also exclude nameof(param) — that's not a real dereference.
-                bool isUsed = body.DescendantNodes()
+                SyntaxNode bodyNode = body ?? (SyntaxNode)exprBody!;
+                bool isUsed = bodyNode.DescendantNodes()
                     .OfType<IdentifierNameSyntax>()
                     .Any(id => id.Identifier.Text == paramName && !IsNameofExpression(id));
                 if (!isUsed) continue;
 
-                // Check for any form of null guard in the method body
-                if (HasNullGuard(body, paramName)) continue;
+                // Check for any form of null guard in the method body (block body only)
+                if (body != null && HasNullGuard(body, paramName)) continue;
+
+                // For expression-bodied methods: null-conditional access on the parameter is a guard
+                if (exprBody != null)
+                {
+                    bool hasNullConditional = exprBody.DescendantNodesAndSelf()
+                        .OfType<ConditionalAccessExpressionSyntax>()
+                        .Any(ca => ca.Expression is IdentifierNameSyntax id && id.Identifier.Text == paramName);
+                    if (hasNullConditional) continue;
+                }
 
                 var loc = param.GetLocation().GetLineSpan().StartLinePosition;
                 var methodName = method is MethodDeclarationSyntax md ? md.Identifier.Text : ".ctor";

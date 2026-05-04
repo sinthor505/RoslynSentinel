@@ -92,7 +92,7 @@ public class AdvancedRefactoringEngine
 
         bool IsTaskType(ExpressionSyntax expr)
         {
-            if (semanticModel == null) return true;
+            if (semanticModel == null) return false;
             var typeInfo = semanticModel.GetTypeInfo(expr, cancellationToken);
             var name = typeInfo.Type?.Name;
             return name is "Task" or "ValueTask";

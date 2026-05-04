@@ -48,6 +48,9 @@ public class LogicOptimizationEngine
         var guards = new List<StatementSyntax>();
         foreach (var parameter in method.ParameterList.Parameters)
         {
+            // Skip explicitly nullable reference types (string?, IService?) — null is valid for them
+            if (parameter.Type is NullableTypeSyntax) continue;
+
             var symbol = semanticModel.GetDeclaredSymbol(parameter, cancellationToken);
             if (symbol != null && symbol.Type.IsReferenceType)
             {

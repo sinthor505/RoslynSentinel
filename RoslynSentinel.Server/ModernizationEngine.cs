@@ -42,33 +42,9 @@ public class ModernizationEngine
                 : SyntaxFactory.ParameterList());
 
         var members = new List<MemberDeclarationSyntax>();
-        
-        // Convert auto-properties to init properties, preserving attributes
-        foreach (var prop in properties)
-        {
-            var initProperty = SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier)
-                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(new[] {
-                    SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
-                    SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                })));
-            
-            // Preserve attributes from original property
-            if (prop.AttributeLists.Count > 0)
-            {
-                initProperty = initProperty.WithAttributeLists(prop.AttributeLists);
-            }
-            
-            // Preserve initializer (default value)
-            if (prop.Initializer != null)
-            {
-                initProperty = initProperty.WithInitializer(prop.Initializer);
-            }
-            
-            members.Add(initProperty);
-        }
 
-        // Add non-property members (like methods)
+        // Positional record parameters auto-generate the properties, so only add non-property members
+        // (methods, nested types, fields, etc.). Adding explicit properties here would cause CS0102.
         members.AddRange(classNode.Members.Where(m => m is not PropertyDeclarationSyntax));
         
         recordNode = recordNode.WithMembers(SyntaxFactory.List(members));
@@ -292,12 +268,11 @@ public class ModernizationEngine
             // Due to Roslyn API limitations, we'll try to build this using ConstantPatterns
             PatternSyntax pattern = SyntaxFactory.ConstantPattern(caseValues[0]);
 
-            // Try to create an or pattern if possible
+            // Try to create an or pattern: x is 1 or 2 or 3
             for (int i = 1; i < caseValues.Count; i++)
             {
                 var nextPattern = SyntaxFactory.ConstantPattern(caseValues[i]);
-                // Skip or pattern creation for now as it requires SyntaxNode creation
-                pattern = nextPattern; // Just use the last pattern for now
+                pattern = SyntaxFactory.BinaryPattern(SyntaxKind.OrPattern, pattern, nextPattern);
             }
 
             result = SyntaxFactory.IsPatternExpression(subject, pattern);

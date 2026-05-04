@@ -154,6 +154,7 @@ public class RefinementEngine
             (original, _) => expressionToInline.WithTriviaFrom(original));
 
         updatedRoot = updatedRoot.RemoveNode(updatedRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().First(m => m.Identifier.Text == methodName), SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        if (updatedRoot == null) return "";
         
         return updatedRoot.NormalizeWhitespace().ToFullString();
     }

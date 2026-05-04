@@ -82,13 +82,25 @@ public class TestingEngine
         var testClassName = $"{className}Tests";
         var testFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{testClassName}.cs");
 
-        var testAttribute = framework.ToLowerInvariant() == "nunit" ? "[Test]" : "[Fact]";
-        var classAttribute = framework.ToLowerInvariant() == "nunit" ? "[TestFixture]" : "";
+        var frameworkLower = framework.ToLowerInvariant();
+        var testAttribute = frameworkLower switch
+        {
+            "nunit"   => "[Test]",
+            "mstest"  => "[TestMethod]",
+            _         => "[Fact]"   // default: xunit
+        };
+        var classAttribute = frameworkLower switch
+        {
+            "nunit"  => "[TestFixture]",
+            "mstest" => "[TestClass]",
+            _        => ""
+        };
 
         var sb = new StringBuilder();
         sb.AppendLine("using System;");
-        if (framework.ToLowerInvariant() == "nunit") sb.AppendLine("using NUnit.Framework;");
-        if (framework.ToLowerInvariant() == "xunit") sb.AppendLine("using Xunit;");
+        if (frameworkLower == "nunit")   sb.AppendLine("using NUnit.Framework;");
+        if (frameworkLower == "xunit")   sb.AppendLine("using Xunit;");
+        if (frameworkLower == "mstest")  sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
         sb.AppendLine($"using {ns};");
         sb.AppendLine();
         sb.AppendLine($"namespace {ns}.Tests");
@@ -116,8 +128,9 @@ public class TestingEngine
             sb.AppendLine("            // Act");
             sb.AppendLine("            ");
             sb.AppendLine("            // Assert");
-            if (framework.ToLowerInvariant() == "nunit") sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
-            if (framework.ToLowerInvariant() == "xunit") sb.AppendLine("            Assert.True(false, \"Test not implemented\");");
+            if (frameworkLower == "nunit")  sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
+            if (frameworkLower == "xunit")  sb.AppendLine("            Assert.True(false, \"Test not implemented\");");
+            if (frameworkLower == "mstest") sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
             sb.AppendLine("        }");
             sb.AppendLine();
         }

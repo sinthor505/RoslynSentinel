@@ -1344,6 +1344,7 @@ public class RefactoringEngine
         if (model == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
 
         var flow = model.AnalyzeControlFlow(method.Body);
+        if (flow == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
         var returnPoints = flow.ReturnStatements
             .Select(r => r.ToString().Trim())
             .ToList();
