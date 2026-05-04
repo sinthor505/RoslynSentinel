@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
@@ -182,7 +183,7 @@ public async Task<List<string>> FindStructuralSmells(
 
     [McpServerTool]
     [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
-    public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
+    public async Task<SymbolHoverInfo> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
         => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
@@ -233,14 +234,30 @@ public async Task<List<string>> FindStructuralSmells(
 
     [McpServerTool]
     [Description("Builds a forward call graph from a method: shows what that method calls, what those callees call, and so on up to maxDepth levels (default 3). Only follows calls into methods with source locations in the solution (not BCL/NuGet). Returns a CallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callees. Already-visited methods appear as leaf nodes to prevent cycles.")]
-    public async Task<CallGraphNode?> GetCallGraph(
+    public async Task<CallGraphNode> GetCallGraph(
         string filePath, string methodName, int maxDepth = 3)
-        => await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
+    {
+        var result = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
+        if (result == null)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
+                "Use get_document_outline to list available methods in the file.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Builds a reverse call graph (who calls this method): shows all methods that call the given method, what calls those, etc., up to maxDepth levels. Uses Roslyn SymbolFinder for accurate semantic reference resolution — not text search. Returns a ReverseCallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callers.")]
-    public async Task<ReverseCallGraphNode?> GetReverseCallGraph(string filePath, string methodName, int maxDepth = 3)
-        => await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
+    public async Task<ReverseCallGraphNode> GetReverseCallGraph(string filePath, string methodName, int maxDepth = 3)
+    {
+        var result = await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
+        if (result == null)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
+                "Use get_document_outline to list available methods in the file.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Converts a class to a BackgroundService: adds BackgroundService base class, generates ExecuteAsync override, and adds Microsoft.Extensions.Hosting using directive.")]

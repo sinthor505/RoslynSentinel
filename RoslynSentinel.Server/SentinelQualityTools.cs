@@ -79,7 +79,12 @@ public class SentinelQualityTools
     [Description("Adds ArgumentNullException.ThrowIfNull guard clauses for all reference parameters in a method.")]
     public async Task<string> AddGuardClauses(string filePath, string methodName)
     {
-        return await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName);
+        var result = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"AddGuardClauses failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
     }
 
     [McpServerTool]
@@ -99,8 +104,15 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Adds a BenchmarkDotNet stub class for performance testing a specific method.")]
-    public async Task<string> AddBenchmarkStub(string filePath, string className, string methodName) 
-        => await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName);
+    public async Task<string> AddBenchmarkStub(string filePath, string className, string methodName)
+    {
+        var result = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"AddBenchmarkStub failed for '{className}.{methodName}' in '{filePath}': " +
+                "file not found in workspace, class not found, or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Analyzes a solution or project for deadlocks. Optional scope.")]
@@ -296,22 +308,50 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("Adds .ConfigureAwait(false) to all await expressions in a file that don't already have it. Use libraryMode=true (default) for library code, false for ASP.NET app code. Idempotent — skips already-configured awaits.")]
     public async Task<string> AddConfigureAwaitFalse(string filePath, bool libraryMode = true)
-        => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
+    {
+        var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"AddConfigureAwaitFalse failed for '{filePath}': " +
+                "file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Removes all .ConfigureAwait(x) calls from a file, leaving the bare awaited expression. Useful when migrating library code to ASP.NET app code where ConfigureAwait is unnecessary.")]
     public async Task<string> RemoveConfigureAwaitFalse(string filePath)
-        => await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
+    {
+        var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"RemoveConfigureAwaitFalse failed for '{filePath}': " +
+                "file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Converts lock statements inside a method to async-safe SemaphoreSlim pattern: adds a 'private readonly SemaphoreSlim _semaphore = new(1,1)' field, replaces each lock block with 'await _semaphore.WaitAsync(); try { ... } finally { _semaphore.Release(); }', and makes the method async if needed.")]
     public async Task<string> ConvertLockToSemaphoreSlim(string filePath, string methodName)
-        => await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
+    {
+        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertLockToSemaphoreSlim failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace, method not found, or no lock statements found in method. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Converts a method returning Task<List<T>>, Task<IEnumerable<T>>, or List<T> to IAsyncEnumerable<T>. Transforms 'results.Add(item)' patterns to 'yield return item', removes the list variable and return statement, and adds a CancellationToken parameter if missing.")]
     public async Task<string> ConvertToAsyncEnumerable(string filePath, string methodName)
-        => await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
+    {
+        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertToAsyncEnumerable failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace, method not found, or method does not return Task<List<T>> or similar. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Detects invalid ValueTask usage patterns: (A) double await on same variable, (B) ValueTask stored and deferred-awaited with intervening statements, (C) ValueTask passed to Task.WhenAll() without .AsTask(), (D) .Result accessed on ValueTask. Reports method name and line for each violation.")]
@@ -321,12 +361,26 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("Adds 'CancellationToken cancellationToken = default' as the last parameter to a method and propagates it to async callees in the method body that have a CancellationToken overload. Also adds cancellationToken to Task.Delay() calls. Returns the updated source.")]
     public async Task<string> AddCancellationTokenToMethod(string filePath, string methodName)
-        => await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
+    {
+        var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"AddCancellationTokenToMethod failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type.")]
     public async Task<string> MakeMethodThreadSafe(string filePath, string methodName, string lockFieldName = "_lock")
-        => await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName);
+    {
+        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"MakeMethodThreadSafe failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Finds async methods with no await expressions, or that only await Task.FromResult/Task.CompletedTask.")]

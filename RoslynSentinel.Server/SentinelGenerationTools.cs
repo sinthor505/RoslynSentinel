@@ -35,12 +35,26 @@ public class SentinelGenerationTools
     [McpServerTool]
     [Description("Generates a typed HttpClient for a Web API controller.")]
     public async Task<string> GenerateHttpClient(string filePath, string controllerName)
-        => await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
+    {
+        var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
+                "file not found in workspace or controller class not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Generates a constructor for a class from its private/readonly fields. Skips if a constructor already exists. Returns the updated file content.")]
     public async Task<string> GenerateConstructor(string filePath, string className)
-        => await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
+    {
+        var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"GenerateConstructor failed for '{className}' in '{filePath}': " +
+                "file not found in workspace or class not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("""
@@ -75,28 +89,63 @@ public class SentinelGenerationTools
 
     [McpServerTool]
     [Description("Generates a Decorator pattern class for a given interface. The decorator wraps any implementation, delegates all interface members to an inner instance, and includes TODO comments for adding cross-cutting concerns (logging, caching, retry). Returns the full .cs file source.")]
-    public async Task<DecoratorResult?> GenerateDecoratorClass(string interfaceName, string decoratorPrefix = "Logging", string? projectName = null)
-        => await _codeGenerationEngine.GenerateDecoratorClassAsync(interfaceName, decoratorPrefix, projectName);
+    public async Task<DecoratorResult> GenerateDecoratorClass(string interfaceName, string decoratorPrefix = "Logging", string? projectName = null)
+    {
+        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(interfaceName, decoratorPrefix, projectName);
+        if (result == null)
+            throw new InvalidOperationException(
+                $"Interface '{interfaceName}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. " +
+                "Ensure the interface name matches exactly (including the leading 'I') and is part of the loaded solution.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and generates a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(string projectName)
-        => await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
+    {
+        var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"GenerateDefaultConfigJson failed for project '{projectName}': " +
+                "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Generates an async overload for a synchronous method by wrapping it in Task.Run.")]
     public async Task<string> GenerateAsyncOverload(string filePath, string methodName)
-        => await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
+    {
+        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"GenerateAsyncOverload failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Adds [Required] and [StringLength(100)] data annotations to all string properties in a POCO class.")]
     public async Task<string> AddValidationToPoco(string filePath, string className)
-        => await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
+    {
+        var result = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"AddValidationToPoco failed for '{className}' in '{filePath}': " +
+                "file not found in workspace or class not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Generates stub implementations for all unimplemented members of an interface on a class. Unlike the built-in implement_interface, this never adds the 'override' keyword (which is incorrect for interface implementations). Pass filePath of the class file, className of the implementing class, and interfaceName of the interface to implement.")]
     public async Task<string> ImplementInterfaceSafe(string filePath, string className, string interfaceName)
-        => await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
+    {
+        var result = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ImplementInterfaceSafe failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
+                "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("""
@@ -113,7 +162,14 @@ public class SentinelGenerationTools
         """)]
     public async Task<string> ConvertPropertySafe(
         string filePath, string propertyName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet, lineBefore, lineAfter);
+    {
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet, lineBefore, lineAfter);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertPropertySafe failed for property '{propertyName}' ({direction}) in '{filePath}': " +
+                "file not found in workspace, property not found, or the specified context snippet did not match. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("""
@@ -126,5 +182,12 @@ public class SentinelGenerationTools
         Returns the updated file content.
         """)]
     public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
-        => await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
+    {
+        var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"InterpolateStringSafe failed in '{filePath}': " +
+                "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
+        return result;
+    }
 }

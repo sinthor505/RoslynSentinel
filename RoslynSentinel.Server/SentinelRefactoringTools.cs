@@ -22,6 +22,8 @@ public class SentinelRefactoringTools
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private readonly LogicOptimizationEngine _logicOptimizationEngine;
+    private readonly ModernizationEngine _modernizationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
@@ -40,6 +42,8 @@ public class SentinelRefactoringTools
         CodeStyleEngine codeStyleEngine,
         CodeFlowEngine codeFlowEngine,
         AdvancedRefactoringEngine advancedRefactoringEngine,
+        LogicOptimizationEngine logicOptimizationEngine,
+        ModernizationEngine modernizationEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
@@ -57,6 +61,8 @@ public class SentinelRefactoringTools
         _codeStyleEngine = codeStyleEngine;
         _codeFlowEngine = codeFlowEngine;
         _advancedRefactoringEngine = advancedRefactoringEngine;
+        _logicOptimizationEngine = logicOptimizationEngine;
+        _modernizationEngine = modernizationEngine;
         _workspaceManager = workspaceManager;
         _config = config;
         _logger = logger;
@@ -678,7 +684,14 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Adds to the interface any public methods or properties that exist in the class but are missing from the interface. Finds the interface in the same file or anywhere in the solution. Returns the updated source of the file containing the interface (prefixed with '// Updated file: path' if it differs from the class file).")]
     public async Task<string> SyncInterfaceToImplementation(string filePath, string className, string interfaceName)
-        => await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
+    {
+        var result = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"SyncInterfaceToImplementation failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
+                "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only those specified in parameterNames) into a 'public record {NewTypeName}(...)'. Rewrites parameter references in the method body to 'request.PropertyName'. Appends the record to the end of the file. Adds a TODO comment in the method body reminding to update call sites.")]
@@ -687,12 +700,26 @@ public class SentinelRefactoringTools
         string methodName,
         string? newTypeName = null,
         string[]? parameterNames = null)
-        => await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
+    {
+        var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"IntroduceParameterObject failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Regenerates XML doc param/returns tags to match the current method signature: adds tags for new parameters, removes tags for deleted parameters, and adds a <returns> tag if missing on a non-void method.")]
     public async Task<string> UpdateXmlDocsFromSignature(string filePath, string methodName)
-        => await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName);
+    {
+        var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"UpdateXmlDocsFromSignature failed for '{methodName}' in '{filePath}': " +
+                "file not found in workspace or method not found. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Converts a method or property between expression body (=>) and block body forms. " +
@@ -702,7 +729,14 @@ public class SentinelRefactoringTools
                  "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns the updated file content.")]
     public async Task<string> ConvertExpressionBody(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet, lineBefore, lineAfter);
+    {
+        var result = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet, lineBefore, lineAfter);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertExpressionBody failed for '{memberName}' ({direction}) in '{filePath}': " +
+                "file not found in workspace, member not found, or context snippet did not match. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Extracts a literal expression to a named constant in the containing type. " +
@@ -712,7 +746,14 @@ public class SentinelRefactoringTools
                  "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
                  "Returns the updated file content.")]
     public async Task<string> ExtractConstant(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null)
-        => await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility, lineBefore, lineAfter);
+    {
+        var result = await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility, lineBefore, lineAfter);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ExtractConstant failed for constant '{constantName}' in '{filePath}': " +
+                "file not found in workspace or context snippet did not match any literal. Ensure the solution is loaded.");
+        return result;
+    }
 
     [McpServerTool]
     [Description("Analyzes control flow of a method: shows whether it always/sometimes/never returns, lists all return points, and identifies exit paths (throws, breaks, continues). " +
@@ -742,4 +783,83 @@ public class SentinelRefactoringTools
         """)]
     public async Task<FormatPreviewResult> FormatDocumentPreview(string filePath)
         => await _refactoringEngine.FormatDocumentPreviewAsync(filePath);
+
+    [McpServerTool]
+    [Description("""
+        Modernizes null checks using null coalescing operators (?? and ??=).
+        Converts patterns like:
+        - 'if (x == null) x = y;' → 'x ??= y;'
+        - 'x == null ? y : x' → 'x ?? y'
+        - 'x != null ? x : defaultValue' → 'x ?? defaultValue'
+        filePath: path to the .cs file to transform.
+        """)]
+    public async Task<string> ConvertToNullCoalescing(string filePath)
+    {
+        var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertToNullCoalescing failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("""
+        Extracts an inline expression into a local variable declaration.
+        Converts patterns like:
+        - 'return x + y;' → 'var sum = x + y; return sum;'
+        - 'var result = getValue();' → Extracts getValue() to a variable
+        
+        contextSnippet: a verbatim substring containing or surrounding the expression to extract.
+        variableName: the name for the new variable.
+        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+        Returns the updated file content with the expression extracted to a variable.
+        """)]
+    public async Task<string> ExtractLocalVariable(string filePath, string contextSnippet, string variableName, string? lineBefore = null, string? lineAfter = null)
+    {
+        var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': " +
+                "file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.");
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("""
+        Replaces if-else chains with switch statements for better readability.
+        Converts patterns like:
+        - 'if (x == 1) {...} else if (x == 2) {...}' → 'switch (x) { case 1: ...; case 2: ... }'
+        
+        filePath: path to the .cs file to transform.
+        Automatically detects and converts eligible if-else chains (minimum 3 branches).
+        Returns the updated file content with switch statements applied.
+        """)]
+    public async Task<string> ConvertToSwitch(string filePath)
+    {
+        var result = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertToSwitch failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("""
+        Modernizes code using C# pattern matching (C# 7.0+).
+        Converts patterns like:
+        - 'if (x == null)' → 'if (x is null)'
+        - 'if (x != null)' → 'if (x is not null)'
+        - 'if (obj != null && obj.Property > 0)' → 'if (obj is { Property: > 0 })'
+        
+        filePath: path to the .cs file to transform.
+        Returns the updated file content with modern pattern matching applied.
+        """)]
+    public async Task<string> ConvertToPattern(string filePath)
+    {
+        var result = await _modernizationEngine.ConvertToPatternAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"ConvertToPattern failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
 }
