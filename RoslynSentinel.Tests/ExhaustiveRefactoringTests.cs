@@ -92,7 +92,11 @@ public class MyPoco {
 }");
         var modernizationEngine = new ModernizationEngine(_workspaceManager, config);
         var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
-        Assert.That(result, Contains.Substring("public record MyPoco(string Name)"));
-        Assert.That(result, Contains.Substring("public void DoWork()"));
+        // Bug 2 fix: properties with [Required] cannot use positional syntax (would drop attributes),
+        // so class-body record with init accessors is generated instead.
+        Assert.That(result, Contains.Substring("record MyPoco"));
+        Assert.That(result, Contains.Substring("[Required]"), "Attribute must be preserved");
+        Assert.That(result, Contains.Substring("init"), "set accessor must be converted to init");
+        Assert.That(result, Contains.Substring("DoWork"), "Methods must be preserved");
     }
 }

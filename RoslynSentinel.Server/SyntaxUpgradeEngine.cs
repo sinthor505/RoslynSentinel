@@ -144,72 +144,104 @@ public class SyntaxUpgradeEngine
         if (!_config.IsFeatureEnabled("FieldBackedProperties")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null) return "// File not found in workspace.";
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null) return string.Empty;
 
+        // Find private backing-field + property pairs per class and collapse them to auto-properties.
+        // A "pair" is: a private field `_foo` of type T  +  a property `Foo` of type T whose
+        // get/set accessors read/write only that field (expression-body style).
         var classNodes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
         var replaceMap = new Dictionary<SyntaxNode, SyntaxNode>();
 
         foreach (var classNode in classNodes)
         {
-            var newMembers = new List<MemberDeclarationSyntax>();
-            bool changed = false;
+            // Index backing fields: fieldName -> FieldDeclarationSyntax
+            var backingFields = classNode.Members
+                .OfType<FieldDeclarationSyntax>()
+                .Where(f => f.Modifiers.Any(SyntaxKind.PrivateKeyword) &&
+                            !f.Modifiers.Any(SyntaxKind.StaticKeyword) &&
+                            !f.Modifiers.Any(SyntaxKind.ReadOnlyKeyword))
+                .SelectMany(f => f.Declaration.Variables.Select(v => (Name: v.Identifier.Text, Field: f, Var: v)))
+                .ToDictionary(x => x.Name, x => x);
 
-            foreach (var member in classNode.Members)
+            var fieldsToRemove = new HashSet<FieldDeclarationSyntax>();
+            var propReplacements = new Dictionary<PropertyDeclarationSyntax, PropertyDeclarationSyntax>();
+
+            foreach (var prop in classNode.Members.OfType<PropertyDeclarationSyntax>())
             {
-                if (member is PropertyDeclarationSyntax prop && IsAutoProperty(prop))
+                if (prop.AccessorList == null) continue;
+                var accessors = prop.AccessorList.Accessors;
+
+                // Expect exactly get + set (or get + init), both expression-bodied, no custom body
+                var getAcc = accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                var setAcc = accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration) || a.IsKind(SyntaxKind.InitAccessorDeclaration));
+
+                if (getAcc == null || getAcc.ExpressionBody == null) continue;
+                if (accessors.Count == 2 && setAcc == null) continue;
+                if (accessors.Count > 2) continue;
+
+                // get accessor must return the backing field: => _fieldName
+                var getExpr = getAcc.ExpressionBody!.Expression.ToString().Trim();
+
+                // Expect camelCase version of property name with leading underscore
+                var expectedFieldName = "_" + char.ToLowerInvariant(prop.Identifier.Text[0]) + prop.Identifier.Text.Substring(1);
+                if (getExpr != expectedFieldName) continue;
+                if (!backingFields.TryGetValue(expectedFieldName, out var fieldInfo)) continue;
+
+                // set/init accessor must assign: => _fieldName = value
+                if (setAcc != null)
                 {
-                    changed = true;
-                    var propName = prop.Identifier.Text;
-                    var fieldName = "_" + char.ToLowerInvariant(propName[0]) + propName.Substring(1);
+                    if (setAcc.ExpressionBody == null) continue;
+                    var setExpr = setAcc.ExpressionBody.Expression.ToString().Trim();
+                    if (setExpr != $"{expectedFieldName} = value") continue;
+                }
 
-                    var fieldDecl = SyntaxFactory.FieldDeclaration(
-                        SyntaxFactory.VariableDeclaration(
-                            prop.Type,
-                            SyntaxFactory.SingletonSeparatedList(
-                                SyntaxFactory.VariableDeclarator(
-                                    SyntaxFactory.Identifier(fieldName), null, prop.Initializer))))
-                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)));
+                // Field type must match property type
+                var fieldType = fieldInfo.Field.Declaration.Type.ToString().Trim();
+                var propType = prop.Type.ToString().Trim();
+                if (fieldType != propType) continue;
 
-                    var hasSetter = prop.AccessorList!.Accessors.Any(
-                        a => a.IsKind(SyntaxKind.SetAccessorDeclaration) || a.IsKind(SyntaxKind.InitAccessorDeclaration));
+                // Build auto-property: `public T Foo { get; set; }` (or `get; init;`)
+                var initOrSet = setAcc?.IsKind(SyntaxKind.InitAccessorDeclaration) == true
+                    ? SyntaxKind.InitAccessorDeclaration
+                    : SyntaxKind.SetAccessorDeclaration;
 
-                    var getAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
-                        .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName(fieldName)))
-                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                var newGetAcc = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
-                    AccessorDeclarationSyntax? setAccessor = null;
-                    if (hasSetter)
+                var autoAccessors = setAcc != null
+                    ? new[]
                     {
-                        var setKind = prop.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration))
-                            ? SyntaxKind.InitAccessorDeclaration : SyntaxKind.SetAccessorDeclaration;
-                        setAccessor = SyntaxFactory.AccessorDeclaration(setKind)
-                            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
-                                SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                                    SyntaxFactory.IdentifierName(fieldName), SyntaxFactory.IdentifierName("value"))))
-                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                        newGetAcc,
+                        SyntaxFactory.AccessorDeclaration(initOrSet)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
                     }
+                    : new[] { newGetAcc };
 
-                    var accessorList = hasSetter && setAccessor != null
-                        ? SyntaxFactory.AccessorList(SyntaxFactory.List(new[] { getAccessor, setAccessor }))
-                        : SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getAccessor));
+                // Transfer initializer from backing field to auto-property if present
+                var fieldInitializer = fieldInfo.Var.Initializer;
 
-                    var newProp = prop.WithAccessorList(accessorList)
-                        .WithInitializer(null)
-                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+                var autoProp = prop
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(autoAccessors)))
+                    .WithInitializer(fieldInitializer)
+                    .WithSemicolonToken(fieldInitializer != null
+                        ? SyntaxFactory.Token(SyntaxKind.SemicolonToken)
+                        : SyntaxFactory.Token(SyntaxKind.None));
 
-                    newMembers.Add(fieldDecl);
-                    newMembers.Add(newProp);
-                }
-                else
-                {
-                    newMembers.Add(member);
-                }
+                propReplacements[prop] = autoProp;
+                fieldsToRemove.Add(fieldInfo.Field);
             }
 
-            if (changed)
-                replaceMap[classNode] = classNode.WithMembers(SyntaxFactory.List(newMembers));
+            if (propReplacements.Count == 0) continue;
+
+            // Rebuild the class without the removed backing fields, with updated auto-properties
+            var newMembers = classNode.Members
+                .Where(m => !(m is FieldDeclarationSyntax f && fieldsToRemove.Contains(f)))
+                .Select(m => m is PropertyDeclarationSyntax p && propReplacements.TryGetValue(p, out var r) ? r : m)
+                .ToList();
+
+            replaceMap[classNode] = classNode.WithMembers(SyntaxFactory.List(newMembers));
         }
 
         if (replaceMap.Count == 0) return root.ToFullString();

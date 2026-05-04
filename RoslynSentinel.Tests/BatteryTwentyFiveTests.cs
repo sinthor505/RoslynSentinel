@@ -1169,13 +1169,14 @@ public class Router {
     }
 
     [Test]
-    public async Task UseFieldBackedPropertiesAsync_UnknownFile_ReturnsEmpty()
+    public async Task UseFieldBackedPropertiesAsync_UnknownFile_ReturnsFriendlyMessage()
     {
+        // Bug 4b fix: engine returns a comment message instead of empty string when file not found
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
 
         var result = await _engine.UseFieldBackedPropertiesAsync("NoFile.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result, Does.Contain("not found").Or.Contain("not in workspace"));
     }
 }

@@ -266,10 +266,12 @@ public class Worker
     }
 
     [Test]
-    public void UseFieldBackedProperties_NonExistentFile_Throws()
+    public async Task UseFieldBackedProperties_NonExistentFile_ReturnsFriendlyMessage()
     {
+        // Bug 4b fix: handler no longer throws; returns a friendly message instead
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UseFieldBackedProperties("NonExistent.cs"));
+        var result = await _tools.UseFieldBackedProperties("NonExistent.cs");
+        Assert.That(result, Does.Contain("not in workspace").Or.Contain("not found").Or.Contain("NoFile").Or.Contain("NonExistent"));
     }
 
     // --- ClassToRecord ---

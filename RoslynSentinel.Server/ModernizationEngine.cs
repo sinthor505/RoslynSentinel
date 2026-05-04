@@ -26,28 +26,72 @@ public class ModernizationEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null) return root?.ToFullString() ?? "";
 
-        // Extract properties to create positional parameters
+        // Extract properties
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>().ToList();
         
-        // Create positional parameters from properties
-        var parameters = properties.Select(prop =>
-            SyntaxFactory.Parameter(prop.Identifier).WithType(prop.Type)
-        ).ToList();
+        // Only use positional syntax when properties have no attributes and no initializers.
+        // If any property has attributes or an initializer, positional syntax would silently drop them.
+        bool canUsePositional = properties.All(p => !p.AttributeLists.Any() && p.Initializer == null);
 
-        // Create record declaration with positional parameters
-        var recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
-            .WithModifiers(classNode.Modifiers)
-            .WithParameterList(parameters.Any() 
-                ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters))
-                : SyntaxFactory.ParameterList());
+        SyntaxNode recordNode;
+        if (canUsePositional)
+        {
+            // Positional record: `record Foo(T Prop1, T Prop2);`
+            var parameters = properties.Select(prop =>
+                SyntaxFactory.Parameter(prop.Identifier).WithType(prop.Type)
+            ).ToList();
 
-        var members = new List<MemberDeclarationSyntax>();
+            var positional = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
+                .WithModifiers(classNode.Modifiers)
+                .WithParameterList(parameters.Any() 
+                    ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters))
+                    : SyntaxFactory.ParameterList());
 
-        // Positional record parameters auto-generate the properties, so only add non-property members
-        // (methods, nested types, fields, etc.). Adding explicit properties here would cause CS0102.
-        members.AddRange(classNode.Members.Where(m => m is not PropertyDeclarationSyntax));
-        
-        recordNode = recordNode.WithMembers(SyntaxFactory.List(members));
+            // Only include non-property members (positional params auto-generate the properties)
+            var nonPropMembers = classNode.Members.Where(m => m is not PropertyDeclarationSyntax).ToList();
+            if (nonPropMembers.Count > 0)
+            {
+                positional = positional
+                    .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                    .WithMembers(SyntaxFactory.List(nonPropMembers))
+                    .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+            }
+            else
+            {
+                positional = positional.WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            }
+            recordNode = positional;
+        }
+        else
+        {
+            // Class-body record: preserves attributes and initializers on each property.
+            // Convert `set` accessors to `init` so the record remains immutable by convention.
+            var convertedProperties = properties.Select(prop =>
+            {
+                if (prop.AccessorList == null) return (MemberDeclarationSyntax)prop;
+                var newAccessors = prop.AccessorList.Accessors.Select(acc =>
+                {
+                    if (acc.IsKind(SyntaxKind.SetAccessorDeclaration) && acc.Body == null && acc.ExpressionBody == null)
+                    {
+                        return SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                    }
+                    return acc;
+                });
+                return (MemberDeclarationSyntax)prop.WithAccessorList(
+                    prop.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
+            });
+
+            var allMembers = convertedProperties
+                .Concat(classNode.Members.Where(m => m is not PropertyDeclarationSyntax))
+                .ToList();
+
+            recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
+                .WithModifiers(classNode.Modifiers)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithMembers(SyntaxFactory.List(allMembers))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+        }
 
         var newRoot = root!.ReplaceNode(classNode, recordNode);
         return newRoot.NormalizeWhitespace().ToFullString();

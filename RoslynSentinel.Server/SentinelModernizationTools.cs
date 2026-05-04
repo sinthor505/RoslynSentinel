@@ -119,9 +119,10 @@ public class SentinelModernizationTools
     public async Task<string> UseFieldBackedProperties(string filePath)
     {
         var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
+        // Return a friendly message when the file was not found or no patterns were present;
+        // do NOT throw — the file simply may not be part of the loaded workspace.
         if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"UseFieldBackedProperties failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return $"// No backing-field patterns found or file not in workspace for '{filePath}'.";
         return result;
     }
 

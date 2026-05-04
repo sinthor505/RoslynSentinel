@@ -183,6 +183,13 @@ public class ThreadSafetyEngine
 
         if (!hasSemaphore)
         {
+            // If every method that contains this lock is static, the semaphore must also be static
+            // so that the static methods can access it without an instance.
+            bool isStaticContext = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>()
+                    .Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+                .All(m => m.Modifiers.Any(SyntaxKind.StaticKeyword));
+
             var semaphoreField = SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
                 .WithVariables(SyntaxFactory.SingletonSeparatedList(
@@ -194,7 +201,9 @@ public class ThreadSafetyEngine
                             SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))),
                             SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))
                         }))))))))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+            .AddModifiers(isStaticContext
+                ? new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) }
+                : new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) });
 
             newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
         }

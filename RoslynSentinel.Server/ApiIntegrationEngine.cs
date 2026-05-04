@@ -32,6 +32,16 @@ public class ApiIntegrationEngine
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null) throw new Exception("Class not found.");
 
+        // Helper: check whether a property already carries an attribute (avoids duplicates)
+        static bool HasAttribute(PropertyDeclarationSyntax p, string name) =>
+            p.AttributeLists.SelectMany(al => al.Attributes)
+             .Any(a =>
+             {
+                 var n = a.Name.ToString();
+                 return n == name || n == name + "Attribute" ||
+                        n.EndsWith("." + name) || n.EndsWith("." + name + "Attribute");
+             });
+
         // Replace properties with annotated versions
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>();
         var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) => 
@@ -39,15 +49,15 @@ public class ApiIntegrationEngine
             var typeStr = newProp.Type.ToString();
             var attributes = new List<AttributeListSyntax>();
 
-            // Add [Required] for string
-            if (typeStr == "string")
+            // Add [Required] for string (skip if already present)
+            if (typeStr == "string" && !HasAttribute(newProp, "Required"))
             {
                 attributes.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.Attribute(SyntaxFactory.ParseName("Required")))));
             }
 
-            // Add [StringLength] for string
-            if (typeStr == "string")
+            // Add [StringLength] for string (skip if already present)
+            if (typeStr == "string" && !HasAttribute(newProp, "StringLength"))
             {
                 attributes.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.Attribute(SyntaxFactory.ParseName("StringLength")).WithArgumentList(
@@ -55,8 +65,9 @@ public class ApiIntegrationEngine
                             SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(256)))))))));
             }
 
-            // Add [Range] for numeric types
-            if (typeStr == "int" || typeStr == "decimal" || typeStr == "double" || typeStr == "float")
+            // Add [Range] for numeric types (skip if already present)
+            if ((typeStr == "int" || typeStr == "decimal" || typeStr == "double" || typeStr == "float")
+                && !HasAttribute(newProp, "Range"))
             {
                 attributes.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.Attribute(SyntaxFactory.ParseName("Range")).WithArgumentList(
@@ -67,7 +78,9 @@ public class ApiIntegrationEngine
                         }))))));
             }
 
-            return newProp.WithAttributeLists(newProp.AttributeLists.AddRange(attributes));
+            return attributes.Count == 0
+                ? newProp
+                : newProp.WithAttributeLists(newProp.AttributeLists.AddRange(attributes));
         });
 
         var newRoot = root.ReplaceNode(classNode, newClassNode);
