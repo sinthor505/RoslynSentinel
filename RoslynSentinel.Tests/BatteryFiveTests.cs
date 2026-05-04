@@ -271,21 +271,160 @@ public class Converter
     }
 
     [Test]
-    public async Task DetectMissingNullChecks_AnyFile_ReturnsEmpty()
+    public async Task DetectMissingNullChecks_PublicMethod_UnguardedReferenceParam_IsReported()
     {
-        // DetectMissingNullChecks has its core heuristic commented out (stub).
-        // This test documents the current behavior and acts as a regression guard:
-        // if the stub is ever activated, this test will catch unexpected mass-flagging.
+        // Formerly documented as stub — now properly implemented.
+        // Public method uses reference-type parameter without null guard = MissingNullCheck.
         SetSource(@"
 public class Service
 {
     private readonly string _name;
     public Service(string name) { _name = name; }
-    public int Length() => _name.Length; // Would be a null deref candidate
+    public int Length() => _name.Length;
 }");
         var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
 
-        Assert.That(issues, Is.Empty, "Stub implementation returns empty list — regression guard for future activation");
+        Assert.That(issues, Is.Not.Empty, "Constructor accepting 'string name' without null guard must be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck"), Is.True);
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_PrivateMethod_IsNotFlagged()
+    {
+        // Only public methods are checked — private methods are trusted internal callers.
+        SetSource(@"
+public class Service
+{
+    private void Process(string value) { var x = value.Length; }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Private methods must NOT be flagged for missing null checks.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_NullableReferenceParam_IsNotFlagged()
+    {
+        // string? is explicitly nullable — the caller knows it can be null.
+        SetSource(@"
+public class Service
+{
+    public void Process(string? value) { var x = value?.Length; }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Nullable reference parameters must NOT be flagged.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithIsNullGuard_IsNotFlagged()
+    {
+        SetSource(@"
+public class Service
+{
+    public void Process(string value)
+    {
+        if (value is null) throw new ArgumentNullException(nameof(value));
+        var x = value.Length;
+    }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "'is null' pattern guard must prevent flagging.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithIsNotNullGuard_IsNotFlagged()
+    {
+        SetSource(@"
+public class Service
+{
+    public void Process(string value)
+    {
+        if (value is not null) _ = value.Length;
+    }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "'is not null' pattern guard must prevent flagging.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithThrowIfNullOrEmpty_IsNotFlagged()
+    {
+        SetSource(@"
+public class Service
+{
+    public void Process(string value)
+    {
+        ArgumentNullException.ThrowIfNullOrEmpty(value);
+        _ = value.Length;
+    }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "ThrowIfNullOrEmpty guard must prevent flagging.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_ValueTypeParam_IsNotFlagged()
+    {
+        // int/bool/struct params cannot be null — should never be flagged.
+        SetSource(@"
+public class Service
+{
+    public void Process(int count) { _ = count + 1; }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("count")), Is.False,
+            "Value type parameters must NOT be flagged.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_UnusedParam_IsNotFlagged()
+    {
+        // Unused params cannot cause a null dereference in the method body.
+        SetSource(@"
+public class Service
+{
+    public void Process(string value) { _ = ""constant""; }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Unused parameters must NOT be flagged.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_ParamWithNullDefault_IsNotFlagged()
+    {
+        // Optional null default means the param is intentionally nullable by API design.
+        SetSource(@"
+public class Service
+{
+    public void Process(string value = null) { _ = value?.Length ?? 0; }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Optional params with null default must NOT be flagged.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_MultipleParams_OnlyUnguardedFlagged()
+    {
+        SetSource(@"
+public class Service
+{
+    public void Process(string safe, string risky)
+    {
+        ArgumentNullException.ThrowIfNull(safe);
+        _ = safe.Length + risky.Length;
+    }
+}");
+        var issues = await _engine.DetectMissingNullChecksAsync("Test.cs");
+        Assert.That(issues.Any(i => i.Description.Contains("risky")), Is.True,
+            "Unguarded 'risky' param must be flagged.");
+        Assert.That(issues.Any(i => i.Description.Contains("safe")), Is.False,
+            "Guarded 'safe' param must NOT be flagged.");
     }
 }
 

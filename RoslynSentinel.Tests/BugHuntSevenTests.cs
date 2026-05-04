@@ -376,10 +376,11 @@ public class BH03_UnsafeCastFalsePositiveTests
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BH-04: DetectMissingNullChecksAsync — stub with detection logic commented out
+// BH-04: DetectMissingNullChecksAsync — was a stub; now properly implemented
+// Tests verify the real detection logic works correctly.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
-public class BH04_MissingNullCheckStubTests
+public class BH04_MissingNullCheckTests
 {
     private PersistentWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
@@ -395,17 +396,15 @@ public class BH04_MissingNullCheckStubTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public async Task DetectMissingNullChecks_AlwaysReturnsEmpty_DocumentsStubBehavior()
+    public async Task DetectMissingNullChecks_PublicMethodUsesParameterWithoutGuard_IsReported()
     {
-        // BUG: The detection logic in DetectMissingNullChecksAsync is entirely commented out.
-        // The method always returns an empty list regardless of input.
-        // This test documents the current broken behavior.
-        // When the method is properly implemented this test should be replaced with
-        // a real assertion.
+        // The BUG was: detection logic was entirely commented out — always returned empty.
+        // FIX: Implemented real heuristic — finds public methods using reference-type params
+        //      without any null guard.
         const string source = """
             public class Service {
                 public void Process(string value) {
-                    var len = value.Length; // potential null deref if value == null
+                    var len = value.Length;
                 }
             }
             """;
@@ -414,10 +413,68 @@ public class BH04_MissingNullCheckStubTests
 
         var issues = await _engine.DetectMissingNullChecksAsync("Service.cs");
 
-        // This documents the STUB behavior: logic is commented out, always returns empty.
-        // Once properly implemented this SHOULD return at least one issue.
-        Assert.That(issues, Is.Empty,
-            "DetectMissingNullChecksAsync is a stub: detection logic is commented out, always returns empty.");
+        Assert.That(issues, Is.Not.Empty, "Public method using 'string' param without null guard must be flagged.");
+        Assert.That(issues.Any(i => i.Type == "MissingNullCheck"), Is.True);
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.True);
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithIfNullGuard_IsNotFlagged()
+    {
+        const string source = """
+            public class Service {
+                public void Process(string value) {
+                    if (value == null) throw new ArgumentNullException(nameof(value));
+                    var len = value.Length;
+                }
+            }
+            """;
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var issues = await _engine.DetectMissingNullChecksAsync("Service.cs");
+
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Parameter with if-null guard must NOT be reported.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithThrowIfNull_IsNotFlagged()
+    {
+        const string source = """
+            public class Service {
+                public void Process(string value) {
+                    ArgumentNullException.ThrowIfNull(value);
+                    var len = value.Length;
+                }
+            }
+            """;
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var issues = await _engine.DetectMissingNullChecksAsync("Service.cs");
+
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Parameter protected by ArgumentNullException.ThrowIfNull must NOT be reported.");
+    }
+
+    [Test]
+    public async Task DetectMissingNullChecks_WithNullCoalescing_IsNotFlagged()
+    {
+        const string source = """
+            public class Service {
+                public void Process(string value) {
+                    var safe = value ?? throw new ArgumentNullException(nameof(value));
+                }
+            }
+            """;
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var issues = await _engine.DetectMissingNullChecksAsync("Service.cs");
+
+        Assert.That(issues.Any(i => i.Description.Contains("value")), Is.False,
+            "Parameter protected by null-coalescing must NOT be reported.");
     }
 }
 
