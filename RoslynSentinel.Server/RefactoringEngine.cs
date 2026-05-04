@@ -937,11 +937,53 @@ public class RefactoringEngine
         }
 
         var refs = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
-        if (refs.Any(r => r.Locations.Any()))
+        
+        // Count all references, not just those with locations in the same document
+        var totalRefCount = refs.Sum(r => r.Locations.Count());
+        
+        // BUG-73 FIX: Explicit check that symbol is truly unused
+        // If we have ANY references (including implicit ones), refuse deletion
+        if (totalRefCount > 0)
         {
             _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
-            // Return error message, not empty dict - symbol is used so deletion is unsafe
-            return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {refs.Sum(r => r.Locations.Count())} location(s)." } };
+            return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {totalRefCount} location(s)." } };
+        }
+        
+        // Additional safety check: scan syntax tree for any identifier matching the symbol name
+        // This catches usages that SymbolFinder might miss
+        var declarationNode = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+        foreach (var proj in solution.Projects)
+        {
+            foreach (var doc in proj.Documents)
+            {
+                var docRoot = await doc.GetSyntaxRootAsync(ct);
+                var semanticModel = await doc.GetSemanticModelAsync(ct);
+                var identifierNodes = docRoot?.DescendantNodes().OfType<IdentifierNameSyntax>()
+                    .Where(id => id.Identifier.Text == symbol.Name);
+                
+                if (identifierNodes?.Any() == true)
+                {
+                    // Check if any of these identifiers resolve to our symbol
+                    foreach (var id in identifierNodes)
+                    {
+                        try
+                        {
+                            // Skip if this is inside the declaration node itself
+                            if (declarationNode != null && id.Ancestors().Contains(declarationNode) && doc.Id == document.Id)
+                                continue;
+                            
+                            var idSymbol = semanticModel!.GetSymbolInfo(id, ct).Symbol;
+                            if (idSymbol != null && SymbolEqualityComparer.Default.Equals(idSymbol, symbol))
+                            {
+                                // This is a usage of our symbol (not the declaration)
+                                _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
+                                return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used and cannot be safely removed." } };
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
         }
         
         var member = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
