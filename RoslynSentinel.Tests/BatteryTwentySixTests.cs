@@ -1128,8 +1128,10 @@ public class UnsafeTypeCastGotchaTests
     }
 
     [Test]
-    public async Task FindUnsafeCasts_NumericCast_IsFlagged()
+    public async Task FindUnsafeCasts_NumericCast_IsNotFlagged()
     {
+        // FIX (BH-03): Numeric/value-type casts like (int)double are safe conversions
+        // that cannot throw InvalidCastException. They should NOT be flagged as unsafe.
         const string source = """
             public class NumCaster {
                 public int Truncate(double d) { return (int)d; }
@@ -1140,8 +1142,8 @@ public class UnsafeTypeCastGotchaTests
 
         var issues = await _engine.FindUnsafeTypeCastsAsync("NumCaster.cs");
 
-        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.True,
-            "(int)double is a direct cast and must be flagged.");
+        Assert.That(issues.Any(i => i.Type == "UnsafeCast"), Is.False,
+            "(int)double is a safe numeric conversion and must NOT be flagged as UnsafeCast.");
     }
 
     [Test]

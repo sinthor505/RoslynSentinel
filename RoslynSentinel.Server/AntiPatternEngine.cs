@@ -212,19 +212,19 @@ public class AntiPatternEngine
 
     private static IEnumerable<AntiPatternFinding> DetectStringConcatInLoop(SyntaxNode root, string filePath)
     {
+        static bool IsInsideLoop(SyntaxNode node) =>
+            node.Ancestors().Any(a =>
+                a is ForEachStatementSyntax ||
+                a is ForStatementSyntax ||
+                a is WhileStatementSyntax ||
+                a is DoStatementSyntax);
+
+        // Pattern A: str += value  (compound assignment)
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
             if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression)) continue;
+            if (!IsInsideLoop(assignment)) continue;
 
-            // Must be inside a loop
-            if (!assignment.Ancestors().Any(a =>
-                    a is ForEachStatementSyntax ||
-                    a is ForStatementSyntax ||
-                    a is WhileStatementSyntax ||
-                    a is DoStatementSyntax))
-                continue;
-
-            // Determine whether this looks like string concatenation
             var lhsText = assignment.Left.ToString();
             var rhs = assignment.Right;
             bool rhsIsString = rhs is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
@@ -237,6 +237,31 @@ public class AntiPatternEngine
             var snippet = Truncate(assignment.ToString());
             yield return new AntiPatternFinding("StringConcatInLoop",
                 $"String '+=' in a loop creates many intermediate allocations. Use StringBuilder instead.",
+                "Medium", filePath, line, snippet);
+        }
+
+        // Pattern B: str = str + value  (simple assignment with self-referencing addition)
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)) continue;
+            if (assignment.Right is not BinaryExpressionSyntax binary) continue;
+            if (!binary.IsKind(SyntaxKind.AddExpression)) continue;
+            if (!IsInsideLoop(assignment)) continue;
+
+            // Must be self-addition: lhs = lhs + rhs (not arbitrary a + b)
+            var lhsText = assignment.Left.ToString();
+            if (binary.Left.ToString() != lhsText) continue;
+
+            bool rhsIsString = binary.Right is LiteralExpressionSyntax lit2 && lit2.IsKind(SyntaxKind.StringLiteralExpression)
+                               || binary.Right is InterpolatedStringExpressionSyntax;
+            bool lhsLooksLikeString = LooksLikeStringVar(lhsText);
+
+            if (!rhsIsString && !lhsLooksLikeString) continue;
+
+            var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var snippet = Truncate(assignment.ToString());
+            yield return new AntiPatternFinding("StringConcatInLoop",
+                $"String '=' with '+' in a loop ('{lhsText} = {lhsText} + ...') creates many intermediate allocations. Use StringBuilder instead.",
                 "Medium", filePath, line, snippet);
         }
     }
@@ -328,7 +353,9 @@ public class AntiPatternEngine
             if (!returnType.StartsWith("Task") && !returnType.StartsWith("ValueTask")) continue;
 
             var parameters = method.ParameterList.Parameters;
-            if (parameters.Count < 3) continue;
+            // Skip zero-parameter methods only — even 1-parameter public async methods
+            // should accept CancellationToken so callers can cancel long-running operations.
+            if (parameters.Count < 1) continue;
 
             var hasCt = parameters.Any(p =>
                 p.Type?.ToString() is string t &&
@@ -339,7 +366,7 @@ public class AntiPatternEngine
             var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(method.Identifier.Text + method.ParameterList.ToString());
             yield return new AntiPatternFinding("MissingCancellationToken",
-                $"Public async method '{method.Identifier.Text}' has {parameters.Count} parameters but no CancellationToken; callers cannot cancel long-running operations.",
+                $"Public async method '{method.Identifier.Text}' has {parameters.Count} parameter(s) but no CancellationToken; callers cannot cancel long-running operations.",
                 "Medium", filePath, line, snippet);
         }
     }

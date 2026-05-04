@@ -15,6 +15,20 @@ public class SecurityAndSafetyEngine
         _workspaceManager = workspaceManager;
     }
 
+    // Numeric keyword aliases used as cast targets (C# syntax, not CLR names)
+    private static readonly HashSet<string> NumericKeywords = new(StringComparer.Ordinal)
+    {
+        "byte", "sbyte", "short", "ushort", "int", "uint", "long", "ulong",
+        "float", "double", "decimal", "char", "nint", "nuint"
+    };
+
+    // CLR type names for numeric value types (used when checking source type via semantic model)
+    private static readonly HashSet<string> NumericClrNames = new(StringComparer.Ordinal)
+    {
+        "Byte", "SByte", "Int16", "UInt16", "Int32", "UInt32", "Int64", "UInt64",
+        "Single", "Double", "Decimal", "Char", "IntPtr", "UIntPtr"
+    };
+
     public async Task<List<SafetyIssue>> FindUnsafeTypeCastsAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -24,14 +38,30 @@ public class SecurityAndSafetyEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return new List<SafetyIssue>();
 
+        // Use semantic model to determine source types for accurate exclusion of safe numeric casts
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var issues = new List<SafetyIssue>();
 
-        // Look for direct cast expressions like (Type)obj instead of 'as' or pattern matching
+        // Look for direct cast expressions like (Type)obj instead of 'as' or pattern matching.
+        // A numeric cast (e.g., (int)myDouble) is safe only if the SOURCE type is also numeric.
+        // Casting from object/reference to numeric (e.g., (int)untypedObject) IS unsafe and is flagged.
         var casts = root.DescendantNodes().OfType<CastExpressionSyntax>();
         foreach (var cast in casts)
         {
+            var castTypeName = cast.Type.ToString().Trim();
+
+            // Only skip the cast if BOTH target type and source type are numeric value types
+            if (NumericKeywords.Contains(castTypeName) && semanticModel != null)
+            {
+                var sourceType = semanticModel.GetTypeInfo(cast.Expression, cancellationToken).Type;
+                bool sourceIsNumeric = sourceType is { IsValueType: true } &&
+                    (NumericClrNames.Contains(sourceType.Name) || NumericKeywords.Contains(sourceType.Name));
+                if (sourceIsNumeric) continue; // e.g., (int)myDouble — safe narrowing/widening
+            }
+
             var loc = cast.GetLocation().GetLineSpan().StartLinePosition;
-            issues.Add(new SafetyIssue(filePath, loc.Line + 1, loc.Character + 1, "UnsafeCast", "Direct cast detected. Consider using 'as' operator or pattern matching 'is' to avoid InvalidCastException."));
+            issues.Add(new SafetyIssue(filePath, loc.Line + 1, loc.Character + 1, "UnsafeCast",
+                $"Direct cast to '{castTypeName}' detected. Consider using 'as' operator or pattern matching 'is' to avoid InvalidCastException."));
         }
 
         return issues;

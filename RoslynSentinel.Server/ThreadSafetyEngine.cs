@@ -156,17 +156,19 @@ public class ThreadSafetyEngine
         // Replace all lock statements in the type
         var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
 
-        // Find method names that contain locks (before replacement, using original typeNode)
-        var methodNamesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        // Find method SIGNATURES that contain locks (before replacement, using original typeNode).
+        // Using (name, parameterList) tuples avoids the overload bug where method-name-only matching
+        // would make ALL overloads async even when only one overload actually contained a lock.
+        var methodSignaturesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
-            .Select(m => m.Identifier.Text)
+            .Select(m => (Name: m.Identifier.Text, Params: m.ParameterList.ToString()))
             .ToHashSet();
 
-        // Make ALL methods that contained locks async (find them in newTypeNode by name)
+        // Make ONLY the methods that contained locks async (match by name + parameters, not name alone)
         var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         foreach (var meth in methodsInNewType)
         {
-            if (methodNamesWithLocks.Contains(meth.Identifier.Text) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
+            if (methodSignaturesWithLocks.Contains((meth.Identifier.Text, meth.ParameterList.ToString())) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
             {
                 var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
                 var retStr = newMeth.ReturnType.ToString().Trim();
