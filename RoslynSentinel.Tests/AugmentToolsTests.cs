@@ -485,4 +485,313 @@ public class Counter
         Assert.That(result.UpdatedContent, Does.Contain("n * 3"),
             "Extracted method should contain the original statements");
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Regression Guards — Specific failure modes discovered during live
+    // 36-tool battery test against ExpressRecipe (session d717a42b, 2026-04)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    [Description("Regression guard: workspace-first read must succeed when the file is only in memory, "
+                 + "not on disk. This was the root cause of 8 test failures: the original implementation "
+                 + "used File.ReadAllTextAsync(filePath) exclusively. Tests pass only bare filenames "
+                 + "(e.g. 'AuthUser.cs'), which resolve to the test bin directory where no .cs files "
+                 + "exist, causing FileNotFoundException. Fix: check CurrentSolution first.")]
+    public async Task GenerateToStringSafe_WorkspaceFirstRead_NoDiskFileRequired()
+    {
+        // File exists only in the in-memory workspace — no physical .cs file on disk.
+        // If the engine regresses to disk-only reading, this test catches it immediately.
+        const string source = @"
+public class WorkspaceOnlyModel
+{
+    public Guid Id { get; set; }
+    public string Tag { get; set; }
+    public int Priority { get; set; }
+}";
+        SetSource(source, "WorkspaceOnlyModel.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("WorkspaceOnlyModel.cs", "WorkspaceOnlyModel");
+
+        Assert.That(result.Success, Is.True,
+            "WORKSPACE-FIRST-READ REGRESSION: GenerateToStringSafeAsync must read from the "
+            + "Roslyn workspace when the file isn't on disk. If this fails, the engine has "
+            + "regressed to disk-only reading (File.ReadAllTextAsync without workspace fallback).");
+        Assert.That(result.UpdatedContent, Does.Contain("{Id}"), "Id must appear in output");
+        Assert.That(result.UpdatedContent, Does.Contain("{Tag}"), "Tag must appear in output");
+    }
+
+    [Test]
+    [Description("Regression guard: CS8086 must not be generated. "
+                 + "The brace preceding the member list must be DOUBLED ({{ not {). "
+                 + "Single { in an interpolated string starts an interpolation hole — if the "
+                 + "hole is not a valid expression, C# emits CS8086. This test compiles the output "
+                 + "and specifically checks for CS8086 (not just any error).")]
+    public async Task GenerateToStringSafe_GeneratedCode_NoCS8086()
+    {
+        const string source = @"
+public class Entity
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public bool Active { get; set; }
+}";
+        SetSource(source, "Entity.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("Entity.cs", "Entity");
+
+        Assert.That(result.Success, Is.True, result.Error);
+
+        var tree = CSharpSyntaxTree.ParseText(result.UpdatedContent!);
+        var compilation = CSharpCompilation.Create("CS8086Test",
+            syntaxTrees: [tree],
+            options: new CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary),
+            references: [MetadataReference.CreateFromFile(typeof(object).Assembly.Location)]);
+
+        var cs8086 = compilation.GetDiagnostics()
+            .Where(d => d.Id == "CS8086")
+            .ToList();
+
+        Assert.That(cs8086, Is.Empty,
+            "CS8086-REGRESSION: CS8086 ('A interpolated string hole may not contain an "
+            + "interpolated string') must not appear. This error is caused by unescaped literal "
+            + "braces (using { instead of {{ around member names). "
+            + string.Join("; ", cs8086.Select(d => d.GetMessage())));
+    }
+
+    [Test]
+    [Description("Struct types must be supported the same as classes.")]
+    public async Task GenerateToStringSafe_StructType_Works()
+    {
+        const string source = @"
+public struct Vector3
+{
+    public float X { get; set; }
+    public float Y { get; set; }
+    public float Z { get; set; }
+}";
+        SetSource(source, "Vector3.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("Vector3.cs", "Vector3");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Contain("{{ "), "Struct must use escaped braces");
+        Assert.That(result.UpdatedContent, Does.Contain("{X}"), "X must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{Y}"), "Y must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{Z}"), "Z must appear");
+    }
+
+    [Test]
+    [Description("Type declared inside a namespace (the common real-world pattern) must be found correctly.")]
+    public async Task GenerateToStringSafe_TypeInNamespace_Works()
+    {
+        const string source = @"
+namespace ExpressRecipe.Models
+{
+    public class Product
+    {
+        public Guid ProductId { get; set; }
+        public string Name { get; set; }
+        public decimal Price { get; set; }
+    }
+}";
+        SetSource(source, "Product.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("Product.cs", "Product");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Contain("{ProductId}"), "ProductId must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{Name}"), "Name must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{Price}"), "Price must appear");
+    }
+
+    [Test]
+    [Description("Init-only properties (C# 9+, common in modern models) must be included.")]
+    public async Task GenerateToStringSafe_InitOnlyProperties_AreIncluded()
+    {
+        const string source = @"
+public class ImmutableDto
+{
+    public Guid Id { get; init; }
+    public string Name { get; init; }
+    public DateTime CreatedAt { get; init; }
+}";
+        SetSource(source, "ImmutableDto.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("ImmutableDto.cs", "ImmutableDto");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Contain("{Id}"), "Id must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{Name}"), "Name must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{CreatedAt}"), "CreatedAt must appear");
+    }
+
+    [Test]
+    [Description("Class with a single property produces valid output (not just multi-member classes).")]
+    public async Task GenerateToStringSafe_SingleMember_Works()
+    {
+        const string source = @"
+public class Wrapper
+{
+    public string Value { get; set; }
+}";
+        SetSource(source, "Wrapper.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("Wrapper.cs", "Wrapper");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Contain("{Value}"), "Value must appear");
+        Assert.That(result.UpdatedContent, Does.Contain("{{ "), "Opening escaped brace required");
+        Assert.That(result.UpdatedContent, Does.Contain(" }}"), "Closing escaped brace required");
+    }
+
+    [Test]
+    [Description("Class with many properties (5+) produces output with all members. "
+                 + "Guards against off-by-one errors in the member iteration loop.")]
+    public async Task GenerateToStringSafe_ManyMembers_AllIncluded()
+    {
+        const string source = @"
+public class BigModel
+{
+    public Guid Id { get; set; }
+    public string FirstName { get; set; }
+    public string LastName { get; set; }
+    public string Email { get; set; }
+    public int Age { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime CreatedAt { get; set; }
+}";
+        SetSource(source, "BigModel.cs");
+
+        var result = await _engine.GenerateToStringSafeAsync("BigModel.cs", "BigModel");
+
+        Assert.That(result.Success, Is.True, result.Error);
+
+        var allMembers = new[] { "Id", "FirstName", "LastName", "Email", "Age", "IsActive", "CreatedAt" };
+        foreach (var member in allMembers)
+            Assert.That(result.UpdatedContent, Does.Contain($"{{{member}}}"),
+                $"Member '{member}' must be included in the generated ToString");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ExtractMethodSafe — additional regression guards
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test]
+    [Description("Regression guard (Bug #12): generic return types (List<T>, Task<T>) must preserve "
+                 + "the full generic signature. void is never acceptable for a value-returning block.")]
+    public async Task ExtractMethodSafe_GenericListReturn_HasCorrectReturnType()
+    {
+        const string source = @"
+using System.Collections.Generic;
+public class DataFactory
+{
+    public List<string> Build(string a, string b)
+    {
+        return new List<string> { a, b };
+    }
+}";
+        SetSource(source, "DataFactory.cs");
+
+        var result = await _engine.ExtractMethodSafeAsync(
+            "DataFactory.cs", "CreatePair", "return new List<string> { a, b }");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Not.Contain("void CreatePair("),
+            "GENERIC-RETURN REGRESSION (Bug #12): must not generate void for a List<string> return");
+        // Return type should contain "List" (full generic may vary by display format)
+        Assert.That(result.UpdatedContent, Does.Contain("List"),
+            "Return type must reference 'List'");
+    }
+
+    [Test]
+    [Description("bool return type must be preserved correctly (not void).")]
+    public async Task ExtractMethodSafe_BoolReturn_HasCorrectReturnType()
+    {
+        const string source = @"
+public class Validator
+{
+    public bool Validate(int value)
+    {
+        return value > 0;
+    }
+}";
+        SetSource(source, "Validator.cs");
+
+        var result = await _engine.ExtractMethodSafeAsync(
+            "Validator.cs", "IsPositive", "return value > 0");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Not.Contain("void IsPositive("),
+            "Must NOT be void for a bool-returning extraction (Bug #12 regression)");
+        Assert.That(result.UpdatedContent, Does.Contain("bool IsPositive("),
+            "Must have bool return type");
+    }
+
+    [Test]
+    [Description("Regression guard: extracting a method in a class with multiple methods must work. "
+                 + "The engine must append the new method to the end of the type, not overwrite siblings.")]
+    public async Task ExtractMethodSafe_ClassWithMultipleMethods_PreservesAllMethods()
+    {
+        const string source = @"
+public class Service
+{
+    public string GetName() => ""test"";
+
+    public int Compute(int x)
+    {
+        return x * x;
+    }
+
+    public void Log(string msg) { }
+}";
+        SetSource(source, "Service.cs");
+
+        var result = await _engine.ExtractMethodSafeAsync(
+            "Service.cs", "Square", "return x * x");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        // All three original methods must still be present
+        Assert.That(result.UpdatedContent, Does.Contain("GetName"),
+            "GetName must be preserved after extraction");
+        Assert.That(result.UpdatedContent, Does.Contain("Log"),
+            "Log must be preserved after extraction");
+        // The extracted method must appear
+        Assert.That(result.UpdatedContent, Does.Contain("Square"),
+            "Extracted method Square must be present");
+    }
+
+    [Test]
+    [Description("Extracting from inside an if block (the exact pattern from AuthRepository during "
+                 + "the ExpressRecipe live test) must produce the correct return type.")]
+    public async Task ExtractMethodSafe_ReturnInsideIfBlock_HasCorrectReturnType()
+    {
+        const string source = @"
+public class AuthUserMapper
+{
+    public AuthResult Map(bool success, string user)
+    {
+        if (success)
+        {
+            return new AuthResult { User = user };
+        }
+        return new AuthResult();
+    }
+}
+
+public class AuthResult
+{
+    public string User { get; set; }
+}";
+        SetSource(source, "AuthUserMapper.cs");
+
+        var result = await _engine.ExtractMethodSafeAsync(
+            "AuthUserMapper.cs", "CreateAuthResult", "return new AuthResult { User = user }");
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Not.Contain("void CreateAuthResult("),
+            "Must NOT be void for an object-returning extraction inside an if block "
+            + "(exact pattern from AuthRepository ExpressRecipe live test — Bug #12 regression)");
+        Assert.That(result.UpdatedContent, Does.Contain("AuthResult CreateAuthResult("),
+            "Must have AuthResult return type");
+    }
 }
