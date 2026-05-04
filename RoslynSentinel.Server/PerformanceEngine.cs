@@ -33,7 +33,7 @@ public class PerformanceEngine
 
         foreach (var concat in stringConcats)
         {
-            var inLoop = concat.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax);
+            var inLoop = concat.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax || a is DoStatementSyntax);
             if (inLoop)
             {
                 var loc = concat.GetLocation().GetLineSpan().StartLinePosition;
@@ -48,7 +48,7 @@ public class PerformanceEngine
 
         foreach (var assign in assignConcats)
         {
-            var inLoop = assign.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax);
+            var inLoop = assign.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax || a is DoStatementSyntax);
             if (!inLoop) continue;
 
             // Use semantic model if available, otherwise fall back to literal heuristic

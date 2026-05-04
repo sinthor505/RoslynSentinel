@@ -204,7 +204,8 @@ public class AntiPatternEngine
         var firstType = parameters[0].Type?.ToString() ?? "";
         var secondType = parameters[1].Type?.ToString() ?? "";
         // Standard pattern: (object sender, XxxEventArgs e)
-        return (firstType == "object" || firstType == "Object") &&
+        var bareFirstType = firstType.TrimEnd('?');
+        return (bareFirstType == "object" || bareFirstType == "Object") &&
                secondType.EndsWith("EventArgs");
     }
 
@@ -459,7 +460,9 @@ public class AntiPatternEngine
 
             var path = document.FilePath ?? document.Name;
 
-            foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            foreach (var classDecl in root.DescendantNodes()
+                .OfType<TypeDeclarationSyntax>()
+                .Where(t => t is ClassDeclarationSyntax or RecordDeclarationSyntax))
             {
                 if (!classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
 
@@ -474,6 +477,9 @@ public class AntiPatternEngine
                     var setAccessor = prop.AccessorList?.Accessors
                         .FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
                     if (setAccessor == null) continue;
+                    // A private or protected setter is NOT a public API surface
+                    if (setAccessor.Modifiers.Any(m =>
+                            m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword))) continue;
 
                     var line = prop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     findings.Add(new AntiPatternFinding(

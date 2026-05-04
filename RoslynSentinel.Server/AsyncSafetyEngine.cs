@@ -347,7 +347,8 @@ public class AsyncSafetyEngine
                 foreach (var memberAccess in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
                 {
                     if (memberAccess.Name.Identifier.Text == "Result" &&
-                        !(memberAccess.Parent is InvocationExpressionSyntax))
+                        !(memberAccess.Parent is InvocationExpressionSyntax) &&
+                        !(memberAccess.Parent is AssignmentExpressionSyntax lhsAssign && lhsAssign.Left == memberAccess))
                     {
                         var lineSpan = memberAccess.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text,
