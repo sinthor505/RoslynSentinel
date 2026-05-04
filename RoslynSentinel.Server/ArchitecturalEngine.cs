@@ -38,6 +38,9 @@ public class ArchitecturalEngine
         if (!root.Usings.Any(u => u.Name.ToString() == "Microsoft.Extensions.Hosting"))
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Microsoft.Extensions.Hosting")));
+            // Re-find class node after root modification (stale reference otherwise)
+            classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+            if (classNode == null) throw new Exception("Class not found after root modification.");
         }
 
         // 2. Change base class
