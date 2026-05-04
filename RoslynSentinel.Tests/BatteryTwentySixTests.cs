@@ -3,9 +3,12 @@
 // detections across AntiPatternEngine, AsyncSafetyEngine, ThreadSafetyEngine,
 // SecurityAndSafetyEngine, and ImmutabilityEngine.
 //
-// Key discoveries that drive these tests are documented inline; where an engine
-// has a confirmed bug the test still asserts the *actual* (current) behavior and
-// carries a "// BUG:" comment so the regression is visible and auditable.
+// Bug fixes included in this battery:
+//   - AsyncSafetyEngine.DetectAsyncVoidMethodsAsync: async void event handlers
+//     (object sender, *EventArgs e) now produce an advisory message rather than
+//     the generic crash warning.
+//   - AsyncSafetyEngine.FindUnawaitedFireAndForgetAsync: _ = MethodAsync() discard
+//     assignments are now detected as fire-and-forget patterns.
 
 #pragma warning disable CS8618
 
@@ -238,13 +241,10 @@ public class AsyncVoidGotchaTests
     }
 
     [Test]
-    public async Task DetectAsyncVoid_EventHandlerSignature_IsAlsoFlagged()
+    public async Task DetectAsyncVoid_EventHandlerSignature_IsReportedWithAdvisory()
     {
-        // BUG / design note: the engine has NO IsEventHandlerSignature exclusion.
-        // AsyncSafetyEngine.DetectAsyncVoidMethodsAsync (line 33-38) matches every
-        // method with `async` + return-type `void` — including conventional
-        // (object sender, EventArgs e) event-handler signatures.
-        // Documenting actual behavior: event handlers ARE flagged.
+        // FIXED: engine now calls IsEventHandlerSignature() and emits an advisory message
+        // (not a crash warning) for the conventional (object sender, *EventArgs e) pattern.
         const string source = """
             using System;
             using System.Threading.Tasks;
@@ -259,9 +259,36 @@ public class AsyncVoidGotchaTests
 
         var reports = await _engine.DetectAsyncVoidMethodsAsync("MyForm.cs");
 
+        // Event handler is still reported — but with an advisory message, NOT the crash warning.
         Assert.That(reports, Has.Count.EqualTo(1),
-            "Engine has no event-handler exclusion: async void event handlers ARE flagged.");
+            "Event handlers matching (object sender, *EventArgs e) should still produce a report.");
         Assert.That(reports[0].MethodName, Is.EqualTo("Button_Click"));
+        Assert.That(reports[0].Reason, Does.Contain("only acceptable use"),
+            "Event handler report should contain advisory language, not the crash warning.");
+        Assert.That(reports[0].Reason, Does.Not.Contain("cannot be awaited"),
+            "Event handler should NOT get the non-event-handler crash message.");
+    }
+
+    [Test]
+    public async Task DetectAsyncVoid_NonEventHandler_GetsCrashWarning()
+    {
+        // Non-event-handler async void methods still receive the fatal crash warning.
+        const string source = """
+            using System.Threading.Tasks;
+            public class Worker {
+                public async void DoWork() {
+                    await Task.Delay(1);
+                }
+            }
+            """;
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var reports = await _engine.DetectAsyncVoidMethodsAsync("Worker.cs");
+
+        Assert.That(reports, Has.Count.EqualTo(1));
+        Assert.That(reports[0].Reason, Does.Contain("cannot be awaited"),
+            "Non-event-handler async void must receive the crash warning.");
     }
 }
 
@@ -1177,8 +1204,8 @@ public class UnsafeTypeCastGotchaTests
 // ─────────────────────────────────────────────────────────────────────────────
 // 11. FireAndForgetGotchaTests
 //     FindUnawaitedFireAndForgetAsync
-//     The engine only detects raw InvocationExpressionSyntax in ExpressionStatements.
-//     Discard-assignment fire-and-forget ( _ = RunAsync() ) is NOT detected — BUG.
+//     Tests raw invocation, discard-assignment (_ = RunAsync()), and awaited calls.
+//     Bug fixed: _ = RunAsync() was silently skipped (AssignmentExpressionSyntax).
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 public class FireAndForgetGotchaTests
@@ -1220,14 +1247,11 @@ public class FireAndForgetGotchaTests
     }
 
     [Test]
-    public async Task FindUnawaitedFireAndForget_DiscardAssignment_BugNotDetected()
+    public async Task FindUnawaitedFireAndForget_DiscardAssignment_IsNowDetected()
     {
-        // BUG: _ = RunAsync() is an AssignmentExpressionSyntax inside an ExpressionStatement,
-        // NOT an InvocationExpressionSyntax.  The engine checks:
-        //   if (exprStmt.Expression is not InvocationExpressionSyntax inv) continue;
-        // This skips the assignment entirely, so the discard pattern is silently missed.
-        // This test documents the current (broken) behavior; once fixed it should assert
-        // Is.Not.Empty instead.
+        // FIXED: _ = RunAsync() is now also detected as fire-and-forget.
+        // The engine checks for AssignmentExpressionSyntax where Left is the discard
+        // identifier "_" and Right is an InvocationExpression ending in "Async".
         const string source = """
             using System.Threading.Tasks;
             public class Discarder {
@@ -1243,10 +1267,12 @@ public class FireAndForgetGotchaTests
 
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Discarder.cs");
 
-        // BUG: should be Is.Not.Empty — discard-assignment fire-and-forget is a real issue
-        // but the engine's ExpressionStatement/InvocationExpression check misses it.
-        Assert.That(reports, Is.Empty,
-            "BUG: _ = RunAsync() is currently NOT detected because the engine skips AssignmentExpressionSyntax.");
+        Assert.That(reports, Is.Not.Empty,
+            "_ = RunAsync() is a discard fire-and-forget and must now be detected by the engine.");
+        Assert.That(reports[0].Reason, Does.Contain("RunAsync"),
+            "The report should name the fire-and-forgot method.");
+        Assert.That(reports[0].Reason, Does.Contain("discard"),
+            "The report should mention the discard pattern.");
     }
 
     [Test]

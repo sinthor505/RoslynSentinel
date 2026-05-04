@@ -35,7 +35,23 @@ public class AsyncSafetyEngine
 
             foreach (var method in methods)
             {
-                reports.Add(new AsyncSafetyReport(document.FilePath ?? document.Name, method.Identifier.Text, "Async void methods cannot be awaited and crash the process on exceptions."));
+                // Event handler exclusion: (object sender, *EventArgs* e) is the conventional
+                // async void pattern for UI events — flag with advisory rather than crash warning.
+                if (IsEventHandlerSignature(method))
+                {
+                    reports.Add(new AsyncSafetyReport(
+                        document.FilePath ?? document.Name,
+                        method.Identifier.Text,
+                        "Async void event handler: this is the only acceptable use of async void. " +
+                        "Exceptions still crash the process — wrap the body in try/catch if exceptions are possible."));
+                }
+                else
+                {
+                    reports.Add(new AsyncSafetyReport(
+                        document.FilePath ?? document.Name,
+                        method.Identifier.Text,
+                        "Async void methods cannot be awaited and crash the process on exceptions. Change return type to Task."));
+                }
             }
         }
         return reports;
@@ -829,6 +845,31 @@ public class AsyncSafetyEngine
         return reports;
     }
 
+    /// <summary>
+    /// Returns true when a method matches the conventional event-handler signature:
+    /// exactly 2 parameters where the first is <c>object</c> (or <c>object?</c>) and the
+    /// second type name ends with <c>EventArgs</c>.
+    /// </summary>
+    private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
+    {
+        var parameters = method.ParameterList.Parameters;
+        if (parameters.Count != 2) return false;
+
+        var firstType = parameters[0].Type?.ToString().TrimEnd('?') ?? "";
+        if (firstType != "object") return false;
+
+        var secondType = parameters[1].Type?.ToString() ?? "";
+        // Strip nullable suffix and fully-qualified prefix, check tail
+        var bare = secondType.TrimEnd('?');
+        var dotIdx = bare.LastIndexOf('.');
+        var simpleName = dotIdx >= 0 ? bare[(dotIdx + 1)..] : bare;
+        return simpleName.EndsWith("EventArgs", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Finds unawaited fire-and-forget Task calls including the <c>_ = MethodAsync()</c>
+    /// discard-assignment pattern.
+    /// </summary>
     public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForgetAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -846,33 +887,53 @@ public class AsyncSafetyEngine
 
             foreach (var exprStmt in root.DescendantNodes().OfType<ExpressionStatementSyntax>())
             {
-                // Must be a raw invocation, not await
-                if (exprStmt.Expression is not InvocationExpressionSyntax inv)
+                // Pattern A: Raw invocation without await — RunAsync();
+                if (exprStmt.Expression is InvocationExpressionSyntax inv)
+                {
+                    // Skip if parent is an await expression
+                    if (exprStmt.Expression is AwaitExpressionSyntax)
+                        continue;
+
+                    string? methodName = null;
+                    if (inv.Expression is MemberAccessExpressionSyntax ma)
+                        methodName = ma.Name.Identifier.Text;
+                    else if (inv.Expression is IdentifierNameSyntax id)
+                        methodName = id.Identifier.Text;
+
+                    if (methodName != null && methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                        var lineSpan = exprStmt.GetLocation().GetLineSpan();
+                        reports.Add(new AsyncSafetyReport(
+                            document.FilePath ?? document.Name,
+                            containingMethod?.Identifier.Text ?? "<unknown>",
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' called without await — exceptions will be swallowed silently."));
+                    }
                     continue;
+                }
 
-                // Skip if parent is an await expression
-                if (exprStmt.Expression is AwaitExpressionSyntax)
-                    continue;
+                // Pattern B: Discard-assignment — _ = RunAsync();
+                if (exprStmt.Expression is AssignmentExpressionSyntax assign &&
+                    assign.Left is IdentifierNameSyntax discardId &&
+                    discardId.Identifier.Text == "_" &&
+                    assign.Right is InvocationExpressionSyntax discardInv)
+                {
+                    string? methodName = null;
+                    if (discardInv.Expression is MemberAccessExpressionSyntax dma)
+                        methodName = dma.Name.Identifier.Text;
+                    else if (discardInv.Expression is IdentifierNameSyntax did)
+                        methodName = did.Identifier.Text;
 
-                // Get method name
-                string? methodName = null;
-                if (inv.Expression is MemberAccessExpressionSyntax ma)
-                    methodName = ma.Name.Identifier.Text;
-                else if (inv.Expression is IdentifierNameSyntax id)
-                    methodName = id.Identifier.Text;
-
-                if (methodName == null) continue;
-
-                // Syntactic heuristic: if method name ends in Async, it likely returns Task
-                if (!methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-                var lineSpan = exprStmt.GetLocation().GetLineSpan();
-                reports.Add(new AsyncSafetyReport(
-                    document.FilePath ?? document.Name,
-                    containingMethod?.Identifier.Text ?? "<unknown>",
-                    $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' called without await — exceptions will be swallowed silently."));
+                    if (methodName != null && methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                        var lineSpan = exprStmt.GetLocation().GetLineSpan();
+                        reports.Add(new AsyncSafetyReport(
+                            document.FilePath ?? document.Name,
+                            containingMethod?.Identifier.Text ?? "<unknown>",
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' fire-and-forgot via discard ('_ = {methodName}()') — exceptions will be swallowed silently. Use proper fire-and-forget with error logging instead."));
+                    }
+                }
             }
         }
         return reports;
