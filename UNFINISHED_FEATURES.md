@@ -1,7 +1,7 @@
 # RoslynSentinel Unfinished Features & Known Limitations
 
 **Status:** Complete inventory of all unfinished work  
-**Last Updated:** 2026-05-03  
+**Last Updated:** 2026-05-04  
 **Scope:** All stub methods, deferred bugs, and known limitations with rationale
 
 ---
@@ -103,15 +103,15 @@ This capability is planned for Phase 2.5."
 
 ## 🐛 Deferred Bugs (With Regression Tests)
 
-These are known bugs with regression tests written but test marked `[Ignore]`. Bug fixes are planned but deferred.
+These are known bugs with regression tests. All tests are **actively running** (no `[Ignore]` attributes).
 
 ### BUG-72: IntroduceField — Variable Scoping Issue
 
 **Symptom:** `IntroduceFieldAsync()` sometimes introduces field at wrong scope when called on nested classes or interfaces.
 
-**Regression Test:** `RoslynSentinel.Tests/BugFixTests.cs::CriticalBugRegressionTests.BUG_72_IntroduceField_WithLiteralValue_InitializesCorrectly()`
-
-**Test Status:** `[Ignore("Scoping logic not yet fixed")]` — Test written, will pass once fix applied
+**Regression Tests:**
+- `BUG_72_IntroduceField_WithClassScopedValue_InitializesCorrectly` ✅ Running
+- `BUG_72_IntroduceField_WithLocalParameter_NoInitializer` ✅ Running
 
 **Root Cause:** Field introduction logic doesn't validate nesting depth or interface context
 
@@ -127,9 +127,10 @@ These are known bugs with regression tests written but test marked `[Ignore]`. B
 
 **Symptom:** `ExtractClassAsync()` fails when extracting from file-scoped types (C# 11+).
 
-**Regression Test:** `RoslynSentinel.Tests/BugFixTests.cs::CriticalBugRegressionTests.BUG_74_ExtractClass_WithFileScopedType_GeneratesCorrectly()`
-
-**Test Status:** `[Ignore("File-scoped type handling not yet implemented")]` — Test written, will pass once fix applied
+**Regression Tests:**
+- `BUG_74_ExtractClass_FileScopeType_CopiesMembers` ✅ Running
+- `BUG_74_ExtractClass_FileScopedType_ExtractsMembersCorrectly` ✅ Running
+- `BUG_74_ExtractClass_WithNamespace_PreservesStructure` ✅ Running
 
 **Root Cause:** Extract logic doesn't detect `file` keyword on source type, generates incorrect namespace/scoping in extracted class
 
@@ -157,9 +158,9 @@ These are known bugs with regression tests written but test marked `[Ignore]`. B
 
 **Symptom:** `InlineMethodAsync()` crashes when the target method contains multiple statements and has cross-file call sites.
 
-**Regression Test:** `RoslynSentinel.Tests/BugFixTests.cs::CriticalBugRegressionTests.InlineMethod_MultiStatement_WithMultipleCallSites_InlinesCorrectly()`
-
-**Test Status:** `[Ignore("Multi-statement inlining across files not yet implemented")]` — Test written, will pass once fix applied
+**Regression Tests:**
+- `BUG_69_InlineMethod_MultiStatementMethod_GracefulError` ✅ Running
+- `BUG_InlineMethod_MultipleStatements_HandlesGracefully` ✅ Running
 
 **Root Cause:** Stale node references after tree mutations; inlining collects nodes from root before mutations but applies after
 
@@ -178,9 +179,7 @@ These are known bugs with regression tests written but test marked `[Ignore]`. B
 - Extracting members that reference type parameters from enclosing class
 - Circular reference detection between extracted and source class
 
-**Regression Tests:** Multiple tests in `BugFixTests.cs::CriticalBugRegressionTests` marked `[Ignore]`
-
-**Test Status:** Tests written, awaiting fixes
+**Regression Tests:** Multiple tests in `BugFixTests.cs::CriticalBugRegressionTests` — all actively running
 
 **Priority:** Medium-Low (edge cases affecting <5% of uses)
 

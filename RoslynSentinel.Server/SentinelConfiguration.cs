@@ -59,6 +59,7 @@ public class SentinelConfiguration
         _features["UseBaseTypeWherePossible"] = true;
         _features["ConvertExpressionBody"] = true;
         _features["ExtractConstant"] = true;
+        _features["ExtractLocalVariable"] = true;
         _features["AnalyzeControlFlow"] = true;
         _features["AnalyzeDataFlow"] = true;
 

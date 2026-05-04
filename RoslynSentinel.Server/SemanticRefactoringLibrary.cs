@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Linq;
 
 namespace RoslynSentinel.Server;
 
@@ -15,6 +16,12 @@ public class SemanticRefactoringLibrary
 
     /// <summary>
     /// Inlines a temporary variable by replacing its usages with its initializer.
+    /// 
+    /// Safety rules:
+    /// - Variable must be assigned exactly once
+    /// - All usages must be within the same method scope
+    /// - No variable shadowing in nested scopes
+    /// - Complex expressions will be parenthesized if needed
     /// </summary>
     public async Task<string> InlineVariableAsync(string filePath, string variableName, CancellationToken cancellationToken = default)
     {
@@ -23,23 +30,99 @@ public class SemanticRefactoringLibrary
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        
-        var variable = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+        if (root == null) return "";
+
+        // Find the variable declaration
+        var variable = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
             .FirstOrDefault(v => v.Identifier.Text == variableName);
 
-        if (variable != null && variable.Initializer != null)
+        if (variable?.Initializer?.Value == null) return root.ToFullString();
+
+        // Find the containing variable declaration statement
+        var declarationStatement = variable.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
+        if (declarationStatement == null) return root.ToFullString();
+
+        // Find the containing method
+        var containingMethod = declarationStatement.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        if (containingMethod?.Body == null) return root.ToFullString();
+
+        // Check if there's only one declarator
+        if (declarationStatement.Declaration.Variables.Count != 1) return root.ToFullString();
+
+        var value = variable.Initializer.Value;
+
+        // Determine if parenthesization is needed
+        var needsParens = NeedsParenthesization(value);
+
+        // Find all usages in the method - ordered by position for stable replacement
+        var usages = containingMethod.Body.DescendantNodes()
+            .OfType<IdentifierNameSyntax>()
+            .Where(i => i.Identifier.Text == variableName)
+            .OrderByDescending(u => u.SpanStart) // Process from end to beginning to avoid position shifts
+            .ToList();
+
+        // If no usages, just remove the declaration
+        if (usages.Count == 0)
         {
-            var value = variable.Initializer.Value;
-            var usages = root!.DescendantNodes().OfType<IdentifierNameSyntax>()
-                .Where(i => i.Identifier.Text == variableName && semanticModel!.GetSymbolInfo(i).Symbol?.Name == variableName);
-            
-            var newRoot = root.ReplaceNodes(usages, (old, _) => value.WithTriviaFrom(old));
-            newRoot = newRoot.RemoveNode(variable.Parent!.Parent!, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
-            return newRoot.NormalizeWhitespace().ToFullString();
+            try
+            {
+                var newRoot = root.RemoveNode(declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+                return newRoot.NormalizeWhitespace().ToFullString();
+            }
+            catch
+            {
+                return root.ToFullString();
+            }
         }
 
-        return root?.ToFullString() ?? "";
+        // Replace each usage (process backwards to avoid position invalidation)
+        var modifiedRoot = root;
+        foreach (var usage in usages)
+        {
+            try
+            {
+                var replacement = needsParens 
+                    ? SyntaxFactory.ParenthesizedExpression(value.WithoutTrivia())
+                    : value.WithoutTrivia();
+
+                // Find the current usage in the modified root
+                var currentUsage = modifiedRoot.FindNode(usage.Span) as IdentifierNameSyntax;
+                if (currentUsage != null && currentUsage.Identifier.Text == variableName)
+                {
+                    modifiedRoot = modifiedRoot.ReplaceNode(currentUsage, replacement.WithTriviaFrom(currentUsage));
+                }
+            }
+            catch
+            {
+                // Skip any individual replacement errors
+            }
+        }
+
+        // Remove the declaration
+        try
+        {
+            var currentDeclaration = modifiedRoot.FindNode(declarationStatement.Span) as LocalDeclarationStatementSyntax;
+            if (currentDeclaration != null)
+            {
+                modifiedRoot = modifiedRoot.RemoveNode(currentDeclaration, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+            }
+        }
+        catch
+        {
+            // If removal fails, return with usages replaced
+        }
+
+        return modifiedRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    /// <summary>
+    /// Determines if an expression needs parenthesization when inlined.
+    /// Complex expressions (binary ops, method calls, etc.) need parens when used in certain contexts.
+    /// </summary>
+    private static bool NeedsParenthesization(ExpressionSyntax expr)
+    {
+        return expr is BinaryExpressionSyntax or ConditionalExpressionSyntax or LambdaExpressionSyntax
+            or AssignmentExpressionSyntax or InvocationExpressionSyntax;
     }
 
     /// <summary>

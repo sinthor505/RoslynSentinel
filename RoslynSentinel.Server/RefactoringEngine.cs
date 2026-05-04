@@ -1152,6 +1152,172 @@ public class RefactoringEngine
         return trackedRoot.NormalizeWhitespace().ToFullString();
     }
 
+    public async Task<string> ExtractLocalVariableAsync(
+        string filePath, string contextSnippet, string? newVariableName = null, 
+        string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    {
+        if (!_config.IsFeatureEnabled("ExtractLocalVariable")) return "";
+        
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "";
+
+        var root = (await document.GetSyntaxRootAsync(ct))!;
+        var text = await document.GetTextAsync(ct);
+        
+        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        if (pos < 0) return $"Error: {snippetError}";
+
+        // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync
+        var trimmedSnippet = contextSnippet.Trim();
+        var expression = root.DescendantNodes()
+            .OfType<ExpressionSyntax>()
+            .Where(e => e.SpanStart == pos && e.ToString().Trim() == trimmedSnippet)
+            .FirstOrDefault()
+            // Fallback: walk from the token at the position up to the first expression
+            ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
+
+        if (expression == null) return "";
+
+        // Find the containing method
+        var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+        if (containingMethod == null || containingMethod.Body == null) return root.ToFullString();
+
+        // Find the containing statement and block
+        var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
+        if (containingStatement == null) return root.ToFullString();
+
+        var containingBlock = containingStatement.Parent as BlockSyntax;
+        if (containingBlock == null) return root.ToFullString();
+
+        // Skip if expression is already a standalone variable declaration
+        if (containingStatement is LocalDeclarationStatementSyntax existingDecl &&
+            existingDecl.Declaration.Variables.Count == 1 &&
+            existingDecl.Declaration.Variables[0].Initializer?.Value?.IsEquivalentTo(expression) == true)
+        {
+            var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
+            return $"// '{existingName}' is already a local variable — nothing to extract.";
+        }
+
+        // Skip if expression has potential side effects (method calls, assignments)
+        if (HasSideEffects(expression)) return "";
+
+        // Generate or validate variable name
+        var varName = newVariableName;
+        if (string.IsNullOrWhiteSpace(varName))
+        {
+            var baseName = InferVariableName(expression);
+            varName = ContextHelper.GetUniqueVariableName(containingMethod.Body, baseName);
+        }
+        else
+        {
+            // Check if provided name conflicts
+            varName = ContextHelper.GetUniqueVariableName(containingMethod.Body, varName);
+        }
+
+        // Infer type from semantic analysis if possible
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        TypeSyntax? inferredType = null;
+        if (semanticModel != null)
+        {
+            var typeInfo = semanticModel.GetTypeInfo(expression, ct);
+            if (typeInfo.Type != null)
+            {
+                inferredType = SyntaxFactory.ParseTypeName(typeInfo.Type.ToDisplayString());
+            }
+        }
+
+        // Create variable declaration with 'var' type
+        var varDecl = SyntaxFactory.LocalDeclarationStatement(
+            SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(varName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(expression.WithoutTrivia())))));
+
+        // Handle parenthesized expressions - replace outer parens too if the expression is the sole content
+        SyntaxNode nodeToReplace = expression;
+        if (expression.Parent is ParenthesizedExpressionSyntax parenParent &&
+            parenParent.Expression == expression)
+        {
+            nodeToReplace = parenParent;
+        }
+
+        var varRef = SyntaxFactory.IdentifierName(varName).WithTriviaFrom(nodeToReplace);
+
+        // Track all nodes that need to be replaced
+        var trackedRoot = root.TrackNodes(new SyntaxNode[] { nodeToReplace, containingStatement, containingBlock });
+        
+        // Replace the expression with variable reference
+        var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(nodeToReplace)!, varRef);
+        
+        // Get updated statement and block
+        var currentStatement = newRoot.GetCurrentNode(containingStatement)!;
+        var currentBlock = newRoot.GetCurrentNode(containingBlock)!;
+        
+        // Find the index where we insert the variable declaration
+        var idx = currentBlock.Statements.IndexOf(currentStatement);
+        if (idx < 0) return root.ToFullString();
+        
+        // Insert variable declaration before the statement
+        var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
+        newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private static bool HasSideEffects(ExpressionSyntax expression)
+    {
+        // Check for method calls, assignments, and other side-effect operations
+        var descendants = expression.DescendantNodesAndSelf();
+        
+        // Method invocations are risky unless they're property getters
+        if (descendants.OfType<InvocationExpressionSyntax>().Any()) return true;
+        
+        // Assignment expressions always have side effects
+        if (descendants.OfType<AssignmentExpressionSyntax>().Any()) return true;
+        
+        // Pre/post increment/decrement
+        if (descendants.OfType<PostfixUnaryExpressionSyntax>().Any()) return true;
+        if (descendants.OfType<PrefixUnaryExpressionSyntax>().Any(p => 
+            p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression))) 
+            return true;
+        
+        return false;
+    }
+
+    private static string InferVariableName(ExpressionSyntax expression)
+    {
+        // Try to infer a meaningful variable name from the expression
+        return expression switch
+        {
+            // Binary operations: "x + y" -> "sum", "x * y" -> "product"
+            BinaryExpressionSyntax binary => binary.OperatorToken.Kind() switch
+            {
+                SyntaxKind.PlusToken => "sum",
+                SyntaxKind.MinusToken => "difference",
+                SyntaxKind.AsteriskToken => "product",
+                SyntaxKind.SlashToken => "quotient",
+                SyntaxKind.PercentToken => "remainder",
+                SyntaxKind.GreaterThanToken or SyntaxKind.LessThanToken or 
+                SyntaxKind.GreaterThanEqualsToken or SyntaxKind.LessThanEqualsToken or
+                SyntaxKind.EqualsEqualsToken or SyntaxKind.ExclamationEqualsToken => "comparison",
+                SyntaxKind.AmpersandAmpersandToken or SyntaxKind.BarBarToken => "condition",
+                _ => "result"
+            },
+            // Member access: "obj.Property" -> "property"
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.Text.ToLowerInvariant(),
+            // Identifier: "x" -> "x"
+            IdentifierNameSyntax ident => ident.Identifier.Text,
+            // String literals: "..." -> "text" or "str"
+            LiteralExpressionSyntax lit when lit.IsKind(SyntaxKind.StringLiteralExpression) => "text",
+            // Numeric literals
+            LiteralExpressionSyntax lit when lit.IsKind(SyntaxKind.NumericLiteralExpression) => "value",
+            // Default fallback
+            _ => "extracted"
+        };
+    }
+
     public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

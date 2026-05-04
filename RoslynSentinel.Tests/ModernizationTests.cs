@@ -192,6 +192,206 @@ public class C
             "else-branch should be present.");
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // ModernizationEngine — ConvertToPatternAsync
+    // ══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Test 1: Null check pattern - x == null → x is null
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_NullCheck_EqualsNull_ConvertsToIsNull()
+    {
+        const string source = @"public class C 
+{
+    public void M(object x) 
+    {
+        if (x == null)
+        {
+            Console.WriteLine(""Null"");
+        }
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result, Does.Contain("is null"), "Should convert to pattern matching 'is null'");
+    }
+
+    /// <summary>
+    /// Test 2: Null check pattern on right side - null == x → x is null
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_NullCheckReversed_ConvertsToIsNull()
+    {
+        const string source = @"public class C 
+{
+    public void M(string name) 
+    {
+        if (null == name)
+        {
+            Console.WriteLine(""Empty"");
+        }
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result, Does.Contain("is null"), "Should convert reversed null check to pattern");
+    }
+
+    /// <summary>
+    /// Test 3: Multiple null checks in same method
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_MultipleMethods_ConvertsAllNullChecks()
+    {
+        const string source = @"public class C 
+{
+    public void Method1(object x) 
+    {
+        if (x == null) return;
+    }
+
+    public void Method2(string y)
+    {
+        if (y == null) return;
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        var countOfIsNull = result.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
+        Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert both null checks");
+    }
+
+    /// <summary>
+    /// Test 4: Code without null checks should return unchanged
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_NoPatterns_ReturnsUnchanged()
+    {
+        const string source = @"public class C 
+{
+    public void M(int x) 
+    {
+        if (x > 0)
+        {
+            Console.WriteLine(""Positive"");
+        }
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
+        Assert.That(result, Does.Contain("if (x > 0)"), "Code without patterns should remain unchanged");
+    }
+
+    /// <summary>
+    /// Test 5: Nested null checks
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_NestedNullChecks_ConvertsAllInstances()
+    {
+        const string source = @"public class C 
+{
+    public void M(object x, object y) 
+    {
+        if (x == null)
+        {
+            if (y == null)
+            {
+                Console.WriteLine(""Both null"");
+            }
+        }
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        var countOfIsNull = result.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
+        Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert nested null checks");
+    }
+
+    /// <summary>
+    /// Test 6: Property check with null - x != null condition (preserves code)
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_NotNullCheck_PreservesCode()
+    {
+        const string source = @"public class C 
+{
+    public void M(object x) 
+    {
+        if (x != null)
+        {
+            Console.WriteLine(""Not null"");
+        }
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
+        // For now, not null patterns might not be converted depending on implementation
+        Assert.That(result, Does.Contain("Not null"), "Logic should be preserved");
+    }
+
+    /// <summary>
+    /// Test 7: Mixed patterns in multiple branches
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_MixedPatterns_HandlesAllCases()
+    {
+        const string source = @"public class C 
+{
+    public void M(string a, string b, int c) 
+    {
+        if (a == null) return;
+        if (b != null) return;
+        if (c > 0) return;
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result, Does.Contain("is null"), "Should convert null check");
+    }
+
+    /// <summary>
+    /// Test 8: Null check in single-line if statement
+    /// </summary>
+    [Test]
+    public async Task ConvertToPattern_SingleLineIf_ConvertsPattern()
+    {
+        const string source = @"public class C 
+{
+    public void M(object x) 
+    {
+        if (x == null) return;
+    }
+}";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Test.cs"));
+        
+        var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
+        
+        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result, Does.Contain("is null"), "Should convert single-line null check");
+    }
+
     [Test]
     public async Task ConvertSwitchToExpression_Should_Upgrade_Statements()
     {
