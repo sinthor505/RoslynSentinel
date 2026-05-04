@@ -35,14 +35,6 @@ public class ModernLoggingEngine
 
         if (!invocations.Any()) return root!.ToFullString();
 
-        var newClassNode = classNode;
-
-        // Ensure class is partial
-        if (!newClassNode.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-        {
-            newClassNode = newClassNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
-        }
-
         int eventId = 1;
         var generatedMethods = new List<MethodDeclarationSyntax>();
         var replaceMap = new Dictionary<SyntaxNode, SyntaxNode>();
@@ -59,7 +51,6 @@ public class ModernLoggingEngine
                 var messageArg = args[0].Expression as LiteralExpressionSyntax;
                 if (messageArg == null || !messageArg.IsKind(SyntaxKind.StringLiteralExpression)) continue;
 
-                var message = messageArg.Token.ValueText;
                 var methodName = $"Log{levelStr}Event{eventId}";
 
                 // Build LoggerMessage attribute
@@ -81,8 +72,6 @@ public class ModernLoggingEngine
 
                 for (int i = 1; i < args.Count; i++)
                 {
-                    // Defaulting to object or generic for params if type info is hard to grab without semantic model deep dive.
-                    // For a robust implementation, we'd use SemanticModel to get exact types.
                     parameters.Add(SyntaxFactory.Parameter(SyntaxFactory.Identifier($"p{i}")).WithType(SyntaxFactory.ParseTypeName("object")));
                 }
 
@@ -106,8 +95,18 @@ public class ModernLoggingEngine
             }
         }
 
-        // First, replace invocations in the class, then add generated methods
-        newClassNode = newClassNode.ReplaceNodes(replaceMap.Keys, (oldNode, _) => replaceMap[oldNode]);
+        // Replace invocations first on the original classNode (before any AddModifiers mutation
+        // that would create new green-node identities and make the replaceMap keys stale).
+        var newClassNode = replaceMap.Count > 0
+            ? classNode.ReplaceNodes(replaceMap.Keys, (oldNode, _) => replaceMap[oldNode])
+            : classNode;
+
+        // Now safe to AddModifiers (re-found tree is already correct after ReplaceNodes)
+        if (!newClassNode.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+        {
+            newClassNode = newClassNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
+        }
+
         newClassNode = newClassNode.AddMembers(generatedMethods.ToArray());
         
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
