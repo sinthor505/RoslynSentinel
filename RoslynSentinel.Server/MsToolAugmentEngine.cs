@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -1068,5 +1069,306 @@ public class MsToolAugmentEngine
         if (text.EndsWith('l')) return "long";
         if (text.Contains('.'))  return "double";
         return "int";
+    }
+
+    // ── 11. GenerateToStringSafe ──────────────────────────────────────────────
+    // MS Bug: generate_tostring produces $"TypeName { Prop1 = {Prop1} }" where the
+    // outer literal braces are NOT escaped, causing CS8086 (invalid interpolation hole).
+    // Fix: emit {{ and }} for literal braces surrounding the member list.
+
+    /// <summary>
+    /// Generates a <c>ToString()</c> override for a type using a properly-escaped
+    /// interpolated string. Fixes the standard <c>generate_tostring</c> bug where
+    /// literal <c>{</c> in the format section is left unescaped, causing CS8086.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the .cs file.</param>
+    /// <param name="typeName">Name of the type to add ToString() to.</param>
+    /// <param name="members">Optional explicit list of property/field names to include.
+    ///     If null/empty, all public instance properties and fields are used.</param>
+    public async Task<MsAugmentResult> GenerateToStringSafeAsync(
+        string filePath, string typeName, IList<string>? members = null,
+        CancellationToken ct = default)
+    {
+        // Read source: prefer workspace (always in sync, supports testability)
+        // then fall back to disk for files not loaded in the solution.
+        string source;
+        var currentSolution = _workspaceManager.CurrentSolution;
+        var wsDoc = currentSolution?.GetDocumentIdsWithFilePath(filePath)
+            .Select(currentSolution.GetDocument)
+            .FirstOrDefault();
+
+        if (wsDoc != null)
+        {
+            var wsText = await wsDoc.GetTextAsync(ct);
+            source = wsText.ToString();
+        }
+        else
+        {
+            try { source = await File.ReadAllTextAsync(filePath, ct); }
+            catch (Exception ex) { return MsAugmentResult.Fail($"Could not read '{filePath}': {ex.Message}"); }
+        }
+
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: ct);
+        var root = await tree.GetRootAsync(ct);
+
+        var typeDecl = root.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == typeName);
+
+        if (typeDecl == null)
+            return MsAugmentResult.Fail($"Type '{typeName}' not found in {filePath}.");
+
+        if (typeDecl.Members.OfType<MethodDeclarationSyntax>()
+            .Any(m => m.Identifier.Text == "ToString" && !m.ParameterList.Parameters.Any()))
+            return MsAugmentResult.Fail(
+                $"'{typeName}' already has a ToString() override. Remove it first.");
+
+        // Collect members to include in the ToString output
+        var selectedMembers = new List<string>();
+        if (members != null && members.Count > 0)
+        {
+            selectedMembers.AddRange(members);
+        }
+        else
+        {
+            selectedMembers.AddRange(
+                typeDecl.Members.OfType<PropertyDeclarationSyntax>()
+                    .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
+                             && !p.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                             && (p.AccessorList?.Accessors.Any(
+                                     a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true
+                                 || p.ExpressionBody != null))
+                    .Select(p => p.Identifier.Text));
+
+            selectedMembers.AddRange(
+                typeDecl.Members.OfType<FieldDeclarationSyntax>()
+                    .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
+                             && !f.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                    .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text)));
+        }
+
+        if (selectedMembers.Count == 0)
+            return MsAugmentResult.Fail(
+                $"No public properties or fields found on '{typeName}'. Specify members explicitly.");
+
+        // Build the interpolated string: $"TypeName {{ Prop1 = {Prop1}, Prop2 = {Prop2} }}"
+        // Using {{ and }} to produce literal braces in C# interpolated strings (no CS8086).
+        // NOTE: do NOT use a C# interpolated string here — $"{typeName} {{ " would evaluate
+        // {{ to a single { at runtime, defeating the escape. Use concatenation instead.
+        var contents = new List<InterpolatedStringContentSyntax>
+        {
+            MakeText(typeName + " {{ ")
+        };
+
+        for (int i = 0; i < selectedMembers.Count; i++)
+        {
+            if (i > 0) contents.Add(MakeText(", "));
+            contents.Add(MakeText($"{selectedMembers[i]} = "));
+            contents.Add(SyntaxFactory.Interpolation(
+                SyntaxFactory.IdentifierName(selectedMembers[i])));
+        }
+
+        contents.Add(MakeText(" }}"));
+
+        var interpolated = SyntaxFactory.InterpolatedStringExpression(
+            SyntaxFactory.Token(SyntaxKind.InterpolatedStringStartToken),
+            SyntaxFactory.List(contents),
+            SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken));
+
+        var method = SyntaxFactory.MethodDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.StringKeyword)),
+                "ToString")
+            .WithModifiers(SyntaxFactory.TokenList(
+                SyntaxFactory.Token(SyntaxKind.PublicKeyword)
+                    .WithTrailingTrivia(SyntaxFactory.Space),
+                SyntaxFactory.Token(SyntaxKind.OverrideKeyword)
+                    .WithTrailingTrivia(SyntaxFactory.Space)))
+            .WithParameterList(SyntaxFactory.ParameterList())
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(interpolated))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+        var newTypeDecl = typeDecl.AddMembers(method);
+        var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
+        return MsAugmentResult.Ok(newRoot.NormalizeWhitespace().ToFullString());
+    }
+
+    // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
+    // MS Bug: extract_method generates `private void MethodName(...)` when the
+    // selected block ends with `return <expression>`, producing a compile error
+    // because the extracted method has the wrong (void) return type.
+    // Fix: use SemanticModel.GetTypeInfo() on the return expression, and
+    // DataFlowAnalysis.DataFlowsIn to determine the correct parameter list.
+
+    /// <summary>
+    /// Extracts a block of statements into a new private method using semantic
+    /// analysis to determine the correct return type. Fixes the standard
+    /// <c>extract_method</c> bug where selections ending with <c>return expr</c>
+    /// produce <c>void</c> return type instead of the expression's actual type.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the .cs file (must be in loaded solution).</param>
+    /// <param name="newMethodName">Valid C# identifier for the new method.</param>
+    /// <param name="contextSnippet">A short unique code snippet identifying the selection.</param>
+    /// <param name="lineBefore">Optional line immediately before the snippet for disambiguation.</param>
+    /// <param name="lineAfter">Optional line immediately after the snippet for disambiguation.</param>
+    public async Task<MsAugmentResult> ExtractMethodSafeAsync(
+        string filePath, string newMethodName, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null,
+        CancellationToken ct = default)
+    {
+        if (!SyntaxFacts.IsValidIdentifier(newMethodName))
+            return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.");
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var doc = solution.GetDocumentIdsWithFilePath(filePath)
+            .Select(solution.GetDocument)
+            .FirstOrDefault();
+        if (doc == null)
+            return MsAugmentResult.Fail($"File not found in solution: {filePath}");
+
+        var root = await doc.GetSyntaxRootAsync(ct);
+        var model = await doc.GetSemanticModelAsync(ct);
+        var sourceText = await doc.GetTextAsync(ct);
+        if (root == null || model == null)
+            return MsAugmentResult.Fail("Could not load semantic model.");
+
+        int pos;
+        try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+        catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+
+        var selectionSpan = new TextSpan(pos, contextSnippet.Length);
+        var node = root.FindNode(selectionSpan);
+
+        // Walk up to the nearest block so we can work with statement-level items
+        var block = node.AncestorsAndSelf().OfType<BlockSyntax>().FirstOrDefault();
+        if (block == null)
+            return MsAugmentResult.Fail(
+                "Selection must be inside a method body (no enclosing block found).");
+
+        // Find statements that overlap the selection
+        var stmtsInSelection = block.Statements
+            .Where(s => selectionSpan.Contains(s.Span) || selectionSpan.OverlapsWith(s.Span))
+            .ToList();
+
+        if (stmtsInSelection.Count == 0)
+        {
+            // Fall back to the single statement that contains the selection
+            var single = node.AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault();
+            if (single != null && block.Statements.Contains(single))
+                stmtsInSelection.Add(single);
+            else
+                return MsAugmentResult.Fail(
+                    "No statements found at the contextSnippet location. Try a broader snippet.");
+        }
+
+        var firstStmt = stmtsInSelection.First();
+        var lastStmt  = stmtsInSelection.Last();
+
+        // Determine the return type of the extracted method
+        string returnTypeStr = "void";
+        bool   returnsValue  = false;
+
+        if (lastStmt is ReturnStatementSyntax retStmt && retStmt.Expression != null)
+        {
+            var typeInfo = model.GetTypeInfo(retStmt.Expression, ct);
+            if (typeInfo.Type != null
+             && typeInfo.Type.SpecialType != SpecialType.System_Void
+             && typeInfo.Type.TypeKind    != TypeKind.Error)
+            {
+                returnTypeStr = typeInfo.Type.ToDisplayString(
+                    SymbolDisplayFormat.MinimallyQualifiedFormat);
+                returnsValue = true;
+            }
+        }
+
+        // Find variables that flow into the selection — these become parameters
+        var parameters = new List<(string Name, string TypeStr)>();
+        try
+        {
+            var df = model.AnalyzeDataFlow(firstStmt, lastStmt);
+            if (df?.Succeeded == true)
+            {
+                foreach (var sym in df.DataFlowsIn)
+                {
+                    if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local)
+                        parameters.Add((local.Name,
+                            local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    else if (sym.Kind == SymbolKind.Parameter && sym is IParameterSymbol param)
+                        parameters.Add((param.Name,
+                            param.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                }
+            }
+        }
+        catch { /* best-effort — proceed without parameters if analysis fails */ }
+
+        // Preserve static-ness from the containing method
+        var containingMethod = block.Ancestors()
+            .OfType<BaseMethodDeclarationSyntax>()
+            .FirstOrDefault();
+        bool isStatic = containingMethod?
+            .Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) == true;
+
+        // Determine the containing type BEFORE any tree modifications
+        var containingType = block.Ancestors()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault();
+        if (containingType == null)
+            return MsAugmentResult.Fail(
+                "No containing type found — cannot place extracted method.");
+
+        // Build the extracted method source text
+        var sb = new StringBuilder();
+        sb.Append("private ");
+        if (isStatic) sb.Append("static ");
+        sb.Append($"{returnTypeStr} {newMethodName}(");
+        sb.Append(string.Join(", ", parameters.Select(p => $"{p.TypeStr} {p.Name}")));
+        sb.AppendLine(")");
+        sb.AppendLine("{");
+        foreach (var stmt in stmtsInSelection)
+            sb.AppendLine($"    {stmt.WithoutLeadingTrivia().ToFullString().TrimEnd()}");
+        sb.Append("}");
+
+        var newMethodDecl = SyntaxFactory.ParseMemberDeclaration(sb.ToString());
+        if (newMethodDecl == null)
+            return MsAugmentResult.Fail("Failed to parse the generated method declaration.");
+
+        // Build the call-site replacement statement
+        var argsStr  = string.Join(", ", parameters.Select(p => p.Name));
+        string callText = returnsValue
+            ? $"return {newMethodName}({argsStr});"
+            : $"{newMethodName}({argsStr});";
+
+        var callStmt = SyntaxFactory.ParseStatement(callText)
+            .WithLeadingTrivia(firstStmt.GetLeadingTrivia())
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+
+        // Replace the selected statements in the block with the call
+        var stmtList   = block.Statements.ToList();
+        int firstIdx   = stmtList.IndexOf(firstStmt);
+        if (firstIdx < 0)
+            return MsAugmentResult.Fail("Could not locate first statement in block (internal error).");
+
+        var newStmts = new List<StatementSyntax>();
+        newStmts.AddRange(stmtList.Take(firstIdx));
+        newStmts.Add(callStmt);
+        newStmts.AddRange(stmtList.Skip(firstIdx + stmtsInSelection.Count));
+
+        var newBlock  = block.WithStatements(SyntaxFactory.List(newStmts));
+        var newRoot1  = root.ReplaceNode(block, newBlock);
+
+        // Locate the containing type in the modified tree (by name) and add the new method
+        var newContainingType = newRoot1.DescendantNodes()
+            .OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == containingType.Identifier.Text);
+        if (newContainingType == null)
+            return MsAugmentResult.Fail("Could not re-locate containing type after transformation.");
+
+        var methodWithTrivia = newMethodDecl
+            .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+
+        var updatedType = newContainingType.AddMembers(methodWithTrivia);
+        var finalRoot   = newRoot1.ReplaceNode(newContainingType, updatedType);
+
+        return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
     }
 }

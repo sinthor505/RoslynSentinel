@@ -359,4 +359,67 @@ public class SentinelAugmentTools
         _logger.LogInformation("ExtractConstantSafe: {File} constant={Name}", filePath, constantName);
         return await _engine.ExtractConstantSafeAsync(filePath, contextSnippet, constantName, lineBefore, lineAfter);
     }
+
+    // ── 11. GenerateToStringSafe ──────────────────────────────────────────────
+
+    [McpServerTool, Description("""
+        generate_tostring_safe — generates a ToString() override with CORRECTLY ESCAPED interpolated strings.
+
+        Fixes a bug in the standard generate_tostring tool where literal { characters in the format section
+        are left unescaped, producing broken code like $"Type { Prop = {Prop} }" that fails with
+        CS8086 (invalid interpolation hole). This tool always emits {{ and }} for literal braces,
+        producing valid code like $"Type {{ Prop = {Prop} }}".
+
+        Parameters:
+          filePath  — absolute path to the .cs file
+          typeName  — the class/struct to add ToString() to
+          members   — optional comma-separated list of property/field names to include;
+                      if omitted, all public instance properties and fields are used
+
+        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+                 or Success=false and Error with a human-readable explanation.
+        """)]
+    public async Task<MsAugmentResult> GenerateToStringSafe(
+        string filePath, string typeName, string? members = null)
+    {
+        _logger.LogInformation("GenerateToStringSafe: {File} type={Type}", filePath, typeName);
+        IList<string>? memberList = members is null ? null
+            : members.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
+                     .Select(m => m.Trim())
+                     .Where(m => m.Length > 0)
+                     .ToList();
+        return await _engine.GenerateToStringSafeAsync(filePath, typeName, memberList);
+    }
+
+    // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
+
+    [McpServerTool, Description("""
+        extract_method_safe— extracts selected statements into a new method with the CORRECT return type.
+
+        Fixes a bug in the standard extract_method tool where selections ending with `return <expression>`
+        are extracted into a method declared `private void MethodName(...)`. The void return type is
+        incorrect and causes a compile error. This tool uses Roslyn's SemanticModel to determine the
+        actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list.
+
+        Requires a solution to be loaded first (via set_solution_path or equivalent), because semantic
+        analysis is needed to determine types.
+
+        Parameters:
+          filePath        — absolute path to the .cs file (must be in the loaded solution)
+          newMethodName   — valid C# identifier for the new extracted method
+          contextSnippet  — a short unique code snippet that identifies the selection
+          lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
+          lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
+
+        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+                 or Success=false and Error with a human-readable explanation.
+        """)]
+    public async Task<MsAugmentResult> ExtractMethodSafe(
+        string filePath, string newMethodName, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
+        return await _engine.ExtractMethodSafeAsync(
+            filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+    }
 }
