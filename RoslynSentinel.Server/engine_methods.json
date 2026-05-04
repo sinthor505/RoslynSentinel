@@ -1,0 +1,1681 @@
+{
+  "SyntaxUpgradeEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeToModernGuardsAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UpgradeToModernGuardsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddBracesAsync(string filePath, CancellationToken ct = default)",
+      "Name": "AddBracesAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UpgradePatternMatchingAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseNameofExpressionAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "UseNameofExpressionAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertSwitchToExpressionAsync(string filePath, string methodName, CancellationToken ct = default)",
+      "Name": "ConvertSwitchToExpressionAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertSwitchExpressionToStatementAsync(string filePath, CancellationToken ct = default)",
+      "Name": "ConvertSwitchExpressionToStatementAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> CleanupImplicitSpansAsync(string filePath, CancellationToken ct = default)",
+      "Name": "CleanupImplicitSpansAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseFieldBackedPropertiesAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UseFieldBackedPropertiesAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)",
+      "Name": "UpgradeToPrimaryConstructorAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseExceptionExpressionsAsync(string filePath, string methodName, CancellationToken ct = default)",
+      "Name": "UseExceptionExpressionsAsync"
+    }
+  ],
+  "CodeFlowEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReduceBlockDepthAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ReduceBlockDepthAsync"
+    }
+  ],
+  "AsyncOptimizationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeToValueTaskAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "OptimizeToValueTaskAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeIndependentAwaitsAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "OptimizeIndependentAwaitsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateAsyncOverloadAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "GenerateAsyncOverloadAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddConfigureAwaitFalseAsync(string filePath, bool libraryMode = true, CancellationToken cancellationToken = default)",
+      "Name": "AddConfigureAwaitFalseAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveConfigureAwaitFalseAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "RemoveConfigureAwaitFalseAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToAsyncEnumerableAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertToAsyncEnumerableAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddCancellationTokenToMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "AddCancellationTokenToMethodAsync"
+    }
+  ],
+  "DependencyEngine": [
+    {
+      "ReturnType": "ProjectDependencyReport",
+      "Signature": "public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName)",
+      "Name": "GetProjectDependenciesAsync"
+    }
+  ],
+  "SentinelIntelligenceTools": [
+    {
+      "ReturnType": "ComprehensiveHealthReport",
+      "Signature": "public async Task<ComprehensiveHealthReport> GetComprehensiveHealthReport(\r         List<HealthEngineType>? engines = null,\r         string? projectName = null,\r         string? filePath = null,\r         int offset = 0,\r         int limit = 10,\r         int timeoutSeconds = 25)",
+      "Name": "GetComprehensiveHealthReport"
+    },
+    {
+      "ReturnType": "ImpactReport",
+      "Signature": "public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "GetBlastRadius"
+    },
+    {
+      "ReturnType": "SolutionMetrics",
+      "Signature": "public async Task<SolutionMetrics> GetSolutionMetrics(string? projectName = null) => await _metricsEngine.GetSolutionMetricsAsync(projectName);",
+      "Name": "GetSolutionMetrics"
+    },
+    {
+      "ReturnType": "CodeInventoryReport",
+      "Signature": "public async Task<CodeInventoryReport> GetCodeInventory(string filePath) => await _inventoryEngine.GetCodeInventoryAsync(filePath);",
+      "Name": "GetCodeInventory"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateCallTree(string filePath, string methodName, int depth = 3)",
+      "Name": "GenerateCallTree"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> DocumentPocoFields(string filePath, string className)",
+      "Name": "DocumentPocoFields"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateEqualityOverrides(string filePath, string className)",
+      "Name": "GenerateEqualityOverrides"
+    },
+    {
+      "ReturnType": "SymbolHoverInfo?",
+      "Signature": "public async Task<SymbolHoverInfo?> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "GetSymbolInfo"
+    },
+    {
+      "ReturnType": "CallGraphNode?",
+      "Signature": "public async Task<CallGraphNode?> GetCallGraph(\r         string filePath, string methodName, int maxDepth = 3)",
+      "Name": "GetCallGraph"
+    },
+    {
+      "ReturnType": "ReverseCallGraphNode?",
+      "Signature": "public async Task<ReverseCallGraphNode?> GetReverseCallGraph(string filePath, string methodName, int maxDepth = 3)",
+      "Name": "GetReverseCallGraph"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToBackgroundService(string filePath, string className)",
+      "Name": "ConvertToBackgroundService"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FixMismatchedNamespaces(string filePath)",
+      "Name": "FixMismatchedNamespaces"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MoveFileToNamespaceFolder(string filePath)",
+      "Name": "MoveFileToNamespaceFolder"
+    },
+    {
+      "ReturnType": "BestInsertionResult",
+      "Signature": "public async Task<BestInsertionResult> FindBestInsertionPoint(string filePath, string containerName, string memberKind)",
+      "Name": "FindBestInsertionPoint"
+    },
+    {
+      "ReturnType": "RenameImpactPreview",
+      "Signature": "public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "PreviewRenameImpact"
+    }
+  ],
+  "AdvancedLogicEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertIfToSwitchExpressionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertIfToSwitchExpressionAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertIfToSwitchStatementAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertIfToSwitchStatementAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ExtensionToStaticAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ExtensionToStaticAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertStaticToExtensionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertStaticToExtensionAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertForEachToForAsync(string filePath, int line, CancellationToken ct = default)",
+      "Name": "ConvertForEachToForAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertForToForEachAsync(string filePath, int line, CancellationToken ct = default)",
+      "Name": "ConvertForToForEachAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertWhileToForAsync(string filePath, int line, CancellationToken ct = default)",
+      "Name": "ConvertWhileToForAsync"
+    }
+  ],
+  "HealthOrchestrationEngine": [
+    {
+      "ReturnType": "ComprehensiveHealthReport",
+      "Signature": "public async Task<ComprehensiveHealthReport> GenerateComprehensiveHealthReportAsync(\r         List<HealthEngineType>? engines = null,\r         string? projectName = null,\r         string? filePath = null,\r         int offset = 0,\r         int limit = 10,\r         int timeoutSeconds = 25,\r         CancellationToken cancellationToken = default)",
+      "Name": "GenerateComprehensiveHealthReportAsync"
+    }
+  ],
+  "ModernizationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ClassToRecordAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "ClassToRecordAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RecordToClassAsync(string filePath, string recordName, CancellationToken cancellationToken = default)",
+      "Name": "RecordToClassAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertMethodToExpressionBodyAsync(string filePath, string methodName, CancellationToken ct = default)",
+      "Name": "ConvertMethodToExpressionBodyAsync"
+    }
+  ],
+  "SemanticRefactoringLibrary": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineVariableAsync(string filePath, string variableName, CancellationToken cancellationToken = default)",
+      "Name": "InlineVariableAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string className, string propertyName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertPropertyToMethodsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> WrapInUsingAsync(string filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)",
+      "Name": "WrapInUsingAsync"
+    }
+  ],
+  "ModernLoggingEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToSourceGeneratedLoggingAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "ConvertToSourceGeneratedLoggingAsync"
+    }
+  ],
+  "SentinelQualityTools": [
+    {
+      "ReturnType": "TestSkeletonReport",
+      "Signature": "public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className)",
+      "Name": "GenerateTestSkeleton"
+    },
+    {
+      "ReturnType": "TestScaffoldResult",
+      "Signature": "public async Task<TestScaffoldResult> GenerateTestScaffold(string filePath, string className)",
+      "Name": "GenerateTestScaffold"
+    },
+    {
+      "ReturnType": "PathCoverageReport",
+      "Signature": "public async Task<PathCoverageReport> AnalyzePathCoverage(string filePath, string methodName)",
+      "Name": "AnalyzePathCoverage"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddGuardClauses(string filePath, string methodName)",
+      "Name": "AddGuardClauses"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddBenchmarkStub(string filePath, string className, string methodName)",
+      "Name": "AddBenchmarkStub"
+    },
+    {
+      "ReturnType": "ControlFlowAnalysisResult",
+      "Signature": "public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlow(\r         string filePath,\r         string methodName,\r         int? disambiguateLine = null)",
+      "Name": "AnalyzeMethodControlFlow"
+    },
+    {
+      "ReturnType": "DataFlowAnalysisResult",
+      "Signature": "public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlow(\r         string filePath,\r         string methodName,\r         int? disambiguateLine = null)",
+      "Name": "AnalyzeMethodDataFlow"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddConfigureAwaitFalse(string filePath, bool libraryMode = true)",
+      "Name": "AddConfigureAwaitFalse"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveConfigureAwaitFalse(string filePath)",
+      "Name": "RemoveConfigureAwaitFalse"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertLockToSemaphoreSlim(string filePath, string methodName)",
+      "Name": "ConvertLockToSemaphoreSlim"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToAsyncEnumerable(string filePath, string methodName)",
+      "Name": "ConvertToAsyncEnumerable"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddCancellationTokenToMethod(string filePath, string methodName)",
+      "Name": "AddCancellationTokenToMethod"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeMethodThreadSafe(string filePath, string methodName, string lockFieldName = \"_lock\")",
+      "Name": "MakeMethodThreadSafe"
+    },
+    {
+      "ReturnType": "DiagnosticsSummaryResult",
+      "Signature": "public async Task<DiagnosticsSummaryResult> GetDiagnosticsSummary(\r         string? filePath = null, string? projectName = null, int topN = 20)",
+      "Name": "GetDiagnosticsSummary"
+    }
+  ],
+  "CodeSmellAndStyleEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseSwitchExpressionAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "UseSwitchExpressionAsync"
+    }
+  ],
+  "LogicOptimizationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyBooleanExpressionsAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "SimplifyBooleanExpressionsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddGuardClausesAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "AddGuardClausesAsync"
+    }
+  ],
+  "ImpactAnalyzer": [
+    {
+      "ReturnType": "ImpactReport",
+      "Signature": "public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)",
+      "Name": "AnalyzeImpactAsync"
+    },
+    {
+      "ReturnType": "ImpactReport",
+      "Signature": "public async Task<ImpactReport> FindDerivedTypesAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)",
+      "Name": "FindDerivedTypesAsync"
+    },
+    {
+      "ReturnType": "ImpactReport",
+      "Signature": "public async Task<ImpactReport> FindImplementationsAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)",
+      "Name": "FindImplementationsAsync"
+    }
+  ],
+  "SolutionManagementEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> CreateProjectAsync(string projectName, string projectType = \"console\", CancellationToken cancellationToken = default)",
+      "Name": "CreateProjectAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)",
+      "Name": "SplitProjectByFolderAsync"
+    }
+  ],
+  "SentinelModernizationTools": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FixThreadSleep(string filePath)",
+      "Name": "FixThreadSleep"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddBraces(string filePath)",
+      "Name": "AddBraces"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradePatternMatching(string filePath)",
+      "Name": "UpgradePatternMatching"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseIndexFromEnd(string filePath)",
+      "Name": "UseIndexFromEnd"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeUnboundNameof(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "UpgradeUnboundNameof"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseFieldBackedProperties(string filePath)",
+      "Name": "UseFieldBackedProperties"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ClassToRecord(string filePath, string className)",
+      "Name": "ClassToRecord"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RecordToClass(string filePath, string recordName)",
+      "Name": "RecordToClass"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyVerbosity(string filePath)",
+      "Name": "SimplifyVerbosity"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeThreadSafety(string filePath)",
+      "Name": "UpgradeThreadSafety"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseTimeProvider(string filePath)",
+      "Name": "UseTimeProvider"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> ModernizeExceptions(List<CodeHealingEngine.ExceptionTarget> targets, bool autoStage = true)",
+      "Name": "ModernizeExceptions"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeToModernGuards(string filePath)",
+      "Name": "UpgradeToModernGuards"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertSwitchToExpression(string filePath, string methodName)",
+      "Name": "ConvertSwitchToExpression"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> CleanupImplicitSpans(string filePath)",
+      "Name": "CleanupImplicitSpans"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToSourceGeneratedLogging(string filePath, string className)",
+      "Name": "ConvertToSourceGeneratedLogging"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyBooleanExpressions(string filePath)",
+      "Name": "SimplifyBooleanExpressions"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyMemberAccess(string filePath)",
+      "Name": "SimplifyMemberAccess"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeClassImmutable(string filePath, string className)",
+      "Name": "MakeClassImmutable"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertStaticToExtension(string filePath, string methodName)",
+      "Name": "ConvertStaticToExtension"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeToValueTask(string filePath, string methodName)",
+      "Name": "OptimizeToValueTask"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeIndependentAwaits(string filePath, string methodName)",
+      "Name": "OptimizeIndependentAwaits"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradeToPrimaryConstructor(string filePath, string className)",
+      "Name": "UpgradeToPrimaryConstructor"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseExceptionExpressions(string filePath, string methodName)",
+      "Name": "UseExceptionExpressions"
+    }
+  ],
+  "ArchitecturalEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToBackgroundServiceAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "ConvertToBackgroundServiceAsync"
+    }
+  ],
+  "UniversalRefactoringLibrary": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RunRefactoringAsync(string filePath, string refactoringId, CancellationToken cancellationToken = default)",
+      "Name": "RunRefactoringAsync"
+    }
+  ],
+  "DependencyInjectionEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddDependencyAsync(string filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)",
+      "Name": "AddDependencyAsync"
+    }
+  ],
+  "ModernizationUpgradeEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseSpanForParsingAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "UseSpanForParsingAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "UpgradePatternMatchingAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseThrowExpressionsAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "UseThrowExpressionsAsync"
+    }
+  ],
+  "ApiIntegrationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddValidationToPocoAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "AddValidationToPocoAsync"
+    }
+  ],
+  "SentinelAugmentTools": [
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> EncapsulateFieldSafe(\r         string filePath,\r         string fieldName,\r         string? overridePropertyName = null)",
+      "Name": "EncapsulateFieldSafe"
+    },
+    {
+      "ReturnType": "SwitchConversionAnalysis",
+      "Signature": "public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversion(\r         string filePath,\r         string contextSnippet,\r         string? lineBefore = null,\r         string? lineAfter = null)",
+      "Name": "AnalyzeSwitchForPatternConversion"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ConvertSwitchToPatternSafe(\r         string filePath,\r         string contextSnippet,\r         string? lineBefore = null,\r         string? lineAfter = null)",
+      "Name": "ConvertSwitchToPatternSafe"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmart(\r         string filePath,\r         string contextSnippet,\r         string? lineBefore = null,\r         string? lineAfter = null)",
+      "Name": "ConvertStringFormatToInterpolatedSmart"
+    },
+    {
+      "ReturnType": "UsingsCleanupResult",
+      "Signature": "public async Task<UsingsCleanupResult> SortAndDeduplicateUsings(string filePath)",
+      "Name": "SortAndDeduplicateUsings"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> FormatDocumentSafe(string filePath, bool preview = true)",
+      "Name": "FormatDocumentSafe"
+    },
+    {
+      "ReturnType": "ForeachLinqAnalysis",
+      "Signature": "public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversion(\r         string filePath, string contextSnippet,\r         string? lineBefore = null, string? lineAfter = null)",
+      "Name": "AnalyzeForeachForLinqConversion"
+    },
+    {
+      "ReturnType": "WorkspaceHealthReport",
+      "Signature": "public async Task<WorkspaceHealthReport> GetWorkspaceHealth()",
+      "Name": "GetWorkspaceHealth"
+    },
+    {
+      "ReturnType": "AddUsingsPreview",
+      "Signature": "public async Task<AddUsingsPreview> PreviewAddMissingUsings(string filePath)",
+      "Name": "PreviewAddMissingUsings"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ExtractConstantSafe(\r         string filePath, string contextSnippet, string constantName,\r         string? lineBefore = null, string? lineAfter = null)",
+      "Name": "ExtractConstantSafe"
+    }
+  ],
+  "InstrumentationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddTryCatchToMethodAsync(string filePath, string methodName, string exceptionType = \"Exception\", bool addFinally = false, CancellationToken cancellationToken = default)",
+      "Name": "AddTryCatchToMethodAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddTryCatchToClassAsync(string filePath, string className, string exceptionType = \"Exception\", CancellationToken cancellationToken = default)",
+      "Name": "AddTryCatchToClassAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddStopwatchDiagnosticsAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "AddStopwatchDiagnosticsAsync"
+    }
+  ],
+  "ControlFlowEngine": [
+    {
+      "ReturnType": "PathCoverageReport",
+      "Signature": "public async Task<PathCoverageReport> AnalyzePathCoverageAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "AnalyzePathCoverageAsync"
+    },
+    {
+      "ReturnType": "ControlFlowAnalysisResult",
+      "Signature": "public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlowAsync(\r         string filePath,\r         string methodName,\r         int? disambiguateLine = null,\r         CancellationToken ct = default)",
+      "Name": "AnalyzeMethodControlFlowAsync"
+    },
+    {
+      "ReturnType": "DataFlowAnalysisResult",
+      "Signature": "public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlowAsync(\r         string filePath,\r         string methodName,\r         int? disambiguateLine = null,\r         CancellationToken ct = default)",
+      "Name": "AnalyzeMethodDataFlowAsync"
+    }
+  ],
+  "SymbolNavigationEngine": [
+    {
+      "ReturnType": "SymbolHoverInfo?",
+      "Signature": "public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "GetSymbolInfoAsync"
+    },
+    {
+      "ReturnType": "CallGraphNode?",
+      "Signature": "public async Task<CallGraphNode?> GetCallGraphAsync(\r         string filePath,\r         string methodName,\r         int maxDepth = 3,\r         CancellationToken ct = default)",
+      "Name": "GetCallGraphAsync"
+    },
+    {
+      "ReturnType": "ReverseCallGraphNode?",
+      "Signature": "public async Task<ReverseCallGraphNode?> GetReverseCallGraphAsync(\r         string filePath,\r         string methodName,\r         int maxDepth = 3,\r         CancellationToken ct = default)",
+      "Name": "GetReverseCallGraphAsync"
+    }
+  ],
+  "ApiAutomationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateHttpClientForControllerAsync(string filePath, string controllerName, CancellationToken cancellationToken = default)",
+      "Name": "GenerateHttpClientForControllerAsync"
+    }
+  ],
+  "RefinementEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "InlineMethodAsync"
+    }
+  ],
+  "ImmutabilityEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeClassImmutableAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "MakeClassImmutableAsync"
+    }
+  ],
+  "InventoryEngine": [
+    {
+      "ReturnType": "CodeInventoryReport",
+      "Signature": "public async Task<CodeInventoryReport> GetCodeInventoryAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "GetCodeInventoryAsync"
+    }
+  ],
+  "SentinelWorkspaceTools": [
+    {
+      "ReturnType": "DependencyEngine.ProjectDependencyReport",
+      "Signature": "public async Task<DependencyEngine.ProjectDependencyReport> ListDependencies(string projectName)",
+      "Name": "ListDependencies"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> LoadSolution(string solutionPath)",
+      "Name": "LoadSolution"
+    },
+    {
+      "ReturnType": "HealthReport",
+      "Signature": "public async Task<HealthReport> Diagnose(string? solutionPath = null, bool verbose = false)",
+      "Name": "Diagnose"
+    },
+    {
+      "ReturnType": "DiagnosticReport",
+      "Signature": "public async Task<DiagnosticReport> ValidateProposedDiff(string filePath, string unifiedDiff)",
+      "Name": "ValidateProposedDiff"
+    },
+    {
+      "ReturnType": "DiagnosticReport",
+      "Signature": "public async Task<DiagnosticReport> ValidateProposedChanges(Dictionary<string, string> changes)",
+      "Name": "ValidateProposedChanges"
+    },
+    {
+      "ReturnType": "DiagnosticReport",
+      "Signature": "public async Task<DiagnosticReport> ValidateStagedChanges(string changeId)",
+      "Name": "ValidateStagedChanges"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ApplyProposedDiff(string filePath, string unifiedDiff)",
+      "Name": "ApplyProposedDiff"
+    },
+    {
+      "ReturnType": "PersistentWorkspaceManager.ApplyChangesResult",
+      "Signature": "public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyProposedChanges(Dictionary<string, string> changes, int retryCount = 3)",
+      "Name": "ApplyProposedChanges"
+    },
+    {
+      "ReturnType": "PersistentWorkspaceManager.ApplyChangesResult",
+      "Signature": "public async Task<PersistentWorkspaceManager.ApplyChangesResult> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)",
+      "Name": "RetryFailedChanges"
+    },
+    {
+      "ReturnType": "PersistentWorkspaceManager.ApplyChangesResult",
+      "Signature": "public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyStagedChanges(string changeId, int retryCount = 3)",
+      "Name": "ApplyStagedChanges"
+    },
+    {
+      "ReturnType": "DiagnosticSummary",
+      "Signature": "public async Task<DiagnosticSummary> GetFileDiagnostics(string filePath) => await _diagnosticEngine.GetFileDiagnosticsAsync(filePath);",
+      "Name": "GetFileDiagnostics"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SafeDelete(string filePath, int line, int column)",
+      "Name": "SafeDelete"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SyncTypeAndFilename(string filePath)",
+      "Name": "SyncTypeAndFilename"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> CreateProject(string projectName, string projectType = \"console\")",
+      "Name": "CreateProject"
+    },
+    {
+      "ReturnType": "DiagnosticSummary",
+      "Signature": "public async Task<DiagnosticSummary> GetProjectDiagnostics(string projectName)",
+      "Name": "GetProjectDiagnostics"
+    },
+    {
+      "ReturnType": "DiagnosticSummary",
+      "Signature": "public async Task<DiagnosticSummary> GetSolutionDiagnostics()",
+      "Name": "GetSolutionDiagnostics"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)",
+      "Name": "SplitProjectByFolder"
+    }
+  ],
+  "RefactoringEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FormatDocumentAsync(string filePath, CancellationToken ct = default)",
+      "Name": "FormatDocumentAsync"
+    },
+    {
+      "ReturnType": "ExtractMethodResult",
+      "Signature": "public async Task<ExtractMethodResult> ExtractMethodAsync(\r         string filePath, int startLine, string startLineText, int endLine, string endLineText,\r         string newMethodName, CancellationToken ct = default)",
+      "Name": "ExtractMethodAsync"
+    },
+    {
+      "ReturnType": "RenameSymbolResult",
+      "Signature": "public async Task<RenameSymbolResult> RenameSymbolAsync(string filePath, string symbolName, string contextSnippet, string newName, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "RenameSymbolAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertIndexerToMethodAsync(string filePath, CancellationToken ct = default)",
+      "Name": "ConvertIndexerToMethodAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddRemoveParamsAsync(string filePath, string methodName, CancellationToken ct = default)",
+      "Name": "AddRemoveParamsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReplaceMemberAsync(string filePath, string memberName, string newSource, CancellationToken ct = default)",
+      "Name": "ReplaceMemberAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddMemberAsync(string filePath, string containerName, string newMemberSource, CancellationToken ct = default)",
+      "Name": "AddMemberAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveMemberAsync(string filePath, string memberName, CancellationToken ct = default)",
+      "Name": "RemoveMemberAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)",
+      "Name": "ConvertToPrimaryConstructorAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "ConvertExpressionBodyAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = \"private\", string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "ExtractConstantAsync"
+    },
+    {
+      "ReturnType": "ControlFlowSummary",
+      "Signature": "public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "AnalyzeControlFlowAsync"
+    },
+    {
+      "ReturnType": "DataFlowSummary",
+      "Signature": "public async Task<DataFlowSummary> AnalyzeDataFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "AnalyzeDataFlowAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)    {",
+      "Name": "AddUsingDirectiveAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddEnumValueAsync(string filePath, string enumName, string valueName, int? explicitValue = null, CancellationToken ct = default)",
+      "Name": "AddEnumValueAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InsertMemberAfterAsync(string filePath, string containerName, string afterMemberName, string newMemberSource, CancellationToken ct = default)",
+      "Name": "InsertMemberAfterAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InsertMemberBeforeAsync(string filePath, string containerName, string beforeMemberName, string newMemberSource, CancellationToken ct = default)",
+      "Name": "InsertMemberBeforeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddAttributeAsync(string filePath, string targetName, string attributeSource, CancellationToken ct = default)",
+      "Name": "AddAttributeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)",
+      "Name": "AddBaseTypeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveAttributeAsync(string filePath, string targetName, string attributeName, CancellationToken ct = default)",
+      "Name": "RemoveAttributeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)",
+      "Name": "RemoveBaseTypeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ChangeAccessibilityAsync(string filePath, string targetName, string accessibility, CancellationToken ct = default)",
+      "Name": "ChangeAccessibilityAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)",
+      "Name": "AddModifierAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)",
+      "Name": "RemoveModifierAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddSummaryCommentAsync(string filePath, string targetName, string summaryText, CancellationToken ct = default)",
+      "Name": "AddSummaryCommentAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddPropertyAsync(string filePath, string containerName, string propertyName, string propertyType, string accessibility = \"public\", bool hasSetter = true, bool isInit = false, CancellationToken ct = default)",
+      "Name": "AddPropertyAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddFieldAsync(string filePath, string containerName, string fieldName, string fieldType, string accessibility = \"private\", bool isReadonly = false, bool isStatic = false, string? initializer = null, CancellationToken ct = default)",
+      "Name": "AddFieldAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SortMembersAsync(string filePath, string containerName, CancellationToken ct = default)",
+      "Name": "SortMembersAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> WrapInTryCatchAsync(string filePath, int startLine, int endLine, string exceptionType = \"Exception\", string catchVariableName = \"ex\", string? catchBody = null, CancellationToken ct = default)",
+      "Name": "WrapInTryCatchAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddConstructorParameterAsync(string filePath, string className, string paramName, string paramType, string? fieldName = null, CancellationToken ct = default)",
+      "Name": "AddConstructorParameterAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> WrapInRegionAsync(string filePath, int startLine, int endLine, string regionName, CancellationToken ct = default)",
+      "Name": "WrapInRegionAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SyncInterfaceToImplementationAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)",
+      "Name": "SyncInterfaceToImplementationAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpdateXmlDocsFromSignatureAsync(string filePath, string methodName, CancellationToken ct = default)",
+      "Name": "UpdateXmlDocsFromSignatureAsync"
+    },
+    {
+      "ReturnType": "FormatPreviewResult",
+      "Signature": "public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(string filePath, CancellationToken ct = default)",
+      "Name": "FormatDocumentPreviewAsync"
+    }
+  ],
+  "MetricsEngine": [
+    {
+      "ReturnType": "SolutionMetrics",
+      "Signature": "public async Task<SolutionMetrics> GetSolutionMetricsAsync(string? projectName = null, CancellationToken cancellationToken = default)",
+      "Name": "GetSolutionMetricsAsync"
+    }
+  ],
+  "MsToolAugmentEngine": [
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> EncapsulateFieldSafeAsync(\r         string filePath, string fieldName, string? overridePropertyName = null,\r         CancellationToken ct = default)",
+      "Name": "EncapsulateFieldSafeAsync"
+    },
+    {
+      "ReturnType": "SwitchConversionAnalysis",
+      "Signature": "public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversionAsync(\r         string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "AnalyzeSwitchForPatternConversionAsync"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(\r         string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "ConvertSwitchToPatternSafeAsync"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmartAsync(\r         string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "ConvertStringFormatToInterpolatedSmartAsync"
+    },
+    {
+      "ReturnType": "UsingsCleanupResult",
+      "Signature": "public async Task<UsingsCleanupResult> SortAndDeduplicateUsingsAsync(\r         string filePath, CancellationToken ct = default)",
+      "Name": "SortAndDeduplicateUsingsAsync"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> FormatDocumentSafeAsync(\r         string filePath, bool preview = true, CancellationToken ct = default)",
+      "Name": "FormatDocumentSafeAsync"
+    },
+    {
+      "ReturnType": "ForeachLinqAnalysis",
+      "Signature": "public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversionAsync(\r         string filePath, string contextSnippet,\r         string? lineBefore = null, string? lineAfter = null,\r         CancellationToken ct = default)",
+      "Name": "AnalyzeForeachForLinqConversionAsync"
+    },
+    {
+      "ReturnType": "AddUsingsPreview",
+      "Signature": "public async Task<AddUsingsPreview> PreviewAddMissingUsingsAsync(\r         string filePath, CancellationToken ct = default)",
+      "Name": "PreviewAddMissingUsingsAsync"
+    },
+    {
+      "ReturnType": "MsAugmentResult",
+      "Signature": "public async Task<MsAugmentResult> ExtractConstantSafeAsync(\r         string filePath, string contextSnippet, string constantName,\r         string? lineBefore = null, string? lineAfter = null,\r         CancellationToken ct = default)",
+      "Name": "ExtractConstantSafeAsync"
+    }
+  ],
+  "SentinelGenerationTools": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateHttpClient(string filePath, string controllerName)",
+      "Name": "GenerateHttpClient"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateConstructor(string filePath, string className)",
+      "Name": "GenerateConstructor"
+    },
+    {
+      "ReturnType": "CodeGenerationEngine.GenerateToStringResult",
+      "Signature": "public async Task<CodeGenerationEngine.GenerateToStringResult> GenerateToString(\r         string filePath,\r         string className,\r         string[]? excludeProperties = null)",
+      "Name": "GenerateToString"
+    },
+    {
+      "ReturnType": "RepositoryInterfaceResult",
+      "Signature": "public async Task<RepositoryInterfaceResult> GenerateRepositoryInterface(string filePath, string className)",
+      "Name": "GenerateRepositoryInterface"
+    },
+    {
+      "ReturnType": "FluentBuilderResult",
+      "Signature": "public async Task<FluentBuilderResult> GenerateFluentBuilder(string filePath, string className)",
+      "Name": "GenerateFluentBuilder"
+    },
+    {
+      "ReturnType": "DecoratorResult?",
+      "Signature": "public async Task<DecoratorResult?> GenerateDecoratorClass(string interfaceName, string decoratorPrefix = \"Logging\", string? projectName = null)",
+      "Name": "GenerateDecoratorClass"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateDefaultConfigJson(string projectName)",
+      "Name": "GenerateDefaultConfigJson"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateAsyncOverload(string filePath, string methodName)",
+      "Name": "GenerateAsyncOverload"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddValidationToPoco(string filePath, string className)",
+      "Name": "AddValidationToPoco"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ImplementInterfaceSafe(string filePath, string className, string interfaceName)",
+      "Name": "ImplementInterfaceSafe"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertPropertySafe(\r         string filePath, string propertyName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "ConvertPropertySafe"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "InterpolateStringSafe"
+    }
+  ],
+  "IDEStyleEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyMemberAccessAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "SimplifyMemberAccessAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseObjectInitializersAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "UseObjectInitializersAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseNullPropagationAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "UseNullPropagationAsync"
+    }
+  ],
+  "DocumentationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateXmlDocumentationStubsAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "GenerateXmlDocumentationStubsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> DocumentPocoFieldsAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "DocumentPocoFieldsAsync"
+    }
+  ],
+  "CodeGenerationEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateConstructorAsync(string filePath, string className, CancellationToken ct = default)",
+      "Name": "GenerateConstructorAsync"
+    },
+    {
+      "ReturnType": "GenerateToStringResult",
+      "Signature": "public async Task<GenerateToStringResult> GenerateToStringAsync(\r         string filePath,\r         string className,\r         string[]? excludeProperties = null,\r         CancellationToken ct = default)",
+      "Name": "GenerateToStringAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)",
+      "Name": "GenerateDefaultConfigJsonAsync"
+    },
+    {
+      "ReturnType": "RepositoryInterfaceResult",
+      "Signature": "public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(\r         string filePath, string className, CancellationToken ct = default)",
+      "Name": "GenerateRepositoryInterfaceAsync"
+    },
+    {
+      "ReturnType": "FluentBuilderResult",
+      "Signature": "public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(\r         string filePath, string className, CancellationToken ct = default)",
+      "Name": "GenerateFluentBuilderAsync"
+    },
+    {
+      "ReturnType": "DecoratorResult?",
+      "Signature": "public async Task<DecoratorResult?> GenerateDecoratorClassAsync(\r         string interfaceName,\r         string decoratorPrefix = \"Logging\",\r         string? projectName = null,\r         CancellationToken ct = default)",
+      "Name": "GenerateDecoratorClassAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ImplementInterfaceAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)",
+      "Name": "ImplementInterfaceAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertPropertySafeAsync(\r         string filePath,\r         string propertyName,\r         string direction,\r         string? contextSnippet = null,\r         string? lineBefore = null,\r         string? lineAfter = null,\r         CancellationToken ct = default)",
+      "Name": "ConvertPropertySafeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InterpolateStringAsync(\r         string filePath,\r         string contextSnippet,\r         string? lineBefore = null,\r         string? lineAfter = null,\r         CancellationToken ct = default)",
+      "Name": "InterpolateStringAsync"
+    }
+  ],
+  "CodeStyleEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FixDangerousLockAsync(string filePath, CancellationToken ct = default)",
+      "Name": "FixDangerousLockAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string propertyName, CancellationToken ct = default)",
+      "Name": "ConvertPropertyToMethodsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyVerbosityAsync(string filePath, CancellationToken ct = default)",
+      "Name": "SimplifyVerbosityAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseCollectionExpressionsAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UseCollectionExpressionsAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseTimeProviderAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UseTimeProviderAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SimplifyAllNamesAsync(string filePath, CancellationToken ct = default)",
+      "Name": "SimplifyAllNamesAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UseIndexFromEndAsync(string filePath, CancellationToken ct = default)",
+      "Name": "UseIndexFromEndAsync"
+    }
+  ],
+  "SentinelRefactoringTools": [
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> ExtractSuperclass(string[] filePaths, string[] classNames, string newBaseClassName, bool autoStage = true)",
+      "Name": "ExtractSuperclass"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SyncTypeAndFilename(string filePath)",
+      "Name": "SyncTypeAndFilename"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> SafeDeleteSymbol(string filePath, string contextSnippet, bool autoStage = true, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "SafeDeleteSymbol"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineMethod(string filePath, string methodName)",
+      "Name": "InlineMethod"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true)",
+      "Name": "ChangeSignature"
+    },
+    {
+      "ReturnType": "ExtractMethodResult",
+      "Signature": "public async Task<ExtractMethodResult> ExtractMethod(\r         string filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName)",
+      "Name": "ExtractMethod"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceField(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "IntroduceField"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceParameter(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "IntroduceParameter"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineField(string filePath, string fieldName)",
+      "Name": "InlineField"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineParameter(string filePath, string methodName, string parameterName)",
+      "Name": "InlineParameter"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeMethodStatic(string filePath, string methodName)",
+      "Name": "MakeMethodStatic"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ExtensionToStatic(string filePath, string methodName)",
+      "Name": "ExtensionToStatic"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> RenameSymbol(string filePath, string symbolName, string contextSnippet, string newName, bool autoStage = true, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "RenameSymbol"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> ExtractInterface(string filePath, string className, string interfaceName, bool autoStage = true)",
+      "Name": "ExtractInterface"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> MoveTypeToFile(string filePath, string typeName, bool autoStage = true)",
+      "Name": "MoveTypeToFile"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertAbstractToInterface(string filePath, string className)",
+      "Name": "ConvertAbstractToInterface"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateMapping(string filePath, string fromType, string toType)",
+      "Name": "GenerateMapping"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> WrapInUsing(string filePath, int startLine, int endLine, string disposalName)",
+      "Name": "WrapInUsing"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceVariable(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "IntroduceVariable"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineVariable(string filePath, string variableName)",
+      "Name": "InlineVariable"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertPropertyToMethods(string filePath, string propertyName)",
+      "Name": "ConvertPropertyToMethods"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertMethodToIndexer(string filePath, string methodName)",
+      "Name": "ConvertMethodToIndexer"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MoveTypeToOuterScope(string filePath, string typeName)",
+      "Name": "MoveTypeToOuterScope"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = true)",
+      "Name": "MoveAllTypesToFiles"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> MoveAllTypesToFilesInProject(string projectName, bool autoStage = true)",
+      "Name": "MoveAllTypesToFilesInProject"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> MoveAllTypesToFilesInSolution(bool autoStage = true)",
+      "Name": "MoveAllTypesToFilesInSolution"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReplaceMember(string filePath, string memberName, string newSource)",
+      "Name": "ReplaceMember"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddMemberToClass(string filePath, string containerName, string newMemberSource)",
+      "Name": "AddMemberToClass"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RemoveMember(string filePath, string memberName)",
+      "Name": "RemoveMember"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddUsingDirective(string filePath, string namespaceName, bool autoStage = true)",
+      "Name": "AddUsingDirective"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddEnumValue(string filePath, string enumName, string valueName, int? explicitValue = null, bool autoStage = true)",
+      "Name": "AddEnumValue"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> InsertMemberAfter(string filePath, string containerName, string afterMemberName, string newMemberSource, bool autoStage = true)",
+      "Name": "InsertMemberAfter"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> InsertMemberBefore(string filePath, string containerName, string beforeMemberName, string newMemberSource, bool autoStage = true)",
+      "Name": "InsertMemberBefore"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddAttribute(string filePath, string targetName, string attributeSource, bool autoStage = true)",
+      "Name": "AddAttribute"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)",
+      "Name": "AddBaseType"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReplaceConstructorWithFactory(string filePath, string className)",
+      "Name": "ReplaceConstructorWithFactory"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InvertAssignments(string filePath, int startLine, int endLine)",
+      "Name": "InvertAssignments"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReduceBlockDepth(string filePath, string methodName)",
+      "Name": "ReduceBlockDepth"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeTaskWait(string filePath)",
+      "Name": "OptimizeTaskWait"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> PullUpMember(string filePath, string className, string memberName, bool autoStage = true)",
+      "Name": "PullUpMember"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> RemoveAttribute(string filePath, string targetName, string attributeName, bool autoStage = true)",
+      "Name": "RemoveAttribute"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> RemoveBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)",
+      "Name": "RemoveBaseType"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> ChangeAccessibility(string filePath, string targetName, string accessibility, bool autoStage = true)",
+      "Name": "ChangeAccessibility"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddModifier(string filePath, string targetName, string modifier, bool autoStage = true)",
+      "Name": "AddModifier"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> RemoveModifier(string filePath, string targetName, string modifier, bool autoStage = true)",
+      "Name": "RemoveModifier"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddSummaryComment(string filePath, string targetName, string summaryText, bool autoStage = true)",
+      "Name": "AddSummaryComment"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddProperty(string filePath, string containerName, string propertyName, string propertyType, string accessibility = \"public\", bool hasSetter = true, bool isInit = false, bool autoStage = true)",
+      "Name": "AddProperty"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddField(string filePath, string containerName, string fieldName, string fieldType, string accessibility = \"private\", bool isReadonly = false, bool isStatic = false, string? initializer = null, bool autoStage = true)",
+      "Name": "AddField"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> SortMembers(string filePath, string containerName, bool autoStage = true)",
+      "Name": "SortMembers"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> WrapInTryCatch(string filePath, int startLine, int endLine, string exceptionType = \"Exception\", string catchVariableName = \"ex\", string? catchBody = null, bool autoStage = true)",
+      "Name": "WrapInTryCatch"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> AddConstructorParameter(string filePath, string className, string paramName, string paramType, string? fieldName = null, bool autoStage = true)",
+      "Name": "AddConstructorParameter"
+    },
+    {
+      "ReturnType": "object",
+      "Signature": "public async Task<object> WrapInRegion(string filePath, int startLine, int endLine, string regionName, bool autoStage = true)",
+      "Name": "WrapInRegion"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SyncInterfaceToImplementation(string filePath, string className, string interfaceName)",
+      "Name": "SyncInterfaceToImplementation"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceParameterObject(\r         string filePath,\r         string methodName,\r         string? newTypeName = null,\r         string[]? parameterNames = null)",
+      "Name": "IntroduceParameterObject"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> UpdateXmlDocsFromSignature(string filePath, string methodName)",
+      "Name": "UpdateXmlDocsFromSignature"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertExpressionBody(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "ConvertExpressionBody"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ExtractConstant(string filePath, string contextSnippet, string constantName, string visibility = \"private\", string? lineBefore = null, string? lineAfter = null)",
+      "Name": "ExtractConstant"
+    },
+    {
+      "ReturnType": "ControlFlowSummary",
+      "Signature": "public async Task<ControlFlowSummary> AnalyzeControlFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "AnalyzeControlFlow"
+    },
+    {
+      "ReturnType": "DataFlowSummary",
+      "Signature": "public async Task<DataFlowSummary> AnalyzeDataFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)",
+      "Name": "AnalyzeDataFlow"
+    },
+    {
+      "ReturnType": "FormatPreviewResult",
+      "Signature": "public async Task<FormatPreviewResult> FormatDocumentPreview(string filePath)",
+      "Name": "FormatDocumentPreview"
+    }
+  ],
+  "AnalysisEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateCallTreeAsync(string filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)",
+      "Name": "GenerateCallTreeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateEqualityOverridesAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "GenerateEqualityOverridesAsync"
+    }
+  ],
+  "AdvancedRefactoringEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReplaceStringConcatWithInterpolationAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "ReplaceStringConcatWithInterpolationAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> OptimizeTaskWaitAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "OptimizeTaskWaitAsync"
+    }
+  ],
+  "StructuralRefinementEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SyncTypeAndFilenameAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "SyncTypeAndFilenameAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> SafeDeleteSymbolAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)",
+      "Name": "SafeDeleteSymbolAsync"
+    }
+  ],
+  "StandardRefactoringEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertMethodToPropertyAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertMethodToPropertyAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeMethodStaticAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "MakeMethodStaticAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InvertBooleanAsync(string filePath, string boolName, CancellationToken cancellationToken = default)",
+      "Name": "InvertBooleanAsync"
+    }
+  ],
+  "TestingEngine": [
+    {
+      "ReturnType": "TestComplexityReport",
+      "Signature": "public async Task<TestComplexityReport> CalculateComplexityAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "CalculateComplexityAsync"
+    },
+    {
+      "ReturnType": "TestSkeletonReport",
+      "Signature": "public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(string filePath, string className, string framework = \"NUnit\", CancellationToken cancellationToken = default)",
+      "Name": "GenerateTestSkeletonAsync"
+    },
+    {
+      "ReturnType": "TestScaffoldResult",
+      "Signature": "public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(string filePath, string className, CancellationToken ct = default)",
+      "Name": "GenerateTestScaffoldAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddBenchmarkStubAsync(string filePath, string className, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "AddBenchmarkStubAsync"
+    }
+  ],
+  "DiscoveryEngine": [
+    {
+      "ReturnType": "BestInsertionResult",
+      "Signature": "public async Task<BestInsertionResult> FindBestInsertionPointAsync(\r         string filePath, string containerName, string memberKind, CancellationToken ct = default)",
+      "Name": "FindBestInsertionPointAsync"
+    },
+    {
+      "ReturnType": "RenameImpactPreview",
+      "Signature": "public async Task<RenameImpactPreview> PreviewRenameImpactAsync(\r         string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)",
+      "Name": "PreviewRenameImpactAsync"
+    }
+  ],
+  "AdvancedStructuralEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertAbstractClassToInterfaceAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "ConvertAbstractClassToInterfaceAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ReplaceConstructorWithFactoryAsync(string filePath, string className, CancellationToken cancellationToken = default)",
+      "Name": "ReplaceConstructorWithFactoryAsync"
+    }
+  ],
+  "ProjectStructureEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FixMismatchedNamespacesAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "FixMismatchedNamespacesAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MoveFileToNamespaceFolderAsync(string filePath, CancellationToken cancellationToken = default)",
+      "Name": "MoveFileToNamespaceFolderAsync"
+    }
+  ],
+  "ValidationEngine": [
+    {
+      "ReturnType": "DiagnosticReport",
+      "Signature": "public async Task<DiagnosticReport> ValidateDiffAsync(string filePath, string unifiedDiff, CancellationToken cancellationToken = default)",
+      "Name": "ValidateDiffAsync"
+    },
+    {
+      "ReturnType": "DiagnosticReport",
+      "Signature": "public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<string, string> fileChanges, CancellationToken cancellationToken = default)",
+      "Name": "ValidateChangesAsync"
+    }
+  ],
+  "GranularRefactoringEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> RunMicroRefactoringAsync(string filePath, string refactoringId, int line, CancellationToken cancellationToken = default)",
+      "Name": "RunMicroRefactoringAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineFieldAsync(string filePath, string fieldName, CancellationToken cancellationToken = default)",
+      "Name": "InlineFieldAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InlineParameterAsync(string filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)",
+      "Name": "InlineParameterAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertMethodToIndexerAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertMethodToIndexerAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)",
+      "Name": "IntroduceFieldAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)",
+      "Name": "IntroduceParameterAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceVariableAsync(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)",
+      "Name": "IntroduceVariableAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MoveTypeToOuterScopeAsync(string filePath, string nestedTypeName, CancellationToken cancellationToken = default)",
+      "Name": "MoveTypeToOuterScopeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> IntroduceParameterObjectAsync(\r         string filePath,\r         string methodName,\r         string? newTypeName = null,\r         string[]? parameterNames = null,\r         CancellationToken cancellationToken = default)",
+      "Name": "IntroduceParameterObjectAsync"
+    }
+  ],
+  "CodeHealingEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> FixThreadSleepAsync(string filePath, CancellationToken ct = default)",
+      "Name": "FixThreadSleepAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> AddRetryPolicyAsync(string f, int sl, int el, int rc) => \"\";",
+      "Name": "AddRetryPolicyAsync"
+    }
+  ],
+  "ThreadSafetyEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> MakeMethodThreadSafeAsync(string filePath, string methodName, string lockFieldName = \"_lock\", CancellationToken cancellationToken = default)",
+      "Name": "MakeMethodThreadSafeAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> ConvertLockToSemaphoreSlimAsync(string filePath, string methodName, CancellationToken cancellationToken = default)",
+      "Name": "ConvertLockToSemaphoreSlimAsync"
+    }
+  ],
+  "MappingEngine": [
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> GenerateMappingAsync(string filePath, string fromType, string toType, CancellationToken cancellationToken = default)",
+      "Name": "GenerateMappingAsync"
+    },
+    {
+      "ReturnType": "string",
+      "Signature": "public async Task<string> InvertAssignmentsAsync(string filePath, int startLine, int endLine, CancellationToken cancellationToken = default)",
+      "Name": "InvertAssignmentsAsync"
+    }
+  ]
+}

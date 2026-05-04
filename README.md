@@ -2,6 +2,22 @@
 
 **Roslyn Sentinel** is a high-performance, persistent MCP (Model Context Protocol) server designed to give AI agents "Compiler-Grade Intelligence." It keeps your .NET solution "hot" in memory, maintaining an active `MSBuildWorkspace` to eliminate cold-start delays and provide deep semantic analysis across massive (300k+ LOC) codebases.
 
+---
+
+## 📚 Documentation
+
+| Document | Purpose | Status |
+|----------|---------|--------|
+| **[TOOL_DOCUMENTATION.md](./TOOL_DOCUMENTATION.md)** | Complete reference with pre/post code examples for all ~240 tools | ✅ NEW |
+| [UNFINISHED_FEATURES.md](./UNFINISHED_FEATURES.md) | Stub methods, deferred bugs, known limitations | ✅ Complete |
+| [UNFINISHED.md](./UNFINISHED.md) | Full development history (16 sessions, 600+ tests) | ✅ Complete |
+| [README.md](./README.md) | High-level overview (this file) | ✅ Current |
+| [DOCUMENTATION_INDEX.md](./DOCUMENTATION_INDEX.md) | Navigation guide for all docs | ✅ Complete |
+
+**Start here:** Read [TOOL_DOCUMENTATION.md](./TOOL_DOCUMENTATION.md) for realistic before/after examples of every tool.
+
+---
+
 ## 🚀 236 MCP Tools across 55 Specialized Engines
 
 Roslyn Sentinel is built on a modular engine architecture, providing a vast library of surgical refactorings, architectural audits, modernizations, and code generation tools.

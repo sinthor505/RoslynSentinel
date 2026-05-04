@@ -3189,7 +3189,6 @@ public class MyClass
     }
 
     [Test]
-    [Ignore("BUG-72: IntroduceField context matching complexity - ambiguous snippets fail")]
     public async Task BUG_72_IntroduceField_WithLocalParameter_NoInitializer()
     {
         // BUG-72 documents that IntroduceFieldAsync has difficulty disambiguating
@@ -3232,7 +3231,6 @@ public class MyClass
     // ── BUG-73: SafeDeleteSymbol — refuses when symbol IS used ──────────
     
     [Test]
-    [Ignore("BUG-73: SafeDeleteSymbol usage detection - returns empty dict for used symbols")]
     public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
     {
         // BUG-73 documents that SafeDeleteSymbolAsync may fail to detect when a symbol
@@ -3254,45 +3252,16 @@ public class Service
         
         SetSource(code, "Service.cs");
         
-        // Since SafeDeleteSymbolAsync might be complex, just verify the basic behavior
-        // It should either return an error dict or at least not fail silently
-        try
-        {
-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(
-                "Service.cs",
-                contextSnippet: "public string GetValue",
-                lineBefore: null,
-                lineAfter: null);
-            
-            // If it returns a dict with ERROR key, that's good
-            if (result.ContainsKey("ERROR"))
-            {
-                Assert.Pass("Correctly returned error for used symbol");
-            }
-            else if (result.Count == 0)
-            {
-                // Empty dict indicates failure to detect usage - this is the bug
-                Assert.Fail("BUG-73: Returned empty dict for used symbol - usage was not detected");
-            }
-            else
-            {
-                // Some other dict returned - could be success (bad) or partial result
-                var content = string.Concat(result.Values);
-                if (content.Contains("GetValue"))
-                {
-                    Assert.Fail("BUG-73: Method should not have been deleted - it's still in use");
-                }
-                else
-                {
-                    Assert.Pass("Deletion was blocked (usage detected) - bug may be fixed");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // If an exception is thrown, that's at least explicit about the problem
-            Assert.Fail($"SafeDeleteSymbol threw exception: {ex.Message}");
-        }
+        var result = await _refactoringEngine.SafeDeleteSymbolAsync(
+            "Service.cs",
+            contextSnippet: "public string GetValue",
+            lineBefore: null,
+            lineAfter: null);
+        
+        // Verify it returns error dict (not empty) for used symbols
+        Assert.That(result, Is.Not.Empty, "Should return non-empty dict for used symbol");
+        Assert.That(result.ContainsKey("ERROR"), Is.True, 
+            "Should contain ERROR key when symbol is used and cannot be deleted");
     }
 
     [Test]
