@@ -1,0 +1,43 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  RoslynSentinel.Server -> E:\source\repos\RoslynSentinel\RoslynSentinel.Server\bin\Debug\net10.0\RoslynSentinel.Server.dll
+  RoslynSentinel.Tests -> E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll
+Test run for E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+NUnit Adapter 5.0.0.0: Test execution started
+Running selected tests in E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll
+   NUnit3TestExecutor discovered 1 of 1 NUnit test cases using Current Discovery mode, Non-Explicit run
+NUnit Adapter 5.0.0.0: Test execution complete
+  Failed InlineVariable_EmptyString_InlinesCorrectly [350 ms]
+  Error Message:
+     Empty string should inline
+Assert.That(result, Does.Contain("return string.IsNullOrEmpty(\"\")"))
+  Expected: String containing "return string.IsNullOrEmpty("")"
+  But was:  "public class EmptyStringTest
+{
+    public bool IsEmpty()
+    {
+        return string.IsNullOrEmpty(empty);
+    }
+}"
+
+  Stack Trace:
+     at RoslynSentinel.Tests.InlineVariableTests.InlineVariable_EmptyString_InlinesCorrectly() in E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\InlineVariableTests.cs:line 357
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.GetResult()
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.<>c__DisplayClass1_0.<Execute>b__0()
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)
+
+1)    at RoslynSentinel.Tests.InlineVariableTests.InlineVariable_EmptyString_InlinesCorrectly() in E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\InlineVariableTests.cs:line 357
+   at System.Runtime.CompilerServices.AsyncMethodBuilderCore.Start[TStateMachine](TStateMachine& stateMachine)
+   at RoslynSentinel.Tests.InlineVariableTests.InlineVariable_EmptyString_InlinesCorrectly()
+
+
+
+Total tests: 1
+Test Run Failed.
+     Failed: 1
+ Total time: 0.8670 Seconds

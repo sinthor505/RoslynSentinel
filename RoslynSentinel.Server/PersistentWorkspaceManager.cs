@@ -67,7 +67,14 @@ public class PersistentWorkspaceManager : IDisposable
             _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
             
             _workspace?.Dispose();
-            _workspace = MSBuildWorkspace.Create();
+            // Suppress NuGet vulnerability audit during workspace load — this is a code-analysis
+            // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
+            // design-time errors that block project loading but are irrelevant for code analysis.
+            _workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+            {
+                { "NuGetAudit", "false" },
+                { "NuGetAuditLevel", "critical" }
+            });
             _workspaceLoadErrors.Clear();
             _workspace.RegisterWorkspaceFailedHandler((d) => 
             {
