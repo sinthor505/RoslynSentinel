@@ -146,8 +146,80 @@ public class SyntaxUpgradeEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return string.Empty;
         var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
+        if (root == null) return string.Empty;
+
+        var classNodes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+        var replaceMap = new Dictionary<SyntaxNode, SyntaxNode>();
+
+        foreach (var classNode in classNodes)
+        {
+            var newMembers = new List<MemberDeclarationSyntax>();
+            bool changed = false;
+
+            foreach (var member in classNode.Members)
+            {
+                if (member is PropertyDeclarationSyntax prop && IsAutoProperty(prop))
+                {
+                    changed = true;
+                    var propName = prop.Identifier.Text;
+                    var fieldName = "_" + char.ToLowerInvariant(propName[0]) + propName.Substring(1);
+
+                    var fieldDecl = SyntaxFactory.FieldDeclaration(
+                        SyntaxFactory.VariableDeclaration(
+                            prop.Type,
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.VariableDeclarator(
+                                    SyntaxFactory.Identifier(fieldName), null, prop.Initializer))))
+                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)));
+
+                    var hasSetter = prop.AccessorList!.Accessors.Any(
+                        a => a.IsKind(SyntaxKind.SetAccessorDeclaration) || a.IsKind(SyntaxKind.InitAccessorDeclaration));
+
+                    var getAccessor = SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                        .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName(fieldName)))
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+                    AccessorDeclarationSyntax? setAccessor = null;
+                    if (hasSetter)
+                    {
+                        var setKind = prop.AccessorList.Accessors.Any(a => a.IsKind(SyntaxKind.InitAccessorDeclaration))
+                            ? SyntaxKind.InitAccessorDeclaration : SyntaxKind.SetAccessorDeclaration;
+                        setAccessor = SyntaxFactory.AccessorDeclaration(setKind)
+                            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
+                                SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
+                                    SyntaxFactory.IdentifierName(fieldName), SyntaxFactory.IdentifierName("value"))))
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                    }
+
+                    var accessorList = hasSetter && setAccessor != null
+                        ? SyntaxFactory.AccessorList(SyntaxFactory.List(new[] { getAccessor, setAccessor }))
+                        : SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getAccessor));
+
+                    var newProp = prop.WithAccessorList(accessorList)
+                        .WithInitializer(null)
+                        .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+
+                    newMembers.Add(fieldDecl);
+                    newMembers.Add(newProp);
+                }
+                else
+                {
+                    newMembers.Add(member);
+                }
+            }
+
+            if (changed)
+                replaceMap[classNode] = classNode.WithMembers(SyntaxFactory.List(newMembers));
+        }
+
+        if (replaceMap.Count == 0) return root.ToFullString();
+        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
+
+    private static bool IsAutoProperty(PropertyDeclarationSyntax prop) =>
+        prop.AccessorList != null &&
+        prop.AccessorList.Accessors.All(a => a.Body == null && a.ExpressionBody == null);
 
     public async Task<string> UpgradeToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)
     {

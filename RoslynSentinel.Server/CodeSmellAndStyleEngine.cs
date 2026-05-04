@@ -70,10 +70,30 @@ public class CodeSmellAndStyleEngine
 
         foreach (var sw in switchStatements)
         {
-             // logic to build SwitchExpressionArmSyntax for each section...
-             // and replace sw with a ReturnStatement(SwitchExpression) or assignment.
+            // Only convert if all sections have one label and one return statement (no fall-through)
+            if (!sw.Sections.All(s =>
+                s.Labels.Count == 1 &&
+                s.Statements.Count == 1 &&
+                s.Statements[0] is ReturnStatementSyntax))
+                continue;
+
+            var arms = sw.Sections.Select(s =>
+            {
+                var label = s.Labels.FirstOrDefault();
+                var pattern = label is CaseSwitchLabelSyntax c
+                    ? (PatternSyntax)SyntaxFactory.ConstantPattern(c.Value)
+                    : SyntaxFactory.DiscardPattern();
+                var result = ((ReturnStatementSyntax)s.Statements[0]).Expression
+                    ?? SyntaxFactory.ParseExpression("default");
+                return SyntaxFactory.SwitchExpressionArm(pattern, result);
+            });
+
+            var switchExpr = SyntaxFactory.SwitchExpression(sw.Expression, SyntaxFactory.SeparatedList(arms));
+            replaceMap[sw] = SyntaxFactory.ReturnStatement(switchExpr);
         }
 
-        return root.ToFullString();
+        if (replaceMap.Count == 0) return root.ToFullString();
+        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 }

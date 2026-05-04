@@ -80,7 +80,28 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null) return root.ToFullString();
+
+        var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
+        if (ifStmt == null) return root.ToFullString();
+
+        if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
+            return root.ToFullString();
+
+        var arms = branches.Select(b =>
+            SyntaxFactory.SwitchExpressionArm(SyntaxFactory.ConstantPattern(b.Pattern), b.Result)).ToList();
+        if (defaultResult != null)
+            arms.Add(SyntaxFactory.SwitchExpressionArm(SyntaxFactory.DiscardPattern(), defaultResult));
+
+        var switchExpr = SyntaxFactory.SwitchExpression(
+            SyntaxFactory.ParseExpression(condVar),
+            SyntaxFactory.SeparatedList(arms));
+        var newRoot = root.ReplaceNode(ifStmt, SyntaxFactory.ReturnStatement(switchExpr));
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> ConvertIfToSwitchStatementAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
@@ -89,7 +110,36 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null) return root.ToFullString();
+
+        var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
+        if (ifStmt == null) return root.ToFullString();
+
+        if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
+            return root.ToFullString();
+
+        var sections = new List<SwitchSectionSyntax>();
+        foreach (var branch in branches)
+        {
+            sections.Add(SyntaxFactory.SwitchSection(
+                SyntaxFactory.SingletonList<SwitchLabelSyntax>(SyntaxFactory.CaseSwitchLabel(branch.Pattern)),
+                SyntaxFactory.SingletonList<StatementSyntax>(SyntaxFactory.ReturnStatement(branch.Result))));
+        }
+        if (defaultResult != null)
+        {
+            sections.Add(SyntaxFactory.SwitchSection(
+                SyntaxFactory.SingletonList<SwitchLabelSyntax>(SyntaxFactory.DefaultSwitchLabel()),
+                SyntaxFactory.SingletonList<StatementSyntax>(SyntaxFactory.ReturnStatement(defaultResult))));
+        }
+
+        var switchStmt = SyntaxFactory.SwitchStatement(SyntaxFactory.ParseExpression(condVar))
+            .WithSections(SyntaxFactory.List(sections));
+        var newRoot = root.ReplaceNode(ifStmt, switchStmt);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> ExtensionToStaticAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
@@ -256,7 +306,34 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
         var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>()
+            .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
+        if (forStmt == null) return root.ToFullString();
+
+        if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0) return root.ToFullString();
+        var indexVar = forStmt.Declaration.Variables[0].Identifier.Text;
+
+        // Extract collection from condition: i < arr.Length or i < arr.Count
+        if (forStmt.Condition is not BinaryExpressionSyntax condBin ||
+            condBin.Right is not MemberAccessExpressionSyntax memberAccess ||
+            (memberAccess.Name.Identifier.Text != "Length" && memberAccess.Name.Identifier.Text != "Count"))
+            return root.ToFullString();
+        var collectionStr = memberAccess.Expression.ToString();
+
+        const string elementVar = "item";
+        var rewriter = new IndexedAccessRewriter(collectionStr, indexVar, elementVar);
+        var newBody = (StatementSyntax)(rewriter.Visit(forStmt.Statement) ?? forStmt.Statement);
+
+        var forEach = SyntaxFactory.ForEachStatement(
+            SyntaxFactory.IdentifierName("var"),
+            SyntaxFactory.Identifier(elementVar),
+            SyntaxFactory.ParseExpression(collectionStr),
+            newBody);
+
+        var newRoot = root.ReplaceNode(forStmt, forEach);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> ConvertWhileToForAsync(string filePath, int line, CancellationToken ct = default)
@@ -265,6 +342,132 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null) return "";
         var root = await document.GetSyntaxRootAsync(ct);
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>()
+            .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
+        if (whileStmt == null) return root.ToFullString();
+
+        if (whileStmt.Condition is not BinaryExpressionSyntax condBin ||
+            condBin.Left is not IdentifierNameSyntax counterIdent)
+            return root.ToFullString();
+        var counterName = counterIdent.Identifier.Text;
+
+        if (whileStmt.Parent is not BlockSyntax parentBlock) return root.ToFullString();
+        var whileIndex = parentBlock.Statements.IndexOf(whileStmt);
+        if (whileIndex <= 0) return root.ToFullString();
+
+        var prevStmt = parentBlock.Statements[whileIndex - 1];
+        if (prevStmt is not LocalDeclarationStatementSyntax localDecl ||
+            localDecl.Declaration.Variables.Count == 0 ||
+            localDecl.Declaration.Variables[0].Identifier.Text != counterName)
+            return root.ToFullString();
+
+        if (whileStmt.Statement is not BlockSyntax whileBody) return root.ToFullString();
+
+        ExpressionStatementSyntax? incrementStmt = null;
+        foreach (var s in whileBody.Statements)
+        {
+            if (s is ExpressionStatementSyntax ess &&
+                ess.Expression is PostfixUnaryExpressionSyntax post &&
+                post.IsKind(SyntaxKind.PostIncrementExpression) &&
+                post.Operand is IdentifierNameSyntax id &&
+                id.Identifier.Text == counterName)
+            {
+                incrementStmt = ess;
+                break;
+            }
+        }
+        if (incrementStmt == null) return root.ToFullString();
+
+        var newBody = whileBody.WithStatements(whileBody.Statements.Remove(incrementStmt));
+        var incrementors = SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
+            SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
+                SyntaxFactory.IdentifierName(counterName)));
+        var forStmt = SyntaxFactory.ForStatement(
+            localDecl.Declaration,
+            SyntaxFactory.SeparatedList<ExpressionSyntax>(),
+            whileStmt.Condition,
+            incrementors,
+            newBody);
+
+        var newStmtList = new List<StatementSyntax>();
+        foreach (var s in parentBlock.Statements)
+        {
+            if (ReferenceEquals(s, localDecl)) continue;
+            newStmtList.Add(ReferenceEquals(s, whileStmt) ? (StatementSyntax)forStmt : s);
+        }
+        var newStatements = SyntaxFactory.List<StatementSyntax>(newStmtList);
+        var newRoot = root.ReplaceNode(parentBlock, parentBlock.WithStatements(newStatements));
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private record IfBranch(ExpressionSyntax Pattern, ExpressionSyntax Result);
+
+    private static bool TryExtractIfChainBranches(IfStatementSyntax ifStmt, out string condVar, out List<IfBranch> branches, out ExpressionSyntax? defaultResult)
+    {
+        condVar = "";
+        branches = new List<IfBranch>();
+        defaultResult = null;
+
+        IfStatementSyntax? current = ifStmt;
+        while (current != null)
+        {
+            if (current.Condition is not BinaryExpressionSyntax bin || !bin.IsKind(SyntaxKind.EqualsExpression))
+                return false;
+
+            var leftStr = bin.Left.ToString();
+            if (condVar == "") condVar = leftStr;
+            else if (condVar != leftStr) return false;
+
+            var result = GetSingleReturnExpression(current.Statement);
+            if (result == null) return false;
+
+            branches.Add(new IfBranch(bin.Right, result));
+
+            if (current.Else == null) break;
+            if (current.Else.Statement is IfStatementSyntax elseIf)
+                current = elseIf;
+            else
+            {
+                defaultResult = GetSingleReturnExpression(current.Else.Statement);
+                break;
+            }
+        }
+
+        return branches.Count >= 1;
+    }
+
+    private static ExpressionSyntax? GetSingleReturnExpression(StatementSyntax stmt)
+    {
+        if (stmt is ReturnStatementSyntax ret) return ret.Expression;
+        if (stmt is BlockSyntax block && block.Statements.Count == 1 &&
+            block.Statements[0] is ReturnStatementSyntax br) return br.Expression;
+        return null;
+    }
+
+    private sealed class IndexedAccessRewriter : CSharpSyntaxRewriter
+    {
+        private readonly string _collection;
+        private readonly string _indexVar;
+        private readonly string _elementVar;
+
+        public IndexedAccessRewriter(string collection, string indexVar, string elementVar)
+        {
+            _collection = collection;
+            _indexVar = indexVar;
+            _elementVar = elementVar;
+        }
+
+        public override SyntaxNode? VisitElementAccessExpression(ElementAccessExpressionSyntax node)
+        {
+            if (node.Expression.ToString() == _collection &&
+                node.ArgumentList.Arguments.Count == 1 &&
+                node.ArgumentList.Arguments[0].Expression.ToString() == _indexVar)
+            {
+                return SyntaxFactory.IdentifierName(_elementVar).WithTriviaFrom(node);
+            }
+            return base.VisitElementAccessExpression(node);
+        }
     }
 }

@@ -48,7 +48,63 @@ public class CodeHealingEngine
         }
     }
 
-    public async Task<string> AddRetryPolicyAsync(string f, int sl, int el, int rc) => "";
+    public async Task<string> AddRetryPolicyAsync(string f, int sl, int el, int rc)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == f || d.FilePath == f);
+        if (document == null) return "";
+
+        var root = await document.GetSyntaxRootAsync();
+        if (root == null) return "";
+
+        var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+        MethodDeclarationSyntax? method = null;
+        if (sl > 0 && el > 0)
+        {
+            method = methods.FirstOrDefault(m =>
+            {
+                var span = m.GetLocation().GetLineSpan();
+                return span.StartLinePosition.Line + 1 >= sl && span.EndLinePosition.Line + 1 <= el;
+            });
+        }
+        method ??= methods.FirstOrDefault();
+        if (method?.Body == null) return root.NormalizeWhitespace().ToFullString();
+
+        var retryDecl = SyntaxFactory.LocalDeclarationStatement(
+            SyntaxFactory.VariableDeclaration(
+                SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)),
+                SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(
+                        SyntaxFactory.Identifier("_retryCount"), null,
+                        SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0)))))));
+
+        var tryBody = SyntaxFactory.Block(
+            method.Body.Statements.Add(SyntaxFactory.BreakStatement()));
+
+        var filterExpr = SyntaxFactory.BinaryExpression(
+            SyntaxKind.LessThanExpression,
+            SyntaxFactory.IdentifierName("_retryCount"),
+            SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(rc)));
+
+        var catchBody = SyntaxFactory.Block(
+            SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
+                    SyntaxFactory.IdentifierName("_retryCount"))));
+
+        var catchClause = SyntaxFactory.CatchClause(
+            SyntaxFactory.CatchDeclaration(SyntaxFactory.ParseTypeName("Exception")),
+            SyntaxFactory.CatchFilterClause(filterExpr),
+            catchBody);
+
+        var whileStmt = SyntaxFactory.WhileStatement(
+            SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression),
+            SyntaxFactory.Block(SyntaxFactory.TryStatement(tryBody, SyntaxFactory.SingletonList(catchClause), null)));
+
+        var newMethod = method.WithBody(SyntaxFactory.Block(retryDecl, whileStmt));
+        var newRoot = root.ReplaceNode(method, newMethod);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
     
     public async Task<Dictionary<string, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken ct = default)
     {
