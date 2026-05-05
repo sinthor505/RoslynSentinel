@@ -906,11 +906,12 @@ public class Svc : ISvc { public void Foo() {} }";
             "Should NOT emit 'public void' for async method test");
     }
 
-    // ── Bug 4: GenerateFluentBuilder — DI class error ─────────────────────────
+    // ── Bug 4: GenerateFluentBuilder — DI class error (returns error result, does NOT throw) ──
 
     [Test]
-    public void GenerateFluentBuilder_DiClass_ThrowsDescriptiveException()
+    public async Task GenerateFluentBuilder_DiClass_ReturnsErrorResult_NotException()
     {
+        // Regression: previously threw InvalidOperationException; now returns FluentBuilderResult with Error.
         const string src = @"public class ProductsController
 {
     private readonly IProductService _svc;
@@ -922,12 +923,19 @@ public class Svc : ISvc { public void Foo() {} }";
     }
 }";
         SetSource(src, "ProductsController.cs");
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            () => _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController"));
-        Assert.That(ex!.Message, Does.Contain("No settable public properties"),
-            "Exception should explain that the class has no settable public properties");
-        Assert.That(ex.Message, Does.Contain("DI-injected"),
-            "Exception should mention DI-injected classes");
+        // Must NOT throw
+        FluentBuilderResult? result = null;
+        Assert.DoesNotThrowAsync(async () =>
+        {
+            result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController");
+        });
+        Assert.That(result, Is.Not.Null, "Should return a FluentBuilderResult, not null");
+        Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
+            "Error field should be populated for DI classes with no settable properties");
+        Assert.That(result.Error, Does.Contain("No settable public properties"),
+            "Error should explain that the class has no settable public properties");
+        Assert.That(result.Error, Does.Contain("DI-injected"),
+            "Error should mention DI-injected classes");
     }
 
     [Test]

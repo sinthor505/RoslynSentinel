@@ -68,10 +68,19 @@ public class SentinelWorkspaceTools
     [Description("Lists all files within a specific project.")]
     public async Task<List<string>> ListFiles(string projectName)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-        if (project == null) throw new Exception($"Project '{projectName}' not found.");
-        return project.Documents.Select(d => d.FilePath ?? d.Name).ToList();
+        try
+        {
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+            if (project == null) throw new InvalidOperationException($"Project '{projectName}' not found.");
+            return project.Documents.Select(d => d.FilePath ?? d.Name).ToList();
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ListFiles unexpected exception for project '{ProjectName}'", projectName);
+            throw new InvalidOperationException($"ListFiles for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -101,43 +110,51 @@ public class SentinelWorkspaceTools
     [Description("Checks the health of the Roslyn MCP server environment and workspace status.")]
     public async Task<HealthReport> Diagnose(string? solutionPath = null, bool verbose = false)
     {
-        if (!string.IsNullOrEmpty(solutionPath))
+        try
         {
-            await _workspaceManager.LoadSolutionAsync(solutionPath);
-        }
-
-        var components = _workspaceManager.GetHealthComponents();
-        var workspace = _workspaceManager.GetWorkspaceStatus();
-        var errors = new List<HealthIssue>();
-        var warnings = new List<HealthIssue>();
-
-        if (!components.MsBuildFound)
-        {
-            warnings.Add(new HealthIssue("W5001", "MSBuild not found. If the workspace loaded successfully, this can be ignored.", null, "Install Visual Studio, Build Tools, or .NET SDK for full MSBuild support."));
-        }
-
-        if (workspace.SolutionLoaded && workspace.ProjectCount == 0)
-        {
-            var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
-            foreach (var error in loadErrors)
+            if (!string.IsNullOrEmpty(solutionPath))
             {
-                errors.Add(new HealthIssue("5005", "Workspace load error", error, "Check project file for syntax errors, missing NuGet packages, or SDK version mismatches."));
+                await _workspaceManager.LoadSolutionAsync(solutionPath);
             }
-            
-            if (loadErrors.Count == 0)
-            {
-                warnings.Add(new HealthIssue("4001", "Solution loaded but no projects found. Check for unsupported project types."));
-            }
-        }
 
-        return new HealthReport(
-            Healthy: errors.Count == 0,
-            Components: components,
-            Workspace: workspace,
-            Capabilities: new List<string> { "diagnose", "load_solution", "refactor", "intelligence" },
-            Errors: errors,
-            Warnings: warnings
-        );
+            var components = _workspaceManager.GetHealthComponents();
+            var workspace = _workspaceManager.GetWorkspaceStatus();
+            var errors = new List<HealthIssue>();
+            var warnings = new List<HealthIssue>();
+
+            if (!components.MsBuildFound)
+            {
+                warnings.Add(new HealthIssue("W5001", "MSBuild not found. If the workspace loaded successfully, this can be ignored.", null, "Install Visual Studio, Build Tools, or .NET SDK for full MSBuild support."));
+            }
+
+            if (workspace.SolutionLoaded && workspace.ProjectCount == 0)
+            {
+                var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
+                foreach (var error in loadErrors)
+                {
+                    errors.Add(new HealthIssue("5005", "Workspace load error", error, "Check project file for syntax errors, missing NuGet packages, or SDK version mismatches."));
+                }
+                
+                if (loadErrors.Count == 0)
+                {
+                    warnings.Add(new HealthIssue("4001", "Solution loaded but no projects found. Check for unsupported project types."));
+                }
+            }
+
+            return new HealthReport(
+                Healthy: errors.Count == 0,
+                Components: components,
+                Workspace: workspace,
+                Capabilities: new List<string> { "diagnose", "load_solution", "refactor", "intelligence" },
+                Errors: errors,
+                Warnings: warnings
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Diagnose unexpected exception");
+            throw new InvalidOperationException($"Diagnose failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -157,7 +174,15 @@ public class SentinelWorkspaceTools
     [Description("Validates a dictionary of proposed file changes in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying changes.")]
     public async Task<DiagnosticReport> ValidateProposedChanges(Dictionary<string, string> changes)
     {
-        return await _validationEngine.ValidateChangesAsync(changes);
+        try
+        {
+            return await _validationEngine.ValidateChangesAsync(changes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ValidateProposedChanges unexpected exception");
+            throw new InvalidOperationException($"ValidateProposedChanges failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -172,12 +197,21 @@ public class SentinelWorkspaceTools
     [Description("Applies a Unified Diff to a file and returns the resulting full content.")]
     public async Task<string> ApplyProposedDiff(string filePath, string unifiedDiff)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) throw new Exception("File not found.");
-        var oldText = await document.GetTextAsync();
-        return _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+        try
+        {
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+            if (document == null) throw new InvalidOperationException("File not found.");
+            var oldText = await document.GetTextAsync();
+            return _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ApplyProposedDiff unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"ApplyProposedDiff for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]

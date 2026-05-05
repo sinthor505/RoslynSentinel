@@ -72,9 +72,17 @@ public class SentinelRefactoringTools
     [Description("Extracts common members from multiple classes into a new shared base class.")]
     public async Task<object> ExtractSuperclass(string[] filePaths, string[] classNames, string newBaseClassName, bool autoStage = true) 
     {
-        var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(filePaths, classNames, newBaseClassName);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract superclass '{newBaseClassName}' from {classNames.Length} classes.");
-        return changes;
+        try
+        {
+            var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(filePaths, classNames, newBaseClassName);
+            if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract superclass '{newBaseClassName}' from {classNames.Length} classes.");
+            return changes;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ExtractSuperclass unexpected exception for '{NewBaseClassName}'", newBaseClassName);
+            throw new InvalidOperationException($"ExtractSuperclass for '{newBaseClassName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     private static string PreviewFileContent(string content)
@@ -88,8 +96,18 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename(string filePath) 
-        => await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
+    public async Task<string> SyncTypeAndFilename(string filePath)
+    {
+        try
+        {
+            return await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Safe deletes a symbol only if it has zero usages in the entire codebase. Provide contextSnippet: a verbatim substring from the symbol's declaration line. Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. If autoStage is true, returns a ChangeId.")]
@@ -102,8 +120,18 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Inlines a simple single-statement method by replacing call sites with its expression.")]
-    public async Task<string> InlineMethod(string filePath, string methodName) 
-        => await _refinementEngine.InlineMethodAsync(filePath, methodName);
+    public async Task<string> InlineMethod(string filePath, string methodName)
+    {
+        try
+        {
+            return await _refinementEngine.InlineMethodAsync(filePath, methodName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "InlineMethod unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            throw new InvalidOperationException($"InlineMethod for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Reorders parameters in a method signature and updates all call sites globally.")]
@@ -174,9 +202,17 @@ public class SentinelRefactoringTools
     [Description("Extracts an interface from a class. If autoStage is true, returns a ChangeId.")]
     public async Task<object> ExtractInterface(string filePath, string className, string interfaceName, bool autoStage = true) 
     {
-        var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, interfaceName);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract interface '{interfaceName}' from '{className}'.");
-        return changes;
+        try
+        {
+            var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, interfaceName);
+            if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract interface '{interfaceName}' from '{className}'.");
+            return changes;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ExtractInterface unexpected exception for '{InterfaceName}' from '{ClassName}' in '{FilePath}'", interfaceName, className, filePath);
+            throw new InvalidOperationException($"ExtractInterface for '{interfaceName}' from '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -203,8 +239,18 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Converts an abstract class to an interface.")]
-    public async Task<string> ConvertAbstractToInterface(string filePath, string className) 
-        => await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(filePath, className);
+    public async Task<string> ConvertAbstractToInterface(string filePath, string className)
+    {
+        try
+        {
+            return await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(filePath, className);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConvertAbstractToInterface unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+            throw new InvalidOperationException($"ConvertAbstractToInterface for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Generates a mapping method between two types.")]
@@ -305,8 +351,18 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
-    public async Task<string> ReplaceMember(string filePath, string memberName, string newSource) 
-        => await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
+    public async Task<string> ReplaceMember(string filePath, string memberName, string newSource)
+    {
+        try
+        {
+            return await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReplaceMember unexpected exception for '{MemberName}' in '{FilePath}'", memberName, filePath);
+            throw new InvalidOperationException($"ReplaceMember for '{memberName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Adds a new member (method, field, etc.) to an existing class, interface, record, or struct.")]

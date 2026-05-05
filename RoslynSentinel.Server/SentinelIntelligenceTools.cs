@@ -173,8 +173,18 @@ public async Task<List<string>> FindStructuralSmells(
 
     [McpServerTool]
     [Description("Identifies constructors that are never called in the entire solution.")]
-    public async Task<List<DeadCodeReport>> FindUnusedConstructors(string filePath) 
-        => await _deadCodeEngine.FindUnusedConstructorsAsync(filePath);
+    public async Task<List<DeadCodeReport>> FindUnusedConstructors(string filePath)
+    {
+        try
+        {
+            return await _deadCodeEngine.FindUnusedConstructorsAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FindUnusedConstructors unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"FindUnusedConstructors for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Scans a file for event subscriptions that are never unsubscribed, potential memory leaks.")]

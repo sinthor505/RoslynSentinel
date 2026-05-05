@@ -52,8 +52,18 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes a file for common performance issues.")]
-    public async Task<List<PerformanceIssueReport>> AnalyzePerformance(string filePath) 
-        => await _performanceEngine.AnalyzePerformanceAsync(filePath);
+    public async Task<List<PerformanceIssueReport>> AnalyzePerformance(string filePath)
+    {
+        try
+        {
+            return await _performanceEngine.AnalyzePerformanceAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzePerformance unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"AnalyzePerformance for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Analyzes a file for potential security vulnerabilities.")]
@@ -89,8 +99,18 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Scans for IDisposable objects that are not properly disposed. Optionally filtered by project.")]
-    public async Task<List<string>> OptimizeResourceDisposal(string? filePath = null, string? projectName = null) 
-        => await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
+    public async Task<List<string>> OptimizeResourceDisposal(string? filePath = null, string? projectName = null)
+    {
+        try
+        {
+            return await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "OptimizeResourceDisposal unexpected exception for '{FilePath}' / '{ProjectName}'", filePath, projectName);
+            throw new InvalidOperationException($"OptimizeResourceDisposal failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Scans for common string comparison pitfalls. Optionally filtered by project.")]
@@ -116,8 +136,18 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes a solution or project for deadlocks. Optional scope.")]
-    public async Task<List<string>> FindPossibleDeadlocks(string? projectName = null, string? filePath = null) 
-        => await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+    public async Task<List<string>> FindPossibleDeadlocks(string? projectName = null, string? filePath = null)
+    {
+        try
+        {
+            return await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FindPossibleDeadlocks unexpected exception for '{ProjectName}' / '{FilePath}'", projectName, filePath);
+            throw new InvalidOperationException($"FindPossibleDeadlocks failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("Analyzes SemaphoreSlim usage to find potentially missing Release() calls.")]
@@ -233,7 +263,17 @@ public class SentinelQualityTools
         Does NOT check CommandText property assignments.
         """)]
     public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string filePath)
-        => await _securityEngine.CheckForSqlInjectionAsync(filePath);
+    {
+        try
+        {
+            return await _securityEngine.CheckForSqlInjectionAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CheckForSqlInjection unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"CheckForSqlInjection for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 
     [McpServerTool]
     [Description("""

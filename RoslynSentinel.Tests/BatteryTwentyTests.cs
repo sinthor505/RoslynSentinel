@@ -122,7 +122,7 @@ public class BatteryTwentyTests
     public void ListFiles_UnknownProject_ThrowsException()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<Exception>(() => _tools.ListFiles("NoSuchProject"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListFiles("NoSuchProject"));
     }
 
     // --- ListDependencies ---
@@ -218,7 +218,7 @@ public class BatteryTwentyTests
     public void ApplyProposedDiff_NonExistentFile_ThrowsException()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<Exception>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             () => _tools.ApplyProposedDiff("NonExistent.cs", "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
     }
 

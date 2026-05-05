@@ -163,7 +163,7 @@ public class ModernizationEngineTests
             [("Dto.cs", "public class Point { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<Exception>(() => _engine.ClassToRecordAsync("DoesNotExist.cs", "Point"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _engine.ClassToRecordAsync("DoesNotExist.cs", "Point"));
     }
 
     [Test]

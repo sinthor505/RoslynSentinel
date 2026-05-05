@@ -289,7 +289,7 @@ public class Worker
     public void ClassToRecord_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(() => _tools.ClassToRecord("NonExistent.cs", "Point"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ClassToRecord("NonExistent.cs", "Point"));
     }
 
     // --- RecordToClass ---
@@ -545,7 +545,7 @@ public class Worker
     public void OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(() => _tools.OptimizeToValueTask("NonExistent.cs", "M"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.OptimizeToValueTask("NonExistent.cs", "M"));
     }
 
     // --- OptimizeIndependentAwaits ---

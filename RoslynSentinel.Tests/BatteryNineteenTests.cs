@@ -221,7 +221,7 @@ public interface IOrderRepository
     public void GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             () => _tools.GenerateAsyncOverload("NonExistent.cs", "GetData"));
     }
 
@@ -239,7 +239,7 @@ public interface IOrderRepository
     public void AddValidationToPoco_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(
+        Assert.ThrowsAsync<InvalidOperationException>(
             () => _tools.AddValidationToPoco("NonExistent.cs", "Order"));
     }
 

@@ -30,6 +30,29 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
 
+// Global unhandled exception handlers — log before dying
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    var ex = e.ExceptionObject as Exception;
+    Log.Fatal(ex, "UNHANDLED EXCEPTION (IsTerminating={IsTerminating}): {Message}",
+        e.IsTerminating, ex?.Message ?? e.ExceptionObject?.ToString());
+    try
+    {
+        var crashPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "crash.log");
+        File.AppendAllText(crashPath,
+            $"\n[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] CRASH (IsTerminating={e.IsTerminating})\n" +
+            (ex?.ToString() ?? e.ExceptionObject?.ToString() ?? "unknown") + "\n");
+    }
+    catch { /* best effort */ }
+    Log.CloseAndFlush();
+};
+
+TaskScheduler.UnobservedTaskException += (_, e) =>
+{
+    Log.Warning(e.Exception, "Unobserved task exception (suppressed): {Message}", e.Exception.Message);
+    e.SetObserved(); // Prevent .NET from terminating on unobserved task exceptions
+};
+
 builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
 builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
@@ -153,8 +176,19 @@ if (!string.IsNullOrEmpty(solutionPath))
 }
 
 logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes}", string.Join(", ", activeModes));
+Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
 
-await host.RunAsync();
+try
+{
+    await host.RunAsync();
+    logger.LogInformation("Host shut down cleanly.");
+}
+catch (Exception runEx)
+{
+    logger.LogCritical(runEx, "Host.RunAsync terminated with exception: {Message}", runEx.Message);
+    Console.Error.WriteLine($"[RoslynSentinel] FATAL: {runEx.Message}");
+    throw;
+}
 }
 catch (Exception ex)
 {

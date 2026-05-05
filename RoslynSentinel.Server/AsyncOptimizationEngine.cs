@@ -21,11 +21,11 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) throw new Exception("Method not found.");
+        if (methodNode == null) throw new InvalidOperationException("Method not found.");
 
         // Safety checks
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
@@ -249,13 +249,13 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         var methodNode = classNode?.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         
-        if (classNode == null || methodNode == null) throw new Exception("Class or method not found.");
+        if (classNode == null || methodNode == null) throw new InvalidOperationException("Class or method not found.");
 
         var asyncMethodName = methodName + "Async";
         var returnTypeStr = methodNode.ReturnType.ToString();
@@ -307,10 +307,10 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new Exception("Could not get syntax root.");
+        if (root == null) throw new InvalidOperationException("Could not get syntax root.");
 
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
             .Where(a => !(a.Expression is InvocationExpressionSyntax inv &&
@@ -344,10 +344,10 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new Exception("Could not get syntax root.");
+        if (root == null) throw new InvalidOperationException("Could not get syntax root.");
 
         var configureAwaitInvocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
             .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&

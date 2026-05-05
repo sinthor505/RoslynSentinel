@@ -85,7 +85,17 @@ public class SentinelGenerationTools
     [McpServerTool]
     [Description("Generates a fluent builder class for any C# class. The builder provides With{Property}() methods for each public settable property and a Build() method that constructs the target type. Returns the complete builder source, class name, and a usage example.")]
     public async Task<FluentBuilderResult> GenerateFluentBuilder(string filePath, string className)
-        => await _codeGenerationEngine.GenerateFluentBuilderAsync(filePath, className);
+    {
+        try
+        {
+            return await _codeGenerationEngine.GenerateFluentBuilderAsync(filePath, className);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateFluentBuilder failed for '{ClassName}' in '{FilePath}'", className, filePath);
+            return new FluentBuilderResult(className, string.Empty, string.Empty, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
 
     [McpServerTool]
     [Description("Generates a Decorator pattern class for a given interface. The decorator wraps any implementation, delegates all interface members to an inner instance, and includes TODO comments for adding cross-cutting concerns (logging, caching, retry). Returns the full .cs file source.")]
@@ -115,24 +125,42 @@ public class SentinelGenerationTools
     [Description("Generates an async overload for a synchronous method by wrapping it in Task.Run.")]
     public async Task<string> GenerateAsyncOverload(string filePath, string methodName)
     {
-        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"GenerateAsyncOverload failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace or method not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"GenerateAsyncOverload failed for '{methodName}' in '{filePath}': " +
+                    "file not found in workspace or method not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateAsyncOverload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            throw new InvalidOperationException($"GenerateAsyncOverload for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Adds [Required] and [StringLength(100)] data annotations to all string properties in a POCO class.")]
     public async Task<string> AddValidationToPoco(string filePath, string className)
     {
-        var result = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"AddValidationToPoco failed for '{className}' in '{filePath}': " +
-                "file not found in workspace or class not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"AddValidationToPoco failed for '{className}' in '{filePath}': " +
+                    "file not found in workspace or class not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AddValidationToPoco unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+            throw new InvalidOperationException($"AddValidationToPoco for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]

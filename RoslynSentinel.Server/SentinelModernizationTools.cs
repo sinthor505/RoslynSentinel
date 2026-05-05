@@ -63,44 +63,80 @@ public class SentinelModernizationTools
     [Description("EPC33: Replaces Thread.Sleep with Task.Delay in async methods.")]
     public async Task<string> FixThreadSleep(string filePath)
     {
-        var result = await _codeHealingEngine.FixThreadSleepAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"FixThreadSleep failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _codeHealingEngine.FixThreadSleepAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"FixThreadSleep failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FixThreadSleep unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"FixThreadSleep for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("IDE0011: Adds braces to single-line if, foreach, and while statements.")]
     public async Task<string> AddBraces(string filePath)
     {
-        var result = await _syntaxUpgradeEngine.AddBracesAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"AddBraces failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _syntaxUpgradeEngine.AddBracesAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"AddBraces failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AddBraces unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"AddBraces for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("IDE0019/20: Upgrades legacy type checks and casts to modern C# pattern matching (is string s).")]
     public async Task<string> UpgradePatternMatching(string filePath)
     {
-        var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"UpgradePatternMatching failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"UpgradePatternMatching failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UpgradePatternMatching unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"UpgradePatternMatching for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("IDE0056: Upgrades manual index calculations (Length - 1) to modern [^1] syntax.")]
     public async Task<string> UseIndexFromEnd(string filePath)
     {
-        var result = await _codeStyleEngine.UseIndexFromEndAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"UseIndexFromEnd failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _codeStyleEngine.UseIndexFromEndAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"UseIndexFromEnd failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UseIndexFromEnd unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"UseIndexFromEnd for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -118,78 +154,139 @@ public class SentinelModernizationTools
     [Description("C# 14: Upgrades manual backing fields to modern 'field' keyword auto-properties.")]
     public async Task<string> UseFieldBackedProperties(string filePath)
     {
-        var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
-        // Return a friendly message when the file was not found or no patterns were present;
-        // do NOT throw — the file simply may not be part of the loaded workspace.
-        if (string.IsNullOrEmpty(result))
-            return $"// No backing-field patterns found or file not in workspace for '{filePath}'.";
-        return result;
+        try
+        {
+            var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
+            // Return a friendly message when the file was not found or no patterns were present;
+            // do NOT throw — the file simply may not be part of the loaded workspace.
+            if (string.IsNullOrEmpty(result))
+                return $"// No backing-field patterns found or file not in workspace for '{filePath}'.";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UseFieldBackedProperties unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"UseFieldBackedProperties for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Converts a class to a C# record.")]
     public async Task<string> ClassToRecord(string filePath, string className)
     {
-        var result = await _modernizationEngine.ClassToRecordAsync(filePath, className);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"ClassToRecord failed for '{className}' in '{filePath}': " +
-                "file not found in workspace or class not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _modernizationEngine.ClassToRecordAsync(filePath, className);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"ClassToRecord failed for '{className}' in '{filePath}': " +
+                    "file not found in workspace or class not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ClassToRecord unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+            throw new InvalidOperationException($"ClassToRecord for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Converts a C# record back to a standard class.")]
     public async Task<string> RecordToClass(string filePath, string recordName)
     {
-        var result = await _modernizationEngine.RecordToClassAsync(filePath, recordName);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"RecordToClass failed for '{recordName}' in '{filePath}': " +
-                "file not found in workspace or record not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _modernizationEngine.RecordToClassAsync(filePath, recordName);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"RecordToClass failed for '{recordName}' in '{filePath}': " +
+                    "file not found in workspace or record not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RecordToClass unexpected exception for '{RecordName}' in '{FilePath}'", recordName, filePath);
+            throw new InvalidOperationException($"RecordToClass for '{recordName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Simplifies redundant code patterns globally in a file (target-typed new, null-coalescing assignment, etc.).")]
     public async Task<string> SimplifyVerbosity(string filePath)
     {
-        var result = await _codeStyleEngine.SimplifyVerbosityAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"SimplifyVerbosity failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _codeStyleEngine.SimplifyVerbosityAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"SimplifyVerbosity failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SimplifyVerbosity unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"SimplifyVerbosity for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Upgrades threading patterns (locks, semaphores) to modern/safe versions.")]
     public async Task<string> UpgradeThreadSafety(string filePath)
     {
-        var result = await _codeStyleEngine.FixDangerousLockAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"UpgradeThreadSafety failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _codeStyleEngine.FixDangerousLockAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"UpgradeThreadSafety failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UpgradeThreadSafety unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"UpgradeThreadSafety for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Replaces direct DateTime usage with modern TimeProvider abstractions for testability.")]
     public async Task<string> UseTimeProvider(string filePath)
     {
-        var result = await _codeStyleEngine.UseTimeProviderAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"UseTimeProvider failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _codeStyleEngine.UseTimeProviderAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"UseTimeProvider failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UseTimeProvider unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"UseTimeProvider for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Replaces generic throw new Exception calls with custom typed exceptions and generates the new class files.")]
-    public async Task<object> ModernizeExceptions(List<CodeHealingEngine.ExceptionTarget> targets, bool autoStage = true) 
+    public async Task<object> ModernizeExceptions(List<CodeHealingEngine.ExceptionTarget> targets, bool autoStage = true)
     {
-        var changes = await _codeHealingEngine.ModernizeExceptionsAsync(targets);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions.");
-        return changes;
+        try
+        {
+            var changes = await _codeHealingEngine.ModernizeExceptionsAsync(targets);
+            if (autoStage) return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions.");
+            return changes;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ModernizeExceptions unexpected exception");
+            throw new InvalidOperationException($"ModernizeExceptions failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -207,23 +304,41 @@ public class SentinelModernizationTools
     [Description("IfToSwitch: Converts a switch statement in a method to a switch expression.")]
     public async Task<string> ConvertSwitchToExpression(string filePath, string methodName)
     {
-        var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"ConvertSwitchToExpression failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace, method not found, or no eligible switch statements found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"ConvertSwitchToExpression failed for '{methodName}' in '{filePath}': " +
+                    "file not found in workspace, method not found, or no eligible switch statements found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConvertSwitchToExpression unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            throw new InvalidOperationException($"ConvertSwitchToExpression for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("ImplicitSpanCleanup: Removes unnecessary .AsSpan() calls that are implicit in modern C#.")]
     public async Task<string> CleanupImplicitSpans(string filePath)
     {
-        var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"CleanupImplicitSpans failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"CleanupImplicitSpans failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CleanupImplicitSpans unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"CleanupImplicitSpans for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
@@ -253,35 +368,62 @@ public class SentinelModernizationTools
     [Description("Removes redundant 'this.' member access qualifiers from an entire file.")]
     public async Task<string> SimplifyMemberAccess(string filePath)
     {
-        var result = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"SimplifyMemberAccess failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"SimplifyMemberAccess failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SimplifyMemberAccess unexpected exception for '{FilePath}'", filePath);
+            throw new InvalidOperationException($"SimplifyMemberAccess for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Makes a class immutable: adds 'readonly' to all fields and converts property setters to 'init'.")]
     public async Task<string> MakeClassImmutable(string filePath, string className)
     {
-        var result = await _immutabilityEngine.MakeClassImmutableAsync(filePath, className);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"MakeClassImmutable failed for '{className}' in '{filePath}': " +
-                "file not found in workspace or class not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _immutabilityEngine.MakeClassImmutableAsync(filePath, className);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"MakeClassImmutable failed for '{className}' in '{filePath}': " +
+                    "file not found in workspace or class not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "MakeClassImmutable unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
+            throw new InvalidOperationException($"MakeClassImmutable for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]
     [Description("Converts a standard static method into an extension method by prepending 'this' to its first parameter.")]
     public async Task<string> ConvertStaticToExtension(string filePath, string methodName)
     {
-        var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-            throw new InvalidOperationException(
-                $"ConvertStaticToExtension failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace or method not found. Ensure the solution is loaded.");
-        return result;
+        try
+        {
+            var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
+            if (string.IsNullOrEmpty(result))
+                throw new InvalidOperationException(
+                    $"ConvertStaticToExtension failed for '{methodName}' in '{filePath}': " +
+                    "file not found in workspace or method not found. Ensure the solution is loaded.");
+            return result;
+        }
+        catch (InvalidOperationException) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConvertStaticToExtension unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            throw new InvalidOperationException($"ConvertStaticToExtension for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
     }
 
     [McpServerTool]

@@ -549,10 +549,10 @@ public class CodeGenerationEngine
         }
 
         if (properties.Count == 0)
-            throw new InvalidOperationException(
-                $"No settable public properties or primary constructor parameters found on '{className}'. " +
-                $"generate_fluent_builder is designed for POCOs and records with settable properties, not " +
-                $"DI-injected classes. Consider exposing public properties or using a record type.");
+            return new FluentBuilderResult("", "", "",
+                Error: $"No settable public properties or primary constructor parameters found on '{className}'. " +
+                       $"generate_fluent_builder is designed for POCOs and records with settable properties, not " +
+                       $"DI-injected classes. Consider exposing public properties or using a record type.");
 
         var builderClassName = className + "Builder";
         var sb = new System.Text.StringBuilder();

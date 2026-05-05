@@ -20,7 +20,7 @@ public class ModernizationEngine
         if (!_config.IsFeatureEnabled("ClassToRecord")) return string.Empty;
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) throw new Exception("File not found.");
+        if (document == null) throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
