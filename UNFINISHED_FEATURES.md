@@ -23,62 +23,27 @@ All of this information is crucial for:
 
 ---
 
-## 🔧 Stub Methods (Not Fully Implemented)
+## 🔧 Stub Methods — All Resolved ✅
 
-### Category: Stub Methods with No Implementation
+**As of May 2026, all previously-documented stub methods have been fully implemented.**
 
-These engine methods exist in source but throw exceptions or return no-ops, and are **NOT exposed as MCP tools**.
+### Methods implemented in prior sessions (docs incorrectly marked as stubs):
+- `ConvertForToForEachAsync` (AdvancedLogicEngine) — real AST rewrite via `IndexedAccessRewriter`
+- `ConvertWhileToForAsync` (AdvancedLogicEngine) — real control-flow transform
+- `AddRetryPolicyAsync` (CodeHealingEngine) — injects retry loop via SyntaxFactory
+- `RunSpecificRuleAsync` (MassiveAnalyzerEngine) — runs Roslyn compiler diagnostics
 
-#### AdvancedLogicEngine
-**Methods:**
-- `ConvertForToForEachAsync()` — Stub (no implementation)
-- `ConvertWhileToForAsync()` — Stub (no implementation)
+### Methods implemented in May 2026 session (were genuinely stubs or no-ops):
+- `UseNullPropagationAsync` (IDEStyleEngine) — `NullPropagationRewriter` converts `if (x != null) x.Method()` → `x?.Method()`
+- `UseSpanForParsingAsync` (ModernizationUpgradeEngine) — `SpanParsingRewriter` converts `str.Substring(...)` → `str.AsSpan(...).ToString()`
+- `UseThrowExpressionsAsync` (ModernizationUpgradeEngine) — `ThrowExpressionRewriter` merges `var x = expr; if (x == null) throw ...` → `var x = expr ?? throw ...`
+- `RunMicroRefactoringAsync` (GranularRefactoringEngine) — real dispatch: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant
 
-**Reason for deferral:** Complex control flow analysis required. Scope beyond Phase 1-2.
-
-**Status:** No MCP tool wrapping these. Users cannot invoke.
-
----
-
-#### ModernizationUpgradeEngine
-**Methods:**
-- `UseSpanForParsingAsync()` — Stub (no implementation)
-
-**Reason for deferral:** Requires AST pattern matching for string manipulation → Span conversion.
-
-**Status:** No MCP tool wrapping this. Users cannot invoke.
+**Test coverage:** 30 new tests in `StubImplementationTests.cs`. All 30 pass.
 
 ---
 
-#### IDEStyleEngine / ModernizationUpgradeEngine (Duplicate Names)
-**Methods:**
-- `UseThrowExpressionsAsync()` — Stub in IDEStyleEngine
-- `UseNullPropagationAsync()` — Stub in ModernizationUpgradeEngine
-- `ConvertSwitchToExpressionAsync()` — **Duplicate name** in ModernizationUpgradeEngine (also in SyntaxUpgradeEngine)
-
-**Reason for deferral:** 
-- Throw expressions and null propagation require semantic validation
-- Duplicate method names prevent both from being MCP tools simultaneously
-
-**Status:** 
-- `SyntaxUpgradeEngine.ConvertSwitchToExpressionAsync()` IS exposed as MCP tool
-- Duplicate in ModernizationUpgradeEngine is NOT exposed (conflict)
-
----
-
-#### UniversalRefactoringLibrary / SemanticRefactoringLibrary
-**Methods:**
-- `AddRetryPolicyAsync()` — Stub
-- `RunSpecificRuleAsync()` — Stub
-- `RunMicroRefactoringAsync()` — Stub
-
-**Reason for deferral:** Require configuration and rule engine. Out of scope for initial release.
-
-**Status:** No MCP tool wrapping these.
-
----
-
-### Category: Methods That Throw Exceptions (Not Stubs, But Incomplete)
+### Category: Methods That Throw Exceptions (Documented Limitation, Not a Stub)
 
 These methods exist, are partially implemented, but throw `InvalidOperationException` with explanatory messages. They ARE documented as throwing to guide users.
 
