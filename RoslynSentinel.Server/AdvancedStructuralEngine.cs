@@ -144,13 +144,102 @@ public class AdvancedStructuralEngine
     }
 
     /// <summary>
-    /// Inlines a class by moving all its members to a target class and removing the original.
+    /// Inlines a class by moving all its members into the first class of the target file,
+    /// then removes the source class declaration.
     /// </summary>
-    public Task<Dictionary<string, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<string, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
-        throw new InvalidOperationException(
-            $"inline_class is not yet implemented. To manually inline '{className}': " +
-            $"copy its members to the target class in '{Path.GetFileName(targetFilePath)}' " +
-            $"and remove the source file '{Path.GetFileName(sourceFilePath)}'.");
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        bool sameFile = string.Equals(
+            Path.GetFullPath(sourceFilePath),
+            Path.GetFullPath(targetFilePath),
+            StringComparison.OrdinalIgnoreCase);
+
+        // Load source document
+        var sourceDoc = solution.GetDocumentIdsWithFilePath(sourceFilePath)
+            .Select(solution.GetDocument).FirstOrDefault();
+        if (sourceDoc == null)
+            return new Dictionary<string, string>
+            {
+                { "__error__", $"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution." }
+            };
+
+        var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        if (sourceRoot == null) return new Dictionary<string, string>();
+
+        var sourceClass = sourceRoot.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className);
+        if (sourceClass == null)
+            return new Dictionary<string, string>
+            {
+                { "__error__", $"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'." }
+            };
+
+        var membersToInline = sourceClass.Members;
+
+        if (sameFile)
+        {
+            // Find the first class in the file that is NOT the class being inlined
+            var targetClass = sourceRoot.DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.Identifier.Text != className);
+            if (targetClass == null)
+                return new Dictionary<string, string>
+                {
+                    { "__error__", $"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into." }
+                };
+
+            // Add members to target class
+            var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
+            var intermediate = (CompilationUnitSyntax)sourceRoot.ReplaceNode(targetClass, expandedTarget);
+
+            // Remove source class from the updated tree (re-locate by name since node identity changed)
+            var classToRemove = intermediate.DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.Identifier.Text == className);
+            var newRoot = classToRemove != null
+                ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)!
+                : intermediate;
+
+            return new Dictionary<string, string>
+            {
+                { sourceFilePath, newRoot.NormalizeWhitespace().ToFullString() }
+            };
+        }
+        else
+        {
+            // Cross-file: load target document
+            var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath)
+                .Select(solution.GetDocument).FirstOrDefault();
+            if (targetDoc == null)
+                return new Dictionary<string, string>
+                {
+                    { "__error__", $"Target file '{Path.GetFileName(targetFilePath)}' not found in solution." }
+                };
+
+            var targetRoot = await targetDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+            var targetClass = targetRoot?.DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault();
+            if (targetClass == null)
+                return new Dictionary<string, string>
+                {
+                    { "__error__", $"No class found in target file '{Path.GetFileName(targetFilePath)}'." }
+                };
+
+            // Add members to target class
+            var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
+            var newTargetRoot = (CompilationUnitSyntax)targetRoot!.ReplaceNode(targetClass, expandedTarget);
+
+            // Remove source class from source file
+            var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, SyntaxRemoveOptions.KeepExteriorTrivia)!;
+
+            return new Dictionary<string, string>
+            {
+                { targetFilePath, newTargetRoot.NormalizeWhitespace().ToFullString() },
+                { sourceFilePath, newSourceRoot.NormalizeWhitespace().ToFullString() }
+            };
+        }
     }
 }

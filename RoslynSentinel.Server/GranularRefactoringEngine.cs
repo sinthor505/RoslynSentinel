@@ -86,45 +86,47 @@ public class GranularRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (method != null && method.ParameterList.Parameters.Count == 1)
+        if (method == null)
+            return $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.\n" + (root?.ToFullString() ?? "");
+
+        if (method.ParameterList.Parameters.Count != 1)
+            return $"// ERROR: Cannot convert '{methodName}' to an indexer — it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).\n" + root!.ToFullString();
+
+        // C# does not support static indexers
+        if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+            return $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers.\n" + root!.ToFullString();
+
+        // Build getter body from block body or expression body
+        BlockSyntax getterBody;
+        if (method.Body != null)
         {
-            // C# does not support static indexers
-            if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
-                return $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers.\n" + root!.ToFullString();
-
-            // Build getter body from block body or expression body
-            BlockSyntax getterBody;
-            if (method.Body != null)
-            {
-                getterBody = method.Body;
-            }
-            else if (method.ExpressionBody != null)
-            {
-                getterBody = SyntaxFactory.Block(
-                    SyntaxFactory.ReturnStatement(method.ExpressionBody.Expression));
-            }
-            else
-            {
-                return root?.ToFullString() ?? "";
-            }
-
-            // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
-            var validModifiers = method.Modifiers
-                .Where(m => !m.IsKind(SyntaxKind.StaticKeyword) && !m.IsKind(SyntaxKind.AbstractKeyword) && !m.IsKind(SyntaxKind.ExternKeyword))
-                .ToArray();
-
-            var parameter = method.ParameterList.Parameters[0];
-            var indexer = SyntaxFactory.IndexerDeclaration(method.ReturnType)
-                .AddModifiers(validModifiers)
-                .WithParameterList(SyntaxFactory.BracketedParameterList(SyntaxFactory.SingletonSeparatedList(parameter)))
-                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(
-                    SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(getterBody))));
-
-            var newRoot = root!.ReplaceNode(method, indexer);
-            return newRoot.NormalizeWhitespace().ToFullString();
+            getterBody = method.Body;
+        }
+        else if (method.ExpressionBody != null)
+        {
+            getterBody = SyntaxFactory.Block(
+                SyntaxFactory.ReturnStatement(method.ExpressionBody.Expression));
+        }
+        else
+        {
+            // Abstract/extern methods have no body — cannot create indexer
+            return $"// ERROR: Cannot convert '{methodName}' to an indexer — method has no body.\n" + root!.ToFullString();
         }
 
-        return root?.ToFullString() ?? "";
+        // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
+        var validModifiers = method.Modifiers
+            .Where(m => !m.IsKind(SyntaxKind.StaticKeyword) && !m.IsKind(SyntaxKind.AbstractKeyword) && !m.IsKind(SyntaxKind.ExternKeyword))
+            .ToArray();
+
+        var parameter = method.ParameterList.Parameters[0];
+        var indexer = SyntaxFactory.IndexerDeclaration(method.ReturnType)
+            .AddModifiers(validModifiers)
+            .WithParameterList(SyntaxFactory.BracketedParameterList(SyntaxFactory.SingletonSeparatedList(parameter)))
+            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(
+                SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(getterBody))));
+
+        var newRoot = root!.ReplaceNode(method, indexer);
+        return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)

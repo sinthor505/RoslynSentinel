@@ -600,12 +600,15 @@ public enum Status { Active = 1, Pending = 2 }
     // --- InlineClass ---
 
     [Test]
-    public void InlineClass_ValidClasses_Throws()
+    public async Task InlineClass_CrossFile_MovesMembers()
     {
         SetMultiFile(
-            ("Refactor.cs", RefactorSource),
-            ("Target.cs", "namespace RefactorNs; public class TargetClass {}"));
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.InlineClass("Refactor.cs", "Target.cs", "Target"));
+            ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
+            ("Owner.cs", "namespace App; public class Owner {}"));
+        var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
+        Assert.That(result, Does.ContainKey("Owner.cs"));
+        Assert.That(result["Owner.cs"], Does.Contain("Value"));
+        Assert.That(result["Owner.cs"], Does.Contain("Go"));
     }
 
     // --- IntroduceVariable ---
