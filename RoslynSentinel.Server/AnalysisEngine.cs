@@ -722,6 +722,14 @@ public class AnalysisEngine
                 // and similar fluent API patterns where the Task is implicitly returned.
                 if (invocation.Parent is SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax) continue;
 
+                // Skip: the invocation is an argument to a new ValueTask<T>(...) constructor.
+                // e.g.  ct => new ValueTask<T>(GetByIdFromDbAsync(id, ct))
+                // The Task is propagated to the caller via the ValueTask wrapper.
+                if (invocation.Parent is ArgumentSyntax &&
+                    invocation.Parent.Parent?.Parent is ObjectCreationExpressionSyntax valueTaskCtor &&
+                    valueTaskCtor.Type.ToString().Contains("ValueTask"))
+                    continue;
+
                 // Skip: assigned to a local variable that is later passed to Task.WhenAll/WhenAny
                 if (invocation.Parent is EqualsValueClauseSyntax evc &&
                     evc.Parent is VariableDeclaratorSyntax vd &&

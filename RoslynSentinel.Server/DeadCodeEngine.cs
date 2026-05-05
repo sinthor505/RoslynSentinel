@@ -203,6 +203,9 @@ public class DeadCodeEngine
 
         var reports = new List<DeadCodeReport>();
 
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null) return reports;
+
         // Build set of unsubscribed event+handler pairs from all -= assignments
         var removeKeys = new HashSet<string>(
             root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
@@ -210,9 +213,14 @@ public class DeadCodeEngine
                 .Select(a => $"{a.Left}|{a.Right}"));
 
         // Report += subscriptions that have no matching -=
+        // Only flag actual event subscriptions (not string +=, numeric +=, etc.)
         foreach (var add in root.DescendantNodes().OfType<AssignmentExpressionSyntax>()
             .Where(a => a.IsKind(SyntaxKind.AddAssignmentExpression)))
         {
+            var leftSymbol = semanticModel.GetSymbolInfo(add.Left, cancellationToken).Symbol;
+            if (leftSymbol is not IEventSymbol)
+                continue;
+
             var key = $"{add.Left}|{add.Right}";
             if (!removeKeys.Contains(key))
             {
