@@ -1,9 +1,8 @@
-# RoslynSentinel Unfinished Features & Known Limitations
+# RoslynSentinel — Deferred Bugs & Feature Limitations
 
-**Status:** Complete inventory of all unfinished work  
-**Last Updated:** 2026-05-09  
-**Scope:** All stub methods, deferred bugs, and known limitations with rationale  
-**Current Test Suite:** ✅ 1,662 passing tests, 0 failures — all 15 engines exercised against ExpressRecipe (86 projects)
+**Status:** All previously-documented stub methods are fully implemented. This document tracks deferred bugs with regression tests and known edge-case limitations.  
+**Last Updated:** 2026-05-05  
+**Test Suite:** ✅ 1,692 passing tests, 0 failures
 
 ---
 

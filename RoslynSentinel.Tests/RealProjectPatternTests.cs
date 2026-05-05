@@ -7,7 +7,7 @@ using RoslynSentinel.Server;
 namespace RoslynSentinel.Tests;
 
 /// <summary>
-/// Battery #2 — Tests using realistic code patterns extracted from 10 ExpressRecipe files
+/// Battery #2 — Tests using realistic code patterns from a real .NET microservices project
 /// across 4 services (InventoryService, ShoppingService, RecipeService, MealPlanningService).
 ///
 /// Files targeted:
@@ -26,7 +26,7 @@ namespace RoslynSentinel.Tests;
 /// verifies that the augmented tool handles it correctly.
 /// </summary>
 [TestFixture]
-public class ExpressRecipePatternTests
+public class RealProjectPatternTests
 {
     private PersistentWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;

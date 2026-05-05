@@ -447,13 +447,13 @@ public class Streamer {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Real-solution smoke test — load ExpressRecipe and run analysis engines
+// Real-solution smoke test — load a configured solution and run analysis engines
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Integration")]
-public class ExpressRecipe_RealSolution_SmokeTests
+public class RealSolution_SmokeTests_Battery28
 {
-    private const string SlnPath = @"E:\source\repos\rhale78\ExpressRecipe\ExpressRecipe.sln";
+    private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
     private PersistentWorkspaceManager _workspaceManager = null!;
 
@@ -465,7 +465,7 @@ public class ExpressRecipe_RealSolution_SmokeTests
     public async Task Setup()
     {
         if (!File.Exists(SlnPath))
-            Assert.Ignore("ExpressRecipe solution not found at expected path — skipping integration tests.");
+            Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
 
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
@@ -489,7 +489,7 @@ public class ExpressRecipe_RealSolution_SmokeTests
                 }
             }
         }
-        Assert.Ignore("No class-containing document found in ExpressRecipe solution.");
+        Assert.Ignore("No class-containing document found in the configured test solution.");
     }
 
     [TearDown]
@@ -504,7 +504,7 @@ public class ExpressRecipe_RealSolution_SmokeTests
         List<AntiPatternFinding>? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.DetectAntiPatternsAsync(),
-            "AntiPatternEngine must not throw on the real ExpressRecipe solution.");
+            "AntiPatternEngine must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 

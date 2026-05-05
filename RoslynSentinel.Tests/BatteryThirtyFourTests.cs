@@ -1,6 +1,6 @@
 // Battery #34 — Real-Solution Smoke Tests: Engines Not Covered in Battery #28
 //
-// Loads the real ExpressRecipe solution and exercises the 15 engines that power
+// Loads a real .NET solution to smoke-test all 15 engines that power
 // write/transform MCP tools but were NOT yet smoke-tested against live code:
 //
 //   Engines covered (new in this battery):
@@ -32,23 +32,10 @@ namespace RoslynSentinel.Tests;
 
 [TestFixture]
 [Category("Integration")]
-public class ExpressRecipe_EngineSmoke_Battery34Tests
+public class RealSolution_EngineSmoke_Battery34Tests
 {
-    // ── Solution & known file paths ─────────────────────────────────────────
-    private const string SlnPath =
-        @"E:\source\repos\rhale78\ExpressRecipe\ExpressRecipe.sln";
-
-    /// A file with several async methods, no lock usage — good for async engines.
-    private const string AsyncRepoFile =
-        @"E:\source\repos\rhale78\ExpressRecipe\src\ExpressRecipe.Data.Common\ApiHistoryRepository.cs";
-
-    /// A file with lock patterns — good for thread-safety engines.
-    private const string LockFile =
-        @"E:\source\repos\rhale78\ExpressRecipe\src\Messaging\ExpressRecipe.Messaging.RabbitMQ\Internal\ChannelPool.cs";
-
-    /// A file with multiple public classes — good for MoveAllTypesToFiles / generation tests.
-    private const string MultiTypeFile =
-        @"E:\source\repos\rhale78\ExpressRecipe\src\ExpressRecipe.Client.Shared\Models\Auth\AuthModels.cs";
+    // ── Solution ────────────────────────────────────────────────────────────
+    private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
     // ── State ───────────────────────────────────────────────────────────────
     private PersistentWorkspaceManager _workspaceManager = null!;
@@ -65,7 +52,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         if (!File.Exists(SlnPath))
         {
-            Assert.Ignore("ExpressRecipe solution not found — skipping Battery #34 integration tests.");
+            Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
             return;
         }
 
@@ -101,7 +88,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
             }
         }
 
-        Assert.Ignore("No suitable document found in ExpressRecipe solution.");
+        Assert.Ignore("No suitable document found in the configured test solution.");
     }
 
     [TearDown]
@@ -179,7 +166,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         var engine = new AsyncSafetyEngine(_workspaceManager);
         List<AsyncSafetyReport>? result = null;
-        var file = File.Exists(AsyncRepoFile) ? AsyncRepoFile : _realFilePath;
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.DetectAsyncVoidMethodsAsync(file),
             "AsyncSafetyEngine.DetectAsyncVoidMethodsAsync must not throw.");
@@ -206,7 +193,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         var engine = new AsyncOptimizationEngine(_workspaceManager);
         string? result = null;
-        var file = File.Exists(AsyncRepoFile) ? AsyncRepoFile : _realFilePath;
+        var file = _realFilePath;
         // Use first discovered method name to avoid "method not found" error
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.OptimizeIndependentAwaitsAsync(file, _realMethodName),
@@ -234,8 +221,8 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         var engine = new ThreadSafetyEngine(_workspaceManager);
         string? result = null;
-        // Use the lock file if available; it has real lock usage
-        var file = File.Exists(LockFile) ? LockFile : _realFilePath;
+        // Use the real file path for thread-safety analysis
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.MakeMethodThreadSafeAsync(file, _realMethodName),
             "ThreadSafetyEngine.MakeMethodThreadSafeAsync must not throw on real file.");
@@ -279,7 +266,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
         DiagnosticSummary? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GetSolutionDiagnosticsAsync(),
-            "DiagnosticEngine.GetSolutionDiagnosticsAsync must not throw on ExpressRecipe.");
+            "DiagnosticEngine.GetSolutionDiagnosticsAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -293,7 +280,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
         var config = new SentinelConfiguration();
         var engine = new ModernizationEngine(_workspaceManager, config);
         string? result = null;
-        var file = File.Exists(MultiTypeFile) ? MultiTypeFile : _realFilePath;
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.ClassToRecordAsync(file, _realClassName),
             "ModernizationEngine.ClassToRecordAsync must not throw on real class.");
@@ -337,7 +324,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         var engine = new CodeGenerationEngine(_workspaceManager);
         string? result = null;
-        var file = File.Exists(MultiTypeFile) ? MultiTypeFile : _realFilePath;
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GenerateConstructorAsync(file, _realClassName),
             "CodeGenerationEngine.GenerateConstructorAsync must not throw on real class.");
@@ -348,7 +335,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     public async Task CodeGenerationEngine_GenerateToString_DoesNotThrow()
     {
         var engine = new CodeGenerationEngine(_workspaceManager);
-        var file = File.Exists(MultiTypeFile) ? MultiTypeFile : _realFilePath;
+        var file = _realFilePath;
         object? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GenerateToStringAsync(file, _realClassName),
@@ -368,7 +355,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
         List<LargeTypeReport>? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.FindLargeTypesAsync(),
-            "AnalysisEngine.FindLargeTypesAsync must not throw on ExpressRecipe solution.");
+            "AnalysisEngine.FindLargeTypesAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -378,7 +365,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
         var config = new SentinelConfiguration();
         var engine = new AnalysisEngine(_workspaceManager, config);
         string? result = null;
-        var file = File.Exists(AsyncRepoFile) ? AsyncRepoFile : _realFilePath;
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GenerateCallTreeAsync(file, _realMethodName),
             "AnalysisEngine.GenerateCallTreeAsync must not throw on real method.");
@@ -396,7 +383,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
         var engine = new RefactoringEngine(
             NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         Dictionary<string, string>? result = null;
-        var file = File.Exists(MultiTypeFile) ? MultiTypeFile : _realFilePath;
+        var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.MoveAllTypesToFilesAsync(file),
             "RefactoringEngine.MoveAllTypesToFilesAsync must not throw on multi-type file.");
@@ -523,7 +510,7 @@ public class ExpressRecipe_EngineSmoke_Battery34Tests
     {
         var config = new SentinelConfiguration();
         var engine = new AnalysisEngine(_workspaceManager, config);
-        var file = File.Exists(AsyncRepoFile) ? AsyncRepoFile : _realFilePath;
+        var file = _realFilePath;
         var result = await engine.GenerateCallTreeAsync(file, _realMethodName);
         Assert.That(result, Is.Not.Null.And.Not.Empty,
             "GenerateCallTreeAsync should return a non-empty call tree string.");

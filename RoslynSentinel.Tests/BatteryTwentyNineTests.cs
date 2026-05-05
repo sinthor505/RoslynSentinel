@@ -1,5 +1,5 @@
 // Battery 29 — Real-solution smoke tests for all 15 remaining engines
-// Loads ExpressRecipe.sln, discovers a real .cs file, class, method, and project,
+// Loads the solution configured via ROSLYN_SENTINEL_TEST_SLN env var, discovers a real .cs file, class, method, and project,
 // then exercises every engine's public async API against live code.
 // All tests are read-only (engines return new content strings; nothing is written to disk).
 
@@ -11,13 +11,13 @@ using RoslynSentinel.Server;
 namespace RoslynSentinel.Tests;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B29 — All 15 remaining engines exercised against the ExpressRecipe solution
+// B29 — All 15 remaining engines exercised against the configured real solution
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Integration")]
 public class B29_AllEngines_RealSolution_SmokeTests
 {
-    private const string SlnPath = @"E:\source\repos\rhale78\ExpressRecipe\ExpressRecipe.sln";
+    private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
     private PersistentWorkspaceManager _workspaceManager = null!;
     private SentinelConfiguration _config = null!;
@@ -31,7 +31,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     public async Task Setup()
     {
         if (!File.Exists(SlnPath))
-            Assert.Ignore("ExpressRecipe solution not found — skipping B29 integration tests.");
+            Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
 
         _config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
@@ -67,7 +67,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             }
         }
 
-        Assert.Ignore("No suitable class+method document found in ExpressRecipe solution.");
+        Assert.Ignore("No suitable class+method document found in the configured test solution.");
     }
 
     [TearDown]

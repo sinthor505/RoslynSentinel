@@ -4,6 +4,154 @@
 
 ---
 
+## 📦 Installation
+
+### 1. Build from Source
+
+```bash
+git clone https://github.com/YOUR_USERNAME/RoslynSentinel
+cd RoslynSentinel
+dotnet publish RoslynSentinel.Server/RoslynSentinel.Server.csproj \
+  -c Release -o ./publish
+```
+
+This produces:
+- **Windows:** `./publish/RoslynSentinel.Server.exe`
+- **macOS/Linux:** `dotnet ./publish/RoslynSentinel.Server.dll`
+
+> **Requirements:** .NET 10 SDK or later
+
+---
+
+### 2. Configure Your AI Assistant
+
+Replace `/path/to/RoslynSentinel` with the actual path to your cloned repository.
+
+#### GitHub Copilot (VS Code)
+
+Edit `~/.copilot/mcp-config.json` (create if it doesn't exist):
+
+```json
+{
+  "servers": {
+    "roslyn-sentinel": {
+      "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe"
+    }
+  }
+}
+```
+
+> **Windows tip:** Use `\\` as path separator: `"C:\\Dev\\RoslynSentinel\\publish\\RoslynSentinel.Server.exe"`
+> **macOS/Linux tip:** Use `"command": "dotnet"` and `"args": ["/path/to/publish/RoslynSentinel.Server.dll"]`
+
+#### Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "roslyn-sentinel": {
+      "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe"
+    }
+  }
+}
+```
+
+#### Cursor
+
+Open Cursor Settings → MCP, or edit `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "roslyn-sentinel": {
+      "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe"
+    }
+  }
+}
+```
+
+#### VS Code (MCP workspace config)
+
+Create `.vscode/mcp.json` in your project:
+
+```json
+{
+  "servers": {
+    "roslyn-sentinel": {
+      "type": "stdio",
+      "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe"
+    }
+  }
+}
+```
+
+#### Cline (VS Code Extension)
+
+In VS Code settings, add to `cline.mcpServers`:
+
+```json
+{
+  "roslyn-sentinel": {
+    "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe",
+    "args": []
+  }
+}
+```
+
+#### Continue.dev
+
+Edit `~/.continue/config.json`:
+
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "/path/to/RoslynSentinel/publish/RoslynSentinel.Server.exe"
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 3. Verify
+
+After configuring, reload your AI assistant and run:
+
+```
+Load my solution: /path/to/MySolution.sln
+```
+
+You should see Roslyn Sentinel confirm the solution is loaded and list available projects.
+
+---
+
+### 4. Running Real-Solution Integration Tests (Optional)
+
+The test suite includes batteries that load a real .NET solution for smoke testing.
+To run them, set the `ROSLYN_SENTINEL_TEST_SLN` environment variable:
+
+```bash
+# Windows (PowerShell)
+$env:ROSLYN_SENTINEL_TEST_SLN = "C:\Dev\MySolution\MySolution.sln"
+
+# macOS/Linux
+export ROSLYN_SENTINEL_TEST_SLN=/home/user/dev/MySolution/MySolution.sln
+
+dotnet test RoslynSentinel.Tests/RoslynSentinel.Tests.csproj
+```
+
+Without the env var, real-solution tests are automatically skipped (`Assert.Ignore`) — unit tests run normally.
+
+---
+
 ## 📚 Documentation
 
 | Document | Purpose |
