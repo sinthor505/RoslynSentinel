@@ -105,17 +105,18 @@ public class ModernizationUpgradeEngineTests
     }
 
     [Test]
-    public async Task UseSpanForParsing_MethodFound_ReturnsRootUnchanged()
+    public async Task UseSpanForParsing_MethodFound_TransformsSubstring()
     {
-        // UseSpanForParsing is a stub — logic commented as "to be implemented"
+        // UseSpanForParsing is fully implemented — replaces Substring with AsSpan().ToString()
         SetSource(@"
 public class Parser
 {
     public string Process(string input) { return input.Substring(1); }
 }");
         var result = await _engine.UseSpanForParsingAsync("Test.cs", "Process");
-        Assert.That(result, Does.Contain("Process"), "Stub should return original code");
-        Assert.That(result, Does.Contain("Substring"), "Stub does not transform — original call preserved");
+        Assert.That(result, Does.Contain("Process"), "Method name should be preserved");
+        Assert.That(result, Does.Contain("AsSpan"), "Substring should be replaced with AsSpan");
+        Assert.That(result, Does.Not.Contain("Substring"), "Original Substring call should be gone");
     }
 
     [Test]

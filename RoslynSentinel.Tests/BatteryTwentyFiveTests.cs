@@ -673,7 +673,8 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.RunMicroRefactoringAsync("Service.cs", "some-refactoring", 1);
+        // Use a real dispatch ID — 'type-to-var' is safe on any code (converts explicit types)
+        var result = await _engine.RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
 
         Assert.That(result, Is.Not.Null);
     }

@@ -366,10 +366,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
         string? result = null;
-        // RunMicroRefactoringAsync is simulation mode — always returns a descriptive message
+        // RunMicroRefactoringAsync has real dispatch — use a known valid ID
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.RunMicroRefactoringAsync(_realFilePath, "R001", 1),
-            "RunMicroRefactoringAsync must not throw on real solution.");
+            result = await engine.RunMicroRefactoringAsync(_realFilePath, "add-braces", 1),
+            "RunMicroRefactoringAsync must not throw on real solution with valid ID.");
         Assert.That(result, Is.Not.Null);
     }
 
