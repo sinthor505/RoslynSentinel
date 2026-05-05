@@ -14,13 +14,147 @@ public class GranularRefactoringEngine
         _workspaceManager = workspaceManager;
     }
 
+    /// <summary>
+    /// Dispatches a named micro-refactoring against a specific line in a file.
+    /// </summary>
+    /// <param name="refactoringId">One of: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant</param>
     public async Task<string> RunMicroRefactoringAsync(string filePath, string refactoringId, int line, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return "";
 
-        return $"Micro-Refactoring {refactoringId} applied to line {line} in simulation mode.";
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return "";
+
+        SyntaxNode? newRoot = refactoringId.ToLowerInvariant() switch
+        {
+            "type-to-var" => ApplyTypeToVar(root, line),
+            "remove-unused-local" => ApplyRemoveLocalAtLine(root, line),
+            "add-braces" => ApplyAddBraces(root, line),
+            "remove-braces" => ApplyRemoveBraces(root, line),
+            "extract-constant" => ApplyExtractConstant(root, line),
+            _ => throw new ArgumentException(
+                $"Unknown micro-refactoring '{refactoringId}'. " +
+                "Known IDs: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant.")
+        };
+
+        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.NormalizeWhitespace().ToFullString();
+    }
+
+    private static SyntaxNode ApplyTypeToVar(SyntaxNode root, int line)
+    {
+        var target = root.DescendantNodes()
+            .OfType<LocalDeclarationStatementSyntax>()
+            .FirstOrDefault(n =>
+                n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line &&
+                !n.IsConst &&
+                !n.Declaration.Type.IsVar &&
+                n.Declaration.Variables.Count == 1 &&
+                n.Declaration.Variables[0].Initializer != null);
+
+        if (target == null) return root;
+
+        var varType = SyntaxFactory.IdentifierName("var")
+            .WithLeadingTrivia(target.Declaration.Type.GetLeadingTrivia())
+            .WithTrailingTrivia(target.Declaration.Type.GetTrailingTrivia());
+
+        return root.ReplaceNode(target, target.WithDeclaration(target.Declaration.WithType(varType)));
+    }
+
+    private static SyntaxNode ApplyRemoveLocalAtLine(SyntaxNode root, int line)
+    {
+        var target = root.DescendantNodes()
+            .OfType<LocalDeclarationStatementSyntax>()
+            .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
+        return target == null ? root : (root.RemoveNode(target, SyntaxRemoveOptions.KeepNoTrivia) ?? root);
+    }
+
+    private static SyntaxNode ApplyAddBraces(SyntaxNode root, int line)
+    {
+        // Find an if/while/for at the target line that has a braceless body
+        var target = root.DescendantNodes()
+            .Where(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line)
+            .OfType<StatementSyntax>()
+            .FirstOrDefault(n => n is IfStatementSyntax || n is WhileStatementSyntax || n is ForStatementSyntax || n is ForEachStatementSyntax);
+
+        if (target == null) return root;
+
+        SyntaxNode replacement = target switch
+        {
+            IfStatementSyntax ifs when ifs.Statement is not BlockSyntax =>
+                ifs.WithStatement(SyntaxFactory.Block(ifs.Statement)),
+            WhileStatementSyntax ws when ws.Statement is not BlockSyntax =>
+                ws.WithStatement(SyntaxFactory.Block(ws.Statement)),
+            ForStatementSyntax fs when fs.Statement is not BlockSyntax =>
+                fs.WithStatement(SyntaxFactory.Block(fs.Statement)),
+            ForEachStatementSyntax fes when fes.Statement is not BlockSyntax =>
+                fes.WithStatement(SyntaxFactory.Block(fes.Statement)),
+            _ => target
+        };
+
+        return root.ReplaceNode(target, replacement);
+    }
+
+    private static SyntaxNode ApplyRemoveBraces(SyntaxNode root, int line)
+    {
+        // Find an if/while/for at the target line with a single-statement block body
+        var target = root.DescendantNodes()
+            .Where(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line)
+            .OfType<StatementSyntax>()
+            .FirstOrDefault(n => n is IfStatementSyntax || n is WhileStatementSyntax || n is ForStatementSyntax || n is ForEachStatementSyntax);
+
+        if (target == null) return root;
+
+        SyntaxNode replacement = target switch
+        {
+            IfStatementSyntax ifs when ifs.Statement is BlockSyntax blk && blk.Statements.Count == 1 =>
+                ifs.WithStatement(blk.Statements[0]),
+            WhileStatementSyntax ws when ws.Statement is BlockSyntax blk && blk.Statements.Count == 1 =>
+                ws.WithStatement(blk.Statements[0]),
+            ForStatementSyntax fs when fs.Statement is BlockSyntax blk && blk.Statements.Count == 1 =>
+                fs.WithStatement(blk.Statements[0]),
+            ForEachStatementSyntax fes when fes.Statement is BlockSyntax blk && blk.Statements.Count == 1 =>
+                fes.WithStatement(blk.Statements[0]),
+            _ => target
+        };
+
+        return root.ReplaceNode(target, replacement);
+    }
+
+    private static SyntaxNode ApplyExtractConstant(SyntaxNode root, int line)
+    {
+        var literal = root.DescendantNodes()
+            .Where(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line)
+            .OfType<LiteralExpressionSyntax>()
+            .FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression) ||
+                                 l.IsKind(SyntaxKind.NumericLiteralExpression));
+        if (literal == null) return root;
+
+        // Find enclosing class or struct to inject const field
+        var enclosingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (enclosingType == null) return root;
+
+        var typeName = literal.IsKind(SyntaxKind.StringLiteralExpression) ? "string" : "int";
+        const string constName = "ExtractedConstant";
+
+        var constDecl = SyntaxFactory.FieldDeclaration(
+            SyntaxFactory.VariableDeclaration(
+                SyntaxFactory.ParseTypeName(typeName),
+                SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(constName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(literal)))))
+            .WithModifiers(SyntaxFactory.TokenList(
+                SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                SyntaxFactory.Token(SyntaxKind.ConstKeyword)));
+
+        var newRoot = root.ReplaceNode(literal, SyntaxFactory.IdentifierName(constName));
+        var newType = newRoot.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .FirstOrDefault(t => t.Identifier.Text == enclosingType.Identifier.Text);
+        if (newType == null) return newRoot;
+
+        var updatedType = newType.WithMembers(newType.Members.Insert(0, constDecl));
+        return newRoot.ReplaceNode(newType, updatedType);
     }
 
     public async Task<string> InlineFieldAsync(string filePath, string fieldName, CancellationToken cancellationToken = default)

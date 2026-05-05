@@ -131,7 +131,10 @@ public class IDEStyleEngine
     }
 
     /// <summary>
-    /// Upgrades traditional null checks to null-propagation (?. ) usage.
+    /// Upgrades traditional null checks to null-propagation (?.) usage.
+    /// Converts:  if (x != null) x.Method(args);
+    /// To:        x?.Method(args);
+    /// Only transforms standalone expression-statement bodies with no else clause.
     /// </summary>
     public async Task<string> UseNullPropagationAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -140,7 +143,63 @@ public class IDEStyleEngine
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        // Look for if (x != null) x.Do();
-        return root?.ToFullString() ?? "";
+        if (root == null) return "";
+
+        var rewriter = new NullPropagationRewriter();
+        var newRoot = rewriter.Visit(root);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class NullPropagationRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
+        {
+            // Only handle: if (x != null) <single-expr-stmt>  with no else
+            if (node.Else != null) return base.VisitIfStatement(node);
+            if (node.Condition is not BinaryExpressionSyntax bin ||
+                !bin.IsKind(SyntaxKind.NotEqualsExpression)) return base.VisitIfStatement(node);
+
+            bool rightIsNull = bin.Right.IsKind(SyntaxKind.NullLiteralExpression);
+            bool leftIsNull  = bin.Left.IsKind(SyntaxKind.NullLiteralExpression);
+            if (!rightIsNull && !leftIsNull) return base.VisitIfStatement(node);
+
+            var checkedExpr = rightIsNull ? bin.Left : bin.Right;
+            var checkedStr  = checkedExpr.ToString();
+
+            // Unwrap single-statement block
+            StatementSyntax body = node.Statement;
+            if (body is BlockSyntax block && block.Statements.Count == 1)
+                body = block.Statements[0];
+
+            if (body is not ExpressionStatementSyntax exprStmt) return base.VisitIfStatement(node);
+
+            ExpressionSyntax? nullConditional = null;
+
+            // Pattern: if (x != null) x.Method(args)
+            if (exprStmt.Expression is InvocationExpressionSyntax invoc &&
+                invoc.Expression is MemberAccessExpressionSyntax ma &&
+                ma.Expression.ToString() == checkedStr)
+            {
+                nullConditional = SyntaxFactory.ConditionalAccessExpression(
+                    checkedExpr,
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.MemberBindingExpression(ma.Name),
+                        invoc.ArgumentList));
+            }
+            // Pattern: if (x != null) x.Property  (bare member access)
+            else if (exprStmt.Expression is MemberAccessExpressionSyntax ma2 &&
+                     ma2.Expression.ToString() == checkedStr)
+            {
+                nullConditional = SyntaxFactory.ConditionalAccessExpression(
+                    checkedExpr,
+                    SyntaxFactory.MemberBindingExpression(ma2.Name));
+            }
+
+            if (nullConditional == null) return base.VisitIfStatement(node);
+
+            return SyntaxFactory.ExpressionStatement(nullConditional)
+                .WithLeadingTrivia(node.GetLeadingTrivia())
+                .WithTrailingTrivia(node.GetTrailingTrivia());
+        }
     }
 }

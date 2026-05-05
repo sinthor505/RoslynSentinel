@@ -14,7 +14,10 @@ public class ModernizationUpgradeEngine
     }
 
     /// <summary>
-    /// Upgrades legacy string parsing to use Span<char> for zero-allocation performance.
+    /// Upgrades legacy string parsing to use Span&lt;char&gt; for zero-allocation performance.
+    /// Converts: str.Substring(start, length) → str.AsSpan(start, length).ToString()
+    /// and:      str.Substring(start)         → str.AsSpan(start).ToString()
+    /// Scoped to the named method when methodName is provided; otherwise transforms entire file.
     /// </summary>
     public async Task<string> UseSpanForParsingAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
     {
@@ -23,12 +26,56 @@ public class ModernizationUpgradeEngine
         if (document == null) return "";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (root == null) return "";
 
-        if (method == null) return root?.ToFullString() ?? "";
+        SyntaxNode scope = root;
+        if (!string.IsNullOrWhiteSpace(methodName))
+        {
+            var method = root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .FirstOrDefault(m => m.Identifier.Text == methodName);
+            if (method == null) return root.ToFullString();
+            scope = method;
+        }
 
-        // logic to find str.Substring(...) and replace with str.AsSpan().Slice(...)
-        return root!.ToFullString();
+        var rewriter = new SpanParsingRewriter();
+        var newScope = rewriter.Visit(scope);
+        var newRoot = string.IsNullOrWhiteSpace(methodName)
+            ? newScope
+            : root.ReplaceNode(scope, newScope);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    private class SpanParsingRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            if (node.Expression is MemberAccessExpressionSyntax memberAccess &&
+                memberAccess.Name.Identifier.Text == "Substring" &&
+                node.ArgumentList.Arguments.Count is 1 or 2)
+            {
+                // str.AsSpan(args...)
+                var asSpanAccess = SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    memberAccess.Expression,
+                    SyntaxFactory.IdentifierName("AsSpan"));
+                var asSpanCall = SyntaxFactory.InvocationExpression(asSpanAccess, node.ArgumentList);
+
+                // .ToString()
+                var toStringAccess = SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    asSpanCall,
+                    SyntaxFactory.IdentifierName("ToString"));
+                var result = SyntaxFactory.InvocationExpression(
+                    toStringAccess,
+                    SyntaxFactory.ArgumentList())
+                    .WithLeadingTrivia(node.GetLeadingTrivia())
+                    .WithTrailingTrivia(node.GetTrailingTrivia());
+                return result;
+            }
+            return base.VisitInvocationExpression(node);
+        }
     }
 
     /// <summary>
@@ -50,7 +97,11 @@ public class ModernizationUpgradeEngine
     }
 
     /// <summary>
-    /// Converts traditional throws to throw expressions (IDE0016).
+    /// Converts adjacent null-assign + null-guard patterns to null-coalescing throw expressions (C# 7+).
+    /// Before:  var x = GetValue();
+    ///          if (x == null) throw new ArgumentNullException(nameof(x));
+    /// After:   var x = GetValue() ?? throw new ArgumentNullException(nameof(x));
+    /// Only transforms cases where the assignment and null check are consecutive statements in the same block.
     /// </summary>
     public async Task<string> UseThrowExpressionsAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -63,32 +114,87 @@ public class ModernizationUpgradeEngine
 
         var rewriter = new ThrowExpressionRewriter();
         var newRoot = rewriter.Visit(root);
-        
+
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     private class ThrowExpressionRewriter : CSharpSyntaxRewriter
     {
-        public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
+        public override SyntaxNode? VisitBlock(BlockSyntax node)
         {
-            // Look for: if (x == null) throw new ...
-            if (node.Condition is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.EqualsExpression) &&
-                (bin.Right.IsKind(SyntaxKind.NullLiteralExpression) || bin.Left.IsKind(SyntaxKind.NullLiteralExpression)))
-            {
-                var throwStmt = node.Statement as ThrowStatementSyntax;
-                if (throwStmt == null && node.Statement is BlockSyntax block && block.Statements.Count == 1)
-                {
-                    throwStmt = block.Statements[0] as ThrowStatementSyntax;
-                }
+            var statements = node.Statements.ToList();
+            var replacements = new Dictionary<int, (bool skipNext, StatementSyntax newStmt)>();
 
-                if (throwStmt != null)
+            for (int i = 0; i < statements.Count - 1; i++)
+            {
+                // Look for: var x = someExpr;  followed by  if (x == null) throw ...;
+                if (statements[i] is not LocalDeclarationStatementSyntax localDecl) continue;
+                if (localDecl.Declaration.Variables.Count != 1) continue;
+
+                var variable = localDecl.Declaration.Variables[0];
+                var varName = variable.Identifier.Text;
+                var initValue = variable.Initializer?.Value;
+                if (initValue == null) continue;
+
+                if (statements[i + 1] is not IfStatementSyntax ifStmt) continue;
+                if (ifStmt.Else != null) continue;
+                if (ifStmt.Condition is not BinaryExpressionSyntax condBin) continue;
+                if (!condBin.IsKind(SyntaxKind.EqualsExpression)) continue;
+
+                bool rightIsNull = condBin.Right.IsKind(SyntaxKind.NullLiteralExpression);
+                bool leftIsNull  = condBin.Left.IsKind(SyntaxKind.NullLiteralExpression);
+                if (!rightIsNull && !leftIsNull) continue;
+
+                var condVar = rightIsNull ? condBin.Left.ToString() : condBin.Right.ToString();
+                if (condVar != varName) continue;
+
+                // Get throw statement from if body
+                ThrowStatementSyntax? throwStmt = ifStmt.Statement as ThrowStatementSyntax;
+                if (throwStmt == null && ifStmt.Statement is BlockSyntax blk && blk.Statements.Count == 1)
+                    throwStmt = blk.Statements[0] as ThrowStatementSyntax;
+
+                if (throwStmt?.Expression == null) continue;
+
+                // Build: var x = initValue ?? throw new ...;
+                var throwExpr = SyntaxFactory.ThrowExpression(
+                    SyntaxFactory.Token(SyntaxKind.ThrowKeyword)
+                        .WithTrailingTrivia(SyntaxFactory.Space),
+                    throwStmt.Expression);
+
+                var coalescedInit = SyntaxFactory.BinaryExpression(
+                    SyntaxKind.CoalesceExpression,
+                    initValue,
+                    throwExpr);
+
+                var newVarDecl = variable.WithInitializer(
+                    variable.Initializer!.WithValue(coalescedInit));
+                var newDecl = localDecl.WithDeclaration(
+                    localDecl.Declaration.WithVariables(
+                        SyntaxFactory.SingletonSeparatedList(newVarDecl)));
+
+                replacements[i] = (skipNext: true, newStmt: newDecl);
+            }
+
+            if (replacements.Count == 0) return base.VisitBlock(node);
+
+            var newStatements = new List<StatementSyntax>();
+            bool skipThisLine = false;
+            for (int i = 0; i < statements.Count; i++)
+            {
+                if (skipThisLine) { skipThisLine = false; continue; }
+                if (replacements.TryGetValue(i, out var rep))
                 {
-                    // This is a candidate, but converting to a throw expression requires an assignment context.
-                    // For now, we flag it or handle simple cases. 
-                    // To be safe, we'll return as is unless we find a following assignment.
+                    newStatements.Add(rep.newStmt);
+                    skipThisLine = rep.skipNext;
+                }
+                else
+                {
+                    newStatements.Add(statements[i]);
                 }
             }
-            return base.VisitIfStatement(node);
+
+            var updated = node.WithStatements(SyntaxFactory.List(newStatements));
+            return base.VisitBlock(updated);
         }
     }
 
