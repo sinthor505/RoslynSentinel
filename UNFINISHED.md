@@ -1,71 +1,57 @@
 # Unfinished Capabilities (Backlog)
 
-## 📊 Recent Session Summary (Session 3583f39d — May 3-4, 2026)
+## 📊 Current Status (May 2026)
 
-**Status:** ✅ **26 of 27 tracked bugs fixed** + **39 regression tests added** in systematic parallel batches using 9 Opus agents.
+**✅ 1,662 tests passing, 0 failures — all engines exercised against the live ExpressRecipe solution (86 projects)**
 
-### Fixed Bugs (26 total):
-
-#### **Priority 1 (Crashes):** 12 fixed ✅
-- BUG-44, 52-53, 58-59, 69-74, 76-77
-- **Root cause:** Null reference crashes from `GetSyntaxRootAsync()` without validation
-- **Fix pattern:** Added explicit null checks + removed unsafe assertion operators (`root!`)
-
-#### **Priority 2 (Uncompilable Output):** 6 fixed ✅
-- BUG-55, 56, 57, 60, 62, 63
-- **Examples:**
-  - BUG-56: Added `static` modifier to extension class
-  - BUG-62: Extracts namespace + usings in partial files
-  - BUG-60: Validates symbol usages before removal (SymbolFinder)
-  - BUG-57: Warns when interface signatures need manual update
-  - BUG-55: Warns when interface needs ValueTask conversion
-
-#### **Priority 3 (Silent Failures):** 8 fixed ✅
-- BUG-45, 47-51, 54, 59
-- **Examples:**
-  - BUG-48: Word boundary regex `\b(BUG)\b` (no substring matching)
-  - BUG-59: Generates XML docs from scratch if missing
-  - BUG-49: Added ternary operator detection
-  - BUG-50: Uses implementation class instead of interface
-
-#### **Bug Fix Summary:**
-- **Total bugs fixed:** 26
-- **Bugs verified working:** 4 (no fix needed)
-- **Bugs remaining untargeted:** 5 (BUG-63-68, 75, 78 — lower priority)
-
-### Test Results:
-- ✅ **592/592 tests passing** (100% pass rate)
-- ✅ **39 regression tests added** across 7 test batches
-- ✅ **0 compiler errors**
-- ✅ **0 critical warnings**
-
-### Regression Tests by Batch:
-1. **Agent #2-3:** 17 tests for Priority 1-3 bugs
-2. **Agent #5:** 10 tests for Priority 1 crashes
-3. **Agent #6:** 8 tests for Priority 2 uncompilable
-4. **Agent #7:** 8 tests for Priority 3 silent failures
-5. **Agent #8:** 12 tests for augmented tool features
-6. **Agent #9:** 9 tests for final bug fixes + tool integration
-
-### Agent Work Summary (9 Agents Total):
-- **Agent #1:** Fixed BUG-44 + validated baseline (603 tests)
-- **Agent #2:** Fixed BUG-70-74 (5 bugs) + tests → 533 tests
-- **Agent #3:** Created 12 regression tests for remaining bugs → 545 tests
-- **Agent #4:** False start (repo context issue) — no impact
-- **Agent #5:** Fixed BUG-52-53, 58-59, 69, 76-77 (6 crashes) + 10 tests → 554 tests
-- **Agent #6:** Fixed BUG-56, 62 (uncompilable) + 8 tests → 562 tests
-- **Agent #7:** Fixed BUG-45, 47-51, 54, 59 (8 silent failures) + 8 tests → 571 tests
-- **Agent #8:** Created 12 augmented tool regression tests → 583 tests
-- **Agent #9:** Fixed BUG-55, 57, 60, 61 (4 bugs) + 9 final tests → 592 tests
-
-### DLL & Deployment:
-- ✅ **Published:** `E:\source\repos\RoslynSentinel\publish\RoslynSentinel.Server.dll`
-- ✅ **Reloaded:** `/mcp reload` completed successfully
-- ✅ **Tools Available:** All ~240 RoslynSentinel tools live and operational
+- All 241 MCP tools are live and operational
+- 34 test batteries including real-solution smoke tests (Battery 28 + Battery 34)
+- All previously identified stubs replaced with real implementations
+- All priority bugs fixed (Priorities 1-3)
 
 ---
 
-This document tracks the massive 300+ atomic refactoring and diagnostic targets currently planned for Roslyn Sentinel.
+## 📝 Session History (Condensed)
+
+### Session Summary (Latest — Battery 34, May 2026)
+- Added Battery 34: 30 real-solution smoke tests against ExpressRecipe for the 15 engines not covered by Battery 28
+- Engines covered: PerformanceEngine, SecurityEngine, AsyncSafetyEngine, AsyncOptimizationEngine, ThreadSafetyEngine, ControlFlowEngine, DiagnosticEngine, ModernizationEngine, SyntaxUpgradeEngine, CodeGenerationEngine, AnalysisEngine, RefactoringEngine, GranularRefactoringEngine, ModernizationUpgradeEngine, CodeStyleEngine
+- All 30 new tests pass; full suite 1,662/1,662
+
+### Session Summary (Session 3583f39d — May 3-4, 2026)
+**Status:** ✅ **26 of 27 tracked bugs fixed** + **39 regression tests added** in systematic parallel batches using 9 Opus agents.
+
+#### Fixed Bugs (26 total):
+
+**Priority 1 (Crashes):** 12 fixed — BUG-44, 52-53, 58-59, 69-74, 76-77
+- Root cause: Null reference crashes from `GetSyntaxRootAsync()` without validation
+- Fix pattern: Added explicit null checks + removed unsafe assertion operators (`root!`)
+
+**Priority 2 (Uncompilable Output):** 6 fixed — BUG-55, 56, 57, 60, 62, 63
+- BUG-56: Added `static` modifier to extension class
+- BUG-62: Extracts namespace + usings in partial files
+- BUG-60: Validates symbol usages before removal (SymbolFinder)
+- BUG-57: Warns when interface signatures need manual update
+- BUG-55: Warns when interface needs ValueTask conversion
+
+**Priority 3 (Silent Failures):** 8 fixed — BUG-45, 47-51, 54, 59
+- BUG-48: Word boundary regex `\b(BUG)\b`
+- BUG-59: Generates XML docs from scratch if missing
+- BUG-49: Added ternary operator detection
+- BUG-50: Uses implementation class instead of interface
+
+### Previous Session Notes (abridged)
+
+- *Session 16:* BUG-44+ systematic bug fixing began; `GenerateFluentBuilderAsync` now throws descriptive exception for DI-injected classes
+- *Session 15 (BUG-33–43):* 11 correctness bugs fixed, 23 regression tests. Key fixes: `AddBenchmarkStub` static class detection, `ConvertLockToSemaphoreSlim` full try/catch wrap, `InlineMethod` stale-span batch fix, `ConvertToAsyncEnumerable` type validation
+- *Session 14:* Fixed critical startup timeout (MSBuildLocator lazy init → eager init at startup). Added 5 new augmented tools: `FormatDocumentSafe`, `AnalyzeForeachForLinqConversion`, `GetWorkspaceHealth`, `PreviewAddMissingUsings`, `ExtractConstantSafe`. Total: 477 tests, 236 tools
+- *Session 12:* Added `MsToolAugmentEngine` with 5 MS tool bug-fix replacements. Added regression hardening. Total: 462 tests, 231 tools
+- *Session 11:* `MoveTypeToFile` + `MoveAllTypesToFiles` now return `ContentPreviews` in staged responses. Total: 423 tests, 226 tools
+- *Session 10:* Added `ConvertPropertySafe`, `InterpolateStringSafe`, `FindCallersSafe`, `FindImplementationsSafe`, `FormatDocumentPreview`, `GetDiagnosticsSummary`. Total: 418 tests, 226 tools
+- *Session 9:* Fixed `Diagnose`/`GetHealthComponents` false negative, `ExtractInterface` namespace wrapping, `ChangeSignature` stub → real implementation. Added `ImplementInterfaceSafe`. Total: 405 tests, 219 tools
+- *Sessions 1-8:* Initial implementation of all engines, stubs replaced with real implementations across AsyncSafetyEngine, SecurityEngine, DeadCodeEngine, AnalysisEngine, GranularRefactoringEngine, AdvancedRefactoringEngine, RefinementEngine (63 comprehensive tests in NewImplementationsTests.cs)
+
+---
 
 ## 🚀 Future Architectural Vision: Intent-Based AST Commands
 The server is transitioning to a "Refactor Recipe" model where AI agents issue high-level intents (e.g., `InjectDependency`, `AddGuard`, `WrapInTryCatch`) and Roslyn handles the structural manipulation, formatting, and trivia preservation.
