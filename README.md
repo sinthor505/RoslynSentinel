@@ -19,7 +19,8 @@ This produces:
 - **Windows:** `./publish/RoslynSentinel.Server.exe`
 - **macOS/Linux:** `dotnet ./publish/RoslynSentinel.Server.dll`
 
-> **Requirements:** .NET 10 SDK or later
+> **Requirements:** .NET 10 SDK or later  
+> **Windows shortcut:** Run `.\scripts\install.ps1` — builds the server and prints ready-to-paste config snippets for Claude Desktop.
 
 ---
 

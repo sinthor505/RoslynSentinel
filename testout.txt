@@ -1,2 +1,0 @@
-Test run for E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll (.NETCoreApp,Version=v10.0)
-The test source file "E:\source\repos\RoslynSentinel\RoslynSentinel.Tests\bin\Debug\net10.0\RoslynSentinel.Tests.dll" provided was not found.
