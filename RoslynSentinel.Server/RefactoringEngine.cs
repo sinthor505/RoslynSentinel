@@ -432,12 +432,10 @@ public class RefactoringEngine
         var typeNode = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == typeName);
         if (typeNode == null) return new Dictionary<string, string>();
 
-        var cleanTypeNode = typeNode.WithoutLeadingTrivia().WithLeadingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
-        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(u => u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+        var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
         var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        var newRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings);
-        
-        if (ns != null) 
+
+        if (ns != null)
         {
             var newNs = ns is FileScopedNamespaceDeclarationSyntax ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name) : SyntaxFactory.NamespaceDeclaration(ns.Name);
             newRoot = newRoot.AddMembers(newNs.AddMembers(cleanTypeNode));
@@ -453,7 +451,7 @@ public class RefactoringEngine
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
             return new Dictionary<string, string>();
 
-        var updatedOrig = root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!;
+        var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
 
         var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
         var formattedNewDoc = await Formatter.FormatAsync(newDoc, null, ct);
@@ -490,12 +488,8 @@ public class RefactoringEngine
         foreach (var typeNode in typesToMove)
         {
             var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-            var cleanTypeNode = typeNode.WithoutLeadingTrivia()
-                .WithLeadingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
-            var cleanUsings = SyntaxFactory.List(root.Usings.Select(u =>
-                u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+            var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root, typeNode);
 
-            var newRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings);
             if (ns != null)
             {
                 var cleanNsName = SyntaxFactory.ParseName(ns.Name.ToString());
@@ -519,12 +513,68 @@ public class RefactoringEngine
             changes[newPath] = (await formattedNewDoc.GetTextAsync(ct)).ToString();
         }
 
-        var updatedRoot = root.RemoveNodes(typesToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
+        var updatedRoot = RemoveOrphanedRegionDirectives(root.RemoveNodes(typesToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
         var updatedOrigDoc = document.WithSyntaxRoot(updatedRoot);
         var formattedOrigDoc = await Formatter.FormatAsync(updatedOrigDoc, null, ct);
         changes[document.FilePath ?? document.Name] = (await formattedOrigDoc.GetTextAsync(ct)).ToString();
 
         return changes;
+    }
+
+    // Builds the compilation unit for a type being split into its own file, handling:
+    // - extern alias declarations (not in root.Usings — must be copied separately)
+    // - global using aliases filtered out (project-scoped; duplicating them causes CS1537)
+    // - file-scoped types promoted to internal (file modifier = visible only in declaring file)
+    private static (CompilationUnitSyntax newRoot, BaseTypeDeclarationSyntax cleanNode) BuildSplitFileRoot(
+        CompilationUnitSyntax root, BaseTypeDeclarationSyntax typeNode)
+    {
+        var cleanNode = typeNode
+            .WithoutLeadingTrivia()
+            .WithLeadingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+
+        // Promote `file` modifier to `internal` — the type is now in its own file and must be accessible
+        if (cleanNode.Modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
+        {
+            var fileToken = cleanNode.Modifiers.First(m => m.IsKind(SyntaxKind.FileKeyword));
+            var internalToken = SyntaxFactory.Token(SyntaxKind.InternalKeyword)
+                .WithLeadingTrivia(fileToken.LeadingTrivia)
+                .WithTrailingTrivia(fileToken.TrailingTrivia);
+            var newModifiers = cleanNode.Modifiers.Replace(fileToken, internalToken);
+            cleanNode = (BaseTypeDeclarationSyntax)cleanNode.WithModifiers(newModifiers);
+        }
+
+        var cleanExterns = SyntaxFactory.List(root.Externs.Select(e =>
+            e.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+
+        // Exclude global using aliases — they are project-scoped; duplicating them across split files causes CS1537
+        var cleanUsings = SyntaxFactory.List(root.Usings
+            .Where(u => u.GlobalKeyword.IsKind(SyntaxKind.None))
+            .Select(u => u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+
+        var newRoot = SyntaxFactory.CompilationUnit()
+            .WithExterns(cleanExterns)
+            .WithUsings(cleanUsings);
+
+        return (newRoot, cleanNode);
+    }
+
+    // Removes #endregion directives that have no matching #region (orphaned when types are removed from a file).
+    private static CompilationUnitSyntax RemoveOrphanedRegionDirectives(CompilationUnitSyntax root)
+    {
+        var toRemove = new HashSet<SyntaxTrivia>();
+        int depth = 0;
+        foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
+        {
+            if (trivia.IsKind(SyntaxKind.RegionDirectiveTrivia)) depth++;
+            else if (trivia.IsKind(SyntaxKind.EndRegionDirectiveTrivia))
+            {
+                if (depth == 0) toRemove.Add(trivia);
+                else depth--;
+            }
+        }
+        return toRemove.Count == 0
+            ? root
+            : (CompilationUnitSyntax)root.ReplaceTrivia(toRemove, (_, _) => SyntaxFactory.Whitespace(""));
     }
 
     public async Task<Dictionary<string, string>> MoveAllTypesToFilesAsync(string filePath, CancellationToken ct = default)
