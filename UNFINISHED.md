@@ -30,8 +30,15 @@ For implementation history and session notes, see the git log.
 ### `inline_method` — Single-File Call Sites Only
 `RefactoringEngine.InlineMethodAsync` only updates call sites within the same file. Cross-file references are not updated. **Workaround:** use `find_callers` to locate other files, then apply `inline_method` to each file individually.
 
-### `move_type_to_file` — File-Scoped Types (C# 11+)
-May generate incorrect output when the source type uses the `file` keyword (C# 11 file-scoped types). Manually verify the `file` modifier is preserved in the generated output.
+### ~~`move_type_to_file` — File-Scoped Types (C# 11+)~~ ✅ FIXED (2026-05-08)
+
+~~May generate incorrect output when the source type uses the `file` keyword (C# 11 file-scoped types).~~
+
+**Fixed in `RefactoringEngine.cs` (`BuildSplitFileRoot` + `RemoveOrphanedRegionDirectives` helpers):**
+- `file`-scoped types promoted to `internal` when moved to their own file
+- `global using` aliases no longer duplicated across split files (was causing CS1537)
+- `extern alias` declarations now copied to every split file
+- Orphaned `#endregion` directives removed from the original file after node removal
 
 ### `extract_class` — Generic Constraints and Circular References
 `AdvancedRefactoringEngine.ExtractClassAsync` does not yet handle:

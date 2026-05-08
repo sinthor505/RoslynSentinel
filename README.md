@@ -250,11 +250,11 @@ Powered by `RefactoringEngine`, `GranularRefactoringEngine`, `RefinementEngine`,
 | `safe_delete_symbol` | Delete a symbol after verifying zero references solution-wide | ⭐⭐⭐⭐⭐ |
 | `rename_symbol` | Rename a symbol and all its references via `SymbolFinder` | ⭐⭐⭐⭐⭐ |
 | `preview_rename_impact` | Show reference count + affected files before committing a rename | ⭐⭐⭐⭐⭐ |
-| `move_type_to_file` | Move a type to its own `{TypeName}.cs` file | ⭐⭐⭐⭐ |
+| `move_type_to_file` | Move a type to its own `{TypeName}.cs` file | ⭐⭐⭐⭐⭐ |
 | `move_type_to_outer_scope` | Unnest a nested type into its enclosing namespace | ⭐⭐⭐⭐⭐ |
-| `move_all_types_to_files` | Move every non-primary type in a file to its own file | ⭐⭐⭐⭐ |
-| `move_all_types_to_files_in_project` | Same, applied across a whole project | ⭐⭐⭐⭐ |
-| `move_all_types_to_files_in_solution` | Same, applied across the whole solution | ⭐⭐⭐⭐ |
+| `move_all_types_to_files` | Move every non-primary type in a file to its own file | ⭐⭐⭐⭐⭐ |
+| `move_all_types_to_files_in_project` | Same, applied across a whole project | ⭐⭐⭐⭐⭐ |
+| `move_all_types_to_files_in_solution` | Same, applied across the whole solution | ⭐⭐⭐⭐⭐ |
 | `convert_abstract_to_interface` | Convert an abstract class to an interface | ⭐⭐⭐⭐⭐ |
 | `convert_anonymous_to_named` | Replace anonymous types with a named `record` | ⭐⭐⭐⭐⭐ |
 | `make_method_static` | Make a method `static` (validates it uses no instance members) | ⭐⭐⭐⭐⭐ |

@@ -7227,7 +7227,7 @@ public async Task<string> MakeMethodStatic(string filePath, string methodName)
 
 
 **Purpose:**
-Code analysis and refactoring tool
+Moves every non-primary type in a single source file to its own `{TypeName}.cs` file in the same directory. The primary type (the one whose name matches the file name) stays in place. Handles `file`-scoped types (promoted to `internal`), filters `global using` duplicates, copies `extern alias` declarations, and removes orphaned `#endregion` directives.
 
 
 **Signature:**
@@ -7244,7 +7244,7 @@ public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = 
 
 
 **Purpose:**
-Code analysis and refactoring tool
+Applies `MoveAllTypesToFiles` to every `.cs` file in a project. Produces one new file per secondary type found. Safe to run on large projects — each file is processed independently.
 
 
 **Signature:**
@@ -7261,7 +7261,7 @@ public async Task<object> MoveAllTypesToFilesInProject(string projectName, bool 
 
 
 **Purpose:**
-Code analysis and refactoring tool
+Applies `MoveAllTypesToFiles` across every project in the solution. Useful for enforcing one-type-per-file across an entire codebase in one operation. All five split-file edge cases are handled automatically (see `BuildSplitFileRoot` in `RefactoringEngine.cs`).
 
 
 **Signature:**
@@ -7278,7 +7278,7 @@ public async Task<object> MoveAllTypesToFilesInSolution(bool autoStage = true)
 
 
 **Purpose:**
-Code analysis and refactoring tool
+Moves a single named type from a multi-type file to its own `{TypeName}.cs` file. Correctly handles: `file`-scoped types (promoted to `internal`), `global using` filtering, `extern alias` propagation, and orphaned `#endregion` cleanup in the original file.
 
 
 **Signature:**

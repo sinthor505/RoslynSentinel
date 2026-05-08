@@ -172,19 +172,20 @@ These are features that work for common cases but have documented limitations:
 
 ---
 
-### MoveTypeToFile — File-Scoped Types
+### MoveTypeToFile / MoveAllTypesToFiles — Five Edge Cases ✅ FIXED (2026-05-08)
 
-**Tool:** `RefactoringEngine.MoveTypeToFile(string sourceFilePath, string typeName)`
+**Tools:** `MoveTypeToFile`, `MoveAllTypesToFiles`, `MoveAllTypesToFilesInProject`, `MoveAllTypesToFilesInSolution`
 
-**Limitation:** May generate incorrect output for file-scoped types (C# 11+)
+**Status:** ✅ **FIXED** — `BuildSplitFileRoot` and `RemoveOrphanedRegionDirectives` helpers added to `RefactoringEngine.cs`
 
-**Reason:** Namespace/scoping logic doesn't account for `file` keyword
-
-**Workaround:** Manually verify generated code includes `file` keyword if source type had it
-
-**Status:** Documented in code comments
-
-**Fix Planned:** Phase 2.5
+**Fixes applied:**
+| Edge Case | Error | Fix |
+|-----------|-------|-----|
+| `file`-scoped types | Type becomes inaccessible in sibling files after split | `file` modifier replaced with `internal` in split file |
+| `global using` duplication | CS1537 — duplicate global alias across split files | Filtered out of split files; already project-scoped from source file |
+| Missing `extern alias` | CS0430 — alias not specified | `root.Externs` now copied to every split file |
+| Orphaned `#endregion` | CS1028 — unexpected preprocessor directive | `RemoveOrphanedRegionDirectives` pass on the updated original file |
+| Missing `using` for source-gen | CS8795 — partial method no implementation | All non-global `using` directives still copied (was already correct; issue was `extern` not being copied) |
 
 ---
 
@@ -227,7 +228,7 @@ These are features that work for common cases but have documented limitations:
 - Fix BUG-74 (ExtractClass file-scoped types)
 - Fix inline_method multi-statement cross-file
 - Implement cross-file InlineMethod
-- Enhance MoveTypeToFile for file-scoped types
+- ~~Enhance MoveTypeToFile for file-scoped types~~ ✅ Fixed 2026-05-08
 
 ### Phase 3 — Advanced Refactoring
 - Fix extract_class edge cases (generics, type parameter constraints)
@@ -244,7 +245,8 @@ These are features that work for common cases but have documented limitations:
 |----------|-------|--------|--------|
 | Stub Methods (No MCP Tool) | 0 | N/A — All resolved | ✅ Done |
 | Deferred Bugs (Regression Tests) | 5 | Medium (known issues) | Awaiting Fix |
-| Known Limitations | 6 | Low-Medium (workarounds exist) | Documented |
+| Known Limitations | 5 | Low-Medium (workarounds exist) | Documented |
+| Fixed This Session | 1 | MoveTypeToFile 5 edge cases | ✅ Fixed 2026-05-08 |
 | Future Enhancements | 5+ | Low (not in current scope) | Planned |
 
 ---
