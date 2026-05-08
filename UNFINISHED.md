@@ -9,14 +9,10 @@ For implementation history and session notes, see the git log.
 
 ### Easy Difficulty
 - **`ConvertIndexerToMethod`** — Replace an indexer with `GetX(int index)` / `SetX(int index, T value)` methods
-- **`ConvertPropertyToAutoProperty`** — Remove manual backing fields when the getter/setter logic is trivial
 - **`CopyType`** — Create a deep structural clone of a type in a new file
-- **`Add/Remove params modifier`** — Toggle the `params` keyword on the final array parameter of a method
-- **`IDE0011 (AddBraces)`** — Surgically add braces to all single-line `if`, `foreach`, and `while` blocks across a project
 
 ### Medium Difficulty
 - **`ConvertInterfaceToAbstractClass`** — Convert an interface to an abstract base class, adding method stubs
-- **`ReplaceConstructorWithFactoryMethod`** — Move instantiation logic to a static `Create(...)` factory; update call sites
 - **`SpecificExceptionCatching`** — Trace method call chains to narrow `catch (Exception)` to the exact exception types thrown
 - **`LocalFunctionMigration`** — Convert anonymous lambdas to named local functions
 - **`EPC26 (TasksInUsing)`** — Detect unawaited tasks inside `using` blocks that may outlive resource disposal

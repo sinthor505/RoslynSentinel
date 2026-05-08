@@ -1,8 +1,8 @@
 # RoslynSentinel — Deferred Bugs & Feature Limitations
 
 **Status:** All previously-documented stub methods are fully implemented. This document tracks deferred bugs with regression tests and known edge-case limitations.  
-**Last Updated:** 2026-05-05  
-**Test Suite:** ✅ 1,692 passing tests, 0 failures
+**Last Updated:** 2026-05-08  
+**Test Suite:** ✅ 1,692 total tests (1,605 passing, 87 skipped — real-solution integration tests requiring `ROSLYN_SENTINEL_TEST_SLN`)
 
 ---
 
@@ -230,15 +230,10 @@ These are features that work for common cases but have documented limitations:
 - Enhance MoveTypeToFile for file-scoped types
 
 ### Phase 3 — Advanced Refactoring
-- Implement `ConvertForToForEachAsync()`
-- Implement `ConvertWhileToForAsync()`
-- Implement `UseSpanForParsingAsync()`
 - Fix extract_class edge cases (generics, type parameter constraints)
 - Enhanced ExtractInterface for generic constraints
 
 ### Phase 4 — IDE Modernization
-- Implement `UseThrowExpressionsAsync()`
-- Implement `UseNullPropagationAsync()`
 - Resolve duplicate `ConvertSwitchToExpressionAsync()` conflict
 
 ---
@@ -247,10 +242,10 @@ These are features that work for common cases but have documented limitations:
 
 | Category | Count | Impact | Status |
 |----------|-------|--------|--------|
-| Stub Methods (No MCP Tool) | 8 | Low (users can't invoke) | Documented |
+| Stub Methods (No MCP Tool) | 0 | N/A — All resolved | ✅ Done |
 | Deferred Bugs (Regression Tests) | 5 | Medium (known issues) | Awaiting Fix |
 | Known Limitations | 6 | Low-Medium (workarounds exist) | Documented |
-| Future Enhancements | 10+ | Low (not in current scope) | Planned |
+| Future Enhancements | 5+ | Low (not in current scope) | Planned |
 
 ---
 
