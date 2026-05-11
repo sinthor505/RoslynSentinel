@@ -219,6 +219,70 @@ public class Recipient { public int Existing; }";
     }
 
     // ======================================================================
+    // inline_class — Cross-file type reference updates (⭐⭐⭐⭐⭐)
+    // ======================================================================
+
+    [Test]
+    public async Task InlineClass_CrossFile_UpdatesTypeReferencesInThirdFile()
+    {
+        // A third file that holds a variable typed as 'Helper'. After inlining Helper into Owner,
+        // that reference should be renamed to 'Owner' in the returned dictionary.
+        SetMultiFile(
+            ("Helper.cs", "namespace App; public class Helper { public int Value; }"),
+            ("Owner.cs", "namespace App; public class Owner {}"),
+            ("Consumer.cs", "namespace App; public class Consumer { public Helper? Instance; }"));
+
+        var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
+
+        // Primary files updated
+        Assert.That(result, Does.ContainKey("Owner.cs"), "Target file should be in result");
+        Assert.That(result["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
+
+        // Third file should also be updated: 'Helper' → 'Owner'
+        Assert.That(result, Does.ContainKey("Consumer.cs"), "Third file with type reference should also be updated");
+        Assert.That(result["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
+        Assert.That(result["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
+    }
+
+    [Test]
+    public async Task ExtractClass_SameFile_ExposesMembersViaPublicProperty()
+    {
+        // After extraction, the source class should expose the new class via a public property, not a private field
+        const string src = @"
+public class Service
+{
+    public void Process() {}
+    public void Validate() {}
+    public string Name { get; set; }
+}";
+        SetSource(src, "Service.cs");
+        var result = await _tools.ExtractClass("Service.cs", "Service", "Validator", ["Process", "Validate"]);
+
+        Assert.That(result, Does.ContainKey("Service.cs"), "Updated source should be in result");
+        var updatedSource = result["Service.cs"];
+        // Should have public property, NOT private readonly field
+        Assert.That(updatedSource, Does.Contain("public Validator"), "Should expose extracted class via public property");
+        Assert.That(updatedSource, Does.Not.Contain("private readonly Validator"), "Should not use private field");
+    }
+
+    [Test]
+    public async Task ExtractClass_CrossFile_UpdatesCallSitesInThirdFile()
+    {
+        // Third file calls 'Process' and 'Validate' on a Service instance.
+        // After extraction into 'Validator', those calls should go through Validator.
+        SetMultiFile(
+            ("Service.cs", "namespace App; public class Service { public void Process() {} public void Validate() {} public string Name { get; set; } }"),
+            ("Client.cs", "namespace App; public class Client { public void Run(Service s) { s.Process(); s.Validate(); } }"));
+
+        var result = await _tools.ExtractClass("Service.cs", "Service", "Validator", ["Process", "Validate"]);
+
+        Assert.That(result, Does.ContainKey("Client.cs"), "Client file should be updated with new call sites");
+        var clientContent = result["Client.cs"];
+        // Call sites should now go through the Validator property
+        Assert.That(clientContent, Does.Contain("Validator"), "Cross-file call sites should reference the extracted class");
+    }
+
+    // ======================================================================
     // convert_method_to_indexer — Bug Fix: Silent no-op on error conditions
     // ======================================================================
 

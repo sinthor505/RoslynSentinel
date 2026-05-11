@@ -268,7 +268,7 @@ public class SentinelRefactoringTools
         => await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName);
 
     [McpServerTool]
-    [Description("Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. LIMITATION: Does not update call sites that reference the old class name in other files — you must update those manually or use rename_symbol first. Returns a dictionary of filePath→updatedContent for each affected file.")]
+    [Description("Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. Automatically updates ALL type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution, renaming them to the target class. Returns a dictionary of filePath→updatedContent for every affected file.")]
     public async Task<Dictionary<string, string>> InlineClass(string sourceFilePath, string targetFilePath, string className) 
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
@@ -288,7 +288,7 @@ public class SentinelRefactoringTools
         => await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propertyName);
 
     [McpServerTool]
-    [Description("Extracts named members (methods, properties, fields) from a class into a new '{newClassName}.cs' file. The source class is updated: extracted members are removed and a 'private readonly {newClassName} _{fieldName}' field is added as the composition point. Returns both the new class file and the updated source file. LIMITATION: Does not rewrite call sites that previously accessed the extracted members directly — update those to go through the new field.")]
+    [Description("Extracts named members (methods, properties, fields) from a class into a new '{newClassName}.cs' file. The source class is updated: extracted members are removed and a public auto-property 'public {NewClassName} {NewClassName} { get; } = new();' is added as the composition point, making the extracted class accessible to external callers. Cross-file call sites that previously called 'sourceObj.Method()' are automatically rewritten to 'sourceObj.NewClassName.Method()' solution-wide. Returns a dictionary of filePath→updatedContent for every affected file.")]
     public async Task<Dictionary<string, string>> ExtractClass(string filePath, string className, string newClassName, string[] memberNames) 
         => await _advancedStructuralEngine.ExtractClassAsync(filePath, className, newClassName, memberNames);
 

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Server;
 
@@ -126,6 +127,13 @@ public class AdvancedStructuralEngine
 
         if (membersToMove.Count == 0) return new Dictionary<string, string>();
 
+        // Capture member symbols BEFORE modifying the syntax tree so SymbolFinder can locate references
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var memberSymbols = membersToMove
+            .Select(m => semanticModel?.GetDeclaredSymbol(m))
+            .Where(s => s is IMethodSymbol or IPropertySymbol)
+            .ToList();
+
         // Build extracted class with same namespace + usings as source
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
@@ -146,32 +154,94 @@ public class AdvancedStructuralEngine
             newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newClassNode);
         }
 
-        // Update source class: remove extracted members and add a private readonly field for the new type
-        var fieldName = $"_{char.ToLower(newClassName[0])}{newClassName[1..]}";
-        var fieldDecl = SyntaxFactory.FieldDeclaration(
-            SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(newClassName))
-                .AddVariables(SyntaxFactory.VariableDeclarator(fieldName)
-                    .WithInitializer(SyntaxFactory.EqualsValueClause(
-                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(newClassName))
-                            .WithArgumentList(SyntaxFactory.ArgumentList())))))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+        // Update source class: remove extracted members and expose the new class via a public property
+        // (public so external callers can update call sites from sourceObj.Method() to sourceObj.NewClass.Method())
+        var propDecl = SyntaxFactory.PropertyDeclaration(
+            SyntaxFactory.ParseTypeName(newClassName),
+            SyntaxFactory.Identifier(newClassName))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
+            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(new[] {
+                SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            })))
+            .WithInitializer(SyntaxFactory.EqualsValueClause(
+                SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(newClassName))
+                    .WithArgumentList(SyntaxFactory.ArgumentList())))
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
 
         var updatedSourceClass = classNode
             .RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!
-            .AddMembers(fieldDecl);
+            .AddMembers(propDecl);
         var updatedRoot = root!.ReplaceNode(classNode, updatedSourceClass);
 
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");
-        return new Dictionary<string, string>
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { newFilePath, newFileRoot.NormalizeWhitespace().ToFullString() },
             { filePath, updatedRoot.NormalizeWhitespace().ToFullString() }
         };
+
+        // Update cross-file call sites: expr.Method() → expr.NewClassName.Method()
+        var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, newFilePath };
+        foreach (var symbol in memberSymbols)
+        {
+            if (symbol == null) continue;
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var byDocument = references.SelectMany(r => r.Locations)
+                .Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath))
+                .GroupBy(l => l.Document.Id)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            foreach (var (docId, locations) in byDocument)
+            {
+                var doc = solution.GetDocument(docId);
+                if (doc?.FilePath == null) continue;
+
+                // Use already-updated root if this file has been modified in a previous symbol's iteration
+                SyntaxNode? docRoot;
+                if (result.TryGetValue(doc.FilePath, out var alreadyModified))
+                    docRoot = CSharpSyntaxTree.ParseText(alreadyModified).GetRoot();
+                else
+                    docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+                if (docRoot == null) continue;
+
+                var spans = locations.Select(l => l.Location.SourceSpan).ToHashSet();
+
+                // Find the identifier nodes at the reference spans; their parent MemberAccessExpression
+                // is what we need to insert the new property name into.
+                var identifiers = docRoot.DescendantNodes()
+                    .OfType<SimpleNameSyntax>()
+                    .Where(n => spans.Contains(n.Span))
+                    .ToList();
+                var memberAccesses = identifiers
+                    .Select(id => id.Parent as MemberAccessExpressionSyntax)
+                    .Where(ma => ma != null)
+                    .Cast<MemberAccessExpressionSyntax>()
+                    .Distinct()
+                    .ToList();
+
+                if (memberAccesses.Count == 0) continue;
+
+                var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
+                {
+                    var intermedReceiver = SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        original.Expression,
+                        SyntaxFactory.IdentifierName(newClassName));
+                    return original.WithExpression(intermedReceiver);
+                });
+
+                result[doc.FilePath] = updatedDocRoot.NormalizeWhitespace().ToFullString();
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
     /// Inlines a class by moving all its members into the first class of the target file,
-    /// then removes the source class declaration.
+    /// then removes the source class declaration. Also renames all type references to the
+    /// inlined class across the solution to point to the target class name.
     /// </summary>
     public async Task<Dictionary<string, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
@@ -202,7 +272,13 @@ public class AdvancedStructuralEngine
                 { "__error__", $"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'." }
             };
 
+        // Capture class symbol BEFORE modification so SymbolFinder can resolve all references
+        var semanticModel = await sourceDoc.GetSemanticModelAsync(cancellationToken);
+        var classSymbol = semanticModel?.GetDeclaredSymbol(sourceClass) as INamedTypeSymbol;
+
         var membersToInline = sourceClass.Members;
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        string targetClassName;
 
         if (sameFile)
         {
@@ -216,11 +292,11 @@ public class AdvancedStructuralEngine
                     { "__error__", $"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into." }
                 };
 
-            // Add members to target class
+            targetClassName = targetClass.Identifier.Text;
+
             var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
             var intermediate = (CompilationUnitSyntax)sourceRoot.ReplaceNode(targetClass, expandedTarget);
 
-            // Remove source class from the updated tree (re-locate by name since node identity changed)
             var classToRemove = intermediate.DescendantNodes()
                 .OfType<ClassDeclarationSyntax>()
                 .FirstOrDefault(c => c.Identifier.Text == className);
@@ -228,14 +304,15 @@ public class AdvancedStructuralEngine
                 ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)!
                 : intermediate;
 
-            return new Dictionary<string, string>
-            {
-                { sourceFilePath, newRoot.NormalizeWhitespace().ToFullString() }
-            };
+            result[sourceFilePath] = newRoot.NormalizeWhitespace().ToFullString();
+
+            // Update type references in all other files
+            if (classSymbol != null)
+                await UpdateTypeReferencesAsync(solution, classSymbol, className, targetClassName,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase) { sourceFilePath }, result, cancellationToken);
         }
         else
         {
-            // Cross-file: load target document
             var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath)
                 .Select(solution.GetDocument).FirstOrDefault();
             if (targetDoc == null)
@@ -254,18 +331,65 @@ public class AdvancedStructuralEngine
                     { "__error__", $"No class found in target file '{Path.GetFileName(targetFilePath)}'." }
                 };
 
-            // Add members to target class
+            targetClassName = targetClass.Identifier.Text;
+
             var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
             var newTargetRoot = (CompilationUnitSyntax)targetRoot!.ReplaceNode(targetClass, expandedTarget);
-
-            // Remove source class from source file
             var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, SyntaxRemoveOptions.KeepExteriorTrivia)!;
 
-            return new Dictionary<string, string>
+            result[targetFilePath] = newTargetRoot.NormalizeWhitespace().ToFullString();
+            result[sourceFilePath] = newSourceRoot.NormalizeWhitespace().ToFullString();
+
+            // Update type references in all other files
+            if (classSymbol != null)
+                await UpdateTypeReferencesAsync(solution, classSymbol, className, targetClassName,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase) { sourceFilePath, targetFilePath }, result, cancellationToken);
+        }
+
+        return result;
+    }
+
+    private static async Task UpdateTypeReferencesAsync(
+        Solution solution,
+        INamedTypeSymbol classSymbol,
+        string oldName,
+        string newName,
+        HashSet<string> skipPaths,
+        Dictionary<string, string> result,
+        CancellationToken cancellationToken)
+    {
+        var references = await SymbolFinder.FindReferencesAsync(classSymbol, solution, cancellationToken);
+        var byDocument = references.SelectMany(r => r.Locations)
+            .Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath))
+            .GroupBy(l => l.Document.Id)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var (docId, locations) in byDocument)
+        {
+            var doc = solution.GetDocument(docId);
+            if (doc?.FilePath == null) continue;
+
+            var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+            if (docRoot == null) continue;
+
+            var spans = locations.Select(l => l.Location.SourceSpan).ToHashSet();
+
+            var nodesToRename = docRoot.DescendantNodes()
+                .Where(n => spans.Contains(n.Span))
+                .ToList();
+
+            if (nodesToRename.Count == 0) continue;
+
+            var updatedRoot = docRoot.ReplaceNodes(nodesToRename, (original, _) =>
             {
-                { targetFilePath, newTargetRoot.NormalizeWhitespace().ToFullString() },
-                { sourceFilePath, newSourceRoot.NormalizeWhitespace().ToFullString() }
-            };
+                if (original is IdentifierNameSyntax id && id.Identifier.Text == oldName)
+                    return SyntaxFactory.IdentifierName(newName).WithTriviaFrom(id);
+                if (original is GenericNameSyntax gen && gen.Identifier.Text == oldName)
+                    return gen.WithIdentifier(SyntaxFactory.Identifier(newName));
+                return original;
+            });
+
+            result[doc.FilePath] = updatedRoot.NormalizeWhitespace().ToFullString();
         }
     }
 }
