@@ -2444,7 +2444,6 @@ public class MathUtil
             var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Double");
 
             Assert.That(result, Is.Not.Null, "Should return non-null result");
-            // Method can be inlined or return error about multi-statement, either is acceptable
             Assert.That(result, Is.Not.Empty, "Should return non-empty result");
         }
 
@@ -2470,7 +2469,6 @@ public class Math
             var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add");
 
             Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-            // Should either fail gracefully with error message or return unchanged code
             Assert.That(result, Is.Not.Empty, "Should return non-empty result");
         }
     }
@@ -3392,10 +3390,10 @@ public class Calculator
         SetSource(code, "Calculator.cs");
         
         var result = await _refinementEngine.InlineMethodAsync("Calculator.cs", "Double");
-        
+
         Assert.That(result, Is.Not.Null, "Should return result");
-        // Should not error on expression-body method
-        Assert.That(result, Does.Not.Contain("Error") | Does.Contain("x * 2"),
+        var resultText = string.Join("\n", result.Values);
+        Assert.That(resultText, Does.Not.Contain("__error__").Or.Contain("x * 2"),
             "Should successfully inline single-expression method");
     }
 
@@ -3421,17 +3419,12 @@ public class Service
         SetSource(code, "Service.cs");
         
         var result = await _refinementEngine.InlineMethodAsync("Service.cs", "Process");
-        
+
         Assert.That(result, Is.Not.Null, "Should return result");
-        // Should either successfully inline or return clear error, not server error
-        Assert.That(result, Is.Not.Empty,
-            "Should not return empty result");
-        // If method has multiple statements, should handle gracefully
-        if (result.Contains("Error") || result.Contains("Cannot inline"))
-        {
-            // This is acceptable - clear error message
+        Assert.That(result, Is.Not.Empty, "Should not return empty result");
+        // Multi-statement method returns error key — that's acceptable
+        if (result.ContainsKey("__error__"))
             Assert.Pass("Method correctly returns error for complex method");
-        }
     }
 
     // ── extract_class bug: general extraction issues ──────────────────────

@@ -119,8 +119,8 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Inlines a method by replacing its call sites with the method's expression. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected with a descriptive error. LIMITATION: Only call sites within the same file are inlined; call sites in other files are not updated. The method declaration is removed after inlining.")]
-    public async Task<string> InlineMethod(string filePath, string methodName)
+    [Description("Inlines a method solution-wide: replaces ALL call sites (across all files in the solution) with the method's expression, then removes the method declaration. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected. Returns a dictionary of filePath→updatedContent for every file that was modified.")]
+    public async Task<Dictionary<string, string>> InlineMethod(string filePath, string methodName)
     {
         try
         {

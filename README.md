@@ -240,7 +240,7 @@ Powered by `RefactoringEngine`, `GranularRefactoringEngine`, `RefinementEngine`,
 | `extract_superclass` | Extract common members to a new abstract base class | ⭐⭐⭐⭐⭐ |
 | `extract_class` | Move named members to a new class; removes them from source and adds a `private readonly {NewClass}` composition field; returns both files | ⭐⭐⭐⭐ |
 | `extract_members_to_partial` | Move specified members to a `partial` companion file | ⭐⭐⭐⭐⭐ |
-| `inline_method` | Inline an expression-body or single-return method at all same-file call sites and remove the method (validates method shape; cross-file sites not updated) | ⭐⭐⭐⭐ |
+| `inline_method` | Inline an expression-body or single-return method at **all call sites solution-wide** and remove the method declaration; returns a file→content map for every modified file | ⭐⭐⭐⭐⭐ |
 | `inline_field` | Inline a field's value and remove the field | ⭐⭐⭐⭐⭐ |
 | `inline_parameter` | Remove a parameter whose value is always a constant | ⭐⭐⭐⭐⭐ |
 | `inline_variable` | Inline a local variable's value and remove it | ⭐⭐⭐⭐⭐ |

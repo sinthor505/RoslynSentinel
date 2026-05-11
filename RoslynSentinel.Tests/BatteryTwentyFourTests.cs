@@ -479,7 +479,7 @@ public enum Status { Active = 1, Pending = 2 }
     // --- InlineMethod ---
 
     [Test]
-    public async Task InlineMethod_ValidMethod_ReturnsString()
+    public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.InlineMethod("Order.cs", "GetLabel");

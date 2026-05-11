@@ -82,8 +82,9 @@ public class RefactoringTests
         var source = "public class C { public int GetTen() { return 10; } public void M() { var x = GetTen(); } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _refinementEngine.InlineMethodAsync("C.cs", "GetTen");
-        Assert.That(result, Contains.Substring("var x = 10;"));
-        Assert.That(result, Does.Not.Contain("GetTen()"));
+        var updatedContent = result.Values.FirstOrDefault(v => !v.StartsWith("// Error:")) ?? "";
+        Assert.That(updatedContent, Contains.Substring("var x = 10;"));
+        Assert.That(updatedContent, Does.Not.Contain("GetTen()"));
     }
 
     [Test]
