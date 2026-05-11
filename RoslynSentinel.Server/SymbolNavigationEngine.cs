@@ -78,6 +78,51 @@ public record ExtensionMethodInfo(
     int? Line
 );
 
+public record VariableAccess(
+    string FilePath,
+    int Line,
+    int Column,
+    string AccessKind,
+    string ContextStack,
+    bool IsInLoop,
+    bool IsInConditional
+);
+
+public record VariableLifetimeReport
+{
+    public string? Error { get; init; }
+    public string VariableName { get; init; } = "";
+    public string TypeName { get; init; } = "";
+    public string DeclarationFile { get; init; } = "";
+    public int DeclarationLine { get; init; }
+    public string ScopeDescription { get; init; } = "";
+    public bool IsDefinitelyAssigned { get; init; }
+    public bool IsAlwaysAssigned { get; init; }
+    public bool IsCapturedInClosure { get; init; }
+    public List<VariableAccess> Accesses { get; init; } = new();
+}
+
+public record TypeHierarchyEntry(
+    string TypeName,
+    string? FilePath,
+    int? Line,
+    string Kind
+);
+
+public record TypeHierarchyReport
+{
+    public string? Error { get; init; }
+    public string TypeName { get; init; } = "";
+    public string? BaseClass { get; init; }
+    public List<string> BaseClassChain { get; init; } = new();
+    public List<string> ImplementedInterfaces { get; init; } = new();
+    public List<TypeHierarchyEntry> DerivedTypes { get; init; } = new();
+    public List<TypeHierarchyEntry> ImplementingTypes { get; init; } = new();
+    public bool IsInterface { get; init; }
+    public bool IsAbstract { get; init; }
+    public bool IsSealed { get; init; }
+}
+
 public record CallGraphNode(
     string MethodName,
     string ContainingType,
@@ -991,5 +1036,353 @@ public class SymbolNavigationEngine
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Traces a variable's full lifetime from declaration through every read, write, and capture
+    /// across all code paths (loops, conditionals, try/catch) in the enclosing method.
+    /// </summary>
+    public async Task<VariableLifetimeReport> TraceVariableLifetimeAsync(
+        string filePath,
+        string variableName,
+        int lineNumber,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+            return new VariableLifetimeReport { Error = $"File not found: '{filePath}'" };
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (root == null || semanticModel == null)
+            return new VariableLifetimeReport { Error = "Could not obtain syntax tree or semantic model." };
+
+        var text = await document.GetTextAsync(ct);
+        if (lineNumber < 1 || lineNumber > text.Lines.Count)
+            return new VariableLifetimeReport { Error = $"Line {lineNumber} is out of range." };
+
+        // Find declaration node at/near the requested line
+        var targetLineSpan = text.Lines[lineNumber - 1].Span;
+        ISymbol? symbol = null;
+        SyntaxNode? declNode = null;
+
+        // Check variable declarators
+        var declarator = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
+            .OfType<VariableDeclaratorSyntax>()
+            .FirstOrDefault(v => v.Identifier.Text == variableName);
+        if (declarator != null)
+        {
+            symbol = semanticModel.GetDeclaredSymbol(declarator, ct);
+            declNode = declarator;
+        }
+
+        // Check parameters
+        if (symbol == null)
+        {
+            var param = root.DescendantNodes(n => n.Span.IntersectsWith(targetLineSpan))
+                .OfType<ParameterSyntax>()
+                .FirstOrDefault(p => p.Identifier.Text == variableName);
+            if (param != null)
+            {
+                symbol = semanticModel.GetDeclaredSymbol(param, ct);
+                declNode = param;
+            }
+        }
+
+        // Widen search to nearby lines if not found on the exact line
+        if (symbol == null)
+        {
+            foreach (var varDecl in root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Where(v => v.Identifier.Text == variableName))
+            {
+                var varLine = varDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                if (Math.Abs(varLine - lineNumber) <= 5)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(varDecl, ct);
+                    declNode = varDecl;
+                    break;
+                }
+            }
+        }
+
+        if (symbol == null)
+            return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}." };
+
+        var declLoc = declNode?.GetLocation();
+        var declLine = declLoc?.GetLineSpan().StartLinePosition.Line + 1 ?? lineNumber;
+        var declFilePath = declLoc?.SourceTree?.FilePath ?? filePath;
+
+        // Get type name
+        string typeName = symbol switch
+        {
+            ILocalSymbol ls => ls.Type.ToDisplayString(),
+            IParameterSymbol ps => ps.Type.ToDisplayString(),
+            IFieldSymbol fs => fs.Type.ToDisplayString(),
+            _ => "unknown"
+        };
+
+        // Scope description from enclosing method
+        var enclosingMethod = declNode?.Ancestors()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault();
+        string scopeDesc = enclosingMethod != null
+            ? $"method: {enclosingMethod.Identifier.Text}"
+            : "unknown scope";
+
+        // Data flow analysis on the enclosing method body
+        bool definitelyAssigned = false, alwaysAssigned = false, capturedInClosure = false;
+        if (enclosingMethod?.Body != null)
+        {
+            try
+            {
+                var dataFlow = semanticModel.AnalyzeDataFlow(enclosingMethod.Body);
+                if (dataFlow?.Succeeded == true)
+                {
+                    definitelyAssigned = dataFlow.DefinitelyAssignedOnEntry.Any(s =>
+                        SymbolEqualityComparer.Default.Equals(s, symbol));
+                    alwaysAssigned = dataFlow.AlwaysAssigned.Any(s =>
+                        SymbolEqualityComparer.Default.Equals(s, symbol));
+                    capturedInClosure = dataFlow.CapturedInside.Any(s =>
+                        SymbolEqualityComparer.Default.Equals(s, symbol));
+                }
+            }
+            catch { /* data flow may fail on complex bodies */ }
+        }
+
+        // Find all references via SymbolFinder (cross-file safe)
+        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var accesses = new List<VariableAccess>();
+
+        // Add declaration entry
+        accesses.Add(new VariableAccess(
+            FilePath: declFilePath,
+            Line: declLine,
+            Column: declLoc?.GetLineSpan().StartLinePosition.Character + 1 ?? 0,
+            AccessKind: "Declaration",
+            ContextStack: BuildContextStack(declNode),
+            IsInLoop: IsInsideLoop(declNode),
+            IsInConditional: IsInsideConditional(declNode)
+        ));
+
+        foreach (var refGroup in references)
+        {
+            foreach (var loc in refGroup.Locations)
+            {
+                if (!loc.Location.IsInSource) continue;
+                var lineSpan = loc.Location.GetLineSpan();
+                var refLine = lineSpan.StartLinePosition.Line + 1;
+                var refCol = lineSpan.StartLinePosition.Character + 1;
+                var refFilePath = loc.Location.SourceTree?.FilePath ?? filePath;
+
+                // Determine access kind from surrounding AST
+                var refDoc = solution.Projects.SelectMany(p => p.Documents)
+                    .FirstOrDefault(d => d.FilePath == refFilePath);
+                if (refDoc == null) continue;
+
+                var refRoot = await refDoc.GetSyntaxRootAsync(ct);
+                if (refRoot == null) continue;
+
+                var tokenNode = refRoot.FindToken(loc.Location.SourceSpan.Start).Parent;
+                string accessKind = DetermineAccessKind(tokenNode, variableName);
+
+                accesses.Add(new VariableAccess(
+                    FilePath: refFilePath,
+                    Line: refLine,
+                    Column: refCol,
+                    AccessKind: accessKind,
+                    ContextStack: BuildContextStack(tokenNode),
+                    IsInLoop: IsInsideLoop(tokenNode),
+                    IsInConditional: IsInsideConditional(tokenNode)
+                ));
+            }
+        }
+
+        accesses.Sort((a, b) =>
+        {
+            var fc = string.Compare(a.FilePath, b.FilePath, StringComparison.OrdinalIgnoreCase);
+            return fc != 0 ? fc : a.Line.CompareTo(b.Line);
+        });
+
+        return new VariableLifetimeReport
+        {
+            VariableName = variableName,
+            TypeName = typeName,
+            DeclarationFile = declFilePath,
+            DeclarationLine = declLine,
+            ScopeDescription = scopeDesc,
+            IsDefinitelyAssigned = definitelyAssigned,
+            IsAlwaysAssigned = alwaysAssigned,
+            IsCapturedInClosure = capturedInClosure,
+            Accesses = accesses
+        };
+    }
+
+    private static string DetermineAccessKind(SyntaxNode? node, string varName)
+    {
+        if (node == null) return "Read";
+
+        // ref/out argument
+        var argList = node.Ancestors().OfType<ArgumentSyntax>().FirstOrDefault();
+        if (argList != null)
+        {
+            if (argList.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)) return "Ref";
+            if (argList.RefKindKeyword.IsKind(SyntaxKind.OutKeyword)) return "Out";
+        }
+
+        // return statement
+        if (node.Ancestors().OfType<ReturnStatementSyntax>().Any()) return "Return";
+
+        // assignment — LHS?
+        var assignment = node.Ancestors().OfType<AssignmentExpressionSyntax>().FirstOrDefault();
+        if (assignment != null)
+        {
+            var lhsText = assignment.Left.ToString();
+            if (lhsText == varName || lhsText.EndsWith("." + varName)) return "Write";
+        }
+
+        // local variable declaration initializer
+        var declarator = node.Ancestors().OfType<VariableDeclaratorSyntax>().FirstOrDefault();
+        if (declarator?.Identifier.Text == varName) return "Declaration";
+
+        // lambda/anonymous method capture
+        if (node.Ancestors().Any(a => a is LambdaExpressionSyntax or AnonymousFunctionExpressionSyntax))
+            return "Capture";
+
+        return "Read";
+    }
+
+    private static string BuildContextStack(SyntaxNode? node)
+    {
+        if (node == null) return "";
+        var parts = new List<string>();
+        foreach (var ancestor in node.Ancestors())
+        {
+            switch (ancestor)
+            {
+                case MethodDeclarationSyntax m: parts.Add($"method:{m.Identifier.Text}"); break;
+                case ConstructorDeclarationSyntax c: parts.Add($"ctor:{c.Identifier.Text}"); break;
+                case ForStatementSyntax: parts.Add("for"); break;
+                case ForEachStatementSyntax fe: parts.Add($"foreach({fe.Identifier.Text})"); break;
+                case WhileStatementSyntax: parts.Add("while"); break;
+                case DoStatementSyntax: parts.Add("do-while"); break;
+                case IfStatementSyntax: parts.Add("if"); break;
+                case SwitchStatementSyntax: parts.Add("switch"); break;
+                case TryStatementSyntax: parts.Add("try"); break;
+                case CatchClauseSyntax: parts.Add("catch"); break;
+                case FinallyClauseSyntax: parts.Add("finally"); break;
+                case LambdaExpressionSyntax: parts.Add("lambda"); break;
+            }
+        }
+        parts.Reverse();
+        return string.Join(" > ", parts);
+    }
+
+    private static bool IsInsideLoop(SyntaxNode? node) =>
+        node?.Ancestors().Any(a =>
+            a is ForStatementSyntax or
+            ForEachStatementSyntax or
+            WhileStatementSyntax or
+            DoStatementSyntax) == true;
+
+    private static bool IsInsideConditional(SyntaxNode? node) =>
+        node?.Ancestors().Any(a =>
+            a is IfStatementSyntax or
+            SwitchStatementSyntax or
+            ConditionalExpressionSyntax) == true;
+
+    /// <summary>
+    /// Returns the full type hierarchy for a named type: base class chain, implemented interfaces,
+    /// derived classes, and (if an interface) all implementing types.
+    /// </summary>
+    public async Task<TypeHierarchyReport> GetTypeHierarchyAsync(
+        string typeName,
+        string? projectName = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        var searchProjects = projectName != null
+            ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            : solution.Projects;
+
+        INamedTypeSymbol? typeSymbol = null;
+        foreach (var project in searchProjects)
+        {
+            var compilation = await project.GetCompilationAsync(ct);
+            if (compilation == null) continue;
+            typeSymbol = compilation
+                .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
+                .OfType<INamedTypeSymbol>()
+                .FirstOrDefault();
+            if (typeSymbol != null) break;
+        }
+
+        if (typeSymbol == null)
+            return new TypeHierarchyReport { Error = $"Type '{typeName}' not found in solution." };
+
+        // Base class chain (excluding System.Object)
+        var baseChain = new List<string>();
+        var bt = typeSymbol.BaseType;
+        while (bt != null && bt.SpecialType != SpecialType.System_Object)
+        {
+            baseChain.Add(bt.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat));
+            bt = bt.BaseType;
+        }
+
+        // Implemented interfaces (direct only at type level, AllInterfaces for full set)
+        var interfaces = typeSymbol.AllInterfaces
+            .Select(i => i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat))
+            .ToList();
+
+        // Derived classes
+        var derivedEntries = new List<TypeHierarchyEntry>();
+        if (typeSymbol.TypeKind == TypeKind.Class)
+        {
+            var derived = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, solution, null, ct);
+            foreach (var d in derived)
+            {
+                var loc = d.Locations.FirstOrDefault(l => l.IsInSource);
+                derivedEntries.Add(new TypeHierarchyEntry(
+                    TypeName: d.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    FilePath: loc?.SourceTree?.FilePath,
+                    Line: loc != null ? loc.GetLineSpan().StartLinePosition.Line + 1 : null,
+                    Kind: d.TypeKind.ToString()
+                ));
+            }
+        }
+
+        // Implementing types (interface only)
+        var implementingEntries = new List<TypeHierarchyEntry>();
+        if (typeSymbol.TypeKind == TypeKind.Interface)
+        {
+            var impls = await SymbolFinder.FindImplementationsAsync(typeSymbol, solution, null, ct);
+            foreach (var impl in impls.OfType<INamedTypeSymbol>())
+            {
+                var loc = impl.Locations.FirstOrDefault(l => l.IsInSource);
+                implementingEntries.Add(new TypeHierarchyEntry(
+                    TypeName: impl.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    FilePath: loc?.SourceTree?.FilePath,
+                    Line: loc != null ? loc.GetLineSpan().StartLinePosition.Line + 1 : null,
+                    Kind: impl.TypeKind.ToString()
+                ));
+            }
+        }
+
+        return new TypeHierarchyReport
+        {
+            TypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+            BaseClass = typeSymbol.BaseType?.SpecialType == SpecialType.System_Object
+                ? null
+                : typeSymbol.BaseType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+            BaseClassChain = baseChain,
+            ImplementedInterfaces = interfaces,
+            DerivedTypes = derivedEntries,
+            ImplementingTypes = implementingEntries,
+            IsInterface = typeSymbol.TypeKind == TypeKind.Interface,
+            IsAbstract = typeSymbol.IsAbstract,
+            IsSealed = typeSymbol.IsSealed
+        };
     }
 }

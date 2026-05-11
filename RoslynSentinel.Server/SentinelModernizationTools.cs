@@ -80,6 +80,17 @@ public class SentinelModernizationTools
     }
 
     [McpServerTool]
+    [Description("IDE0210: Converts a block-form namespace declaration ('namespace Foo { }') to C# 10 file-scoped form ('namespace Foo;'). Preserves using directives, extern aliases, and all type members. Returns the rewritten file content.")]
+    public async Task<string> UpgradeToFileScopedNamespace(string filePath)
+    {
+        var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"UpgradeToFileScopedNamespace failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
+
+    [McpServerTool]
     [Description("IDE0011: Adds braces to single-line if, foreach, and while statements.")]
     public async Task<string> AddBraces(string filePath)
     {

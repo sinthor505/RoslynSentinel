@@ -172,6 +172,38 @@ public class AdvancedStructuralEngine
         var updatedSourceClass = classNode
             .RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!
             .AddMembers(propDecl);
+
+        // Fix internal callers within the remaining class body so they route through the new property:
+        //   this.Method()  →  NewClass.Method()
+        //   Method()       →  NewClass.Method()
+        var memberNameSet = new HashSet<string>(memberNames, StringComparer.Ordinal);
+
+        var thisAccesses = updatedSourceClass.DescendantNodes()
+            .OfType<MemberAccessExpressionSyntax>()
+            .Where(ma => ma.Expression is ThisExpressionSyntax && memberNameSet.Contains(ma.Name.Identifier.Text))
+            .ToList();
+        if (thisAccesses.Count > 0)
+        {
+            updatedSourceClass = updatedSourceClass.ReplaceNodes(thisAccesses, (original, _) =>
+                original.WithExpression(SyntaxFactory.IdentifierName(newClassName)));
+        }
+
+        var bareIdentifiers = updatedSourceClass.DescendantNodes()
+            .OfType<IdentifierNameSyntax>()
+            .Where(id =>
+                memberNameSet.Contains(id.Identifier.Text) &&
+                id.Parent is not MemberAccessExpressionSyntax &&
+                id.Parent is not QualifiedNameSyntax)
+            .ToList();
+        if (bareIdentifiers.Count > 0)
+        {
+            updatedSourceClass = updatedSourceClass.ReplaceNodes(bareIdentifiers, (original, _) =>
+                SyntaxFactory.MemberAccessExpression(
+                    SyntaxKind.SimpleMemberAccessExpression,
+                    SyntaxFactory.IdentifierName(newClassName),
+                    (SimpleNameSyntax)original));
+        }
+
         var updatedRoot = root!.ReplaceNode(classNode, updatedSourceClass);
 
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");

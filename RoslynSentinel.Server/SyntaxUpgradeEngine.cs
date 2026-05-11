@@ -383,6 +383,34 @@ public class SyntaxUpgradeEngine
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
+    public async Task<string> UpgradeToFileScopedNamespaceAsync(string filePath, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null) return "// File not found in workspace.";
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return string.Empty;
+
+        if (root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().Any())
+            return "// Already uses file-scoped namespace declaration.";
+
+        var nsDecl = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
+        if (nsDecl == null) return "// No block-form namespace declaration found in this file.";
+
+        // Preserve all members, usings, and extern aliases from the block namespace
+        var fileScopedNs = SyntaxFactory.FileScopedNamespaceDeclaration(nsDecl.Name)
+            .WithExterns(nsDecl.Externs)
+            .WithUsings(nsDecl.Usings)
+            .WithMembers(nsDecl.Members)
+            .WithLeadingTrivia(nsDecl.GetLeadingTrivia())
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.ElasticCarriageReturnLineFeed));
+
+        var newRoot = root.ReplaceNode(nsDecl, fileScopedNs);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
     public async Task<string> UseExceptionExpressionsAsync(string filePath, string methodName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

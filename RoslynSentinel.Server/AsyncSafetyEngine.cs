@@ -851,6 +851,107 @@ public class AsyncSafetyEngine
     /// exactly 2 parameters where the first is <c>object</c> (or <c>object?</c>) and the
     /// second type name ends with <c>EventArgs</c>.
     /// </summary>
+    /// <summary>
+    /// EPC31: Finds async methods that have a CancellationToken parameter but call awaitable
+    /// methods without forwarding the token. Only flags calls ending in "Async" that don't
+    /// already receive the token as an argument.
+    /// </summary>
+    public async Task<List<AsyncSafetyReport>> FindCancellationTokenNotForwardedAsync(
+        string? filePath = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var reports = new List<AsyncSafetyReport>();
+
+        IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents).Cast<Document?>()
+            : solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+
+        foreach (var doc in docs)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            // Get semantic model for this doc (optional — fall back to syntax heuristics if unavailable)
+            SemanticModel? model = null;
+            try { model = await doc.GetSemanticModelAsync(cancellationToken); } catch { }
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                // Method must be async (or return Task/ValueTask)
+                bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+                bool returnsTask = !isAsync && method.ReturnType is GenericNameSyntax gn &&
+                    (gn.Identifier.Text == "Task" || gn.Identifier.Text == "ValueTask");
+                if (!isAsync && !returnsTask) continue;
+
+                // Method must have a CancellationToken parameter
+                var ctParam = method.ParameterList.Parameters.FirstOrDefault(p =>
+                {
+                    var typeName = p.Type?.ToString() ?? "";
+                    return typeName == "CancellationToken" || typeName.EndsWith(".CancellationToken");
+                });
+                if (ctParam == null) continue;
+
+                var ctParamName = ctParam.Identifier.Text;
+                var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
+                if (body == null) continue;
+
+                foreach (var invocation in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    // Target must look like an async call
+                    string? calleeName = invocation.Expression switch
+                    {
+                        MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                        IdentifierNameSyntax id => id.Identifier.Text,
+                        _ => null
+                    };
+                    if (calleeName == null || !calleeName.EndsWith("Async", StringComparison.Ordinal))
+                        continue;
+
+                    // Must be awaited to be a real async call site
+                    bool isAwaited = invocation.Parent is AwaitExpressionSyntax ||
+                        (invocation.Parent is MemberAccessExpressionSyntax chainMa &&
+                         chainMa.Parent is InvocationExpressionSyntax chainCall &&
+                         chainCall.Parent is AwaitExpressionSyntax);
+                    if (!isAwaited) continue;
+
+                    // Check whether the CancellationToken param is already forwarded
+                    var args = invocation.ArgumentList.Arguments;
+                    bool alreadyForwarded = args.Any(a =>
+                        a.Expression.ToString().Contains(ctParamName));
+                    if (alreadyForwarded) continue;
+
+                    // Verify (via semantic model) that a CancellationToken overload exists for the callee.
+                    // If no semantic model, use heuristic: assume any *Async method can accept one.
+                    bool hasCancellableOverload = true;
+                    if (model != null)
+                    {
+                        var si = model.GetSymbolInfo(invocation, cancellationToken);
+                        var candidates = si.Symbol != null
+                            ? new[] { si.Symbol }
+                            : si.CandidateSymbols.ToArray();
+                        hasCancellableOverload = candidates.OfType<IMethodSymbol>().Any() &&
+                            invocation.Expression is MemberAccessExpressionSyntax callMa
+                            ? (model.GetSymbolInfo(invocation, cancellationToken).Symbol is IMethodSymbol ms &&
+                               ms.ContainingType.GetMembers(ms.Name).OfType<IMethodSymbol>()
+                                 .Any(overload => overload.Parameters.Any(p =>
+                                     p.Type.ToDisplayString() == "System.Threading.CancellationToken")))
+                            : true; // fallback: flag it
+                    }
+
+                    if (!hasCancellableOverload) continue;
+
+                    var lineSpan = invocation.GetLocation().GetLineSpan();
+                    reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                        $"Line {lineSpan.StartLinePosition.Line + 1}: '{calleeName}' is called without forwarding '{ctParamName}'. " +
+                        $"Pass '{ctParamName}' as the last argument to propagate cancellation."));
+                }
+            }
+        }
+        return reports;
+    }
+
     private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
     {
         var parameters = method.ParameterList.Parameters;

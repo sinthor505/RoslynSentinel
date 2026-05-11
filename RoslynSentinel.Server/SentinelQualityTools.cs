@@ -608,6 +608,17 @@ public class SentinelQualityTools
     public async Task<List<AsyncSafetyReport>> FindUnobservedTaskInField(string? filePath = null)
         => await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
 
+    [McpServerTool]
+    [Description("""
+        EPC31: Finds async methods that have a CancellationToken parameter but call awaitable
+        methods ('*Async') without forwarding the token. Detects missed cancellation propagation
+        that leaves callers unable to cancel downstream work.
+        filePath: scan a single file. Leave null to scan the entire solution.
+        Returns method name, file, line, the unforwarded callee name, and the CT parameter name.
+        """)]
+    public async Task<List<AsyncSafetyReport>> FindCancellationTokenNotForwarded(string? filePath = null)
+        => await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
+
     // ── Code style: new detectors ──────────────────────────────────────────────
 
     [McpServerTool]

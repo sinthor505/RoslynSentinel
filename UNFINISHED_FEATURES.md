@@ -1,8 +1,8 @@
 # RoslynSentinel — Deferred Bugs & Feature Limitations
 
 **Status:** All previously-documented stub methods are fully implemented. This document tracks deferred bugs with regression tests and known edge-case limitations.  
-**Last Updated:** 2026-05-08  
-**Test Suite:** ✅ 1,692 total tests (1,605 passing, 87 skipped — real-solution integration tests requiring `ROSLYN_SENTINEL_TEST_SLN`)
+**Last Updated:** 2026-05-10  
+**Test Suite:** ✅ 1,917 total tests (1,830 passing, 87 skipped — real-solution integration tests requiring `ROSLYN_SENTINEL_TEST_SLN`)
 
 ---
 
@@ -49,20 +49,7 @@ These methods exist, are partially implemented, but throw `InvalidOperationExcep
 #### AdvancedStructuralEngine
 **Method:** `InlineClassAsync(string filePath, string className)`
 
-**Current Behavior:** Throws `InvalidOperationException` with message:
-```
-"InlineClassAsync requires cross-file symbol discovery to update all usages. 
-This capability is planned for Phase 2.5."
-```
-
-**Reason:** 
-- Requires finding all references to the class across the solution
-- Roslyn workspace cross-file symbol resolution complex
-- Partial implementation only handles local references
-
-**Status:** Documented in code. MCP tool exists but clearly communicates limitation.
-
-**Test:** `InlineClassAsync_ThrowsWithExplanation()` in regression tests (passes)
+**Status:** ✅ **FIXED** — Now uses `SymbolFinder.FindReferencesAsync` for solution-wide type reference rewriting. Handles `ClassName x`, `new ClassName()`, casts, `typeof`, etc. across all files.
 
 ---
 

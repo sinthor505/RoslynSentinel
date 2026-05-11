@@ -182,9 +182,9 @@ When an AI agent edits code manually it is doing **text manipulation**, not sema
 
 ---
 
-## 🚀 260 MCP Tools Across 44 Engines + 7 Tool Classes
+## 🚀 265 MCP Tools Across 44 Engines + 7 Tool Classes
 
-Roslyn Sentinel exposes **260 named MCP tools** through 7 façade classes that wrap 44 specialized analysis and transformation engines. All tools are always live; individual **feature toggles** let you silence noisy analysis rules without touching code.
+Roslyn Sentinel exposes **265 named MCP tools** through 7 façade classes that wrap 44 specialized analysis and transformation engines. All tools are always live; individual **feature toggles** let you silence noisy analysis rules without touching code.
 
 > **Rating Key:** ⭐⭐⭐⭐⭐ Production-ready &nbsp;·&nbsp; ⭐⭐⭐⭐ Stable, minor edge cases &nbsp;·&nbsp; ⭐⭐⭐ Functional, documented limitations &nbsp;·&nbsp; ⭐⭐ Partial implementation
 
@@ -308,7 +308,7 @@ All tools below accept `contextSnippet` for position-free targeting. All are `au
 
 ---
 
-## ⚡ Modernization — 26 tools (.NET 8/9/10 · C# 12/13/14)
+## ⚡ Modernization — 27 tools (.NET 8/9/10 · C# 12/13/14)
 
 Powered by `CodeStyleEngine`, `SyntaxUpgradeEngine`, `ModernizationEngine`, `IDEStyleEngine`, `ImmutabilityEngine`, `AsyncOptimizationEngine`, `ModernLoggingEngine`, `LogicOptimizationEngine`, and `AdvancedLogicEngine`.
 
@@ -340,10 +340,11 @@ Powered by `CodeStyleEngine`, `SyntaxUpgradeEngine`, `ModernizationEngine`, `IDE
 | `optimize_independent_awaits` | Parallelise sequential `var x = await a; var y = await b;` to `Task.WhenAll` | ⭐⭐⭐⭐⭐ |
 | `convert_static_to_extension` | Convert a plain `static` method to an extension method | ⭐⭐⭐⭐⭐ |
 | `invert_boolean_logic` | Invert conditions and negate return values throughout a method | ⭐⭐⭐⭐⭐ |
+| `upgrade_to_file_scoped_namespace` | Convert block-form `namespace Foo { }` to file-scoped `namespace Foo;` (IDE0210) | ⭐⭐⭐⭐⭐ |
 
 ---
 
-## 🔍 Intelligence & Analysis — 57 tools
+## 🔍 Intelligence & Analysis — 61 tools
 
 Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `ArchitecturalEngine`, `DeadCodeEngine`, `AsyncSafetyEngine`, `AsyncOptimizationEngine`, `ThreadSafetyEngine`, `DependencyInjectionEngine`, `DiscoveryEngine`, and `SemanticSearchEngine`.
 
@@ -361,6 +362,9 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 | `get_public_api_surface` | List all public members of a type | ⭐⭐⭐⭐⭐ |
 | `get_type_members_detail` | Detailed member list (modifiers, return types, parameter lists) | ⭐⭐⭐⭐⭐ |
 | `find_extension_methods` | Discover all extension methods targeting a type | ⭐⭐⭐⭐⭐ |
+| `get_blast_radius` | Show exact file and reference counts a symbol change would touch — before committing anything | ⭐⭐⭐⭐⭐ |
+| `trace_variable_lifetime` | Full variable data flow from declaration through every read/write, across conditionals and loops, to out-of-scope — includes `IsDefinitelyAssigned`, `IsCapturedInClosure`, and context stack per access | ⭐⭐⭐⭐⭐ |
+| `get_type_hierarchy` | For a class: base chain + implemented interfaces + derived subclasses. For an interface: all implementing types. Includes `IsAbstract`, `IsSealed`, `IsInterface` flags | ⭐⭐⭐⭐⭐ |
 
 ### Architecture & Dependencies
 
@@ -439,6 +443,7 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 | `convert_to_async_enumerable` | Convert a `List<T>` return to `IAsyncEnumerable<T>` | ⭐⭐⭐⭐⭐ |
 | `make_method_thread_safe` | Wrap a method with a `SemaphoreSlim` guard | ⭐⭐⭐⭐⭐ |
 | `find_missing_cancellation_tokens` | Find async methods missing a `CancellationToken` parameter | ⭐⭐⭐⭐⭐ |
+| `find_cancellation_token_not_forwarded` | Find async methods that accept a `CancellationToken` but fail to forward it to awaited `*Async` callees (EPC31) | ⭐⭐⭐⭐⭐ |
 
 ---
 
@@ -655,7 +660,7 @@ Changes take effect immediately for all subsequent tool calls, including `get_co
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by **1,896 tests across 76 test files** (1,809 passing, 87 skipped for real-solution integration tests), including:
+Roslyn Sentinel is backed by **1,917 tests across 77 test files** (1,830 passing, 87 skipped for real-solution integration tests), including:
 - Unit tests for every engine method
 - Accuracy tests verifying each detector fires on positive cases and stays silent on negative cases
 - Real-solution smoke tests against a live .NET codebase (requires `ROSLYN_SENTINEL_TEST_SLN`)
@@ -663,7 +668,7 @@ Roslyn Sentinel is backed by **1,896 tests across 76 test files** (1,809 passing
 
 ```bash
 dotnet test RoslynSentinel.Tests/RoslynSentinel.Tests.csproj
-# → 1,812 passed, 87 skipped
+# → 1,830 passed, 87 skipped
 ```
 
 ---
@@ -672,9 +677,8 @@ dotnet test RoslynSentinel.Tests/RoslynSentinel.Tests.csproj
 
 See [UNFINISHED_FEATURES.md](./UNFINISHED_FEATURES.md) for the backlog of planned additions:
 - `ConvertInterfaceToAbstractClass`, `AutoParallelize`
-- Full `InlineClass` (requires cross-file symbol discovery)
-- IDE0042/IDE0050/IDE0210/IDE0250/IDE0340 modernization passes
-- EPC16/EPC18/EPC31/EPC32 async audit rules
+- IDE0042/IDE0050/IDE0250/IDE0340 modernization passes
+- EPC16/EPC18/EPC32 async audit rules
 - Intent-Based AST Command Model (high-level "recipe" refactorings)
 
 ---

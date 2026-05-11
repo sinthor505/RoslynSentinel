@@ -345,6 +345,33 @@ public async Task<List<string>> FindStructuralSmells(
 
     [McpServerTool]
     [Description("""
+        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass,
+        return, and closure capture, across all code paths (loops, conditionals, try/catch) in the
+        enclosing scope.
+        filePath: file containing the variable declaration.
+        variableName: the exact identifier name.
+        lineNumber: 1-based line of the declaration (used to disambiguate variables with the same name).
+        Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned,
+        IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/
+        Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
+        """)]
+    public async Task<VariableLifetimeReport> TraceVariableLifetime(string filePath, string variableName, int lineNumber)
+        => await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber);
+
+    [McpServerTool]
+    [Description("""
+        Returns the full type hierarchy for a named type: direct base class, full base class chain
+        (excluding System.Object), all implemented interfaces (including transitive ones), derived
+        classes (via SymbolFinder.FindDerivedClassesAsync), and — if the type is an interface —
+        all implementing types (via FindImplementationsAsync).
+        Each entry includes TypeName, FilePath, Line, and Kind (Class/Interface/Struct).
+        IsInterface, IsAbstract, IsSealed flags are included on the root type.
+        """)]
+    public async Task<TypeHierarchyReport> GetTypeHierarchy(string typeName, string? projectName = null)
+        => await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
+
+    [McpServerTool]
+    [Description("""
         Finds all implementations of an interface member or virtual/abstract method in the solution
         without requiring line/column coordinates.
         Unlike the built-in find_implementations which needs a line number, this locates the symbol by name
