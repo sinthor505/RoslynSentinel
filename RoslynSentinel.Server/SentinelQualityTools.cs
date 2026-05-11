@@ -20,6 +20,7 @@ public class SentinelQualityTools
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
+    private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -34,6 +35,7 @@ public class SentinelQualityTools
         AsyncOptimizationEngine asyncOptimizationEngine,
         ThreadSafetyEngine threadSafetyEngine,
         DiagnosticEngine diagnosticEngine,
+        CodeStyleAnalysisEngine codeStyleAnalysisEngine,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -47,6 +49,7 @@ public class SentinelQualityTools
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _threadSafetyEngine = threadSafetyEngine;
         _diagnosticEngine = diagnosticEngine;
+        _codeStyleAnalysisEngine = codeStyleAnalysisEngine;
         _logger = logger;
     }
 
@@ -499,4 +502,116 @@ public class SentinelQualityTools
             TopIssues: groups
         );
     }
+
+    // ── Performance: new detectors ─────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects LINQ N+1 query patterns: LINQ terminal calls (Where, FirstOrDefault, Any, Count, etc.) inside foreach/for/while loops where the loop variable appears in the LINQ chain — each iteration triggers a separate query. Reports file, line, and the loop variable involved.")]
+    public async Task<List<PerformanceIssueReport>> FindLinqN1Patterns(string? filePath = null, string? projectName = null)
+        => await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Detects string interpolation ($\"...\") and string.Format() calls inside loop bodies. Each iteration allocates a new string — use StringBuilder for accumulation or move the format outside the loop.")]
+    public async Task<List<PerformanceIssueReport>> FindStringFormatInLoops(string? filePath = null)
+        => await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects IEnumerable<T> or IQueryable<T> locals/parameters that are iterated more than once without a materializing call (ToList/ToArray). Multiple enumerations can execute a database query or generator multiple times. Reports variable name and enumeration line numbers.")]
+    public async Task<List<PerformanceIssueReport>> FindMultipleEnumeration(string? filePath = null)
+        => await _performanceEngine.FindMultipleEnumerationAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects LINQ chains of the form .Where(pred).First() / .Where(pred).Any() / .Where(pred).Count() where the intermediate Where creates an unnecessary IEnumerable allocation. Suggests collapsing to .First(pred) / .Any(pred) / .Count(pred) for a single-pass, allocation-free alternative.")]
+    public async Task<List<PerformanceIssueReport>> FindLinqRedundantWhere(string? filePath = null)
+        => await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects explicit casts of Nullable<T> values to object or dynamic, which box the nullable and can produce surprising null-equality behavior ((object)(int?)null == null is true, but two boxed int? values with the same value are not reference-equal). Uses the semantic model for accuracy.")]
+    public async Task<List<PerformanceIssueReport>> FindImplicitNullableBoxing(string? filePath = null)
+        => await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
+
+    // ── Analysis: new detectors ────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects classes that implement IDisposable AND declare a finalizer (~C()) without a disposed-flag guard (if (_disposed) return;). The GC may call the finalizer after Dispose() has already run, causing double-free of unmanaged resources.")]
+    public async Task<List<string>> FindFinalizerOnDisposable(string? projectName = null)
+        => await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
+
+    [McpServerTool]
+    [Description("Detects static fields that hold unbounded collections (Dictionary, List, HashSet, etc.) that are populated with .Add()/.TryAdd() but never .Clear()ed and have no Count-based size cap. A common memory exhaustion DoS vector when populated from user-controlled data.")]
+    public async Task<List<string>> FindUnboundedStaticCollections(string? projectName = null)
+        => await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
+
+    [McpServerTool]
+    [Description("Detects recursive methods that lack a depth parameter or an early-exit base-case guard (non-recursive if-return before the recursive call). Unbounded recursion on large inputs causes StackOverflowException and crashes the process with no recoverable exception.")]
+    public async Task<List<string>> FindUnboundedRecursion(string? projectName = null)
+        => await _analysisEngine.FindUnboundedRecursionAsync(projectName);
+
+    // ── Thread safety: new detectors ───────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects the unsafe lazy initialization pattern (if (_field == null) { _field = new X(); }) outside a lock and without a volatile field or Lazy<T>. Without volatile, the CPU or JIT may reorder the store and expose a partially-constructed object on another thread.")]
+    public async Task<List<string>> FindUnsafeLazyInitThread(string? projectName = null, string? filePath = null)
+        => await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Detects while/do-while loops containing Interlocked.CompareExchange that have no back-off (no Thread.Sleep, Thread.SpinWait, SpinWait.SpinOnce, or Task.Delay). A spinning CAS loop without back-off can peg a CPU core at 100% under contention (live-lock).")]
+    public async Task<List<string>> FindCasLoopWithoutBackoff(string? projectName = null, string? filePath = null)
+        => await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Detects the double-checked locking (DCL) pattern where the lazily-initialized field is not declared volatile. Without volatile, a CPU or JIT may reorder the store and expose a partially-constructed object to the outer null-check on another thread. Use volatile or Lazy<T>.")]
+    public async Task<List<string>> FindDoubleCheckedLocking(string? projectName = null, string? filePath = null)
+        => await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Detects the check-then-act race on Dictionary/ConcurrentDictionary: ContainsKey() or TryGetValue() followed by Add()/TryAdd() on the same variable outside of any lock. Another thread may insert the same key between the check and add. Use GetOrAdd() or TryAdd() for atomic insertion.")]
+    public async Task<List<string>> FindCheckThenActOnDictionary(string? projectName = null, string? filePath = null)
+        => await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
+
+    // ── Security: new detectors ────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects Regex patterns in string literals that contain nested quantifiers ((a+)+, (a*b*)+, etc.) — a common ReDoS vulnerability. On non-matching input these patterns cause catastrophic backtracking, making the CPU spin indefinitely. Reports the pattern and the dangerous construct.")]
+    public async Task<List<SecurityIssueReport>> FindReDoSPatterns(string filePath)
+        => await _securityEngine.FindReDoSPatternsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects new Regex() or Regex.IsMatch/Match/Replace calls where the pattern argument is not a compile-time string literal. A non-literal pattern may originate from user input, enabling Regex injection (attacker-controlled matching logic) and ReDoS attacks.")]
+    public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSource(string filePath)
+        => await _securityEngine.FindUnvalidatedRegexSourceAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects new Regex() construction inside loop bodies (for/foreach/while/do). Constructing a Regex per iteration recompiles the pattern on every pass — a pure waste for literal patterns, and a ReDoS amplification vector for variable patterns. Hoist to a static readonly field.")]
+    public async Task<List<SecurityIssueReport>> FindRegexNewInLoop(string filePath)
+        => await _securityEngine.FindRegexNewInLoopAsync(filePath);
+
+    // ── Async safety: new detectors ────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects consecutive await expressions in async methods where neither result is used by the other await — missed Task.WhenAll() parallelism. Example: var a = await F(); var b = await G(); where b doesn't depend on a. Combining with Task.WhenAll cuts total latency to max(F,G).")]
+    public async Task<List<AsyncSafetyReport>> FindSequentialIndependentAwaits(string? filePath = null)
+        => await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects async void methods whose entire body is not wrapped in a try/catch. Unhandled exceptions inside async void crash the process via the unhandled-exception handler — there is no way for a caller to catch them. Wrap the body in try { } catch (Exception ex) { }.")]
+    public async Task<List<AsyncSafetyReport>> FindAsyncVoidWithoutTryCatch(string? filePath = null)
+        => await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects DisposeAsync() calls that are not awaited. In a synchronous Dispose() method or any context without await, the ValueTask returned by DisposeAsync() is discarded — async cleanup (file flushes, connection teardown) finishes after the method returns, leaving resources dangling.")]
+    public async Task<List<AsyncSafetyReport>> FindUnawakedDisposeAsync(string? filePath = null)
+        => await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects Task or ValueTask-returning method calls assigned to fields or properties without await, where the field is never subsequently awaited or .Wait()ed anywhere in the class. The task silently fails — any exception it throws is never observed and may eventually crash the process via UnobservedTaskException.")]
+    public async Task<List<AsyncSafetyReport>> FindUnobservedTaskInField(string? filePath = null)
+        => await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
+
+    // ── Code style: new detectors ──────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Detects public properties that expose mutable collection types (List<T>, Dictionary<K,V>, HashSet<T>, etc.) with a public non-init setter, allowing callers to completely replace the collection. Use IReadOnlyList<T>/IReadOnlyDictionary<K,V>, or change the setter to private/init.")]
+    public async Task<List<string>> FindMutablePublicCollectionProperties(string? projectName = null)
+        => await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
 }

@@ -332,4 +332,119 @@ public class DependencyInjectionEngine
 
         return results;
     }
+
+    // ── CaptiveDependency ─────────────────────────────────────────────────
+
+    public record CaptiveDependencyFinding(
+        string ConsumerClass,
+        string ConsumerLifetime,
+        string DependencyType,
+        string DependencyLifetime,
+        string FilePath,
+        int Line
+    );
+
+    /// <summary>
+    /// Detects captive dependency anti-pattern: a longer-lived service (Singleton) depending
+    /// on a shorter-lived one (Scoped/Transient), which causes the dependency to be captured
+    /// for the container's lifetime rather than its intended scope.
+    /// </summary>
+    public async Task<List<CaptiveDependencyFinding>> FindCaptiveDependenciesAsync(
+        string? projectName = null,
+        CancellationToken ct = default)
+    {
+        // Build a map: simple type name → lifetime (checking both service and impl type)
+        var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
+
+        // Also parse lambda factory registrations (task 13)
+        var lifetimeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var reg in registrations)
+        {
+            var svc = SimpleName(reg.ServiceType);
+            var impl = reg.ImplementationType != null ? SimpleName(reg.ImplementationType) : null;
+            if (!string.IsNullOrEmpty(svc)) lifetimeMap.TryAdd(svc, reg.Lifetime);
+            if (!string.IsNullOrEmpty(impl)) lifetimeMap.TryAdd(impl, reg.Lifetime);
+        }
+
+        // Also scan for lambda factory registrations:
+        // services.AddSingleton(sp => new Foo(sp.GetRequiredService<IBar>()))
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var docs = solution.Projects
+            .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(p => p.Documents);
+
+        foreach (var doc in docs)
+        {
+            if (doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                string? methodName = inv.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                    _ => null
+                };
+                if (methodName == null || !_lifetimeMethods.Contains(methodName)) continue;
+
+                string lifetime;
+                if (methodName == "AddSingleton") lifetime = "Singleton";
+                else if (methodName == "AddScoped") lifetime = "Scoped";
+                else if (methodName == "AddTransient") lifetime = "Transient";
+                else continue;
+
+                // Look for lambda argument: sp => new Foo(...)
+                var lambdaArg = inv.ArgumentList.Arguments
+                    .Select(a => a.Expression)
+                    .OfType<SimpleLambdaExpressionSyntax>()
+                    .FirstOrDefault();
+                if (lambdaArg?.Body is not ObjectCreationExpressionSyntax lambdaOc) continue;
+
+                var implTypeName = lambdaOc.Type.ToString().Split('<')[0].Split('.').Last();
+                lifetimeMap.TryAdd(implTypeName, lifetime);
+            }
+        }
+
+        // Now find violations
+        var findings = new List<CaptiveDependencyFinding>();
+
+        foreach (var doc in docs)
+        {
+            if (doc.FilePath == null) continue;
+            var root2 = await doc.GetSyntaxRootAsync(ct);
+            if (root2 == null) continue;
+
+            foreach (var classDecl in root2.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                var className = classDecl.Identifier.Text;
+                if (!lifetimeMap.TryGetValue(className, out var consumerLifetime)) continue;
+                if (consumerLifetime != "Singleton") continue; // Only Singletons can trap shorter-lived deps
+
+                var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+                if (ctor == null) continue;
+
+                foreach (var param in ctor.ParameterList.Parameters)
+                {
+                    if (param.Type == null) continue;
+                    var depSimpleName = SimpleName(param.Type.ToString());
+
+                    if (!lifetimeMap.TryGetValue(depSimpleName, out var depLifetime)) continue;
+                    if (depLifetime is "Scoped" or "Transient")
+                    {
+                        var line = param.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        findings.Add(new CaptiveDependencyFinding(
+                            className, consumerLifetime,
+                            param.Type.ToString(), depLifetime,
+                            doc.FilePath, line));
+                    }
+                }
+            }
+        }
+
+        return findings;
+    }
+
+    private static string SimpleName(string typeName) =>
+        typeName.Split('<')[0].Split('.').Last();
 }

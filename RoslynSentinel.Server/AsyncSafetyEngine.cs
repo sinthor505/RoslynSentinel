@@ -886,12 +886,15 @@ public class AsyncSafetyEngine
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null) continue;
 
+            // Semantic model enables precise return-type checking instead of name-suffix heuristics.
+            // Graceful fallback: if null (unresolvable project), the Async-suffix heuristic is used.
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+
             foreach (var exprStmt in root.DescendantNodes().OfType<ExpressionStatementSyntax>())
             {
                 // Pattern A: Raw invocation without await — RunAsync();
                 if (exprStmt.Expression is InvocationExpressionSyntax inv)
                 {
-                    // Skip if parent is an await expression
                     if (exprStmt.Expression is AwaitExpressionSyntax)
                         continue;
 
@@ -901,38 +904,401 @@ public class AsyncSafetyEngine
                     else if (inv.Expression is IdentifierNameSyntax id)
                         methodName = id.Identifier.Text;
 
-                    if (methodName != null && methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                    bool isTaskReturning = IsTaskReturningSemantic(semanticModel, inv, cancellationToken)
+                        ?? methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true;
+
+                    if (isTaskReturning)
                     {
                         var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
                         var lineSpan = exprStmt.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(
                             document.FilePath ?? document.Name,
                             containingMethod?.Identifier.Text ?? "<unknown>",
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' called without await — exceptions will be swallowed silently."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' called without await — exceptions will be swallowed silently."));
                     }
                     continue;
                 }
 
-                // Pattern B: Discard-assignment — _ = RunAsync();
+                // Pattern B: Discard-assignment — _ = RunAsync();  OR  _ = _obj.RunAsync();
                 if (exprStmt.Expression is AssignmentExpressionSyntax assign &&
                     assign.Left is IdentifierNameSyntax discardId &&
-                    discardId.Identifier.Text == "_" &&
-                    assign.Right is InvocationExpressionSyntax discardInv)
+                    discardId.Identifier.Text == "_")
                 {
                     string? methodName = null;
-                    if (discardInv.Expression is MemberAccessExpressionSyntax dma)
-                        methodName = dma.Name.Identifier.Text;
-                    else if (discardInv.Expression is IdentifierNameSyntax did)
-                        methodName = did.Identifier.Text;
+                    bool? semanticResult = null;
 
-                    if (methodName != null && methodName.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+                    // B1: right side is a direct invocation (method call or member call)
+                    if (assign.Right is InvocationExpressionSyntax discardInv)
+                    {
+                        if (discardInv.Expression is MemberAccessExpressionSyntax dma)
+                            methodName = dma.Name.Identifier.Text;
+                        else if (discardInv.Expression is IdentifierNameSyntax did)
+                            methodName = did.Identifier.Text;
+
+                        // Skip: task-chaining methods are the correct error-handling pattern.
+                        // _ = DoWorkAsync().ContinueWith(errHandler, OnlyOnFaulted) is intentional.
+                        if (methodName is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask")
+                            continue;
+
+                        semanticResult = IsTaskReturningSemantic(semanticModel, discardInv, cancellationToken);
+                    }
+                    // B2: right side is a null-conditional call — _ = _obj?.RunAsync()
+                    // or chained: _ = _obj?._svc?.RunAsync()
+                    else if (assign.Right is ConditionalAccessExpressionSyntax cae)
+                    {
+                        methodName = ExtractTerminalAsyncMethodName(cae.WhenNotNull);
+                        // Null-conditional returns T? — check the overall expression type (unwrap nullable)
+                        semanticResult = IsTaskReturningSemantic(semanticModel, cae, cancellationToken);
+                    }
+                    // B3: right side is a ternary expression — _ = condition ? DoAAsync() : DoBAsync()
+                    else if (assign.Right is ConditionalExpressionSyntax condExpr)
+                    {
+                        var thenName = ExtractDirectMethodName(condExpr.WhenTrue);
+                        var elseName = ExtractDirectMethodName(condExpr.WhenFalse);
+                        if (thenName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true)
+                            methodName = thenName;
+                        else if (elseName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true)
+                            methodName = elseName;
+                        // Check type of either branch
+                        semanticResult = IsTaskReturningSemantic(semanticModel, condExpr.WhenTrue, cancellationToken)
+                            ?? IsTaskReturningSemantic(semanticModel, condExpr.WhenFalse, cancellationToken);
+                    }
+
+                    bool isTaskReturning = semanticResult
+                        ?? methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true;
+
+                    if (isTaskReturning)
                     {
                         var containingMethod = exprStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
                         var lineSpan = exprStmt.GetLocation().GetLineSpan();
                         reports.Add(new AsyncSafetyReport(
                             document.FilePath ?? document.Name,
                             containingMethod?.Identifier.Text ?? "<unknown>",
-                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName}' fire-and-forgot via discard ('_ = {methodName}()') — exceptions will be swallowed silently. Use proper fire-and-forget with error logging instead."));
+                            $"Line {lineSpan.StartLinePosition.Line + 1}: Task-returning method '{methodName ?? "<unknown>"}' fire-and-forgot via discard ('_ = ...') — exceptions will be swallowed silently. Use proper fire-and-forget with error logging instead."));
+                    }
+                }
+            }
+        }
+        return reports;
+    }
+
+    // Returns true/false if the semantic model can resolve the return type; null if unresolvable (caller falls back).
+    private static bool? IsTaskReturningSemantic(SemanticModel? model, ExpressionSyntax expr, CancellationToken ct)
+    {
+        if (model == null) return null;
+        var type = model.GetTypeInfo(expr, ct).Type;
+        if (type == null) return null; // unresolvable — let caller fall back to heuristic
+        return SemanticTypeHelper.IsTaskOrValueTask(type);
+    }
+
+    // Extracts a method name from a direct invocation or null-conditional call — used for B1/B3.
+    private static string? ExtractDirectMethodName(ExpressionSyntax expr)
+    {
+        if (expr is InvocationExpressionSyntax inv)
+        {
+            if (inv.Expression is MemberAccessExpressionSyntax ma) return ma.Name.Identifier.Text;
+            if (inv.Expression is IdentifierNameSyntax id) return id.Identifier.Text;
+        }
+        if (expr is ConditionalAccessExpressionSyntax cae)
+            return ExtractTerminalAsyncMethodName(cae.WhenNotNull);
+        return null;
+    }
+
+    // Recursively unwraps null-conditional access chains to find the terminal method name.
+    // Handles: _obj?.RunAsync()  and chained: _obj?._svc?.RunAsync()
+    private static string? ExtractTerminalAsyncMethodName(ExpressionSyntax whenNotNull)
+    {
+        // Terminal case: ?.RunAsync() — the WhenNotNull is an invocation via member binding
+        if (whenNotNull is InvocationExpressionSyntax termInv &&
+            termInv.Expression is MemberBindingExpressionSyntax termMb)
+            return termMb.Name.Identifier.Text;
+
+        // Chained case: ?._svc?.RunAsync() — WhenNotNull is another conditional access
+        if (whenNotNull is ConditionalAccessExpressionSyntax innerCae)
+            return ExtractTerminalAsyncMethodName(innerCae.WhenNotNull);
+
+        return null;
+    }
+
+    // ── SequentialIndependentAwaits ───────────────────────────────────────────
+
+    /// <summary>
+    /// Detects sequences of two or more consecutive awaited calls whose result variables
+    /// are independent (neither uses the other's variable) — missed parallelism opportunity.
+    ///
+    /// Example:  var x = await FetchAsync();   // could be parallel
+    ///           var y = await GetAsync();      // neither uses x
+    /// Suggest:  var (x, y) = await Task.WhenAll(FetchAsync(), GetAsync());
+    /// </summary>
+    public async Task<List<AsyncSafetyReport>> FindSequentialIndependentAwaitsAsync(
+        string? filePath = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var reports = new List<AsyncSafetyReport>();
+
+        IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents).Cast<Document?>()
+            : solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+
+        foreach (var doc in docs)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
+                if (method.Body == null) continue;
+
+                var statements = method.Body.Statements;
+                for (int i = 0; i < statements.Count - 1; i++)
+                {
+                    // Must be: var x = await F();
+                    if (!TryGetAwaitedVarDecl(statements[i], out var varName1, out var awaitExpr1)) continue;
+                    if (!TryGetAwaitedVarDecl(statements[i + 1], out var varName2, out var awaitExpr2)) continue;
+
+                    // Neither await expression must reference the other's variable
+                    bool secondUsesFirst = awaitExpr2!.ToString().Contains(varName1!);
+                    bool firstUsesSecond = awaitExpr1!.ToString().Contains(varName2!);
+                    if (secondUsesFirst || firstUsesSecond) continue;
+
+                    // Skip if either is a Task.WhenAll/WhenAny (already parallel)
+                    if (awaitExpr1.ToString().Contains("WhenAll") || awaitExpr1.ToString().Contains("WhenAny")) continue;
+                    if (awaitExpr2.ToString().Contains("WhenAll") || awaitExpr2.ToString().Contains("WhenAny")) continue;
+
+                    var line = statements[i].GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                        $"Line {line}: '{varName1}' and '{varName2}' are awaited sequentially but are independent. " +
+                        "Consider 'await Task.WhenAll(...)' to run both concurrently."));
+                }
+            }
+        }
+        return reports;
+    }
+
+    private static bool TryGetAwaitedVarDecl(
+        StatementSyntax stmt,
+        out string? varName,
+        out ExpressionSyntax? awaitedExpr)
+    {
+        varName = null;
+        awaitedExpr = null;
+        if (stmt is not LocalDeclarationStatementSyntax localDecl) return false;
+        if (localDecl.Declaration.Variables.Count != 1) return false;
+        var v = localDecl.Declaration.Variables[0];
+        if (v.Initializer?.Value is not AwaitExpressionSyntax awaitExpr) return false;
+        varName = v.Identifier.Text;
+        awaitedExpr = awaitExpr.Expression;
+        return true;
+    }
+
+    // ── AsyncVoidWithoutTryCatch ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Detects async void methods (typically event handlers) whose entire body is not
+    /// wrapped in a top-level try/catch. Unhandled exceptions inside async void crash
+    /// the process on the thread-pool — there is no caller to propagate to.
+    /// </summary>
+    public async Task<List<AsyncSafetyReport>> FindAsyncVoidWithoutTryCatchAsync(
+        string? filePath = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var reports = new List<AsyncSafetyReport>();
+
+        IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents).Cast<Document?>()
+            : solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+
+        foreach (var doc in docs)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
+                if (method.ReturnType.ToString() != "void") continue;
+                if (method.Body == null) continue;
+
+                // The "safe" form wraps the entire body in try/catch:
+                // the body has exactly one statement which is a try statement
+                // that has at least one catch clause.
+                bool hasTopLevelTryCatch = method.Body.Statements.Count == 1 &&
+                    method.Body.Statements[0] is TryStatementSyntax trySt &&
+                    trySt.Catches.Count > 0;
+
+                if (hasTopLevelTryCatch) continue;
+
+                // Also pass if the method body itself contains ANY try/catch wrapping all awaits
+                // (conservative: just check for presence of a catch at any level)
+                // This avoids false positives on short methods with inner try/catch.
+                bool hasSomeCatch = method.Body.DescendantNodes().OfType<CatchClauseSyntax>().Any();
+                if (hasSomeCatch) continue;
+
+                var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                    $"Line {line}: async void '{method.Identifier.Text}' has no try/catch. " +
+                    "Unhandled exceptions crash the process. Wrap the body in try {{ }} catch (Exception ex) {{ }}."));
+            }
+        }
+        return reports;
+    }
+
+    // ── UnawakedDisposeAsync ──────────────────────────────────────────────────
+    // Calling IAsyncDisposable.DisposeAsync() without await in a synchronous Dispose()
+    // or other non-async cleanup path means cleanup finishes after the method returns,
+    // leaving file handles, network connections, and database connections dangling.
+
+    /// <summary>
+    /// Detects calls to DisposeAsync() in non-async methods (or in async methods without await),
+    /// where the ValueTask returned by DisposeAsync is discarded rather than awaited.
+    /// </summary>
+    public async Task<List<AsyncSafetyReport>> FindUnawakedDisposeAsyncAsync(
+        string? filePath = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var reports = new List<AsyncSafetyReport>();
+
+        IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents)
+            : solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+
+        foreach (var doc in docs)
+        {
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (method.Body == null && method.ExpressionBody == null) continue;
+
+                bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+
+                foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    // Must be a call to DisposeAsync()
+                    if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
+                    if (ma.Name.Identifier.Text != "DisposeAsync") continue;
+
+                    // Flag if the call is not the direct operand of an AwaitExpressionSyntax
+                    bool isAwaited = inv.Parent is AwaitExpressionSyntax;
+                    // Also accept: await obj.DisposeAsync().ConfigureAwait(false)
+                    if (!isAwaited && inv.Parent is MemberAccessExpressionSyntax chainMa)
+                    {
+                        if (chainMa.Name.Identifier.Text == "ConfigureAwait" &&
+                            chainMa.Parent is InvocationExpressionSyntax configureInv &&
+                            configureInv.Parent is AwaitExpressionSyntax)
+                            isAwaited = true;
+                    }
+
+                    if (isAwaited) continue;
+
+                    var line = inv.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    var context = isAsync
+                        ? "async method without await on DisposeAsync()"
+                        : "synchronous method";
+                    reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                        $"Line {line}: DisposeAsync() called in {context} without await. " +
+                        "The ValueTask returned is discarded — async cleanup runs after the method returns, " +
+                        "leaving resources dangling. Use 'await obj.DisposeAsync()' or implement IAsyncDisposable."));
+                }
+            }
+        }
+        return reports;
+    }
+
+    // ── UnobservedTaskInField ─────────────────────────────────────────────────
+    // Assigning a Task/ValueTask to a field or property (rather than awaiting it)
+    // means any exception thrown by that task is never observed — it silently fails
+    // and can eventually crash the process via UnobservedTaskException.
+
+    /// <summary>
+    /// Detects assignments of Task/ValueTask-returning method calls to fields or properties
+    /// without await, where the assigned field is never subsequently awaited or .Wait()ed.
+    /// This is a fire-and-forget variant that silently swallows exceptions.
+    /// </summary>
+    public async Task<List<AsyncSafetyReport>> FindUnobservedTaskInFieldAsync(
+        string? filePath = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var reports = new List<AsyncSafetyReport>();
+
+        IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
+            ? solution.Projects.SelectMany(p => p.Documents)
+            : solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+
+        foreach (var doc in docs)
+        {
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var model = await doc.GetSemanticModelAsync(ct);
+            if (model == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                // Collect all field and property names in the class
+                var memberNames = classDecl.Members
+                    .SelectMany<MemberDeclarationSyntax, string>(m => m switch
+                    {
+                        FieldDeclarationSyntax f => f.Declaration.Variables.Select(v => v.Identifier.Text),
+                        PropertyDeclarationSyntax p => [p.Identifier.Text],
+                        _ => []
+                    })
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var method in classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    if (method.Body == null) continue;
+
+                    foreach (var assignment in method.Body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+                    {
+                        if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)) continue;
+
+                        // LHS must be a field or property member (not a local)
+                        string? targetName = assignment.Left switch
+                        {
+                            IdentifierNameSyntax id => memberNames.Contains(id.Identifier.Text) ? id.Identifier.Text : null,
+                            MemberAccessExpressionSyntax ma when ma.Expression.ToString() is "this" or "_"
+                                => memberNames.Contains(ma.Name.Identifier.Text) ? ma.Name.Identifier.Text : null,
+                            _ => null
+                        };
+                        if (targetName == null) continue;
+
+                        // RHS must be an invocation — not already awaited
+                        ExpressionSyntax rhs = assignment.Right;
+                        if (rhs is AwaitExpressionSyntax) continue; // already properly awaited
+                        if (rhs is not InvocationExpressionSyntax rhsInv) continue;
+
+                        // Verify RHS returns Task or ValueTask via semantic model
+                        var rhsType = model.GetTypeInfo(rhs, ct).Type as INamedTypeSymbol;
+                        if (rhsType == null) continue;
+                        var rtName = rhsType.OriginalDefinition.ToDisplayString();
+                        bool returnsTask = rtName.StartsWith("System.Threading.Tasks.Task") ||
+                                           rtName.StartsWith("System.Threading.Tasks.ValueTask");
+                        if (!returnsTask) continue;
+
+                        // Check that the field is never awaited anywhere in the class
+                        bool everAwaited = classDecl.DescendantNodes().OfType<AwaitExpressionSyntax>()
+                            .Any(aw => aw.Expression is IdentifierNameSyntax awId &&
+                                       awId.Identifier.Text == targetName);
+                        bool everWaited = classDecl.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                            .Any(inv => inv.Expression is MemberAccessExpressionSyntax ma2 &&
+                                        ma2.Expression is IdentifierNameSyntax recv &&
+                                        recv.Identifier.Text == targetName &&
+                                        ma2.Name.Identifier.Text == "Wait");
+                        if (everAwaited || everWaited) continue;
+
+                        var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                            $"Line {line}: Task/ValueTask from '{rhsInv}' stored in field '{targetName}' without await. " +
+                            "Exceptions thrown by the task are never observed — the task silently fails. " +
+                            "Await the result directly or use a fire-and-forget helper that logs exceptions."));
                     }
                 }
             }

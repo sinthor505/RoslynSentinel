@@ -114,6 +114,7 @@ builder.Services.AddSingleton<SymbolNavigationEngine>();
 builder.Services.AddSingleton<AntiPatternEngine>();
 builder.Services.AddSingleton<DiscoveryEngine>();
 builder.Services.AddSingleton<MsToolAugmentEngine>();
+builder.Services.AddSingleton<CodeStyleAnalysisEngine>();
 
 // --- Configure MCP Server Transport ---
 var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();

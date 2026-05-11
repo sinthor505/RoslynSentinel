@@ -232,4 +232,141 @@ public class SecurityAndSafetyEngine
             .OfType<InvocationExpressionSyntax>()
             .Any(inv => inv.Expression is IdentifierNameSyntax n && n.Identifier.Text == "nameof");
     }
+
+    // ── NullDereferenceChain ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Detects chained member access (a.b.c) where the intermediate step (a.b) is a reference
+    /// type that could be null — flagging the chain as a potential NullReferenceException.
+    /// Only reports when the intermediate is not accessed via null-conditional (?.) and has no
+    /// visible null guard in the containing method.
+    /// </summary>
+    public async Task<List<SafetyIssue>> FindNullDereferenceChainAsync(
+        string filePath,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) return [];
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return [];
+
+        var semanticModel = await document.GetSemanticModelAsync(ct);
+        if (semanticModel == null) return [];
+
+        var issues = new List<SafetyIssue>();
+
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (method.Body == null && method.ExpressionBody == null) continue;
+
+            // Collect all intermediate member-access expressions that are themselves accessed further
+            // Pattern: X.Y.Z → flag X.Y if it could be null and isn't ?.-guarded
+            foreach (var outerMa in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+            {
+                // We want cases where outerMa.Expression is itself a MemberAccessExpressionSyntax
+                if (outerMa.Expression is not MemberAccessExpressionSyntax innerMa) continue;
+
+                // If the inner access uses null-conditional, it's already guarded
+                if (outerMa.IsKind(SyntaxKind.SimpleMemberAccessExpression) &&
+                    outerMa.Parent is ConditionalAccessExpressionSyntax) continue;
+
+                // Check if inner expression is already a conditional access (x?.y.z is fine for x?.y)
+                if (innerMa.Parent is ConditionalAccessExpressionSyntax) continue;
+
+                // Use semantic model to verify the inner type is a nullable reference type
+                var innerType = semanticModel.GetTypeInfo(innerMa, ct).Type;
+                if (innerType == null || !innerType.IsReferenceType) continue;
+
+                // Check that there's no null guard for this expression in the method
+                var innerExprText = innerMa.ToString();
+                var methodBody = (SyntaxNode?)method.Body ?? method.ExpressionBody;
+                bool isGuarded = methodBody!.DescendantNodes().OfType<IfStatementSyntax>()
+                    .Any(ifStmt => ExpressionNullGuarded(ifStmt.Condition, innerExprText));
+
+                // Also accept null-conditional access at this level (x?.y)
+                bool isNullConditional = outerMa.Ancestors()
+                    .OfType<ConditionalAccessExpressionSyntax>()
+                    .Any(ca => ca.Expression.ToString() == innerMa.Expression.ToString());
+
+                if (!isGuarded && !isNullConditional)
+                {
+                    var loc = outerMa.GetLocation().GetLineSpan().StartLinePosition;
+                    issues.Add(new SafetyIssue(filePath, loc.Line + 1, loc.Character + 1,
+                        "NullDereferenceChain",
+                        $"Chained access '{outerMa}' dereferences '{innerExprText}' without a null check. " +
+                        $"If '{innerExprText}' can be null, use '?.' or add a null guard."));
+                }
+            }
+        }
+
+        return issues
+            .DistinctBy(i => (i.Line, i.Column))
+            .ToList();
+    }
+
+    private static bool ExpressionNullGuarded(ExpressionSyntax condition, string exprText)
+    {
+        if (condition is BinaryExpressionSyntax bin &&
+            (bin.IsKind(SyntaxKind.EqualsExpression) || bin.IsKind(SyntaxKind.NotEqualsExpression)))
+        {
+            bool leftMatch = bin.Left.ToString() == exprText;
+            bool rightMatch = bin.Right.ToString() == exprText;
+            bool hasNull = bin.Left is LiteralExpressionSyntax ll && ll.IsKind(SyntaxKind.NullLiteralExpression)
+                        || bin.Right is LiteralExpressionSyntax rl && rl.IsKind(SyntaxKind.NullLiteralExpression);
+            if ((leftMatch || rightMatch) && hasNull) return true;
+        }
+        if (condition is IsPatternExpressionSyntax isPat && isPat.Expression.ToString() == exprText)
+            return true;
+        return false;
+    }
+
+    // ── ArithmeticOverflow ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Detects integer arithmetic that references MaxValue/MinValue boundary constants
+    /// without being wrapped in a checked block — potential silent overflow.
+    /// </summary>
+    public async Task<List<SafetyIssue>> FindArithmeticOverflowRisksAsync(
+        string filePath,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) return [];
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null) return [];
+
+        var issues = new List<SafetyIssue>();
+
+        foreach (var binExpr in root.DescendantNodes().OfType<BinaryExpressionSyntax>())
+        {
+            if (!binExpr.IsKind(SyntaxKind.AddExpression) &&
+                !binExpr.IsKind(SyntaxKind.SubtractExpression) &&
+                !binExpr.IsKind(SyntaxKind.MultiplyExpression)) continue;
+
+            bool involvesMaxMin = binExpr.DescendantNodesAndSelf()
+                .OfType<MemberAccessExpressionSyntax>()
+                .Any(ma => ma.Name.Identifier.Text is "MaxValue" or "MinValue" &&
+                           ma.Expression.ToString() is "int" or "long" or "uint" or "ulong" or
+                                                       "short" or "byte" or "Int32" or "Int64");
+
+            if (!involvesMaxMin) continue;
+
+            // If wrapped in checked { } — intentionally throws on overflow
+            bool isChecked = binExpr.Ancestors().OfType<CheckedStatementSyntax>().Any() ||
+                             binExpr.Ancestors().OfType<CheckedExpressionSyntax>().Any();
+            if (isChecked) continue;
+
+            var loc = binExpr.GetLocation().GetLineSpan().StartLinePosition;
+            issues.Add(new SafetyIssue(filePath, loc.Line + 1, loc.Character + 1,
+                "ArithmeticOverflowRisk",
+                $"Arithmetic involving a boundary constant ({binExpr}) may overflow silently. " +
+                "Wrap in 'checked {{ }}' to throw on overflow, or use a wider type."));
+        }
+
+        return issues;
+    }
 }

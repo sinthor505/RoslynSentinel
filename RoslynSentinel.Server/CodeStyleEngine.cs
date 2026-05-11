@@ -345,4 +345,83 @@ public class CodeStyleEngine
             return base.VisitElementAccessExpression(node);
         }
     }
+
+    // ── MutablePublicCollectionProperty ──────────────────────────────────────
+}
+
+public class CodeStyleAnalysisEngine
+{
+    private readonly PersistentWorkspaceManager _workspaceManager;
+
+    public CodeStyleAnalysisEngine(PersistentWorkspaceManager workspaceManager)
+    {
+        _workspaceManager = workspaceManager;
+    }
+
+    private static readonly HashSet<string> MutableCollectionTypes = new(StringComparer.Ordinal)
+    {
+        "List", "Dictionary", "HashSet", "SortedDictionary", "SortedSet",
+        "Queue", "Stack", "LinkedList", "ObservableCollection",
+        "ConcurrentDictionary", "ConcurrentBag", "ConcurrentQueue", "ConcurrentStack"
+    };
+
+    /// <summary>
+    /// Detects public properties whose type is a mutable collection (List&lt;T&gt;, Dictionary, etc.)
+    /// with a public setter. External callers can replace or mutate the entire collection,
+    /// breaking invariants. Prefer IReadOnlyList&lt;T&gt;/IReadOnlyDictionary or init-only setters.
+    /// </summary>
+    public async Task<List<string>> FindMutablePublicCollectionPropertiesAsync(
+        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<string>();
+
+        IEnumerable<Document> docs;
+        if (!string.IsNullOrEmpty(filePath))
+            docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        else if (!string.IsNullOrEmpty(projectName))
+            docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        else
+            docs = solution.Projects.SelectMany(p => p.Documents);
+
+        foreach (var doc in docs)
+        {
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var fp = doc.FilePath ?? doc.Name;
+
+            foreach (var prop in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+            {
+                // Must be public
+                if (!prop.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+
+                // Type must be a mutable collection
+                var typeName = prop.Type.ToString().Split('<')[0].Split('.')[^1].TrimEnd('?');
+                if (!MutableCollectionTypes.Contains(typeName)) continue;
+
+                // Must have a public setter (not init, not private set)
+                var setter = prop.AccessorList?.Accessors
+                    .FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
+                if (setter == null) continue;
+
+                // Skip init-only setters
+                if (setter.Keyword.IsKind(SyntaxKind.InitKeyword)) continue;
+
+                // Skip if setter is private/protected/internal
+                if (setter.Modifiers.Any(m =>
+                    m.IsKind(SyntaxKind.PrivateKeyword) ||
+                    m.IsKind(SyntaxKind.ProtectedKeyword) ||
+                    m.IsKind(SyntaxKind.InternalKeyword))) continue;
+
+                var containingType = prop.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+                var loc = prop.GetLocation().GetLineSpan().StartLinePosition;
+                results.Add(
+                    $"{fp}:{loc.Line + 1} - Public property '{prop.Identifier.Text}' of type '{prop.Type}' " +
+                    $"in '{containingType?.Identifier.Text ?? "?"}' has a public setter. " +
+                    $"External code can replace the entire collection. " +
+                    $"Expose IReadOnly{typeName}<...> or use a private backing field with a public getter.");
+            }
+        }
+        return results;
+    }
 }

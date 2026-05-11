@@ -238,4 +238,96 @@ public class ControlFlowEngine
             analysis.ReadInside.Select(s => s.Name).ToList(),
             analysis.WrittenInside.Select(s => s.Name).ToList());
     }
+
+    // ── Enum Switch Exhaustiveness ─────────────────────────────────────────
+
+    public record EnumSwitchGap(
+        string FilePath,
+        int Line,
+        string EnumTypeName,
+        List<string> MissingMembers,
+        string MethodName
+    );
+
+    public async Task<List<EnumSwitchGap>> FindNonExhaustiveEnumSwitchesAsync(
+        string? filePath = null,
+        string? projectName = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var proj = solution.Projects.FirstOrDefault(p =>
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = proj?.Documents.Cast<Document?>() ?? [];
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var gaps = new List<EnumSwitchGap>();
+
+        foreach (var doc in documents)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var model = await doc.GetSemanticModelAsync(ct);
+            if (model == null) continue;
+            var docPath = doc.FilePath ?? doc.Name;
+
+            foreach (var switchStmt in root.DescendantNodes().OfType<SwitchStatementSyntax>())
+            {
+                // Only interested in switches on enum types
+                var switchType = model.GetTypeInfo(switchStmt.Expression, ct).Type;
+                if (switchType == null || switchType.TypeKind != TypeKind.Enum) continue;
+
+                // Has a default label → already handles unrecognized values
+                bool hasDefault = switchStmt.Sections
+                    .SelectMany(s => s.Labels)
+                    .Any(l => l is DefaultSwitchLabelSyntax);
+                if (hasDefault) continue;
+
+                // Collect all enum member names handled by the switch
+                var handledNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var section in switchStmt.Sections)
+                {
+                    foreach (var label in section.Labels.OfType<CaseSwitchLabelSyntax>())
+                    {
+                        // The case expression might be: MyEnum.Active, or just Active
+                        var caseSym = model.GetSymbolInfo(label.Value, ct).Symbol;
+                        if (caseSym is IFieldSymbol field && field.ContainingType.Equals(switchType, SymbolEqualityComparer.Default))
+                            handledNames.Add(field.Name);
+                        else
+                        {
+                            // Fallback: last identifier in the expression
+                            var id = label.Value.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().LastOrDefault();
+                            if (id != null) handledNames.Add(id.Identifier.Text);
+                        }
+                    }
+                }
+
+                // Collect all declared enum members
+                var allMembers = switchType.GetMembers()
+                    .OfType<IFieldSymbol>()
+                    .Where(f => f.IsConst || f.IsStatic)
+                    .Select(f => f.Name)
+                    .ToList();
+
+                var missing = allMembers.Where(m => !handledNames.Contains(m)).ToList();
+                if (missing.Count == 0) continue;
+
+                var containingMethod = switchStmt.Ancestors().OfType<MethodDeclarationSyntax>()
+                    .FirstOrDefault()?.Identifier.Text ?? "<top-level>";
+                var line = switchStmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+                gaps.Add(new EnumSwitchGap(docPath, line, switchType.Name, missing, containingMethod));
+            }
+        }
+
+        return gaps;
+    }
 }

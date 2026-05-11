@@ -27,7 +27,13 @@ public static class TestSolutionBuilder
             "System.Linq.dll",
             "System.Console.dll",
             "System.Private.CoreLib.dll",
-            "netstandard.dll"
+            "netstandard.dll",
+            // Required for semantic model type resolution in accuracy tests
+            "System.Threading.dll",
+            "System.Threading.Tasks.dll",
+            "System.Net.Http.dll",
+            "System.Collections.Concurrent.dll",
+            "System.Text.RegularExpressions.dll",
         };
 
         foreach (var name in candidateNames)

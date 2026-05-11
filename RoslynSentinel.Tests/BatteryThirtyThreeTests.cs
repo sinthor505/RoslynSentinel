@@ -99,6 +99,7 @@ public class BatteryThirtyThreeTests
             _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine,
             new AntiPatternEngine(_workspaceManager), _asyncOptimizationEngine,
             new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine,
+            new CodeStyleAnalysisEngine(_workspaceManager),
             NullLogger<SentinelQualityTools>.Instance);
     }
 

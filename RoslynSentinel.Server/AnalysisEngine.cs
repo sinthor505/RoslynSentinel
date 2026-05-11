@@ -559,6 +559,25 @@ public class AnalysisEngine
                             $"{target.Document.FilePath ?? target.Document.Name}:{lineSpan.StartLinePosition.Line + 1} " +
                             $"- Class '{classNode.Identifier.Text}' subscribes to '{sub.Left}' but {reason}.");
                     }
+
+                    // Extra: lambda handler captures 'this' or an outer variable — the publisher
+                    // holds a reference to the subscriber even without IDisposable.
+                    bool handlerIsLambda = sub.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax;
+                    if (!handlerIsLambda) continue;
+
+                    bool capturesThis = sub.Right.DescendantNodesAndSelf().OfType<ThisExpressionSyntax>().Any();
+                    // Also flag if the lambda accesses a member through 'this' (implicit or explicit)
+                    bool capturesMember = !capturesThis && sub.Right.DescendantNodesAndSelf()
+                        .OfType<MemberAccessExpressionSyntax>()
+                        .Any(ma => ma.Expression is ThisExpressionSyntax);
+                    if (capturesThis || capturesMember)
+                    {
+                        var lineSpan2 = sub.GetLocation().GetLineSpan();
+                        results.Add(
+                            $"{target.Document.FilePath ?? target.Document.Name}:{lineSpan2.StartLinePosition.Line + 1} " +
+                            $"- Class '{classNode.Identifier.Text}' subscribes to '{sub.Left}' with a lambda that captures " +
+                            $"'this' — the publisher will keep this instance alive until unsubscribed.");
+                    }
                 }
             }
         }
@@ -571,7 +590,7 @@ public class AnalysisEngine
         if (!_config.IsFeatureEnabled("SemaphoreLeaks")) return new List<string>();
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
-        var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
+        var targets = await GetTargetDocumentsAsync(solution, null, filePath, true, cancellationToken);
 
         foreach (var target in targets)
         {
@@ -580,10 +599,57 @@ public class AnalysisEngine
 
             foreach (var wait in semaphoreWaits)
             {
-                var method = wait.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-                if (method != null && !method.ToString().Contains(".Release()"))
+                // Semantic verification: confirm the receiver is actually SemaphoreSlim, not some
+                // other class that happens to have a WaitAsync() method.
+                if (target.SemanticModel != null &&
+                    wait.Expression is MemberAccessExpressionSyntax waitMa)
                 {
-                    results.Add($"Potential Semaphore leak in method '{method.Identifier.Text}' in {target.Document.Name}");
+                    var receiverType = target.SemanticModel.GetTypeInfo(waitMa.Expression, cancellationToken).Type;
+                    if (receiverType != null && !SemanticTypeHelper.IsSemaphoreSlim(receiverType)) continue;
+                }
+
+                var method = wait.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                var containingType = wait.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+                if (method == null) continue;
+
+                // If this method already contains its own Release call, it handles the semaphore correctly.
+                // Use ".Release" (without parens) to catch both Release() and Release(n).
+                bool methodHandlesOwnRelease = method.ToString().Contains(".Release(");
+                if (methodHandlesOwnRelease) continue;
+
+                // Check if ANY other member of the class contains a release call.
+                // Covers methods, constructors, properties, and finalizers — catches helper-method patterns.
+                bool classHasReleaseElsewhere = containingType?.Members
+                    .Where(m => !ReferenceEquals(m, method))
+                    .Any(m => m.ToString().Contains(".Release(")) == true;
+
+                if (!classHasReleaseElsewhere && target.SemanticModel != null && containingType != null)
+                {
+                    // Second pass: follow 1-level-deep method calls made from class members.
+                    // Catches the pattern where Release is delegated to a helper in another class:
+                    // e.g. this.Return() calls _helper.ReleaseSlot(_sem) which calls _sem.Release().
+                    classHasReleaseElsewhere = containingType.Members
+                        .Where(m => !ReferenceEquals(m, method))
+                        .SelectMany(m => m.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                        .Any(inv =>
+                        {
+                            var calledMethod = target.SemanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
+                            if (calledMethod == null) return false;
+                            var syntaxRef = calledMethod.DeclaringSyntaxReferences.FirstOrDefault();
+                            return syntaxRef?.GetSyntax(cancellationToken).ToString().Contains(".Release(") == true;
+                        });
+                }
+
+                if (classHasReleaseElsewhere)
+                {
+                    // Pool pattern — semaphore lifetime spans method boundaries intentionally.
+                    // Report as advisory so callers know to verify the release path is always reachable.
+                    results.Add($"Advisory (pool pattern): '{method.Identifier.Text}' in {target.Document.Name} acquires a semaphore slot; Release() is in another method of the same class. Verify the release path is always reachable (e.g., via try/finally or a paired return method).");
+                }
+                else
+                {
+                    // Genuine leak — WaitAsync is called but no Release() exists anywhere in the class.
+                    results.Add($"Semaphore leak in '{method.Identifier.Text}' in {target.Document.Name}: WaitAsync() is called but no Release() was found in this class — pool slots will be permanently lost on exceptions.");
                 }
             }
         }
@@ -696,13 +762,44 @@ public class AnalysisEngine
                 }
             }
 
+            // Pre-collect variables that are awaited anywhere in the document.
+            // var t = DoAsync(); ... await t; — t should not be flagged at the assignment site.
+            var awaitedLocalVars = new HashSet<string>();
+            foreach (var awaitExpr in target.Root.DescendantNodes().OfType<AwaitExpressionSyntax>())
+            {
+                if (awaitExpr.Expression is IdentifierNameSyntax awaitedId)
+                    awaitedLocalVars.Add(awaitedId.Identifier.Text);
+            }
+
             var invocations = target.Root.DescendantNodes().OfType<InvocationExpressionSyntax>();
 
             foreach (var invocation in invocations)
             {
                 var symbol = target.SemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
-                if (symbol == null || symbol.ReturnType.Name != "Task") continue;
+                ITypeSymbol? returnType;
+                string invocationName;
+
+                if (symbol != null)
+                {
+                    returnType = symbol.ReturnType;
+                    invocationName = symbol.Name;
+                }
+                else
+                {
+                    // Delegate invocations (e.g. Func<Task> factory = ...; factory()) return null from GetSymbolInfo.
+                    // Fall back to the invocation expression's type to catch unawaited delegate calls.
+                    returnType = target.SemanticModel.GetTypeInfo(invocation, cancellationToken).Type;
+                    invocationName = invocation.Expression.ToString();
+                }
+
+                if (returnType == null || !SemanticTypeHelper.IsTaskOrValueTask(returnType)) continue;
+                // Direct await
                 if (invocation.Parent is AwaitExpressionSyntax) continue;
+                // await expr! — null-forgiving wraps the invocation; parent is PostfixUnary, grandparent is Await
+                if (invocation.Parent is PostfixUnaryExpressionSyntax pue &&
+                    pue.IsKind(SyntaxKind.SuppressNullableWarningExpression) &&
+                    pue.Parent is AwaitExpressionSyntax)
+                    continue;
 
                 // Skip: assigned to a discard (  _ = SomeAsync()  )
                 if (invocation.Parent is AssignmentExpressionSyntax assign &&
@@ -736,7 +833,77 @@ public class AnalysisEngine
                     whenAllVars.Contains(vd.Identifier.Text))
                     continue;
 
-                results.Add($"Potential mismatched await in {target.Document.Name} at line {invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Call to '{symbol.Name}' is not awaited.");
+                // Skip: direct argument to Task.WhenAll / Task.WhenAny / Task.WhenEach
+                // e.g. await Task.WhenAll(RemoveAsync(id), UpdateAsync(id))
+                if (invocation.Parent is ArgumentSyntax directArg &&
+                    directArg.Parent?.Parent is InvocationExpressionSyntax composerInv &&
+                    composerInv.Expression is MemberAccessExpressionSyntax composerMa &&
+                    composerMa.Name.Identifier.Text is "WhenAll" or "WhenAny" or "WhenEach")
+                    continue;
+
+                // Skip: Task / ValueTask factory methods — synchronous, no actual async work
+                // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(ct)
+                if (invocation.Expression is MemberAccessExpressionSyntax factoryMa &&
+                    (factoryMa.Expression.ToString() is "Task" or "ValueTask") &&
+                    factoryMa.Name.Identifier.Text is "FromResult" or "FromException" or "FromCanceled")
+                    continue;
+
+                // Skip: await using — the await keyword is on the using declaration, not the invocation directly
+                // e.g.  await using var conn = OpenConnectionAsync(ct);
+                var ancestorLocalDecl = invocation.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
+                if (ancestorLocalDecl?.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) == true)
+                    continue;
+
+                // Skip: the invocation is the receiver in a method chain consumed by the chain itself
+                // e.g. MethodAsync().ContinueWith(...)  — the returned Task feeds the chain
+                if (invocation.Parent is MemberAccessExpressionSyntax chainedMa &&
+                    chainedMa.Parent is InvocationExpressionSyntax chainedCall &&
+                    chainedMa.Name.Identifier.Text is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask")
+                    continue;
+
+                // Skip: result stored in a local variable that is later awaited in this document
+                // e.g. var t = DoAsync(); ... await t;
+                if (invocation.Parent is EqualsValueClauseSyntax evc2 &&
+                    evc2.Parent is VariableDeclaratorSyntax vd2 &&
+                    awaitedLocalVars.Contains(vd2.Identifier.Text))
+                    continue;
+
+                // Skip: result stored in a field or property (deferred consumption).
+                // Covers: this._task = X()  (MemberAccess) and  _task = X()  (Identifier, underscore convention).
+                if (invocation.Parent is AssignmentExpressionSyntax fieldAssign &&
+                    (fieldAssign.Left is MemberAccessExpressionSyntax ||
+                     (fieldAssign.Left is IdentifierNameSyntax lhsId &&
+                      lhsId.Identifier.Text.StartsWith("_", StringComparison.Ordinal))))
+                    continue;
+
+                // Skip: invocation is inside a ternary or null-coalescing expression
+                // The Task value is used as a value in the expression, likely returned or stored.
+                if (invocation.Ancestors().OfType<ConditionalExpressionSyntax>().Any())
+                    continue;
+                if (invocation.Parent is BinaryExpressionSyntax coalesceOp &&
+                    coalesceOp.IsKind(SyntaxKind.CoalesceExpression))
+                    continue;
+
+                // Skip: invocation inside an anonymous method expression
+                // e.g. Action fn = delegate { DoWorkAsync(); };
+                if (invocation.Ancestors().OfType<AnonymousMethodExpressionSyntax>().Any())
+                    continue;
+
+                // Skip: invocation inside an object or collection initializer
+                // e.g. new Foo { BackgroundTask = StartAsync() }
+                if (invocation.Ancestors().OfType<InitializerExpressionSyntax>().Any())
+                    continue;
+
+                // Skip: argument to collection/task-composition methods that consume tasks
+                // e.g. _tasks.Add(DoWorkAsync())  or  Task.Run(DoWorkAsync)
+                if (invocation.Parent is ArgumentSyntax taskConsumerArg &&
+                    taskConsumerArg.Parent?.Parent is InvocationExpressionSyntax taskConsumerInv &&
+                    taskConsumerInv.Expression is MemberAccessExpressionSyntax taskConsumerMa &&
+                    taskConsumerMa.Name.Identifier.Text is "Add" or "TryAdd" or "Append" or "Push" or
+                        "Enqueue" or "Run" or "StartNew" or "Schedule" or "Post")
+                    continue;
+
+                results.Add($"Potential mismatched await in {target.Document.Name} at line {invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Call to '{invocationName}' is not awaited.");
             }
         }
         return results;
@@ -977,6 +1144,362 @@ public class AnalysisEngine
             {
                 var implementations = await SymbolFinder.FindImplementationsAsync(@interface, solution, cancellationToken: cancellationToken);
                 if (!implementations.Any()) results.Add($"Interface '{@interface.Name}' has no implementations.");
+            }
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Detects circular type dependencies at the class level by analysing constructor parameters.
+    /// Unlike FindCircularDependenciesAsync (which checks project references), this method finds
+    /// cycles in composition: ClassA's ctor takes ClassB, ClassB's ctor takes ClassA.
+    /// Such cycles cause runtime DI failures without a compile error.
+    /// </summary>
+    public async Task<List<string>> FindCircularTypeReferencesAsync(string? projectName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
+
+        // Build map: simpleName → set of constructor-parameter simple names
+        var deps = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+
+        foreach (var target in targets)
+        {
+            if (target.SemanticModel == null) continue;
+            foreach (var classDecl in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                var className = classDecl.Identifier.Text;
+                if (!deps.ContainsKey(className)) deps[className] = new HashSet<string>(StringComparer.Ordinal);
+
+                var ctors = classDecl.Members.OfType<ConstructorDeclarationSyntax>();
+                foreach (var ctor in ctors)
+                {
+                    foreach (var param in ctor.ParameterList.Parameters)
+                    {
+                        if (param.Type == null) continue;
+                        var typeSymbol = target.SemanticModel.GetTypeInfo(param.Type, cancellationToken).Type;
+                        if (typeSymbol == null || typeSymbol.TypeKind == TypeKind.Error) continue;
+                        // Only track types that are declared in this solution (user types)
+                        if (typeSymbol.DeclaringSyntaxReferences.Length == 0) continue;
+                        deps[className].Add(typeSymbol.Name);
+                    }
+                }
+            }
+        }
+
+        var results = new List<string>();
+        var reportedCycles = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var start in deps.Keys)
+        {
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var path = new List<string>();
+            DetectTypeCycle(start, deps, visited, path, results, reportedCycles);
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Detects classes that both implement IDisposable AND declare a finalizer (~Destructor).
+    /// Unless the finalizer guards with a disposed flag, this risks double-freeing managed
+    /// resources when the GC calls the finalizer after Dispose() was already called.
+    /// </summary>
+    public async Task<List<string>> FindFinalizerOnDisposableAsync(
+        string? projectName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            foreach (var classDecl in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                bool implementsDisposable = classDecl.BaseList?.Types
+                    .Any(t => t.ToString().Contains("IDisposable")) ?? false;
+                if (!implementsDisposable) continue;
+
+                var finalizer = classDecl.Members.OfType<DestructorDeclarationSyntax>().FirstOrDefault();
+                if (finalizer == null) continue;
+
+                // Check if the finalizer guards with a disposed flag (correct IDisposable pattern).
+                // Use identifier-level checks only — "disposed" as a bare word also appears in
+                // comments like "/* no disposed guard */" and would produce false negatives.
+                var finalizerText = finalizer.ToString();
+                bool hasDisposedGuard = finalizerText.Contains("_disposed") ||
+                                        finalizerText.Contains("IsDisposed");
+
+                if (!hasDisposedGuard)
+                {
+                    var loc = finalizer.GetLocation().GetLineSpan().StartLinePosition;
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
+                        $"- Class '{classDecl.Identifier.Text}' implements IDisposable and declares a finalizer " +
+                        $"without a disposed-flag guard. The GC may call the finalizer after Dispose(), " +
+                        $"causing double-free. Add: if (_disposed) return; at the top of the finalizer.");
+                }
+            }
+        }
+        return results;
+    }
+
+    private static readonly HashSet<string> UnboundedCollectionTypes = new(StringComparer.Ordinal)
+    {
+        "Dictionary", "List", "HashSet", "SortedDictionary", "SortedSet",
+        "ConcurrentDictionary", "ConcurrentBag", "ConcurrentQueue",
+        "Queue", "Stack", "LinkedList"
+    };
+
+    /// <summary>
+    /// Detects static fields that hold unbounded collections (Dictionary, List, etc.) with
+    /// no size cap, Clear(), or expiry — a memory exhaustion DoS vector when populated from
+    /// user-controlled data. Flags when: static field is a known collection type AND the class
+    /// adds to it (.Add / .TryAdd) but never calls .Clear() or checks Count against a limit.
+    /// </summary>
+    public async Task<List<string>> FindUnboundedStaticCollectionsAsync(
+        string? projectName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            foreach (var classDecl in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                // Find static fields of known collection types
+                var staticCollectionFields = classDecl.Members.OfType<FieldDeclarationSyntax>()
+                    .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                    .SelectMany(f => f.Declaration.Variables.Select(v => new
+                    {
+                        Name = v.Identifier.Text,
+                        TypeName = f.Declaration.Type.ToString().Split('<')[0].Split('.')[^1]
+                    }))
+                    .Where(x => UnboundedCollectionTypes.Contains(x.TypeName))
+                    .ToList();
+
+                if (staticCollectionFields.Count == 0) continue;
+
+                var classText = classDecl.ToString();
+                foreach (var field in staticCollectionFields)
+                {
+                    // Must be populated via Add/TryAdd anywhere in the class
+                    bool isPopulated = classDecl.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                        .Any(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
+                                    ma.Expression.ToString().Contains(field.Name) &&
+                                    ma.Name.Identifier.Text is "Add" or "TryAdd" or "TryGetOrAdd" or "Enqueue" or "Push");
+                    if (!isPopulated) continue;
+
+                    // Flag if there's no Clear(), no Count check, and no capacity/max constant
+                    bool hasClear = classText.Contains(field.Name + ".Clear()");
+                    bool hasCountCheck = classDecl.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+                        .Any(ma => ma.Expression.ToString().Contains(field.Name) &&
+                                   ma.Name.Identifier.Text == "Count");
+                    bool hasMaxConstant = classDecl.Members.OfType<FieldDeclarationSyntax>()
+                        .Any(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)) &&
+                                  (f.Declaration.Variables.Any(v => v.Identifier.Text.ToLower().Contains("max") ||
+                                                                     v.Identifier.Text.ToLower().Contains("limit"))));
+
+                    if (!hasClear && !hasCountCheck && !hasMaxConstant)
+                    {
+                        var loc = classDecl.GetLocation().GetLineSpan().StartLinePosition;
+                        results.Add(
+                            $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
+                            $"- Static field '{field.Name}' ({field.TypeName}) in '{classDecl.Identifier.Text}' " +
+                            $"is populated without a size cap or Clear() call. " +
+                            $"This can cause unbounded memory growth (DoS) on user-controlled input.");
+                    }
+                }
+            }
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Detects directly recursive methods — methods that call themselves on every code path
+    /// without a depth parameter or an early-return base case that does NOT itself recurse.
+    /// Unbounded recursion causes StackOverflowException on deep or adversarial input.
+    /// </summary>
+    public async Task<List<string>> FindUnboundedRecursionAsync(
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            foreach (var method in target.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (method.Body == null && method.ExpressionBody == null) continue;
+                var methodName = method.Identifier.Text;
+
+                // Find self-recursive calls
+                SyntaxNode body = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
+                var selfCalls = body.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                    .Where(inv =>
+                    {
+                        var name = inv.Expression switch
+                        {
+                            IdentifierNameSyntax id => id.Identifier.Text,
+                            MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                            _ => null
+                        };
+                        return name == methodName;
+                    }).ToList();
+
+                if (selfCalls.Count == 0) continue;
+
+                // Look for a depth parameter (int depth, int level, int maxDepth, etc.)
+                bool hasDepthParam = method.ParameterList.Parameters
+                    .Any(p => p.Identifier.Text.ToLower() is "depth" or "level" or "maxdepth" or
+                              "currentdepth" or "recursionlevel" or "limit");
+
+                // Look for an early-return guard (if ... return without self-call)
+                bool hasBaseCase = false;
+                if (method.Body != null)
+                {
+                    foreach (var ifStmt in method.Body.DescendantNodes().OfType<IfStatementSyntax>())
+                    {
+                        // The if-statement's then/else contains a return/throw but no recursive call
+                        var ifBody = ifStmt.Statement.ToString() + (ifStmt.Else?.Statement.ToString() ?? "");
+                        bool hasSelfCall = selfCalls.Any(sc => ifBody.Contains(methodName + "("));
+                        bool hasReturn = ifStmt.Statement.DescendantNodesAndSelf()
+                            .Any(n => n is ReturnStatementSyntax or ThrowStatementSyntax);
+                        if (hasReturn && !hasSelfCall)
+                        {
+                            hasBaseCase = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!hasDepthParam && !hasBaseCase)
+                {
+                    var loc = method.GetLocation().GetLineSpan().StartLinePosition;
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
+                        $"- Method '{methodName}' recurses without a depth guard or base case. " +
+                        $"Deep or adversarial input will cause StackOverflowException. " +
+                        $"Add a depth parameter or a non-recursive early-return guard.");
+                }
+            }
+        }
+        return results;
+    }
+
+    private static void DetectTypeCycle(
+        string current,
+        Dictionary<string, HashSet<string>> deps,
+        HashSet<string> visited,
+        List<string> path,
+        List<string> results,
+        HashSet<string> reportedCycles)
+    {
+        if (!deps.ContainsKey(current)) return;
+        if (path.Contains(current))
+        {
+            // Found a cycle — normalise the cycle key so A→B→A and B→A→B produce one report
+            var cycleStart = path.IndexOf(current);
+            var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
+            var key = string.Join("→", cycle.OrderBy(x => x));
+            if (reportedCycles.Add(key))
+                results.Add($"Circular type dependency: {string.Join(" → ", cycle)}");
+            return;
+        }
+        if (visited.Contains(current)) return;
+        visited.Add(current);
+        path.Add(current);
+        foreach (var dep in deps[current])
+            DetectTypeCycle(dep, deps, visited, path, results, reportedCycles);
+        path.RemoveAt(path.Count - 1);
+    }
+
+    /// <summary>
+    /// Detects generic type parameters that are used in the method body in ways that imply
+    /// a missing constraint — for example, null-comparing T without "where T : class",
+    /// or calling new T() without "where T : new()".  These are not compile errors but are
+    /// design gaps that can surprise callers and lead to confusing runtime exceptions.
+    /// </summary>
+    public async Task<List<string>> FindMissingGenericConstraintsAsync(
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            foreach (var method in target.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                if (!method.TypeParameterList?.Parameters.Any() == true) continue;
+                if (method.Body == null && method.ExpressionBody == null) continue;
+
+                foreach (var typeParam in method.TypeParameterList!.Parameters)
+                {
+                    var tName = typeParam.Identifier.Text;
+
+                    // Find existing constraints declared for this type parameter
+                    var constraintClause = method.ConstraintClauses
+                        .FirstOrDefault(cc => cc.Name.Identifier.Text == tName);
+                    var existingConstraints = constraintClause?.Constraints
+                        .Select(c => c.ToString())
+                        .ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
+
+                    SyntaxNode bodyNode = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
+
+                    // Collect parameter names whose declared type is exactly this type parameter.
+                    // These are the expressions whose null comparison would be meaningless for value types.
+                    var paramNamesOfT = method.ParameterList.Parameters
+                        .Where(p => p.Type?.ToString() == tName)
+                        .Select(p => p.Identifier.Text)
+                        .ToHashSet(StringComparer.Ordinal);
+
+                    // Check: body uses 'new T()' but no 'new()' constraint
+                    bool usesNew = bodyNode.DescendantNodes()
+                        .OfType<ObjectCreationExpressionSyntax>()
+                        .Any(oc => oc.Type.ToString() == tName);
+                    if (usesNew && !existingConstraints.Contains("new()"))
+                    {
+                        var loc = method.GetLocation().GetLineSpan().StartLinePosition;
+                        results.Add(
+                            $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
+                            $"- Method '{method.Identifier.Text}': type parameter '{tName}' is instantiated " +
+                            $"with 'new {tName}()' but is missing 'where {tName} : new()' constraint.");
+                    }
+
+                    if (paramNamesOfT.Count == 0) continue; // no parameters typed as T — skip null checks
+
+                    // Check: a parameter of type T is compared to null, but no 'class' constraint exists.
+                    // Value types can never be null, so this comparison is always false for structs.
+                    bool comparesToNull = bodyNode.DescendantNodes()
+                        .OfType<BinaryExpressionSyntax>()
+                        .Any(b =>
+                            (b.IsKind(SyntaxKind.EqualsExpression) || b.IsKind(SyntaxKind.NotEqualsExpression)) &&
+                            ((b.Left is IdentifierNameSyntax li && paramNamesOfT.Contains(li.Identifier.Text) &&
+                              b.Right is LiteralExpressionSyntax rn && rn.IsKind(SyntaxKind.NullLiteralExpression)) ||
+                             (b.Right is IdentifierNameSyntax ri && paramNamesOfT.Contains(ri.Identifier.Text) &&
+                              b.Left is LiteralExpressionSyntax ln && ln.IsKind(SyntaxKind.NullLiteralExpression))));
+
+                    // Also catch 'x is null' / 'x is not null' patterns on T-typed params
+                    bool isNullPattern = bodyNode.DescendantNodes()
+                        .OfType<IsPatternExpressionSyntax>()
+                        .Any(ip => ip.Expression is IdentifierNameSyntax id && paramNamesOfT.Contains(id.Identifier.Text));
+
+                    bool hasClassConstraint = existingConstraints.Contains("class") ||
+                                              existingConstraints.Contains("notnull") ||
+                                              existingConstraints.Any(c => c.StartsWith("class"));
+
+                    if ((comparesToNull || isNullPattern) && !hasClassConstraint)
+                    {
+                        var loc = method.GetLocation().GetLineSpan().StartLinePosition;
+                        results.Add(
+                            $"{target.Document.FilePath ?? target.Document.Name}:{loc.Line + 1} " +
+                            $"- Method '{method.Identifier.Text}': type parameter '{tName}' is compared to null " +
+                            $"but is missing 'where {tName} : class' constraint — value types will never be null.");
+                    }
+                }
             }
         }
         return results;

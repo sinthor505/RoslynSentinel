@@ -46,7 +46,10 @@ public class AntiPatternEngine
     private static readonly HashSet<string> AllPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
         "BlockingTaskWait", "AsyncVoidMethod", "StringConcatInLoop",
-        "CatchExceptionSwallow", "DisposedObjectUsage", "MissingCancellationToken", "MagicNumber"
+        "CatchExceptionSwallow", "DisposedObjectUsage", "MissingCancellationToken", "MagicNumber",
+        "FireAndForgetTask", "MissingDispose", "DisposedAfterUsing", "SyncCallInAsyncContext",
+        "TaskRunBlocking", "NamedHandlerLeak", "NamedHandlerThisCapture",
+        "ThrowInFinally", "StaticEventSubscription"
     };
 
     public AntiPatternEngine(PersistentWorkspaceManager workspaceManager)
@@ -115,6 +118,30 @@ public class AntiPatternEngine
 
             if (activePatterns.Contains("MagicNumber"))
                 findings.AddRange(DetectMagicNumbers(root, path));
+
+            if (activePatterns.Contains("FireAndForgetTask"))
+                findings.AddRange(DetectFireAndForgetTask(root, path));
+
+            if (activePatterns.Contains("MissingDispose"))
+                findings.AddRange(DetectMissingDispose(root, path));
+
+            if (activePatterns.Contains("DisposedAfterUsing"))
+                findings.AddRange(DetectDisposedAfterUsing(root, path));
+
+            if (activePatterns.Contains("SyncCallInAsyncContext"))
+                findings.AddRange(DetectSyncCallInAsyncContext(root, path));
+
+            if (activePatterns.Contains("TaskRunBlocking"))
+                findings.AddRange(DetectTaskRunBlocking(root, path));
+
+            if (activePatterns.Contains("NamedHandlerLeak") || activePatterns.Contains("NamedHandlerThisCapture"))
+                findings.AddRange(DetectNamedHandlerLeaks(root, path, activePatterns));
+
+            if (activePatterns.Contains("ThrowInFinally"))
+                findings.AddRange(DetectThrowInFinally(root, path));
+
+            if (activePatterns.Contains("StaticEventSubscription"))
+                findings.AddRange(DetectStaticEventSubscription(root, path));
         }
 
         return findings;
@@ -418,6 +445,339 @@ public class AntiPatternEngine
             yield return new AntiPatternFinding("MagicNumber",
                 $"Magic number '{literal.Token.Text}' used directly in code. Extract to a named constant for clarity.",
                 "Low", filePath, line, snippet);
+        }
+    }
+
+    // ── FireAndForgetTask ─────────────────────────────────────────────────────
+
+    private static readonly HashSet<string> TaskFireMethods = new(StringComparer.Ordinal)
+    {
+        "Run", "StartNew", "Factory"
+    };
+
+    private static IEnumerable<AntiPatternFinding> DetectFireAndForgetTask(SyntaxNode root, string filePath)
+    {
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            // Match Task.Run(...) and Task.Factory.StartNew(...)
+            string? methodName = null;
+            if (invocation.Expression is MemberAccessExpressionSyntax ma)
+            {
+                var receiver = ma.Expression.ToString();
+                methodName = ma.Name.Identifier.Text;
+
+                bool isTaskRun = (receiver == "Task" && methodName == "Run") ||
+                                 (receiver == "Task.Factory" && methodName == "StartNew");
+                if (!isTaskRun) continue;
+            }
+            else continue;
+
+            // Skip if directly awaited
+            if (invocation.Parent is AwaitExpressionSyntax) continue;
+
+            // Skip if assigned to any variable, field, or discard
+            if (invocation.Parent is AssignmentExpressionSyntax) continue;
+            if (invocation.Parent is EqualsValueClauseSyntax) continue;
+
+            // Skip if returned
+            if (invocation.Parent is ReturnStatementSyntax) continue;
+            if (invocation.Parent is ArrowExpressionClauseSyntax) continue;
+
+            // Skip if passed as argument (e.g. Task.WhenAll(Task.Run(...)))
+            if (invocation.Parent is ArgumentSyntax) continue;
+
+            // Skip if chained (.ContinueWith, .ConfigureAwait, etc.)
+            if (invocation.Parent is MemberAccessExpressionSyntax) continue;
+
+            var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var snippet = Truncate(invocation.ToString());
+            yield return new AntiPatternFinding(
+                "FireAndForgetTask",
+                $"'{snippet}' is not awaited and not stored — exceptions thrown inside will be silently swallowed. Assign to a Task variable or await it.",
+                "High", filePath, line, snippet);
+        }
+    }
+
+    // ── MissingDispose ────────────────────────────────────────────────────────
+
+    // Well-known IDisposable types allocated with 'new' or factory methods that
+    // should always be wrapped in 'using' or try/finally.
+    private static readonly HashSet<string> KnownDisposableTypes = new(StringComparer.Ordinal)
+    {
+        "StreamReader", "StreamWriter", "FileStream", "BinaryReader", "BinaryWriter",
+        "MemoryStream", "BufferedStream", "GZipStream", "DeflateStream",
+        "SqlConnection", "SqlCommand", "SqlDataReader", "SqlTransaction",
+        "SqliteConnection", "NpgsqlConnection", "OleDbConnection", "OdbcConnection",
+        "HttpClient", "HttpClientHandler", "HttpResponseMessage",
+        "WebClient", "TcpClient", "UdpClient", "Socket",
+        "Mutex", "Semaphore", "SemaphoreSlim", "EventWaitHandle", "ManualResetEvent", "AutoResetEvent",
+        "CancellationTokenSource", "Timer",
+        "Process", "RegistryKey", "X509Certificate", "X509Certificate2"
+    };
+
+    private static readonly HashSet<string> KnownDisposableFactories = new(StringComparer.Ordinal)
+    {
+        "OpenText", "OpenRead", "OpenWrite", "CreateText", "Open", "Create", "AppendText"
+    };
+
+    private static IEnumerable<AntiPatternFinding> DetectMissingDispose(SyntaxNode root, string filePath)
+    {
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (method.Body == null) continue;
+
+            foreach (var localDecl in method.Body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
+            {
+                // Skip declarations that use the 'using' keyword (using var x = ...)
+                if (localDecl.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)) continue;
+
+                foreach (var variable in localDecl.Declaration.Variables)
+                {
+                    var init = variable.Initializer?.Value;
+                    if (init == null) continue;
+
+                    bool isKnownDisposable = init switch
+                    {
+                        // new StreamReader(...), new SqlConnection(...), etc.
+                        ObjectCreationExpressionSyntax oc =>
+                            KnownDisposableTypes.Contains(oc.Type.ToString().Split('.')[^1]),
+                        // File.OpenText(...), File.OpenRead(...), etc.
+                        InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax fma =>
+                            KnownDisposableFactories.Contains(fma.Name.Identifier.Text),
+                        _ => false
+                    };
+
+                    if (!isKnownDisposable) continue;
+
+                    // Check if this variable is contained in a using-statement block
+                    bool inUsing = localDecl.Ancestors().Any(a =>
+                        a is UsingStatementSyntax ||
+                        (a is LocalDeclarationStatementSyntax lds && lds.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)));
+                    if (inUsing) continue;
+
+                    // Check if enclosed in a try/finally that calls Dispose
+                    bool inTryFinally = localDecl.Ancestors().OfType<TryStatementSyntax>()
+                        .Any(ts => ts.Finally?.Block.DescendantNodes()
+                            .OfType<InvocationExpressionSyntax>()
+                            .Any(inv => inv.Expression is MemberAccessExpressionSyntax dma &&
+                                        dma.Name.Identifier.Text == "Dispose" &&
+                                        dma.Expression.ToString() == variable.Identifier.Text) == true);
+                    if (inTryFinally) continue;
+
+                    var line = localDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    var typeName = init switch
+                    {
+                        ObjectCreationExpressionSyntax oc => oc.Type.ToString().Split('.')[^1],
+                        InvocationExpressionSyntax inv when inv.Expression is MemberAccessExpressionSyntax fma
+                            => fma.Name.Identifier.Text,
+                        _ => "disposable resource"
+                    };
+                    yield return new AntiPatternFinding(
+                        "MissingDispose",
+                        $"'{variable.Identifier.Text}' ({typeName}) implements IDisposable but is not wrapped in 'using' or try/finally. Resource leak if an exception occurs.",
+                        "Medium", filePath, line, Truncate(localDecl.ToString()));
+                }
+            }
+        }
+    }
+
+    // ── DisposedAfterUsing ────────────────────────────────────────────────────
+    // Detects: variable assigned inside a using() statement body, then accessed after the block.
+    // The using-statement form (using (s = expr) { }) disposes on exit but does not scope the
+    // variable — s remains accessible after and is now disposed. Use 'using var' to prevent this.
+
+    private static IEnumerable<AntiPatternFinding> DetectDisposedAfterUsing(SyntaxNode root, string filePath)
+    {
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (method.Body == null) continue;
+
+            foreach (var usingStmt in method.Body.DescendantNodes().OfType<UsingStatementSyntax>())
+            {
+                // Only flag the expression form: using (s = expr) { } where s is not declared here
+                if (usingStmt.Expression is not AssignmentExpressionSyntax assign) continue;
+                if (assign.Left is not IdentifierNameSyntax varId) continue;
+
+                var varName = varId.Identifier.Text;
+
+                // Find statements that come AFTER this using in the same parent block
+                var containingBlock = usingStmt.Parent as BlockSyntax;
+                if (containingBlock == null) continue;
+
+                var statements = containingBlock.Statements;
+                var usingIndex = statements.IndexOf(usingStmt);
+                if (usingIndex < 0) continue;
+
+                var accessedAfter = statements
+                    .Skip(usingIndex + 1)
+                    .SelectMany(s => s.DescendantNodes().OfType<IdentifierNameSyntax>())
+                    .Any(id => id.Identifier.Text == varName);
+
+                if (!accessedAfter) continue;
+
+                var line = usingStmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                yield return new AntiPatternFinding(
+                    "DisposedAfterUsing",
+                    $"Variable '{varName}' is used after its 'using' block — it is already disposed. " +
+                    "Declare the variable inside the using block ('using var') to prevent this.",
+                    "High", filePath, line, Truncate(usingStmt.ToString()));
+            }
+        }
+    }
+
+    // ── SyncCallInAsyncContext ────────────────────────────────────────────────
+    // Detects synchronous blocking API calls inside async methods where an async alternative exists.
+    // Thread.Sleep → await Task.Delay; File.ReadAllText → await File.ReadAllTextAsync; etc.
+
+    private static readonly Dictionary<string, string> SyncToAsyncSuggestions =
+        new(StringComparer.Ordinal)
+        {
+            // Thread
+            { "Thread.Sleep",           "await Task.Delay(...)" },
+            // File I/O
+            { "File.ReadAllText",       "await File.ReadAllTextAsync(...)" },
+            { "File.WriteAllText",      "await File.WriteAllTextAsync(...)" },
+            { "File.ReadAllBytes",      "await File.ReadAllBytesAsync(...)" },
+            { "File.WriteAllBytes",     "await File.WriteAllBytesAsync(...)" },
+            { "File.ReadAllLines",      "await File.ReadAllLinesAsync(...)" },
+            { "File.WriteAllLines",     "await File.WriteAllLinesAsync(...)" },
+            // StreamReader/StreamWriter
+            { "StreamReader.ReadToEnd", "await StreamReader.ReadToEndAsync()" },
+            { "StreamWriter.Flush",     "await StreamWriter.FlushAsync()" },
+            // WebClient (obsolete — prefer HttpClient)
+            { "WebClient.DownloadString",   "await HttpClient.GetStringAsync(...)" },
+            { "WebClient.UploadString",     "await HttpClient.PostAsync(...)" },
+            { "WebClient.DownloadData",     "await HttpClient.GetByteArrayAsync(...)" },
+        };
+
+    private static IEnumerable<AntiPatternFinding> DetectSyncCallInAsyncContext(SyntaxNode root, string filePath)
+    {
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
+            if (method.Body == null && method.ExpressionBody == null) continue;
+
+            foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                if (invocation.Expression is not MemberAccessExpressionSyntax ma) continue;
+
+                var receiverText = ma.Expression.ToString();
+                var methodText = ma.Name.Identifier.Text;
+                var fullKey = $"{receiverText}.{methodText}";
+
+                if (!SyncToAsyncSuggestions.TryGetValue(fullKey, out var suggestion)) continue;
+
+                var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                yield return new AntiPatternFinding(
+                    "SyncCallInAsyncContext",
+                    $"'{fullKey}' blocks the thread inside an async method. Use '{suggestion}' instead.",
+                    "Medium", filePath, line, Truncate(invocation.ToString()));
+            }
+        }
+    }
+
+    // ── TaskRunBlocking ───────────────────────────────────────────────────────
+    // Detects .Wait()/.Result/.GetAwaiter().GetResult() specifically on Task.Run(...)
+    // This blocks one thread-pool thread waiting for ANOTHER thread-pool thread — under
+    // load the pool saturates and new work cannot start (thread starvation cascade).
+
+    private static IEnumerable<AntiPatternFinding> DetectTaskRunBlocking(SyntaxNode root, string filePath)
+    {
+        foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
+        {
+            var memberName = ma.Name.Identifier.Text;
+            if (memberName != "Result" && memberName != "Wait") continue;
+
+            // Walk up: skip .Wait() that is itself called (it would be MemberAccess.Parent = Invocation)
+            // We want the receiver of .Result or .Wait() to be Task.Run(...)
+            var receiver = ma.Expression;
+
+            // Direct: Task.Run(...).Result  or  Task.Run(...).Wait()
+            bool isTaskRun = false;
+            if (receiver is InvocationExpressionSyntax inv &&
+                inv.Expression is MemberAccessExpressionSyntax runMa &&
+                runMa.Expression.ToString() is "Task" or "Task.Factory" &&
+                runMa.Name.Identifier.Text is "Run" or "StartNew")
+            {
+                isTaskRun = true;
+            }
+
+            // Variable: var t = Task.Run(...); t.Result  — harder to track, skip for now
+            if (!isTaskRun) continue;
+
+            var line = ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var snippet = Truncate(ma.ToString());
+            yield return new AntiPatternFinding(
+                "TaskRunBlocking",
+                $"'.{memberName}' on Task.Run() blocks a thread-pool thread while waiting for another thread-pool thread. " +
+                "Under load this causes thread starvation. Use 'await Task.Run(...)' instead.",
+                "High", filePath, line, snippet);
+        }
+    }
+
+    // ── NamedHandlerLeak / NamedHandlerThisCapture ────────────────────────────
+    // NamedHandlerLeak: event += this.Handler (or external.Method) without paired -= in Dispose
+    // NamedHandlerThisCapture: += this.Method on an external publisher — keeps 'this' alive
+
+    private static IEnumerable<AntiPatternFinding> DetectNamedHandlerLeaks(
+        SyntaxNode root, string filePath, HashSet<string> activePatterns)
+    {
+        foreach (var classNode in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+        {
+            bool implementsDisposable = classNode.BaseList?.Types
+                .Any(t => t.ToString().Contains("IDisposable")) ?? false;
+
+            // Collect += subscriptions where the right-hand side is a named method (not a lambda)
+            var subscriptions = classNode.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                .Where(a => a.IsKind(SyntaxKind.AddAssignmentExpression) &&
+                            // RHS is a method group (MemberAccess or Identifier), not lambda/anonymous
+                            a.Right is MemberAccessExpressionSyntax or IdentifierNameSyntax)
+                .ToList();
+
+            if (subscriptions.Count == 0) continue;
+
+            // Collect unsubscriptions
+            var unsubKeys = new HashSet<string>(
+                classNode.DescendantNodes().OfType<AssignmentExpressionSyntax>()
+                    .Where(a => a.IsKind(SyntaxKind.SubtractAssignmentExpression))
+                    .Select(a => $"{a.Left}|{a.Right}"));
+
+            foreach (var sub in subscriptions)
+            {
+                // Is the event on an external object (not 'this')? Skip 'this.Event += ...' (subscribing to own events is fine)
+                bool externalPublisher = sub.Left is MemberAccessExpressionSyntax lma &&
+                    lma.Expression is not ThisExpressionSyntax;
+                if (!externalPublisher) continue;
+
+                bool hasUnsubscribe = unsubKeys.Contains($"{sub.Left}|{sub.Right}");
+
+                if (activePatterns.Contains("NamedHandlerLeak") && (!implementsDisposable || !hasUnsubscribe))
+                {
+                    var line = sub.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    var reason = !implementsDisposable
+                        ? "class does not implement IDisposable"
+                        : "Dispose does not unsubscribe";
+                    yield return new AntiPatternFinding(
+                        "NamedHandlerLeak",
+                        $"'{sub.Left}' subscribed with named handler '{sub.Right}' but {reason}. " +
+                        "The publisher will keep this instance alive until the event is unsubscribed.",
+                        "Medium", filePath, line, Truncate(sub.ToString()));
+                }
+
+                // NamedHandlerThisCapture: RHS is 'this.Method' — keeps 'this' alive via publisher
+                if (activePatterns.Contains("NamedHandlerThisCapture") &&
+                    sub.Right is MemberAccessExpressionSyntax rma &&
+                    rma.Expression is ThisExpressionSyntax)
+                {
+                    var line = sub.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    yield return new AntiPatternFinding(
+                        "NamedHandlerThisCapture",
+                        $"'{sub.Left} += this.{rma.Name}' on an external publisher holds a reference to 'this'. " +
+                        "This instance will stay alive as long as the publisher lives. " +
+                        "Unsubscribe in Dispose() with '{sub.Left} -= this.{rma.Name};'",
+                        "Medium", filePath, line, Truncate(sub.ToString()));
+                }
+            }
         }
     }
 
@@ -850,9 +1210,16 @@ public class AntiPatternEngine
                     || typeName == "System.Exception";
                 if (isCatchAll)
                 {
+                    var suggestion = "";
+                    if (catchClause.Parent is TryStatementSyntax parentTry)
+                    {
+                        var inferred = InferExpectedExceptions(parentTry.Block);
+                        if (inferred.Count > 0)
+                            suggestion = $" Based on the try block, consider catching: {string.Join(", ", inferred)}, then Exception as a final catch-all.";
+                    }
                     findings.Add(new ExceptionHandlingFinding(
                         "CatchAll",
-                        "Catching System.Exception (or bare catch) swallows all exception types, including those that should propagate.",
+                        "Catching System.Exception (or bare catch) swallows all exception types, including those that should propagate." + suggestion,
                         "High", path, line, snippet));
                 }
 
@@ -919,9 +1286,173 @@ public class AntiPatternEngine
                     }
                 }
             }
+
+            // 5. throw new Exception("message") — too broad; suggest specific exception type
+            foreach (var throwStmt in root.DescendantNodes().OfType<ThrowStatementSyntax>())
+            {
+                if (throwStmt.Expression is not ObjectCreationExpressionSyntax oc) continue;
+                if (oc.Type.ToString() is not ("Exception" or "System.Exception")) continue;
+
+                var msgArg = oc.ArgumentList?.Arguments.FirstOrDefault()?.Expression as LiteralExpressionSyntax;
+                var suggested = InferSpecificExceptionType(msgArg?.Token.ValueText);
+                var desc = suggested != null
+                    ? $"'throw new Exception()' is too broad. Based on the message, consider 'throw new {suggested}(...)' or a custom exception type."
+                    : "'throw new Exception()' is too broad. Use a specific BCL exception (ArgumentException, InvalidOperationException, etc.) or create a custom exception class.";
+
+                var tLoc = throwStmt.GetLocation().GetLineSpan().StartLinePosition;
+                findings.Add(new ExceptionHandlingFinding(
+                    "GenericThrowExpression", desc, "Medium", path, tLoc.Line + 1, Truncate(throwStmt.ToString())));
+            }
+
+            // 6. Explicit .Dispose() call not protected by try/catch or 'using'
+            foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                if (inv.Expression is not MemberAccessExpressionSyntax dma) continue;
+                if (dma.Name.Identifier.Text != "Dispose") continue;
+                if (inv.ArgumentList.Arguments.Count != 0) continue;
+
+                var isProtected = false;
+                foreach (var anc in inv.Ancestors())
+                {
+                    if (anc is TryStatementSyntax || anc is UsingStatementSyntax) { isProtected = true; break; }
+                    if (anc is LocalDeclarationStatementSyntax lds3 && lds3.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)) { isProtected = true; break; }
+                }
+
+                if (!isProtected)
+                {
+                    var dLoc = inv.GetLocation().GetLineSpan().StartLinePosition;
+                    findings.Add(new ExceptionHandlingFinding(
+                        "UnprotectedDispose",
+                        "Explicit .Dispose() call is not protected by try/catch. If Dispose() throws, cleanup is incomplete. Prefer 'using', or wrap in try { } catch { /* log */ }.",
+                        "Medium", path, dLoc.Line + 1, Truncate(inv.ToString())));
+                }
+            }
+
+            // 7. Dispose() implementation with multiple unprotected sub-Dispose calls
+            // If one sub-resource throws in Dispose(), the others are never released.
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Identifier.Text == "Dispose" && m.ParameterList.Parameters.Count == 0))
+            {
+                if (method.Body == null) continue;
+
+                var unprotected = method.Body.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
+                                  ma.Name.Identifier.Text == "Dispose" &&
+                                  inv.ArgumentList.Arguments.Count == 0 &&
+                                  !IsProtectedByTryWithin(inv, method))
+                    .ToList();
+
+                if (unprotected.Count >= 2)
+                {
+                    var mLoc = method.GetLocation().GetLineSpan().StartLinePosition;
+                    findings.Add(new ExceptionHandlingFinding(
+                        "UnsafeDisposeImplementation",
+                        $"Dispose() calls {unprotected.Count} sub-resources without individual try/catch. If one throws, the remaining resources are not disposed. Wrap each .Dispose() call in its own try/catch.",
+                        "Medium", path, mLoc.Line + 1, "Dispose()"));
+                }
+            }
         }
 
         return findings;
+    }
+
+    private static bool IsProtectedByTryWithin(SyntaxNode node, SyntaxNode container)
+    {
+        foreach (var ancestor in node.Ancestors())
+        {
+            if (ancestor == container) break;
+            if (ancestor is TryStatementSyntax) return true;
+        }
+        return false;
+    }
+
+    private static List<string> InferExpectedExceptions(BlockSyntax tryBlock)
+    {
+        var suggestions = new List<string>();
+
+        foreach (var inv in tryBlock.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var expr = inv.ToString();
+            if (expr.Contains("File.") || expr.Contains("Directory.") || expr.Contains("Stream") ||
+                expr.Contains("ReadAllText") || expr.Contains("WriteAllText") || expr.Contains("ReadAllBytes"))
+            {
+                AddIfAbsent(suggestions, "IOException");
+                AddIfAbsent(suggestions, "UnauthorizedAccessException");
+            }
+            if (expr.Contains("HttpClient") || expr.Contains("GetAsync") || expr.Contains("PostAsync") ||
+                expr.Contains("PutAsync") || expr.Contains("SendAsync") || expr.Contains("GetStringAsync"))
+            {
+                AddIfAbsent(suggestions, "HttpRequestException");
+                AddIfAbsent(suggestions, "TaskCanceledException");
+            }
+            if (expr.Contains(".Parse(") && !expr.Contains("Enum.Parse"))
+            {
+                AddIfAbsent(suggestions, "FormatException");
+                AddIfAbsent(suggestions, "OverflowException");
+            }
+            if (expr.Contains("SqlCommand") || expr.Contains("ExecuteReader") ||
+                expr.Contains("ExecuteNonQuery") || expr.Contains("ExecuteScalar") || expr.Contains(".Open()"))
+            {
+                AddIfAbsent(suggestions, "SqlException");
+                AddIfAbsent(suggestions, "InvalidOperationException");
+            }
+            if (expr.Contains("JsonSerializer") || expr.Contains("JsonConvert") || expr.Contains("Deserialize"))
+                AddIfAbsent(suggestions, "JsonException");
+            if (expr.Contains("Convert.To"))
+            {
+                AddIfAbsent(suggestions, "FormatException");
+                AddIfAbsent(suggestions, "InvalidCastException");
+            }
+        }
+
+        if (tryBlock.DescendantNodes().OfType<CastExpressionSyntax>().Any())
+            AddIfAbsent(suggestions, "InvalidCastException");
+        if (tryBlock.DescendantNodes().OfType<ElementAccessExpressionSyntax>().Any())
+            AddIfAbsent(suggestions, "IndexOutOfRangeException");
+        if (tryBlock.DescendantNodes().OfType<BinaryExpressionSyntax>()
+            .Any(b => b.IsKind(SyntaxKind.DivideExpression)))
+            AddIfAbsent(suggestions, "DivideByZeroException");
+
+        return suggestions;
+    }
+
+    private static string? InferSpecificExceptionType(string? message)
+    {
+        if (message == null) return null;
+        var lower = message.ToLowerInvariant();
+
+        if (lower.Contains("null") || lower.Contains("cannot be null") || lower.Contains("required"))
+            return "ArgumentNullException";
+        if (lower.Contains("not supported"))
+            return "NotSupportedException";
+        if (lower.Contains("not implemented"))
+            return "NotImplementedException";
+        if (lower.Contains("out of range") || lower.Contains("bounds"))
+            return "ArgumentOutOfRangeException";
+        if (lower.Contains("invalid operation") || lower.Contains("invalid state") || lower.Contains("already"))
+            return "InvalidOperationException";
+        if (lower.Contains("timeout") || lower.Contains("timed out"))
+            return "TimeoutException";
+        if (lower.Contains("format") || lower.Contains("invalid format") || lower.Contains("parse"))
+            return "FormatException";
+        if (lower.Contains("overflow"))
+            return "OverflowException";
+        if (lower.Contains("argument") || lower.Contains("parameter") || lower.Contains("invalid"))
+            return "ArgumentException";
+        if (lower.Contains("not found") || lower.Contains("does not exist") || lower.Contains("missing key"))
+            return "KeyNotFoundException";
+        if (lower.Contains("access denied") || lower.Contains("unauthorized") || lower.Contains("permission"))
+            return "UnauthorizedAccessException";
+        if (lower.Contains("disposed"))
+            return "ObjectDisposedException";
+
+        return null;
+    }
+
+    private static void AddIfAbsent(List<string> list, string item)
+    {
+        if (!list.Contains(item)) list.Add(item);
     }
 
     public async Task<List<AntiPatternFinding>> FindLongParameterListAsync(
@@ -1116,5 +1647,74 @@ public class AntiPatternEngine
             }
         }
         return results;
+    }
+
+    // ── ThrowInFinally ────────────────────────────────────────────────────────
+    // Throwing from a finally block suppresses the original exception; the caller
+    // sees the finally-throw instead of the real error, destroying stack context.
+
+    private static IEnumerable<AntiPatternFinding> DetectThrowInFinally(SyntaxNode root, string filePath)
+    {
+        foreach (var tryStmt in root.DescendantNodes().OfType<TryStatementSyntax>())
+        {
+            if (tryStmt.Finally == null) continue;
+
+            foreach (var throwStmt in tryStmt.Finally.Block.DescendantNodes().OfType<ThrowStatementSyntax>())
+            {
+                // Bare `throw;` re-throws current exception — that is fine
+                if (throwStmt.Expression == null) continue;
+
+                var loc = throwStmt.GetLocation().GetLineSpan().StartLinePosition;
+                yield return new AntiPatternFinding(
+                    "ThrowInFinally",
+                    "Throwing in a finally block silently swallows the original exception. " +
+                    "The caller sees the finally-throw instead of the real error, losing the original stack trace. " +
+                    "Move error handling into catch blocks.",
+                    "Warning", filePath,
+                    loc.Line + 1, throwStmt.ToString());
+            }
+        }
+    }
+
+    // ── StaticEventSubscription ───────────────────────────────────────────────
+    // Subscribing an instance method to a static event without unsubscribing in
+    // Dispose pins the instance in memory for the lifetime of the AppDomain.
+
+    private static IEnumerable<AntiPatternFinding> DetectStaticEventSubscription(SyntaxNode root, string filePath)
+    {
+        // Collect unsubscribe targets: everything on the RHS of a -= assignment
+        var unsubscribeTargets = root.DescendantNodes()
+            .OfType<AssignmentExpressionSyntax>()
+            .Where(a => a.IsKind(SyntaxKind.SubtractAssignmentExpression))
+            .Select(a => a.Right.ToString())
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression)) continue;
+
+            // LHS must be a qualified member access: ReceiverName.EventName
+            if (assignment.Left is not MemberAccessExpressionSyntax lhsMa) continue;
+
+            // Heuristic: receiver starts with uppercase letter — likely a class name (static access)
+            var receiverText = lhsMa.Expression.ToString();
+            if (string.IsNullOrEmpty(receiverText) || !char.IsUpper(receiverText[0])) continue;
+
+            // RHS must be a simple method reference (not a lambda)
+            var rhsText = assignment.Right.ToString();
+            if (assignment.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax) continue;
+
+            // Flag only if there's no paired unsubscribe
+            if (unsubscribeTargets.Contains(rhsText)) continue;
+
+            var loc = assignment.GetLocation().GetLineSpan().StartLinePosition;
+            yield return new AntiPatternFinding(
+                "StaticEventSubscription",
+                $"Subscribing '{rhsText}' to static event '{lhsMa}' without a paired '-=' in Dispose. " +
+                "Static events hold references to subscribers for the lifetime of the AppDomain, preventing GC. " +
+                "Unsubscribe in Dispose() or use a WeakEventManager.",
+                "Warning", filePath,
+                loc.Line + 1, assignment.ToString());
+        }
     }
 }

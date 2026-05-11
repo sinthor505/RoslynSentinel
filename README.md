@@ -182,9 +182,9 @@ When an AI agent edits code manually it is doing **text manipulation**, not sema
 
 ---
 
-## 🚀 320 MCP Tools Across 44 Engines + 7 Tool Classes
+## 🚀 260 MCP Tools Across 44 Engines + 7 Tool Classes
 
-Roslyn Sentinel exposes **320 named MCP tools** through 7 façade classes that wrap 44 specialized analysis and transformation engines. All tools are always live; individual **feature toggles** let you silence noisy analysis rules without touching code.
+Roslyn Sentinel exposes **260 named MCP tools** through 7 façade classes that wrap 44 specialized analysis and transformation engines. All tools are always live; individual **feature toggles** let you silence noisy analysis rules without touching code.
 
 > **Rating Key:** ⭐⭐⭐⭐⭐ Production-ready &nbsp;·&nbsp; ⭐⭐⭐⭐ Stable, minor edge cases &nbsp;·&nbsp; ⭐⭐⭐ Functional, documented limitations &nbsp;·&nbsp; ⭐⭐ Partial implementation
 
@@ -442,9 +442,9 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 
 ---
 
-## 🔎 Quality & Anti-Patterns — 39 tools
+## 🔎 Quality & Anti-Patterns — 72 tools
 
-Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingEngine`, `CodeStyleEngine`, and `DiagnosticEngine`.
+Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingEngine`, `CodeStyleEngine`, `CodeStyleAnalysisEngine`, `ThreadSafetyEngine`, `AsyncSafetyEngine`, and `DiagnosticEngine`.
 
 ### Performance
 
@@ -483,6 +483,58 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 | `find_possible_deadlocks` | Detect nested lock acquisition patterns prone to deadlock | ⭐⭐⭐⭐⭐ |
 | `analyze_semaphore_usage` | Detect `SemaphoreSlim` misuse (never released, released without acquire) | ⭐⭐⭐⭐⭐ |
 | `get_diagnostics_summary` | Compiler diagnostics grouped by `CS` code, sorted by frequency | ⭐⭐⭐⭐⭐ |
+
+### Precision Detectors (v2 additions)
+
+#### Performance
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_linq_n1_patterns` | Detect LINQ terminal calls inside loops where the loop variable appears in the chain — each iteration triggers a separate query | ⭐⭐⭐⭐⭐ |
+| `find_string_format_in_loops` | Detect `$"..."` / `string.Format()` inside loop bodies — each iteration allocates; use `StringBuilder` instead | ⭐⭐⭐⭐⭐ |
+| `find_multiple_enumeration` | Detect `IEnumerable<T>` / `IQueryable<T>` locals and parameters iterated more than once without materializing | ⭐⭐⭐⭐⭐ |
+| `find_linq_redundant_where` | Detect `.Where(pred).First()` / `.Any()` / `.Count()` chains — collapse to `First(pred)` for allocation-free single pass | ⭐⭐⭐⭐⭐ |
+| `find_implicit_nullable_boxing` | Detect explicit casts of `Nullable<T>` to `object` — surprising null-equality behavior and boxing overhead | ⭐⭐⭐⭐⭐ |
+
+#### Stability / Resource Safety
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_finalizer_on_disposable` | Detect `IDisposable` classes with a finalizer but no disposed-flag guard — may double-free unmanaged resources | ⭐⭐⭐⭐⭐ |
+| `find_unbounded_static_collections` | Detect static `Dictionary`/`List`/`HashSet` fields populated with `.Add()` but never `.Clear()`ed — memory exhaustion DoS | ⭐⭐⭐⭐⭐ |
+| `find_unbounded_recursion` | Detect recursive methods with no depth parameter or base-case guard before the recursive call — `StackOverflowException` on deep input | ⭐⭐⭐⭐⭐ |
+
+#### Thread Safety
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_unsafe_lazy_init_thread` | Detect `if (_field == null) _field = new X()` outside a lock without `volatile` or `Lazy<T>` — partially constructed objects on other threads | ⭐⭐⭐⭐⭐ |
+| `find_cas_loop_without_backoff` | Detect `while (Interlocked.CompareExchange(...))` with no `SpinWait`, `Thread.Sleep`, or `Task.Delay` — 100% CPU live-lock under contention | ⭐⭐⭐⭐⭐ |
+| `find_double_checked_locking` | Detect the DCL pattern without `volatile` — CPU/JIT may reorder the store and expose a partially-constructed object | ⭐⭐⭐⭐⭐ |
+| `find_check_then_act_on_dictionary` | Detect `ContainsKey()` + `Add()` on the same dictionary outside a lock — another thread may insert between the check and the add | ⭐⭐⭐⭐⭐ |
+
+#### Security
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_re_dos_patterns` | Detect Regex literals with nested quantifiers (`(a+)+`) — catastrophic backtracking on non-matching input | ⭐⭐⭐⭐⭐ |
+| `find_unvalidated_regex_source` | Detect `new Regex(variable)` where the pattern argument is not a compile-time literal — Regex injection and ReDoS amplification | ⭐⭐⭐⭐⭐ |
+| `find_regex_new_in_loop` | Detect `new Regex()` inside loop bodies — recompiles the pattern on every iteration; hoist to a `static readonly` field | ⭐⭐⭐⭐⭐ |
+
+#### Async Safety
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_sequential_independent_awaits` | Detect consecutive `await` calls where neither result depends on the other — missed `Task.WhenAll()` parallelism | ⭐⭐⭐⭐⭐ |
+| `find_async_void_without_try_catch` | Detect `async void` methods whose body is not wrapped in `try/catch` — unhandled exceptions crash the process with no caller recovery | ⭐⭐⭐⭐⭐ |
+| `find_unawaked_dispose_async` | Detect `DisposeAsync()` calls not wrapped in `await` — async cleanup finishes after the method returns, leaving resources dangling | ⭐⭐⭐⭐⭐ |
+| `find_unobserved_task_in_field` | Detect `Task`/`ValueTask` assigned to a field and never subsequently awaited in the class — exceptions silently swallowed | ⭐⭐⭐⭐⭐ |
+
+#### Code Style
+
+| Tool | What it does | ★ |
+|------|--------------|---|
+| `find_mutable_public_collection_properties` | Detect public properties exposing `List<T>`, `Dictionary<K,V>`, `HashSet<T>` etc. with a public setter — callers can replace the entire collection | ⭐⭐⭐⭐⭐ |
 
 ### Testing
 
@@ -603,14 +655,15 @@ Changes take effect immediately for all subsequent tool calls, including `get_co
 
 ## 🧪 Verification
 
-Roslyn Sentinel is backed by **1,692 tests across 76 test files** (1,605 passing, 87 skipped for real-solution integration tests), including:
+Roslyn Sentinel is backed by **1,896 tests across 76 test files** (1,809 passing, 87 skipped for real-solution integration tests), including:
 - Unit tests for every engine method
+- Accuracy tests verifying each detector fires on positive cases and stays silent on negative cases
 - Real-solution smoke tests against a live .NET codebase (requires `ROSLYN_SENTINEL_TEST_SLN`)
 - Regression tests for every fixed bug (Batteries targeting specific CS codes and tool edge cases)
 
 ```bash
 dotnet test RoslynSentinel.Tests/RoslynSentinel.Tests.csproj
-# → 1,605 passed, 87 skipped
+# → 1,809 passed, 87 skipped
 ```
 
 ---
