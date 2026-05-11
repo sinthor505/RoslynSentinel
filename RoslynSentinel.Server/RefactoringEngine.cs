@@ -628,13 +628,22 @@ public class RefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null) return new Dictionary<string, string>();
 
-        // Extract public instance methods (exclude static)
+        // Extract public instance methods (exclude static, constructors)
         var methods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
                      && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)));
 
-        // Build interface methods with proper leading trivia (newline + indent) for formatting
-        var ifaceMembers = methods.Select(m =>
+        // Extract public non-static properties with at least a getter
+        var properties = classNode.Members.OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
+                     && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword))
+                     && p.AccessorList != null);
+
+        static SyntaxTriviaList MemberTrivia() => SyntaxFactory.TriviaList(
+            SyntaxFactory.CarriageReturnLineFeed,
+            SyntaxFactory.Whitespace("    "));
+
+        var ifaceMethods = methods.Select(m =>
             (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(
                     m.ReturnType.WithoutTrivia(),
                     m.Identifier)
@@ -642,12 +651,24 @@ public class RefactoringEngine
                 .WithParameterList(m.ParameterList)
                 .WithConstraintClauses(m.ConstraintClauses)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                .WithLeadingTrivia(SyntaxFactory.TriviaList(
-                    SyntaxFactory.CarriageReturnLineFeed,
-                    SyntaxFactory.Whitespace("    ")))
-                .WithTrailingTrivia(SyntaxFactory.TriviaList(
-                    SyntaxFactory.CarriageReturnLineFeed))
-        ).ToArray();
+                .WithLeadingTrivia(MemberTrivia())
+                .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed)));
+
+        var ifaceProperties = properties.Select(p =>
+        {
+            // Build interface accessor list: only keep get/set/init that existed in source
+            var accessors = p.AccessorList!.Accessors
+                .Select(acc => SyntaxFactory.AccessorDeclaration(acc.Kind())
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            return (MemberDeclarationSyntax)SyntaxFactory.PropertyDeclaration(
+                    p.Type.WithoutTrivia(),
+                    p.Identifier)
+                .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
+                .WithLeadingTrivia(MemberTrivia())
+                .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed));
+        });
+
+        var ifaceMembers = ifaceProperties.Concat(ifaceMethods).ToArray();
 
         var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName)
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))

@@ -236,15 +236,15 @@ Powered by `RefactoringEngine`, `GranularRefactoringEngine`, `RefinementEngine`,
 |------|--------------|---|
 | `extract_method` | Extract selected lines to a new named method; updates call site | ⭐⭐⭐⭐⭐ |
 | `extract_method_safe` | `extract_method` using `contextSnippet` instead of line/col offsets | ⭐⭐⭐⭐⭐ |
-| `extract_interface` | Extract public members of a class to a new `I{ClassName}` interface | ⭐⭐⭐⭐ |
+| `extract_interface` | Extract public non-static methods **and properties** to a new `I{ClassName}` interface; adds the interface to the class base list | ⭐⭐⭐⭐⭐ |
 | `extract_superclass` | Extract common members to a new abstract base class | ⭐⭐⭐⭐⭐ |
-| `extract_class` | Move a subset of members to a brand-new class | ⭐⭐⭐ |
+| `extract_class` | Move named members to a new class; removes them from source and adds a `private readonly {NewClass}` composition field; returns both files | ⭐⭐⭐⭐ |
 | `extract_members_to_partial` | Move specified members to a `partial` companion file | ⭐⭐⭐⭐⭐ |
-| `inline_method` | Inline a method body at all its call sites and remove the method | ⭐⭐⭐ |
+| `inline_method` | Inline an expression-body or single-return method at all same-file call sites and remove the method (validates method shape; cross-file sites not updated) | ⭐⭐⭐⭐ |
 | `inline_field` | Inline a field's value and remove the field | ⭐⭐⭐⭐⭐ |
 | `inline_parameter` | Remove a parameter whose value is always a constant | ⭐⭐⭐⭐⭐ |
 | `inline_variable` | Inline a local variable's value and remove it | ⭐⭐⭐⭐⭐ |
-| `inline_class` | Merge a class's members into its caller (throws descriptive error — cross-file symbol discovery required for full implementation) | ⭐⭐ |
+| `inline_class` | Move all members of a class into a target class and remove the source declaration — works same-file or cross-file (call sites referencing the old class name in other files must be updated manually) | ⭐⭐⭐⭐ |
 | `change_signature` | Reorder/remove method parameters + update all call sites | ⭐⭐⭐⭐⭐ |
 | `sync_type_and_filename` | Rename a file to match its primary type (or vice-versa) | ⭐⭐⭐⭐⭐ |
 | `safe_delete_symbol` | Delete a symbol after verifying zero references solution-wide | ⭐⭐⭐⭐⭐ |

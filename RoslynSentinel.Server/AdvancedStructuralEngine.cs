@@ -112,35 +112,61 @@ public class AdvancedStructuralEngine
         if (document == null) return new Dictionary<string, string>();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        
-        // Search for the class anywhere in the tree (handles both nested and file-scope types)
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
 
-        if (classNode != null)
+        if (classNode == null) return new Dictionary<string, string>();
+
+        var membersToMove = classNode.Members.Where(m =>
         {
-            // Find members to move - be more flexible with matching
-            var membersToMove = classNode.Members.Where(m => 
-            {
-                if (m is MethodDeclarationSyntax meth)
-                    return memberNames.Contains(meth.Identifier.Text);
-                if (m is PropertyDeclarationSyntax prop)
-                    return memberNames.Contains(prop.Identifier.Text);
-                if (m is FieldDeclarationSyntax field)
-                    return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
-                return false;
-            }).ToList();
+            if (m is MethodDeclarationSyntax meth) return memberNames.Contains(meth.Identifier.Text);
+            if (m is PropertyDeclarationSyntax prop) return memberNames.Contains(prop.Identifier.Text);
+            if (m is FieldDeclarationSyntax field) return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
+            return false;
+        }).ToList();
 
-            // Only create the new class if we found members to move
-            if (membersToMove.Count > 0)
-            {
-                var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
-                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                    .WithMembers(SyntaxFactory.List(membersToMove));
+        if (membersToMove.Count == 0) return new Dictionary<string, string>();
 
-                return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"), newClassNode.NormalizeWhitespace().ToFullString() } };
-            }
+        // Build extracted class with same namespace + usings as source
+        var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+        var newClassNode = SyntaxFactory.ClassDeclaration(newClassName)
+            .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+            .WithMembers(SyntaxFactory.List(membersToMove));
+        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(u =>
+            u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
+        CompilationUnitSyntax newFileRoot;
+        if (ns != null)
+        {
+            BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax
+                ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClassNode)
+                : SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(newClassNode);
+            newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
         }
-        return new Dictionary<string, string>();
+        else
+        {
+            newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newClassNode);
+        }
+
+        // Update source class: remove extracted members and add a private readonly field for the new type
+        var fieldName = $"_{char.ToLower(newClassName[0])}{newClassName[1..]}";
+        var fieldDecl = SyntaxFactory.FieldDeclaration(
+            SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(newClassName))
+                .AddVariables(SyntaxFactory.VariableDeclarator(fieldName)
+                    .WithInitializer(SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(newClassName))
+                            .WithArgumentList(SyntaxFactory.ArgumentList())))))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+
+        var updatedSourceClass = classNode
+            .RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!
+            .AddMembers(fieldDecl);
+        var updatedRoot = root!.ReplaceNode(classNode, updatedSourceClass);
+
+        var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");
+        return new Dictionary<string, string>
+        {
+            { newFilePath, newFileRoot.NormalizeWhitespace().ToFullString() },
+            { filePath, updatedRoot.NormalizeWhitespace().ToFullString() }
+        };
     }
 
     /// <summary>

@@ -119,7 +119,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Inlines a simple single-statement method by replacing call sites with its expression.")]
+    [Description("Inlines a method by replacing its call sites with the method's expression. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected with a descriptive error. LIMITATION: Only call sites within the same file are inlined; call sites in other files are not updated. The method declaration is removed after inlining.")]
     public async Task<string> InlineMethod(string filePath, string methodName)
     {
         try
@@ -164,7 +164,7 @@ public class SentinelRefactoringTools
         => await _granularRefactoringEngine.InlineFieldAsync(filePath, fieldName);
 
     [McpServerTool]
-    [Description("Inlines a parameter if it has a constant usage across the solution.")]
+    [Description("Removes a method parameter that is always passed the same compile-time constant literal (e.g. 42, true, \"text\") at every call site, and replaces references to the parameter inside the method body with that constant. Only works when ALL call sites pass the same constant — rejects if call sites are in other files, if the argument varies, or if the argument is not a literal.")]
     public async Task<string> InlineParameter(string filePath, string methodName, string parameterName) 
         => await _granularRefactoringEngine.InlineParameterAsync(filePath, methodName, parameterName);
 
@@ -199,7 +199,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Extracts an interface from a class. If autoStage is true, returns a ChangeId.")]
+    [Description("Extracts an interface from a class: creates a new file '{interfaceName}.cs' containing all public non-static properties and methods, then adds the interface to the class's base list. Returns a staged ChangeId (autoStage=true, default) or the raw file dictionary. Static members and constructors are excluded.")]
     public async Task<object> ExtractInterface(string filePath, string className, string interfaceName, bool autoStage = true) 
     {
         try
@@ -268,7 +268,7 @@ public class SentinelRefactoringTools
         => await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName);
 
     [McpServerTool]
-    [Description("Inlines a class by moving all its members into a target class and removing the original.")]
+    [Description("Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. LIMITATION: Does not update call sites that reference the old class name in other files — you must update those manually or use rename_symbol first. Returns a dictionary of filePath→updatedContent for each affected file.")]
     public async Task<Dictionary<string, string>> InlineClass(string sourceFilePath, string targetFilePath, string className) 
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
@@ -288,7 +288,7 @@ public class SentinelRefactoringTools
         => await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propertyName);
 
     [McpServerTool]
-    [Description("Extracts specific members from a class into a new separate class.")]
+    [Description("Extracts named members (methods, properties, fields) from a class into a new '{newClassName}.cs' file. The source class is updated: extracted members are removed and a 'private readonly {newClassName} _{fieldName}' field is added as the composition point. Returns both the new class file and the updated source file. LIMITATION: Does not rewrite call sites that previously accessed the extracted members directly — update those to go through the new field.")]
     public async Task<Dictionary<string, string>> ExtractClass(string filePath, string className, string newClassName, string[] memberNames) 
         => await _advancedStructuralEngine.ExtractClassAsync(filePath, className, newClassName, memberNames);
 
