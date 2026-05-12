@@ -423,4 +423,29 @@ public async Task<List<string>> FindStructuralSmells(
         string? projectName = null,
         string? filePath = null)
         => await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("""
+        Finds all usages of a named attribute across the solution, optionally scoped to a
+        project or file. Accepts both "Authorize" and "AuthorizeAttribute" (or "[Authorize]")
+        spelling — all three resolve identically.
+
+        Returns: AttributeName, TargetKind (Class/Method/Property/Field/Parameter/Constructor/
+        Interface/Record/Struct/Enum), TargetName, ContainingType (empty for type-level attrs),
+        FilePath, and Line.
+
+        Common use cases:
+          • Security audit: find every endpoint missing [Authorize] by listing controllers and
+            diffing against this result.
+          • API review: "find_attribute_usages [ProducesResponseType]" to see which actions
+            document their return types.
+          • Validation audit: "find_attribute_usages [Required]" to map all required properties.
+          • Obsolete API detection: "find_attribute_usages [Obsolete]" to find every member
+            still marked deprecated.
+        """)]
+    public async Task<List<AttributeUsageSite>> FindAttributeUsages(
+        string attributeName,
+        string? projectName = null,
+        string? filePath = null)
+        => await _discoveryEngine.FindAttributeUsagesAsync(attributeName, projectName, filePath);
 }

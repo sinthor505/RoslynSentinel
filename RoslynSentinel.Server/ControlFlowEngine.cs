@@ -29,6 +29,21 @@ public record DataFlowAnalysisResult(
     List<string> WrittenInside,
     string? Error = null);
 
+public record CoveringTest(string TestFile, string TestMethodName, int Line);
+
+public record TestCoverageMap(
+    string MethodName,
+    List<string> BranchesToTest,
+    List<CoveringTest> CoveringTests,
+    bool HasAnyCoverage);
+
+public record EnumSwitchGap(
+    string FilePath,
+    int Line,
+    string EnumTypeName,
+    List<string> MissingMembers,
+    string MethodName);
+
 public class ControlFlowEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -241,14 +256,6 @@ public class ControlFlowEngine
 
     // ── Enum Switch Exhaustiveness ─────────────────────────────────────────
 
-    public record EnumSwitchGap(
-        string FilePath,
-        int Line,
-        string EnumTypeName,
-        List<string> MissingMembers,
-        string MethodName
-    );
-
     public async Task<List<EnumSwitchGap>> FindNonExhaustiveEnumSwitchesAsync(
         string? filePath = null,
         string? projectName = null,
@@ -332,14 +339,6 @@ public class ControlFlowEngine
     }
 
     // ── Test Coverage Mapping ─────────────────────────────────────────────────
-
-    public record CoveringTest(string TestFile, string TestMethodName, int Line);
-
-    public record TestCoverageMap(
-        string MethodName,
-        List<string> BranchesToTest,
-        List<CoveringTest> CoveringTests,
-        bool HasAnyCoverage);
 
     /// <summary>
     /// Extends path coverage analysis with a cross-reference to test methods that exercise

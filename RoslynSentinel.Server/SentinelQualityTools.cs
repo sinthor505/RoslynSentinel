@@ -90,7 +90,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
-    public async Task<ControlFlowEngine.TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
+    public async Task<TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
         => await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
 
     [McpServerTool]
@@ -630,4 +630,16 @@ public class SentinelQualityTools
     [Description("Detects public properties that expose mutable collection types (List<T>, Dictionary<K,V>, HashSet<T>, etc.) with a public non-init setter, allowing callers to completely replace the collection. Use IReadOnlyList<T>/IReadOnlyDictionary<K,V>, or change the setter to private/init.")]
     public async Task<List<string>> FindMutablePublicCollectionProperties(string? projectName = null)
         => await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
+
+    [McpServerTool]
+    [Description("Finds switch statements on enum types that don't handle all enum members and have no default case. Returns the enum type name, the list of missing member names, the containing method name, file path, and line. Essential after adding a new enum member — tells you every switch that needs updating. Scope to a file or project, or scan the entire solution.")]
+    public async Task<List<EnumSwitchGap>> FindNonExhaustiveEnumSwitches(
+        string? filePath = null,
+        string? projectName = null)
+        => await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
+    public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
+        => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
 }

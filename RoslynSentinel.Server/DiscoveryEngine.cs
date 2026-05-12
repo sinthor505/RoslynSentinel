@@ -5,6 +5,14 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynSentinel.Server;
 
 public record BestInsertionResult(string FilePath, string ContainerName, string MemberKind, int InsertBeforeLine, string Reason);
+
+public record AttributeUsageSite(
+    string AttributeName,
+    string TargetKind,
+    string TargetName,
+    string ContainingType,
+    string FilePath,
+    int Line);
 public record TodoCommentFinding(string FilePath, int Line, string Kind, string Text);
 public record RenameImpactPreview(string SymbolName, int TotalReferences, int FilesAffected, bool HasTestReferences, List<string> AffectedFiles);
 
@@ -603,5 +611,91 @@ public class DiscoveryEngine
             affectedFiles.Count,
             hasTestRefs,
             affectedFiles);
+    }
+
+    /// <summary>
+    /// Finds all usages of a named attribute across the solution, optionally scoped to a
+    /// project or file. Matches both "Foo" and "FooAttribute" spelling variants.
+    /// </summary>
+    public async Task<List<AttributeUsageSite>> FindAttributeUsagesAsync(
+        string attributeName,
+        string? projectName = null,
+        string? filePath = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
+        var name = attributeName.Trim('[', ']');
+
+        // Build both canonical forms: "Authorize" and "AuthorizeAttribute"
+        var bare = name.EndsWith("Attribute", StringComparison.Ordinal)
+            ? name[..^9]
+            : name;
+        var full = bare + "Attribute";
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var proj = solution.Projects.FirstOrDefault(p =>
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = proj?.Documents.Cast<Document?>() ?? [];
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<AttributeUsageSite>();
+
+        foreach (var doc in documents)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var docPath = doc.FilePath ?? doc.Name;
+
+            foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
+            {
+                foreach (var attr in attrList.Attributes)
+                {
+                    var attrText = attr.Name.ToString().Split('.').Last();
+                    if (!string.Equals(attrText, bare, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(attrText, full, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // What is the attribute applied to?
+                    var parent = attrList.Parent;
+                    var (kind, targetName, containingType) = parent switch
+                    {
+                        MethodDeclarationSyntax m => ("Method", m.Identifier.Text,
+                            m.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
+                        PropertyDeclarationSyntax p => ("Property", p.Identifier.Text,
+                            p.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
+                        FieldDeclarationSyntax f => ("Field",
+                            f.Declaration.Variables.FirstOrDefault()?.Identifier.Text ?? "",
+                            f.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
+                        ClassDeclarationSyntax c => ("Class", c.Identifier.Text, ""),
+                        InterfaceDeclarationSyntax i => ("Interface", i.Identifier.Text, ""),
+                        RecordDeclarationSyntax r => ("Record", r.Identifier.Text, ""),
+                        StructDeclarationSyntax s => ("Struct", s.Identifier.Text, ""),
+                        EnumDeclarationSyntax e => ("Enum", e.Identifier.Text, ""),
+                        ParameterSyntax param => ("Parameter", param.Identifier.Text,
+                            param.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
+                        ConstructorDeclarationSyntax ctor => ("Constructor", ctor.Identifier.Text,
+                            ctor.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),
+                        _ => ("Unknown", parent?.GetType().Name ?? "", "")
+                    };
+
+                    var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    results.Add(new AttributeUsageSite(bare, kind, targetName, containingType, docPath, line));
+                }
+            }
+        }
+
+        return results
+            .OrderBy(r => r.FilePath)
+            .ThenBy(r => r.Line)
+            .ToList();
     }
 }
