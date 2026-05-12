@@ -425,6 +425,53 @@ public async Task<List<string>> FindStructuralSmells(
         => await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
 
     [McpServerTool]
+    [Description("Finds types (classes, structs, records, interfaces) exceeding a line count threshold across the solution or a specific project. Returns TypeName, FilePath, and LineCount. Use before modifying a large class — anything over 500 lines is a prime extract-class candidate. Default threshold is 500 lines.")]
+    public async Task<List<LargeTypeReport>> FindLargeTypes(int maxLines = 500, string? projectName = null)
+        => await _analysisEngine.FindLargeTypesAsync(maxLines, projectName);
+
+    [McpServerTool]
+    [Description("Finds methods exceeding a line count threshold across the solution or a specific project. Returns MethodName, TypeName, FilePath, and LineCount. Methods over 50 lines are too large to modify safely without reading in full — they are also prime extract-method candidates. Default threshold is 50 lines.")]
+    public async Task<List<LargeMethodReport>> FindLargeMethods(int maxLines = 50, string? projectName = null)
+        => await _analysisEngine.FindLargeMethodsAsync(maxLines, projectName);
+
+    [McpServerTool]
+    [Description("Finds structurally duplicate method implementations across the solution: methods that share the same statement structure and control flow even if identifiers differ (hash-based). Returns groups of duplicate methods with their file paths and type names. Use to find copy-paste code that should be consolidated into a shared helper. Increase minStatements (default 5) to reduce false positives on short utility methods.")]
+    public async Task<List<DuplicateMethodGroup>> FindDuplicateMethods(int minStatements = 5, string? projectName = null)
+        => await _analysisEngine.FindDuplicateMethodsAsync(minStatements, projectName);
+
+    [McpServerTool]
+    [Description("Finds public classes with 3+ public methods but no corresponding interface. Returns ClassName, FilePath, and the list of public method names. These are prime candidates for interface extraction — a prerequisite for testability (Moq/NSubstitute) and adding a second implementation. Increase minPublicMethods (default 3) for stricter filtering.")]
+    public async Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
+        => await _analysisEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods, projectName);
+
+    [McpServerTool]
+    [Description("Finds circular constructor-injection dependencies among user-defined types: type A's constructor depends on type B, and B's constructor (transitively) depends on A. This is the exact cycle that causes .NET's DI container to throw at startup. Complements find_services_not_registered — use both before adding new service registrations. Optionally scoped to a project.")]
+    public async Task<List<string>> FindCircularTypeReferences(string? projectName = null)
+        => await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
+
+    [McpServerTool]
+    [Description("Finds generic methods with type parameters used in ways that require constraints but have none declared: (1) 'new T()' instantiation without 'where T : new()', (2) 'param == null' comparison without 'where T : class' (always false for value types). Returns file path, line number, method name, and a description of the specific violation. Scope by file or project, or scan the entire solution.")]
+    public async Task<List<string>> FindMissingGenericConstraints(string? projectName = null, string? filePath = null)
+        => await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Finds all TYPES (classes, interfaces, records, structs, enums) decorated with a specific attribute using the semantic model for accuracy. Unlike find_attribute_usages (which returns all targets including methods and properties), this returns only type-level decoration. Useful for: 'find all [ApiController] classes', 'find all [TestClass] types', 'find all [Serializable] types'. Returns TypeName, FilePath, and Line.")]
+    public async Task<List<SearchResult>> FindTypesByAttribute(string attributeName)
+        => await _semanticSearchEngine.FindTypesByAttributeAsync(attributeName);
+
+    [McpServerTool]
+    [Description("Generates XML documentation stubs (<summary>, <param>, <returns>) for ALL undocumented public methods in a file. Unlike document_poco_fields (which targets a specific class's fields), this covers every public method in the file that lacks XML docs. Returns the updated file content. Apply with apply_proposed_changes to write to disk.")]
+    public async Task<string> GenerateXmlDocumentationStubs(string filePath)
+    {
+        var result = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath);
+        if (string.IsNullOrEmpty(result))
+            throw new InvalidOperationException(
+                $"GenerateXmlDocumentationStubs failed for '{filePath}': " +
+                "file not found in workspace. Ensure the solution is loaded.");
+        return result;
+    }
+
+    [McpServerTool]
     [Description("""
         Finds all usages of a named attribute across the solution, optionally scoped to a
         project or file. Accepts both "Authorize" and "AuthorizeAttribute" (or "[Authorize]")

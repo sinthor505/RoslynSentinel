@@ -456,6 +456,16 @@ public class SentinelQualityTools
         => await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
 
     [McpServerTool]
+    [Description("Detects unsafe or incorrect System.Text.Json usage patterns in a file: (1) JsonDocument.Parse() not wrapped in a 'using' — leaks pooled memory back to the ArrayPool, (2) JsonElement.GetProperty() instead of TryGetProperty() — throws KeyNotFoundException on missing keys at runtime. Returns SecurityIssueReport with IssueType, file path, line/column, and remediation description.")]
+    public async Task<List<SecurityIssueReport>> DetectJsonAntiPatterns(string filePath)
+        => await _securityEngine.DetectJsonAntiPatternsAsync(filePath);
+
+    [McpServerTool]
+    [Description("Detects statements within a specific method that are unreachable due to a preceding return, throw, break, or continue on all code paths. Returns string descriptions of each unreachable statement and the reason it cannot execute. Use before adding code at the end of a method to confirm the insertion point is actually reached.")]
+    public async Task<List<string>> DetectUnreachableCode(string filePath, string methodName)
+        => await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
+
+    [McpServerTool]
     [Description("""
         Returns a grouped summary of Roslyn compiler diagnostics (errors and warnings) for a file,
         project, or the entire solution. Groups by diagnostic ID (e.g. CS0103) so you can see which
