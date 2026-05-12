@@ -130,16 +130,19 @@ public class ProjectStructureEngine
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
                 if (root == null) continue;
 
+                // Skip Roslyn source-generator output — file names are always mismatched and contain generated types
+                bool isGeneratedFile = (document.FilePath ?? document.Name).EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
+
                 var types = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
                     .Where(t => t is ClassDeclarationSyntax || t is InterfaceDeclarationSyntax || t is RecordDeclarationSyntax || t is StructDeclarationSyntax || t is EnumDeclarationSyntax)
                     .ToList();
-                
-                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.MultiType) && _config.IsFeatureEnabled("MultiTypeFile") && types.Count > 1)
+
+                if (!isGeneratedFile && (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.MultiType) && _config.IsFeatureEnabled("MultiTypeFile") && types.Count > 1)
                 {
                     results.Add($"[MULTI_TYPE] File '{document.Name}' in project '{project.Name}' contains {types.Count} type declarations.");
                 }
 
-                if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && _config.IsFeatureEnabled("NameMismatch") && types.Count > 0)
+                if (!isGeneratedFile && (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && _config.IsFeatureEnabled("NameMismatch") && types.Count > 0)
                 {
                     // AppHost projects intentionally use Aspire resource-name constants whose file
                     // names don't correspond to class names — skip to avoid hundreds of false positives.
@@ -282,12 +285,26 @@ public class ProjectStructureEngine
 
                 if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.TimeAbstraction) && _config.IsFeatureEnabled("TimeAbstraction"))
                 {
-                    var timeCalls = root.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
-                        .Where(m => m.Expression.ToString() == "DateTime" && m.Name.Identifier.Text is "Now" or "UtcNow" or "Today");
-                    foreach (var call in timeCalls)
+                    // Only flag DateTime.Now/UtcNow/Today inside non-static classes that look like services,
+                    // controllers, workers, or repositories — i.e., types that are DI-injected and testable.
+                    // Static helpers, base classes named *Helper/*Base/*Extensions, and generated files are excluded.
+                    var containingClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+                        .Where(c =>
+                            !c.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                            && !c.Identifier.Text.EndsWith("Helper", StringComparison.OrdinalIgnoreCase)
+                            && !c.Identifier.Text.EndsWith("Extensions", StringComparison.OrdinalIgnoreCase)
+                            && !c.Identifier.Text.EndsWith("Base", StringComparison.OrdinalIgnoreCase)
+                            && !isGeneratedFile);
+
+                    foreach (var cls in containingClasses)
                     {
-                        var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                        results.Add($"[TIME_ABSTRACTION] Direct DateTime.{call.Name.Identifier.Text} usage in '{document.Name}' (Line {line}). Consider injecting TimeProvider for better testability.");
+                        var timeCalls = cls.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+                            .Where(m => m.Expression.ToString() == "DateTime" && m.Name.Identifier.Text is "Now" or "UtcNow" or "Today");
+                        foreach (var call in timeCalls)
+                        {
+                            var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                            results.Add($"[TIME_ABSTRACTION] Direct DateTime.{call.Name.Identifier.Text} usage in '{document.Name}' (Line {line}). Consider injecting TimeProvider for better testability.");
+                        }
                     }
                 }
 

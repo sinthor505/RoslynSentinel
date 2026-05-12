@@ -1,11 +1,12 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Server;
 
 public record AntiPatternFinding(
-    string Pattern,
+    [property: JsonPropertyName("patternType")] string Pattern,
     string Description,
     string Severity,
     string FilePath,
@@ -90,7 +91,10 @@ public class AntiPatternEngine
         }
         else
         {
-            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+            documents = solution.Projects
+                .Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+                         && !p.Name.EndsWith(".Benchmarks", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.Documents).Cast<Document?>();
         }
 
         var activePatterns = patternFilter != null && patternFilter.Length > 0
@@ -1132,7 +1136,10 @@ public class AntiPatternEngine
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
-            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+            documents = solution.Projects
+                .Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+                         && !p.Name.EndsWith(".Benchmarks", StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.Documents).Cast<Document?>();
 
         var findings = new List<MissingCancellationTokenFinding>();
 
