@@ -214,6 +214,72 @@ public static class DateTimeExtensions {
     }
 
     [Test]
+    public async Task TimeAbstraction_RepositoryClass_NotFlagged()
+    {
+        SetProject("MyApp.Service", @"
+using System;
+public class NotificationRepository {
+    public void Insert(object item) {
+        var ts = DateTime.UtcNow; // audit column — not a testability issue
+    }
+}");
+
+        var results = await _structureEngine.FindStructuralSmellsAsync(
+            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+        Assert.That(results, Is.Empty,
+            "Repository classes use DateTime.UtcNow for SQL audit columns — TimeProvider injection is not applicable");
+    }
+
+    [Test]
+    public async Task TimeAbstraction_WorkerClass_NotFlagged()
+    {
+        SetProject("MyApp.Service", @"
+using System;
+public class LowStockMonitorWorker {
+    public void Run() {
+        var now = DateTime.UtcNow; // scheduling reference — not a testability concern
+    }
+}");
+
+        var results = await _structureEngine.FindStructuralSmellsAsync(
+            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+        Assert.That(results, Is.Empty,
+            "Worker/background-service classes must not be flagged for TIME_ABSTRACTION");
+    }
+
+    [Test]
+    public async Task TimeAbstraction_ExporterClass_NotFlagged()
+    {
+        SetProject("MyApp.Service", @"
+using System;
+public class MealPlanPdfExporter {
+    public string Generate() => $""Generated at {DateTime.UtcNow:o}"";
+}");
+
+        var results = await _structureEngine.FindStructuralSmellsAsync(
+            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+        Assert.That(results, Is.Empty,
+            "Exporter/document-generation classes must not be flagged for TIME_ABSTRACTION");
+    }
+
+    [Test]
+    public async Task TimeAbstraction_ProcessorClass_NotFlagged()
+    {
+        SetProject("MyApp.Service", @"
+using System;
+public class BatchProductProcessor {
+    public void Process() {
+        var batchTs = DateTime.UtcNow;
+    }
+}");
+
+        var results = await _structureEngine.FindStructuralSmellsAsync(
+            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+        Assert.That(results, Is.Empty,
+            "Processor/batch classes must not be flagged for TIME_ABSTRACTION");
+    }
+
+    [Test]
     public async Task TimeAbstraction_ServiceClass_IsFlagged()
     {
         SetProject("MyApp.Service", @"

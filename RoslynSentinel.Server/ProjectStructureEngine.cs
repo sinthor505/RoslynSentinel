@@ -285,15 +285,26 @@ public class ProjectStructureEngine
 
                 if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.TimeAbstraction) && _config.IsFeatureEnabled("TimeAbstraction"))
                 {
-                    // Only flag DateTime.Now/UtcNow/Today inside non-static classes that look like services,
-                    // controllers, workers, or repositories — i.e., types that are DI-injected and testable.
-                    // Static helpers, base classes named *Helper/*Base/*Extensions, and generated files are excluded.
+                    // Only flag DateTime.Now/UtcNow/Today in non-static classes where injecting TimeProvider
+                    // is both feasible and testable. Infrastructure-layer types are excluded because
+                    // their DateTime usage (audit columns, scheduling, document timestamps) is not a
+                    // unit-test concern where controlling the clock matters.
+                    static bool IsInfrastructureSuffix(string name)
+                    {
+                        string[] excluded = [
+                            "Helper", "Extensions", "Base", "Repository", "Worker", "Job",
+                            "Exporter", "Importer", "Processor", "Builder", "Factory",
+                            "Mapper", "Converter", "Hub", "Middleware", "Attribute",
+                            "Serializer", "Deserializer", "Formatter", "Parser", "Writer",
+                            "Reader", "Client", "Interceptor", "Decorator"
+                        ];
+                        return excluded.Any(suffix => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                    }
+
                     var containingClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
                         .Where(c =>
                             !c.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
-                            && !c.Identifier.Text.EndsWith("Helper", StringComparison.OrdinalIgnoreCase)
-                            && !c.Identifier.Text.EndsWith("Extensions", StringComparison.OrdinalIgnoreCase)
-                            && !c.Identifier.Text.EndsWith("Base", StringComparison.OrdinalIgnoreCase)
+                            && !IsInfrastructureSuffix(c.Identifier.Text)
                             && !isGeneratedFile);
 
                     foreach (var cls in containingClasses)
