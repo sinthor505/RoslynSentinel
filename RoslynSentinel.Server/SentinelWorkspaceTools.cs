@@ -275,9 +275,18 @@ public class SentinelWorkspaceTools
         => await _diagnosticEngine.GetProjectDiagnosticsAsync(projectName);
 
     [McpServerTool]
-    [Description("Gets all compiler errors and warnings across the entire loaded solution.")]
-    public async Task<DiagnosticSummary> GetSolutionDiagnostics()
-        => await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+    [Description("""
+        Gets compiler errors and warnings across the entire loaded solution.
+        Results are capped at maxDetails entries in the detail list (default 50) to keep
+        output manageable — the Errors/Warnings counts always reflect the full totals.
+        Errors are always sorted before warnings so the cap never hides an error.
+        File paths are relative to the solution root for compact output.
+        For complete diagnostics on a specific project, use get_project_diagnostics instead.
+        Blazor source-generator false positives (CS0234/CS0246/CS0103) are automatically
+        suppressed in Razor-component projects.
+        """)]
+    public async Task<DiagnosticSummary> GetSolutionDiagnostics(int maxDetails = 50)
+        => await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
 
     [McpServerTool]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]

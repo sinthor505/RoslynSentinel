@@ -34,7 +34,8 @@ public record SwitchConversionAnalysis(
 public record UsingsCleanupResult(
     int OriginalCount,
     int RemovedDuplicates,
-    string UpdatedContent);
+    string UpdatedContent,
+    bool WrittenToDisk = false);
 
 // ── New result types for MS bug-fix augmented tools (Tools 6–10) ─────────────
 
@@ -523,7 +524,7 @@ public class MsToolAugmentEngine
     /// is technically "used").
     /// </summary>
     public async Task<UsingsCleanupResult> SortAndDeduplicateUsingsAsync(
-        string filePath, CancellationToken ct = default)
+        string filePath, bool writeToFile = true, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -557,7 +558,12 @@ public class MsToolAugmentEngine
         }));
 
         var newRoot = root.WithUsings(newUsings);
-        return new UsingsCleanupResult(originalCount, removedDuplicates, newRoot.NormalizeWhitespace().ToFullString());
+        var updatedContent = newRoot.NormalizeWhitespace().ToFullString();
+
+        if (writeToFile)
+            await File.WriteAllTextAsync(filePath, updatedContent, ct);
+
+        return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: writeToFile);
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────────

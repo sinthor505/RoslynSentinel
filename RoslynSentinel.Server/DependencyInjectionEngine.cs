@@ -238,10 +238,34 @@ public class DependencyInjectionEngine
         "IMemoryCache", "IDistributedCache", "IHybridCache",
         // Microsoft.AspNetCore
         "IHttpContextAccessor", "IHttpContextFactory", "IActionContextAccessor",
+        "ProblemDetailsFactory",
         // Aspire / cloud infra (registered via extension methods, not Add<T,U>)
         "IConnection", "IConnectionMultiplexer",
         // Feature flags (Aspire/OpenFeature pattern)
         "IFeatureManager", "IVariantFeatureManager",
+        // Blazor / ASP.NET Core (registered by the framework, not user code)
+        "IJSRuntime", "IJSInProcessRuntime", "NavigationManager",
+        "AuthenticationStateProvider", "IComponentActivator",
+        // SignalR (registered by AddSignalR())
+        "IHubContext", "IHubClients",
+        // Localization (registered by AddLocalization())
+        "IStringLocalizer", "IStringLocalizerFactory",
+        "IHtmlLocalizer", "IHtmlLocalizerFactory",
+        // Authorization (registered by AddAuthorization())
+        "IAuthorizationService", "IAuthorizationPolicyProvider",
+        // Data protection (registered by AddDataProtection())
+        "IDataProtectionProvider", "IDataProtector",
+        // Third-party libraries commonly used in .NET projects
+        "ILocalStorageService", "ISessionStorageService",  // Blazored.*
+        "IMapper",                                          // AutoMapper
+        "IMediator", "ISender", "IPublisher",              // MediatR
+        "IBus", "IPublishEndpoint", "ISendEndpointProvider", // MassTransit
+        "ITopicProducer", "IRequestClient",                // MassTransit 2
+        "IEventHubProducerClient",                         // Azure Event Hubs
+        "IQueueClient", "ITopicClient",                    // Azure Service Bus legacy
+        // Messaging / outbox infrastructure — registered via extension methods, not Add<T>
+        "IMessageBus", "IOutboxWriter", "IOutboxReader",
+        "IEventPublisher", "IDomainEventPublisher",
     };
 
     private static readonly HashSet<string> _serviceNameSuffixes = new(StringComparer.OrdinalIgnoreCase)
@@ -250,9 +274,22 @@ public class DependencyInjectionEngine
         "Handler", "Validator", "Dispatcher"
     };
 
+    // Collection interfaces that ASP.NET Core's DI container resolves natively by
+    // aggregating all registered implementations — the user never registers these directly.
+    private static readonly HashSet<string> _nativeCollectionInterfaces = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "IEnumerable", "IReadOnlyList", "IReadOnlyCollection",
+        "ICollection", "IList", "ISet", "IQueryable",
+    };
+
     private static bool LooksLikeInjectedService(string typeName)
     {
         var simpleName = typeName.Split('<')[0].Split('.').Last();
+
+        // Collection wrappers (IEnumerable<IFoo>, IReadOnlyList<T>, etc.) are always
+        // resolved natively — flagging them as "missing" is always a false positive.
+        if (_nativeCollectionInterfaces.Contains(simpleName)) return false;
+
         if (simpleName.Length >= 2 && simpleName[0] == 'I' && char.IsUpper(simpleName[1]))
             return true;
         foreach (var suffix in _serviceNameSuffixes)
@@ -279,8 +316,12 @@ public class DependencyInjectionEngine
         CancellationToken ct = default)
     {
         var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
+        // Include both service types (interfaces) and implementation types (concrete classes)
+        // so that direct concrete class injection isn't flagged when the class IS registered.
         var registeredTypes = new HashSet<string>(
-            registrations.Select(r => r.ServiceType.Split('<')[0].Split('.').Last()),
+            registrations.SelectMany(r => new[] { r.ServiceType, r.ImplementationType }
+                .Where(t => t != null)
+                .Select(t => t!.Split('<')[0].Split('.').Last())),
             StringComparer.OrdinalIgnoreCase);
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

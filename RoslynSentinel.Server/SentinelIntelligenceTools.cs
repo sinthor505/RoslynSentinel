@@ -23,6 +23,8 @@ public class SentinelIntelligenceTools
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
+    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
+    private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -41,6 +43,8 @@ public class SentinelIntelligenceTools
         SymbolNavigationEngine symbolNavigationEngine,
         DependencyInjectionEngine dependencyInjectionEngine,
         DiscoveryEngine discoveryEngine,
+        ProjectConsistencyEngine projectConsistencyEngine,
+        BreakingChangeEngine breakingChangeEngine,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
@@ -59,6 +63,8 @@ public class SentinelIntelligenceTools
         _symbolNavigationEngine = symbolNavigationEngine;
         _dependencyInjectionEngine = dependencyInjectionEngine;
         _discoveryEngine = discoveryEngine;
+        _projectConsistencyEngine = projectConsistencyEngine;
+        _breakingChangeEngine = breakingChangeEngine;
         _logger = logger;
     }
 
@@ -383,4 +389,36 @@ public async Task<List<string>> FindStructuralSmells(
         """)]
     public async Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
         => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+
+    [McpServerTool]
+    [Description("Checks solution-wide consistency: TargetFramework alignment across projects and project naming convention adherence. Returns a list of issues with IssueType (TargetFrameworkMismatch, NamingConventionViolation), description, project name, and file path. NuGet package version consistency is covered by check_package_inconsistency.")]
+    public async Task<List<ProjectConsistencyIssue>> CheckProjectConsistency()
+        => await _projectConsistencyEngine.CheckConsistencyAsync();
+
+    [McpServerTool]
+    [Description("Returns a summary of every project's TargetFramework value. Use this before check_project_consistency to see the full framework landscape across the solution.")]
+    public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummary()
+        => await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
+
+    [McpServerTool]
+    [Description("Extracts a snapshot of the public API surface (all public/protected types, methods, constructors, properties, events) from a project or file. Save the returned list as a baseline, make code changes, then call detect_breaking_changes with the baseline to find removed or renamed members. Provide projectName to scope to one project, filePath to scope to one file, or omit both for the entire solution.")]
+    public async Task<List<PublicApiMember>> GetPublicApiSurfaceSnapshot(
+        string? projectName = null,
+        string? filePath = null)
+        => await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Compares a previously captured API surface (baseline) against the current code and reports breaking changes: removed types, removed/renamed members, and signature changes. Workflow: (1) call get_public_api_surface_snapshot to capture the baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName or filePath as in step 1.")]
+    public async Task<List<BreakingChange>> DetectBreakingChanges(
+        List<PublicApiMember> baseline,
+        string? projectName = null,
+        string? filePath = null)
+        => await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath);
+
+    [McpServerTool]
+    [Description("Detects namespace-level layer architecture violations (e.g. Controllers importing from Data/Repositories directly, Domain models depending on infrastructure layers). Operates on using directives — fast, no compilation required. Returns violation type, description, source layer, forbidden dependency namespace, file path, and line. Scope with projectName or filePath, or omit for the entire solution.")]
+    public async Task<List<ArchitecturalEngine.LayerViolation>> DetectLayerViolations(
+        string? projectName = null,
+        string? filePath = null)
+        => await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
 }

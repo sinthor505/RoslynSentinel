@@ -10,7 +10,8 @@ public record AntiPatternFinding(
     string Severity,
     string FilePath,
     int Line,
-    string Snippet
+    string Snippet,
+    string Remediation = ""
 );
 
 public record MagicValueLocation(string FilePath, int Line, string Snippet);
@@ -305,6 +306,11 @@ public class AntiPatternEngine
 
     // ── CatchExceptionSwallow ─────────────────────────────────────────────────
 
+    private static bool CatchBlockHasJustifyingComment(CatchClauseSyntax c) =>
+        c.Block.DescendantTrivia().Any(t =>
+            t.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+            t.IsKind(SyntaxKind.MultiLineCommentTrivia));
+
     private static IEnumerable<AntiPatternFinding> DetectCatchExceptionSwallow(SyntaxNode root, string filePath)
     {
         foreach (var catchClause in root.DescendantNodes().OfType<CatchClauseSyntax>())
@@ -318,6 +324,10 @@ public class AntiPatternEngine
             }
 
             if (catchClause.Block.Statements.Count > 0) continue;
+
+            // A comment inside the block (/* best-effort */, // intentional, etc.)
+            // indicates the developer has explicitly acknowledged the swallow — skip.
+            if (CatchBlockHasJustifyingComment(catchClause)) continue;
 
             var line = catchClause.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(catchClause.ToString());
@@ -1254,9 +1264,15 @@ public class AntiPatternEngine
 
                 if (!hasRethrow && !hasThrowExpr && !hasReturn && !hasLog)
                 {
-                    var severity = statements.Count == 0 ? "High" : "Medium";
-                    var desc = statements.Count == 0
-                        ? "Empty catch block silently swallows the exception with no logging, rethrowing, or error return."
+                    bool isEmpty = statements.Count == 0;
+                    // An empty block with a comment (/* best-effort */, // intentional) is
+                    // acknowledged by the developer — downgrade to Info rather than High.
+                    bool hasComment = CatchBlockHasJustifyingComment(catchClause);
+                    var severity = isEmpty ? (hasComment ? "Info" : "High") : "Medium";
+                    var desc = isEmpty
+                        ? (hasComment
+                            ? "Empty catch block with justifying comment. Verify the swallow is truly intentional."
+                            : "Empty catch block silently swallows the exception with no logging, rethrowing, or error return.")
                         : "Exception is caught but neither rethrown nor logged, making the failure invisible.";
                     findings.Add(new ExceptionHandlingFinding(
                         "SwallowedException", desc, severity, path, line, snippet));

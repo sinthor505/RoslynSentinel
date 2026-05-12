@@ -34,6 +34,19 @@ public static class DiagnosticExtensions
             lineSpan.EndLinePosition.Character + 1
         );
     }
+
+    /// <summary>
+    /// Returns a copy of this <see cref="DiagnosticInfo"/> with the file path made relative
+    /// to <paramref name="solutionDir"/>, keeping output compact without losing location info.
+    /// </summary>
+    public static DiagnosticInfo WithRelativePath(this DiagnosticInfo info, string solutionDir)
+    {
+        if (string.IsNullOrEmpty(info.FilePath) || string.IsNullOrEmpty(solutionDir))
+            return info;
+        if (info.FilePath.StartsWith(solutionDir, StringComparison.OrdinalIgnoreCase))
+            return info with { FilePath = info.FilePath[solutionDir.Length..].TrimStart('\\', '/') };
+        return info with { FilePath = Path.GetFileName(info.FilePath) };
+    }
 }
 
 public record DiagnosticGroupSummary(

@@ -580,9 +580,110 @@ public class AnalysisEngine
                     }
                 }
             }
+
+            // --- IDisposable fields not disposed in Dispose() ---
+            foreach (var classNode in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                var disposableFields = classNode.Members
+                    .OfType<FieldDeclarationSyntax>()
+                    .Where(f => !f.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                                && IsLikelyDisposableType(f.Declaration.Type.ToString()))
+                    .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text))
+                    .ToHashSet(StringComparer.Ordinal);
+
+                if (disposableFields.Count == 0) continue;
+
+                var disposeMethod = classNode.Members
+                    .OfType<MethodDeclarationSyntax>()
+                    .FirstOrDefault(m => m.Identifier.Text == "Dispose");
+
+                if (disposeMethod?.Body == null) continue;
+
+                var disposedInMethod = disposeMethod.Body.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Select(inv => {
+                        if (inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Dispose")
+                            return ma.Expression.ToString().TrimStart('_');
+                        return null;
+                    })
+                    .Where(n => n != null)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var fieldName in disposableFields)
+                {
+                    var normalizedName = fieldName.TrimStart('_');
+                    if (disposedInMethod.Contains(normalizedName) ||
+                        disposedInMethod.Contains(fieldName)) continue;
+
+                    var fieldDecl = classNode.Members.OfType<FieldDeclarationSyntax>()
+                        .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
+                    var line = fieldDecl?.GetLocation().GetLineSpan().StartLinePosition.Line + 1 ?? 0;
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
+                        $"- Class '{classNode.Identifier.Text}': IDisposable field '{fieldName}' is never disposed in Dispose(). " +
+                        "Call Dispose() on it to release unmanaged resources.");
+                }
+            }
+
+            // --- Static collection fields that grow unbounded ---
+            foreach (var classNode in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                var staticCollectionFields = classNode.Members
+                    .OfType<FieldDeclarationSyntax>()
+                    .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                                && IsGrowableCollectionType(f.Declaration.Type.ToString()))
+                    .SelectMany(f => f.Declaration.Variables.Select(v => (Name: v.Identifier.Text,
+                        Line: v.GetLocation().GetLineSpan().StartLinePosition.Line + 1)))
+                    .ToList();
+
+                if (staticCollectionFields.Count == 0) continue;
+
+                // Look for Clear() calls anywhere in the class targeting these fields
+                var clearedFields = classNode.DescendantNodes()
+                    .OfType<InvocationExpressionSyntax>()
+                    .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
+                                  (ma.Name.Identifier.Text == "Clear" || ma.Name.Identifier.Text == "Remove" ||
+                                   ma.Name.Identifier.Text == "TryRemove" || ma.Name.Identifier.Text == "RemoveAll"))
+                    .Select(inv => {
+                        if (inv.Expression is MemberAccessExpressionSyntax ma)
+                            return ma.Expression.ToString().TrimStart('_');
+                        return null;
+                    })
+                    .Where(n => n != null)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var (fieldName, line) in staticCollectionFields)
+                {
+                    if (clearedFields.Contains(fieldName.TrimStart('_')) ||
+                        clearedFields.Contains(fieldName)) continue;
+
+                    results.Add(
+                        $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
+                        $"- Static collection field '{classNode.Identifier.Text}.{fieldName}' is never cleared. " +
+                        "Static collections live for the AppDomain lifetime and grow without bound unless explicitly cleared or bounded.");
+                }
+            }
         }
 
         return results;
+    }
+
+    private static bool IsLikelyDisposableType(string typeName)
+    {
+        // Common disposable types by name suffix or prefix
+        return typeName.Contains("Stream") || typeName.Contains("Reader") || typeName.Contains("Writer")
+            || typeName.Contains("Client") || typeName.Contains("Connection") || typeName.Contains("Channel")
+            || typeName.Contains("Timer") || typeName.Contains("Semaphore") || typeName.Contains("Mutex")
+            || typeName.Contains("CancellationTokenSource") || typeName.Contains("SqlConnection")
+            || typeName.Contains("SqlCommand") || typeName.Contains("HttpClient");
+    }
+
+    private static bool IsGrowableCollectionType(string typeName)
+    {
+        return typeName.StartsWith("List<") || typeName.StartsWith("Dictionary<")
+            || typeName.StartsWith("HashSet<") || typeName.StartsWith("ConcurrentDictionary<")
+            || typeName.StartsWith("ConcurrentBag<") || typeName.StartsWith("ConcurrentQueue<")
+            || typeName.StartsWith("Queue<") || typeName.StartsWith("Stack<");
     }
 
     public async Task<List<string>> AnalyzeSemaphoreUsageAsync(string filePath, CancellationToken cancellationToken = default)
@@ -909,6 +1010,21 @@ public class AnalysisEngine
         return results;
     }
 
+    // A catch block with a comment inside (e.g., /* best-effort */, // intentional) is
+    // considered justified — the developer has explicitly acknowledged the swallow.
+    private static bool HasJustifyingComment(BlockSyntax block) =>
+        block.DescendantTrivia().Any(t =>
+            t.IsKind(SyntaxKind.SingleLineCommentTrivia) ||
+            t.IsKind(SyntaxKind.MultiLineCommentTrivia));
+
+    private static bool IsTestFile(string? filePath) =>
+        filePath != null && (
+            filePath.Contains(".Tests.", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains("Tests\\", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains("Tests/", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains("TestFactory", StringComparison.OrdinalIgnoreCase) ||
+            filePath.Contains("TestHelper", StringComparison.OrdinalIgnoreCase));
+
     public async Task<List<string>> CheckForEmptyCatchBlocksAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("EmptyCatchBlocks")) return new List<string>();
@@ -918,7 +1034,12 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            var catchBlocks = target.Root.DescendantNodes().OfType<CatchClauseSyntax>().Where(c => c.Block.Statements.Count == 0);
+            // Test teardown patterns (e.g. catch (IOException){} on Directory.Delete) are
+            // intentional best-effort cleanup — no value flagging them in test infrastructure.
+            if (IsTestFile(target.Document.FilePath)) continue;
+
+            var catchBlocks = target.Root.DescendantNodes().OfType<CatchClauseSyntax>()
+                .Where(c => c.Block.Statements.Count == 0 && !HasJustifyingComment(c.Block));
             results.AddRange(catchBlocks.Select(c => $"Empty catch block in {target.Document.Name} at line {c.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Silent failures are risky."));
         }
         return results;

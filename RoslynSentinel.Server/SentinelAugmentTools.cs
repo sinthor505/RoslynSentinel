@@ -192,7 +192,7 @@ public class SentinelAugmentTools
     [McpServerTool]
     [Description("""
         Sorts using directives (System.* first, then alphabetical) AND removes exact
-        duplicates in a single operation.
+        duplicates in a single operation, writing the result directly to disk.
 
         FILLS GAP between two standard tools:
           • sort_usings     → sorts but does NOT remove duplicates
@@ -203,12 +203,17 @@ public class SentinelAugmentTools
         directives (e.g., a merge conflict or copy-paste artifact) and you want both
         sorted AND deduplicated in one step.
 
-        Returns: OriginalCount, RemovedDuplicates, and UpdatedContent.
+        Parameters:
+          filePath    — absolute path to the .cs file to clean
+          writeToFile — true (default) = writes sorted/deduped content to disk immediately
+                        false = preview mode, returns UpdatedContent without writing
+
+        Returns: OriginalCount, RemovedDuplicates, UpdatedContent, WrittenToDisk.
         """)]
-    public async Task<UsingsCleanupResult> SortAndDeduplicateUsings(string filePath)
+    public async Task<UsingsCleanupResult> SortAndDeduplicateUsings(string filePath, bool writeToFile = true)
     {
-        _logger.LogInformation("SortAndDeduplicateUsings: {File}", filePath);
-        return await _engine.SortAndDeduplicateUsingsAsync(filePath);
+        _logger.LogInformation("SortAndDeduplicateUsings: {File} (write={Write})", filePath, writeToFile);
+        return await _engine.SortAndDeduplicateUsingsAsync(filePath, writeToFile);
     }
 
     // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────

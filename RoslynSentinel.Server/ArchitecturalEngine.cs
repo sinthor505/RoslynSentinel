@@ -300,4 +300,125 @@ public class ArchitecturalEngine
 
         return Dfs(start) ? path : null;
     }
+
+    // ── Layer Architecture Enforcement ───────────────────────────────────────
+
+    public record LayerViolation(
+        string ViolationType,
+        string Description,
+        string SourceLayer,
+        string ForbiddenDependency,
+        string FilePath,
+        int Line
+    );
+
+    // Standard layered architecture rule set (namespace segment → layer rank, lower = higher-level)
+    private static readonly Dictionary<string, int> LayerRank = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "Controllers", 0 },
+        { "Endpoints",   0 },
+        { "Hubs",        0 },
+        { "Workers",     1 },
+        { "Services",    2 },
+        { "Managers",    2 },
+        { "Handlers",    2 },
+        { "Queries",     3 },
+        { "Commands",    3 },
+        { "Domain",      4 },
+        { "Models",      4 },
+        { "Entities",    4 },
+        { "Data",        5 },
+        { "Repositories",5 },
+        { "Migrations",  6 },
+    };
+
+    // Rules: a layer at rank R should NOT directly reference a layer at rank > R+1 (skip-a-layer)
+    // and Controllers should never reference Data/Repositories directly.
+    private static readonly Dictionary<string, HashSet<string>> ForbiddenDependencies = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Controllers"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Endpoints"]   = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Hubs"]        = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Workers"]     = new(StringComparer.OrdinalIgnoreCase) { "Repositories", "Migrations" },
+        ["Services"]    = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
+        ["Managers"]    = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
+        ["Domain"]      = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Models"]      = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Entities"]    = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+    };
+
+    /// <summary>
+    /// Detects namespace-level layer violations (e.g. Controllers referencing Repositories directly,
+    /// domain models importing data-layer types). Operates on using directives — no compilation needed.
+    /// </summary>
+    public async Task<List<LayerViolation>> DetectLayerViolationsAsync(
+        string? projectName = null,
+        string? filePath = null,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var violations = new List<LayerViolation>();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p =>
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+        {
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
+
+        foreach (var doc in documents)
+        {
+            if (doc == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            var docPath = doc.FilePath ?? doc.Name;
+
+            // Determine which layer this file belongs to from its own namespace
+            var ownNamespace = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
+                .FirstOrDefault()?.Name.ToString() ?? "";
+            var ownLayer = GetLayerSegment(ownNamespace);
+            if (ownLayer == null) continue;
+
+            if (!ForbiddenDependencies.TryGetValue(ownLayer, out var forbidden)) continue;
+
+            // Scan all using directives in this file
+            var usings = root.DescendantNodes().OfType<UsingDirectiveSyntax>();
+            foreach (var usingDirective in usings)
+            {
+                var importedNs = usingDirective.Name?.ToString() ?? "";
+                var importedLayer = GetLayerSegment(importedNs);
+                if (importedLayer == null) continue;
+                if (!forbidden.Contains(importedLayer)) continue;
+
+                var line = usingDirective.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                violations.Add(new LayerViolation(
+                    "LayerBypass",
+                    $"'{ownLayer}' layer directly references '{importedLayer}' layer ({importedNs}). " +
+                    $"Route through an intermediate service/repository interface instead.",
+                    ownLayer,
+                    importedNs,
+                    docPath,
+                    line));
+            }
+        }
+
+        return violations.OrderBy(v => v.FilePath).ThenBy(v => v.Line).ToList();
+    }
+
+    private static string? GetLayerSegment(string namespaceName)
+    {
+        if (string.IsNullOrEmpty(namespaceName)) return null;
+        var segments = namespaceName.Split('.');
+        return segments.FirstOrDefault(s => LayerRank.ContainsKey(s));
+    }
 }
