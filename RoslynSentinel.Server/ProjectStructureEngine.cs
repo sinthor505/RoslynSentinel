@@ -116,6 +116,14 @@ public class ProjectStructureEngine
         {
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
+        else
+        {
+            // Solution-wide scan: skip test and benchmark projects — TimeProvider can't be injected
+            // into test fixtures, and the findings are noise rather than actionable guidance.
+            projects = projects.Where(p =>
+                !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+                && !p.Name.EndsWith(".Benchmarks", StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var project in projects)
         {
@@ -285,36 +293,39 @@ public class ProjectStructureEngine
 
                 if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.TimeAbstraction) && _config.IsFeatureEnabled("TimeAbstraction"))
                 {
-                    // Only flag DateTime.Now/UtcNow/Today in non-static classes where injecting TimeProvider
-                    // is both feasible and testable. Infrastructure-layer types are excluded because
-                    // their DateTime usage (audit columns, scheduling, document timestamps) is not a
-                    // unit-test concern where controlling the clock matters.
-                    static bool IsInfrastructureSuffix(string name)
+                    // Report DateTime.Now/UtcNow/Today in all non-static, non-generated classes.
+                    // Static classes genuinely cannot inject TimeProvider, so they're skipped.
+                    // Infrastructure-layer classes (repositories, workers, exporters, etc.) are
+                    // flagged at LOW severity — injection is possible but these classes rarely have
+                    // date-driven business logic where controlling the clock in a test matters.
+                    // Business-logic classes (services, controllers, handlers) are flagged at HIGH
+                    // severity because mocking "now" is a real and common test requirement there.
+                    static bool IsInfrastructureClass(string name)
                     {
-                        string[] excluded = [
-                            "Helper", "Extensions", "Base", "Repository", "Worker", "Job",
-                            "Exporter", "Importer", "Processor", "Builder", "Factory",
-                            "Mapper", "Converter", "Hub", "Middleware", "Attribute",
-                            "Serializer", "Deserializer", "Formatter", "Parser", "Writer",
-                            "Reader", "Client", "Interceptor", "Decorator"
+                        string[] infraSuffixes = [
+                            "Repository", "Worker", "Job", "Exporter", "Importer", "Processor",
+                            "Builder", "Factory", "Mapper", "Converter", "Hub", "Middleware",
+                            "Helper", "Extensions", "Serializer", "Deserializer", "Formatter",
+                            "Parser", "Writer", "Reader", "Client", "Interceptor", "Decorator"
                         ];
-                        return excluded.Any(suffix => name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                        return infraSuffixes.Any(s => name.EndsWith(s, StringComparison.OrdinalIgnoreCase));
                     }
 
                     var containingClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-                        .Where(c =>
-                            !c.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
-                            && !IsInfrastructureSuffix(c.Identifier.Text)
-                            && !isGeneratedFile);
+                        .Where(c => !c.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) && !isGeneratedFile);
 
                     foreach (var cls in containingClasses)
                     {
+                        bool isInfra = IsInfrastructureClass(cls.Identifier.Text);
                         var timeCalls = cls.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
                             .Where(m => m.Expression.ToString() == "DateTime" && m.Name.Identifier.Text is "Now" or "UtcNow" or "Today");
                         foreach (var call in timeCalls)
                         {
                             var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                            results.Add($"[TIME_ABSTRACTION] Direct DateTime.{call.Name.Identifier.Text} usage in '{document.Name}' (Line {line}). Consider injecting TimeProvider for better testability.");
+                            if (isInfra)
+                                results.Add($"[TIME_ABSTRACTION:LOW] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). TimeProvider injection is possible but typically low-value — infrastructure classes rarely have date-driven logic that needs to be controlled in tests.");
+                            else
+                                results.Add($"[TIME_ABSTRACTION] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). Consider injecting TimeProvider for better testability.");
                         }
                     }
                 }

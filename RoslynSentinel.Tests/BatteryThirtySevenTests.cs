@@ -184,7 +184,7 @@ public static class DateHelper {
     }
 
     [Test]
-    public async Task TimeAbstraction_HelperSuffixClass_NotFlagged()
+    public async Task TimeAbstraction_HelperSuffixClass_FlaggedAsLow()
     {
         SetProject("MyApp.Service", @"
 using System;
@@ -194,8 +194,9 @@ public class SqlHelper {
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Empty,
-            "Classes ending in 'Helper' must not be flagged — they are utilities, not DI-injectable services");
+        Assert.That(results, Is.Not.Empty, "Helper classes must still be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
+            "Helper classes must use LOW severity — injection is possible but these are utilities, not DI-injectable services");
     }
 
     [Test]
@@ -214,41 +215,43 @@ public static class DateTimeExtensions {
     }
 
     [Test]
-    public async Task TimeAbstraction_RepositoryClass_NotFlagged()
+    public async Task TimeAbstraction_RepositoryClass_FlaggedAsLow()
     {
         SetProject("MyApp.Service", @"
 using System;
 public class NotificationRepository {
     public void Insert(object item) {
-        var ts = DateTime.UtcNow; // audit column — not a testability issue
+        var ts = DateTime.UtcNow;
     }
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Empty,
-            "Repository classes use DateTime.UtcNow for SQL audit columns — TimeProvider injection is not applicable");
+        Assert.That(results, Is.Not.Empty, "Repository classes must still be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
+            "Repository findings must use LOW severity — injection is possible but rarely high-value here");
     }
 
     [Test]
-    public async Task TimeAbstraction_WorkerClass_NotFlagged()
+    public async Task TimeAbstraction_WorkerClass_FlaggedAsLow()
     {
         SetProject("MyApp.Service", @"
 using System;
 public class LowStockMonitorWorker {
     public void Run() {
-        var now = DateTime.UtcNow; // scheduling reference — not a testability concern
+        var now = DateTime.UtcNow;
     }
 }");
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Empty,
-            "Worker/background-service classes must not be flagged for TIME_ABSTRACTION");
+        Assert.That(results, Is.Not.Empty, "Worker classes must still be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
+            "Worker findings must use LOW severity");
     }
 
     [Test]
-    public async Task TimeAbstraction_ExporterClass_NotFlagged()
+    public async Task TimeAbstraction_ExporterClass_FlaggedAsLow()
     {
         SetProject("MyApp.Service", @"
 using System;
@@ -258,12 +261,13 @@ public class MealPlanPdfExporter {
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Empty,
-            "Exporter/document-generation classes must not be flagged for TIME_ABSTRACTION");
+        Assert.That(results, Is.Not.Empty, "Exporter classes must still be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
+            "Exporter findings must use LOW severity");
     }
 
     [Test]
-    public async Task TimeAbstraction_ProcessorClass_NotFlagged()
+    public async Task TimeAbstraction_ProcessorClass_FlaggedAsLow()
     {
         SetProject("MyApp.Service", @"
 using System;
@@ -275,12 +279,13 @@ public class BatchProductProcessor {
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Empty,
-            "Processor/batch classes must not be flagged for TIME_ABSTRACTION");
+        Assert.That(results, Is.Not.Empty, "Processor classes must still be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION:LOW]")), Is.True,
+            "Processor findings must use LOW severity");
     }
 
     [Test]
-    public async Task TimeAbstraction_ServiceClass_IsFlagged()
+    public async Task TimeAbstraction_ServiceClass_FlaggedAsHigh()
     {
         SetProject("MyApp.Service", @"
 using System;
@@ -292,9 +297,24 @@ public class OrderService {
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
-        Assert.That(results, Is.Not.Empty,
-            "Non-static service classes using DateTime.UtcNow must still be flagged");
-        Assert.That(results.Any(r => r.Contains("TIME_ABSTRACTION")), Is.True);
+        Assert.That(results, Is.Not.Empty, "Service class must be reported");
+        Assert.That(results.All(r => r.Contains("[TIME_ABSTRACTION]") && !r.Contains(":LOW")), Is.True,
+            "Service class findings must use HIGH (default) severity — date-driven logic commonly needs mocking in tests");
+    }
+
+    [Test]
+    public async Task TimeAbstraction_TestProject_NotFlagged()
+    {
+        SetProject("MyApp.Tests", @"
+using System;
+public class MyTests {
+    public void Setup() { var ts = DateTime.UtcNow; }
+}");
+
+        var results = await _structureEngine.FindStructuralSmellsAsync(
+            typeFilter: ProjectStructureEngine.StructuralSmellType.TimeAbstraction);
+        Assert.That(results, Is.Empty,
+            "Test projects must be excluded — injecting TimeProvider into test fixtures is not applicable");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
