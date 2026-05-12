@@ -182,7 +182,7 @@ When an AI agent edits code manually it is doing **text manipulation**, not sema
 
 ---
 
-## 🚀 265 MCP Tools Across 44 Engines + 7 Tool Classes
+## 🚀 266 MCP Tools Across 44 Engines + 7 Tool Classes
 
 Roslyn Sentinel exposes **265 named MCP tools** through 7 façade classes that wrap 44 specialized analysis and transformation engines. All tools are always live; individual **feature toggles** let you silence noisy analysis rules without touching code.
 
@@ -507,7 +507,8 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 |------|--------------|---|
 | `find_finalizer_on_disposable` | Detect `IDisposable` classes with a finalizer but no disposed-flag guard — may double-free unmanaged resources | ⭐⭐⭐⭐⭐ |
 | `find_unbounded_static_collections` | Detect static `Dictionary`/`List`/`HashSet` fields populated with `.Add()` but never `.Clear()`ed — memory exhaustion DoS | ⭐⭐⭐⭐⭐ |
-| `find_unbounded_recursion` | Detect recursive methods with no depth parameter or base-case guard before the recursive call — `StackOverflowException` on deep input | ⭐⭐⭐⭐⭐ |
+| `find_unbounded_recursion` | Detect recursive methods with no depth parameter or base-case guard before the recursive call — `StackOverflowException` on deep input. Uses Roslyn semantic model to distinguish true self-recursion from overload delegation (e.g., a short-signature overload calling a long-signature overload of the same name) | ⭐⭐⭐⭐⭐ |
+| `find_misbound_overload_chains` | Validate overload delegation chains for three bug classes: **ChainMissingParameter** (caller value silently dropped), **ChainArgumentOrder** (arguments passed in wrong order to the fuller overload), and **OverloadCycle** (two overloads call each other — guaranteed `StackOverflowException`). Requires semantic model; reports `Suspicious` or `Definite` risk | ⭐⭐⭐⭐⭐ |
 
 #### Thread Safety
 

@@ -1446,17 +1446,21 @@ public class AnalysisEngine
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
+        var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
         var results = new List<string>();
 
         foreach (var target in targets)
         {
+            var model = target.SemanticModel;
+
             foreach (var method in target.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 if (method.Body == null && method.ExpressionBody == null) continue;
                 var methodName = method.Identifier.Text;
 
-                // Find self-recursive calls
+                IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method) as IMethodSymbol;
+
+                // Find self-recursive calls — use semantic model to skip overload chaining
                 SyntaxNode body = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
                 var selfCalls = body.DescendantNodes().OfType<InvocationExpressionSyntax>()
                     .Where(inv =>
@@ -1467,7 +1471,18 @@ public class AnalysisEngine
                             MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
                             _ => null
                         };
-                        return name == methodName;
+                        if (name != methodName) return false;
+
+                        // When semantic model is available, verify same overload
+                        if (containingSymbol != null && model != null)
+                        {
+                            var info = model.GetSymbolInfo(inv);
+                            var calledSymbol = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) as IMethodSymbol;
+                            if (calledSymbol != null && !SymbolEqualityComparer.Default.Equals(
+                                    calledSymbol.OriginalDefinition, containingSymbol.OriginalDefinition))
+                                return false;
+                        }
+                        return true;
                     }).ToList();
 
                 if (selfCalls.Count == 0) continue;
@@ -1507,6 +1522,33 @@ public class AnalysisEngine
                 }
             }
         }
+        return results;
+    }
+
+    /// <summary>
+    /// Validates overload chains across the solution. For each group of same-named methods,
+    /// reports: missing parameter forwarding, inverted argument order, and mutual-delegation
+    /// cycles between overloads. Uses semantic model to identify chain calls precisely.
+    /// </summary>
+    public async Task<List<string>> FindMisboundOverloadChainsAsync(
+        string? projectName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
+        var results = new List<string>();
+
+        foreach (var target in targets)
+        {
+            if (target.SemanticModel == null) continue;
+
+            var findings = StackOverflowEngine.DetectMisboundOverloadChains(
+                target.Root, target.SemanticModel, target.Document.FilePath ?? target.Document.Name);
+
+            foreach (var f in findings)
+                results.Add(
+                    $"{f.FilePath}:{f.LineNumber} [{f.Kind}] — {f.Description}. Fix: {f.Recommendation}");
+        }
+
         return results;
     }
 

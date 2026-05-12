@@ -131,6 +131,8 @@ public class QualityClass
             new AntiPatternEngine(_workspaceManager), _asyncOptimizationEngine,
             new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine,
             new CodeStyleAnalysisEngine(_workspaceManager),
+            new PathDrivenTestEngine(_workspaceManager),
+            new StackOverflowEngine(_workspaceManager),
             NullLogger<SentinelQualityTools>.Instance);
     }
 

@@ -3684,6 +3684,8 @@ public class AddGuardClausesNullReturnRegressionTests
         new ThreadSafetyEngine(_workspaceManager),
         new DiagnosticEngine(_workspaceManager),
         new CodeStyleAnalysisEngine(_workspaceManager),
+        new PathDrivenTestEngine(_workspaceManager),
+        new StackOverflowEngine(_workspaceManager),
         NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
@@ -3774,6 +3776,8 @@ public class AddBenchmarkStubNullReturnRegressionTests
         new ThreadSafetyEngine(_workspaceManager),
         new DiagnosticEngine(_workspaceManager),
         new CodeStyleAnalysisEngine(_workspaceManager),
+        new PathDrivenTestEngine(_workspaceManager),
+        new StackOverflowEngine(_workspaceManager),
         NullLogger<SentinelQualityTools>.Instance);
 
     [Test]

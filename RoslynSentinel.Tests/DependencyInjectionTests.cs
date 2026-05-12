@@ -81,6 +81,8 @@ public class DependencyInjectionTests
         services.AddSingleton<CodeStyleAnalysisEngine>();
         services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<BreakingChangeEngine>();
+        services.AddSingleton<PathDrivenTestEngine>();
+        services.AddSingleton<StackOverflowEngine>();
 
         // 3. Register all tool classes
         services.AddSingleton<SentinelWorkspaceTools>();

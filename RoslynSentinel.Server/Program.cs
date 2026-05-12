@@ -119,6 +119,8 @@ builder.Services.AddSingleton<MsToolAugmentEngine>();
 builder.Services.AddSingleton<CodeStyleAnalysisEngine>();
 builder.Services.AddSingleton<ProjectConsistencyEngine>();
 builder.Services.AddSingleton<BreakingChangeEngine>();
+builder.Services.AddSingleton<PathDrivenTestEngine>();
+builder.Services.AddSingleton<StackOverflowEngine>();
 
 // --- Configure MCP Server Transport ---
 var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();

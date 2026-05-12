@@ -1,10 +1,10 @@
 # RoslynSentinel Tool Documentation
 
-Comprehensive reference for all 320+ refactoring, modernization, analysis, and code generation tools available in RoslynSentinel.
+Comprehensive reference for all 321+ refactoring, modernization, analysis, and code generation tools available in RoslynSentinel.
 
-**Generated:** 2026-05-03 21:21:19  
+**Generated:** 2026-05-12  
 **Total Sources:** 51 (44 engines + 7 tool classes)  
-**Total Tools:** 320
+**Total Tools:** 321
 
 ---
 
@@ -72,7 +72,7 @@ RoslynSentinel provides 320 specialized tools organized across:
 
 - **SentinelAugmentTools** (Tools) - 10 tools
 
-- **SentinelQualityTools** (Tools) - 14 tools
+- **SentinelQualityTools** (Tools) - 15 tools
 
 
 ### Refactoring (7 sources, 112 tools)
@@ -812,7 +812,7 @@ RoslynSentinel provides 320 specialized tools organized across:
 
 
 
-**SentinelQualityTools** (14 tools):
+**SentinelQualityTools** (15 tools):
 
 227. `AddBenchmarkStub`
 
@@ -841,6 +841,8 @@ RoslynSentinel provides 320 specialized tools organized across:
 239. `MakeMethodThreadSafe`
 
 240. `RemoveConfigureAwaitFalse`
+
+241. `FindMisboundOverloadChains`
 
 
 
@@ -6148,7 +6150,7 @@ public async Task<string> UseTimeProvider(string filePath)
 
 **Type:** Tool Class  
 
-**Tools:** 14
+**Tools:** 15
 
 
 **Tools in this source:**
@@ -6181,6 +6183,8 @@ public async Task<string> UseTimeProvider(string filePath)
 - MakeMethodThreadSafe
 
 - RemoveConfigureAwaitFalse
+
+- FindMisboundOverloadChains
 
 
 ---
@@ -6426,6 +6430,33 @@ Code analysis and refactoring tool
 ```csharp
 public async Task<string> RemoveConfigureAwaitFalse(string filePath)
 ```
+
+
+---
+
+
+### FindMisboundOverloadChains
+
+
+**Purpose:**
+Validates overload delegation chains across the solution for three classes of structural bug:
+- **ChainMissingParameter** — a parameter from the calling overload is not forwarded to any argument in the target overload, silently dropping caller data
+- **ChainArgumentOrder** — source parameters appear to be passed in inverted order to the target overload (e.g., `(b, a)` where the target expects `(a, b)`)
+- **OverloadCycle** — two overloads of the same name call each other, guaranteeing a `StackOverflowException` on every invocation
+
+Requires the Roslyn semantic model. Uses `IMethodSymbol.OriginalDefinition` to distinguish overload calls from true self-recursion. Reports `Suspicious` risk for missing/reordered params and `Definite` risk for cycles.
+
+
+**Signature:**
+
+```csharp
+public async Task<List<string>> FindMisboundOverloadChains(string? projectName = null)
+```
+
+**Parameters:**
+- `projectName` *(optional)* — scope analysis to a single project; omit to scan the entire solution
+
+**Returns:** List of findings in the format `{filePath}:{line} [{Kind}] — {description}. Fix: {recommendation}`
 
 
 ---

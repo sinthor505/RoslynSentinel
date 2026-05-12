@@ -21,6 +21,8 @@ public class SentinelQualityTools
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
+    private readonly PathDrivenTestEngine _pathDrivenTestEngine;
+    private readonly StackOverflowEngine _stackOverflowEngine;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -36,6 +38,8 @@ public class SentinelQualityTools
         ThreadSafetyEngine threadSafetyEngine,
         DiagnosticEngine diagnosticEngine,
         CodeStyleAnalysisEngine codeStyleAnalysisEngine,
+        PathDrivenTestEngine pathDrivenTestEngine,
+        StackOverflowEngine stackOverflowEngine,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -50,6 +54,8 @@ public class SentinelQualityTools
         _threadSafetyEngine = threadSafetyEngine;
         _diagnosticEngine = diagnosticEngine;
         _codeStyleAnalysisEngine = codeStyleAnalysisEngine;
+        _pathDrivenTestEngine = pathDrivenTestEngine;
+        _stackOverflowEngine = stackOverflowEngine;
         _logger = logger;
     }
 
@@ -564,6 +570,11 @@ public class SentinelQualityTools
     public async Task<List<string>> FindUnboundedRecursion(string? projectName = null)
         => await _analysisEngine.FindUnboundedRecursionAsync(projectName);
 
+    [McpServerTool]
+    [Description("Validates overload chain correctness across the solution. For each group of same-named methods where shorter overloads delegate to fuller ones, detects: (1) ChainMissingParameter — a parameter from the calling overload is absent from the forwarding call, silently dropping the caller's value; (2) ChainArgumentOrder — source parameters appear in inverted order in the forwarding call, binding to the wrong target parameter; (3) OverloadCycle — two overloads delegate to each other, causing guaranteed StackOverflowException. Requires a loaded solution.")]
+    public async Task<List<string>> FindMisboundOverloadChains(string? projectName = null)
+        => await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
+
     // ── Thread safety: new detectors ───────────────────────────────────────────
 
     [McpServerTool]
@@ -692,4 +703,57 @@ public class SentinelQualityTools
         string? filePath = null,
         string? projectName = null)
         => await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("""
+        Generates path-driven xUnit/NUnit/MSTest test stubs for a method by walking
+        its AST for decision points (if/else, switch, foreach) and emitting one test
+        case per distinct execution path. Always includes a happy-path test first.
+
+        For each path the report includes:
+        - TestMethodName: suggested test method name following the MethodName_Condition_Outcome pattern
+        - ScenarioDescription: human-readable description of the path
+        - InputConstraints: inferred parameter values to trigger this path
+        - ArrangeCode / ActCode / AssertCode: Arrange/Act/Assert scaffold with TODO markers
+        - Note: caveats about heuristic inference
+
+        Generated code is a starting point — TODO markers show where you must supply
+        real values or mock setups that cannot be inferred statically.
+
+        framework: "NUnit" (default), "xunit", or "mstest"
+        disambiguateLine: any line number inside the desired overload when the method is overloaded
+        """)]
+    public async Task<PathDrivenTestReport> GeneratePathDrivenTests(
+        string filePath,
+        string methodName,
+        string framework = "NUnit",
+        int? disambiguateLine = null)
+        => await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine);
+
+    [McpServerTool]
+    [Description("""
+        Statically analyzes a C# file for potential StackOverflowException causes.
+
+        Detects six distinct categories:
+        - DirectRecursion       (Definite)   — method calls itself with no conditional guard
+        - OverrideCallsSelf     (Definite)   — override calls own name instead of base.X()
+        - PropertySelfRead      (Definite)   — property getter reads itself (missing backing field)
+        - PropertySelfWrite     (Definite)   — property setter assigns to itself
+        - InheritanceCycle      (Definite/Suspicious) — override → base → virtual dispatch → same override
+        - ConditionalRecursion  (Suspicious) — guarded self-call whose base case may be unreachable
+        - ArgumentNotDecreasing (Suspicious) — recursive call passes parameter unchanged or growing
+        - MutualRecursion       (Suspicious) — A calls B calls ... calls A (up to 5-hop cycles)
+        - DeepCallChain         (Informational, opt-in) — >40 static frames deep
+
+        Inheritance cycle detection covers both in-file class hierarchies (syntactic) and
+        cross-file base classes (semantic). The most dangerous case — override calls base which
+        calls an abstract/virtual that this class overrides, creating a hidden dispatch loop —
+        is detected with full CyclePath tracing.
+
+        includeInformational: set true to include DeepCallChain findings (default: false)
+        """)]
+    public async Task<StackOverflowReport> AnalyzeStackOverflowRisks(
+        string filePath,
+        bool includeInformational = false)
+        => await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(filePath, includeInformational);
 }

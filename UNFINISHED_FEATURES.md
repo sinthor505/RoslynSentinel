@@ -1,8 +1,8 @@
 # RoslynSentinel — Deferred Bugs & Feature Limitations
 
 **Status:** All previously-documented stub methods are fully implemented. This document tracks deferred bugs with regression tests and known edge-case limitations.  
-**Last Updated:** 2026-05-10  
-**Test Suite:** ✅ 1,917 total tests (1,830 passing, 87 skipped — real-solution integration tests requiring `ROSLYN_SENTINEL_TEST_SLN`)
+**Last Updated:** 2026-05-12  
+**Test Suite:** ✅ 2,021 total tests (1,934 passing, 87 skipped — real-solution integration tests requiring `ROSLYN_SENTINEL_TEST_SLN`)
 
 ---
 
