@@ -330,4 +330,99 @@ public class ControlFlowEngine
 
         return gaps;
     }
+
+    // ── Test Coverage Mapping ─────────────────────────────────────────────────
+
+    public record CoveringTest(string TestFile, string TestMethodName, int Line);
+
+    public record TestCoverageMap(
+        string MethodName,
+        List<string> BranchesToTest,
+        List<CoveringTest> CoveringTests,
+        bool HasAnyCoverage);
+
+    /// <summary>
+    /// Extends path coverage analysis with a cross-reference to test methods that exercise
+    /// the given production method. Finds tests by name convention (test method name contains
+    /// the production method name) and by direct call-site presence in the test body.
+    /// </summary>
+    public async Task<TestCoverageMap> GetTestCoverageMapAsync(
+        string filePath,
+        string methodName,
+        CancellationToken ct = default)
+    {
+        var pathReport = await AnalyzePathCoverageAsync(filePath, methodName, ct);
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var coveringTests = new List<CoveringTest>();
+
+        var testDocs = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Where(d => IsTestFile(d.FilePath));
+
+        foreach (var doc in testDocs)
+        {
+            if (doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+
+            foreach (var testMethod in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                var testMethodName = testMethod.Identifier.Text;
+
+                // Match 1: test method name contains the production method name (convention: DoFoo_WhenX_ReturnsY)
+                bool nameMatch = testMethodName.Contains(methodName, StringComparison.OrdinalIgnoreCase);
+
+                // Match 2: test body contains a direct call to the production method
+                bool callMatch = !nameMatch && testMethod.Body != null &&
+                    testMethod.Body.DescendantNodes()
+                        .OfType<InvocationExpressionSyntax>()
+                        .Any(inv =>
+                        {
+                            var callee = inv.Expression switch
+                            {
+                                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                                IdentifierNameSyntax id => id.Identifier.Text,
+                                _ => null
+                            };
+                            return callee != null &&
+                                   string.Equals(callee, methodName, StringComparison.OrdinalIgnoreCase);
+                        });
+
+                if (!nameMatch && !callMatch) continue;
+
+                // Confirm it has a test attribute ([Fact], [Test], [TestMethod], [Theory])
+                bool hasTestAttr = testMethod.AttributeLists
+                    .SelectMany(al => al.Attributes)
+                    .Any(a =>
+                    {
+                        var name = a.Name.ToString().Split('.').Last();
+                        return name is "Fact" or "Theory" or "Test" or "TestMethod" or "DataTestMethod";
+                    });
+
+                if (!hasTestAttr) continue;
+
+                var line = testMethod.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                coveringTests.Add(new CoveringTest(doc.FilePath, testMethodName, line));
+            }
+        }
+
+        return new TestCoverageMap(
+            methodName,
+            pathReport.BranchesToTest,
+            coveringTests.OrderBy(t => t.TestFile).ThenBy(t => t.Line).ToList(),
+            coveringTests.Count > 0);
+    }
+
+    private static bool IsTestFile(string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath)) return false;
+        var name = Path.GetFileNameWithoutExtension(filePath);
+        return name.EndsWith("Tests", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("Test", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("Spec", StringComparison.OrdinalIgnoreCase)
+            || name.EndsWith("Specs", StringComparison.OrdinalIgnoreCase)
+            || filePath.Contains(Path.DirectorySeparatorChar + "Tests" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            || filePath.Contains(Path.DirectorySeparatorChar + "test" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -52,6 +52,7 @@ public class DiscoveryEngine
         string? exceptionType = null,
         string? filePath = null,
         string? projectName = null,
+        bool sortByFrequency = false,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -89,6 +90,21 @@ public class DiscoveryEngine
 
                 results.Add(info);
             }
+        }
+
+        if (sortByFrequency)
+        {
+            // Rank by exception type frequency (most-thrown type first), then file + line
+            var freqMap = results
+                .GroupBy(r => r.ExceptionType, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+            results = results
+                .OrderByDescending(r => freqMap[r.ExceptionType])
+                .ThenBy(r => r.ExceptionType)
+                .ThenBy(r => r.FilePath)
+                .ThenBy(r => r.Line)
+                .ToList();
         }
 
         return results;
@@ -154,6 +170,7 @@ public class DiscoveryEngine
         string typeName,
         string? filePath = null,
         string? projectName = null,
+        bool sortByFrequency = false,
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -205,6 +222,22 @@ public class DiscoveryEngine
                     GetContainingMemberName(implicitCreation),
                     implicitCreation.ArgumentList?.Arguments.Count ?? 0));
             }
+        }
+
+        if (sortByFrequency)
+        {
+            // When searching across the whole solution, rank by how many times each
+            // distinct resolved type name appears — most-instantiated type first
+            var freqMap = results
+                .GroupBy(r => r.TypeName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+            results = results
+                .OrderByDescending(r => freqMap[r.TypeName])
+                .ThenBy(r => r.TypeName)
+                .ThenBy(r => r.FilePath)
+                .ThenBy(r => r.Line)
+                .ToList();
         }
 
         return results;

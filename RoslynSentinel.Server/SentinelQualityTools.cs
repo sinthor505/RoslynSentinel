@@ -85,8 +85,13 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes execution paths for test coverage.")]
-    public async Task<PathCoverageReport> AnalyzePathCoverage(string filePath, string methodName) 
+    public async Task<PathCoverageReport> AnalyzePathCoverage(string filePath, string methodName)
         => await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
+    public async Task<ControlFlowEngine.TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
+        => await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
 
     [McpServerTool]
     [Description("Adds ArgumentNullException.ThrowIfNull guard clauses for all reference parameters in a method.")]

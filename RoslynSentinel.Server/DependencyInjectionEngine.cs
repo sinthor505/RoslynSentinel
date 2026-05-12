@@ -73,7 +73,8 @@ public class DependencyInjectionEngine
 
     private static readonly HashSet<string> _lifetimeMethods = new(StringComparer.Ordinal)
     {
-        "AddSingleton", "AddScoped", "AddTransient"
+        "AddSingleton", "AddScoped", "AddTransient",
+        "TryAddSingleton", "TryAddScoped", "TryAddTransient", "TryAddEnumerable"
     };
 
     /// <summary>
@@ -114,9 +115,9 @@ public class DependencyInjectionEngine
 
                 var lifetime = methodName switch
                 {
-                    "AddSingleton" => "Singleton",
-                    "AddScoped" => "Scoped",
-                    "AddTransient" => "Transient",
+                    "AddSingleton" or "TryAddSingleton" => "Singleton",
+                    "AddScoped"    or "TryAddScoped"    => "Scoped",
+                    "AddTransient" or "TryAddTransient" or "TryAddEnumerable" => "Transient",
                     _ => "Unknown"
                 };
 
@@ -161,6 +162,39 @@ public class DependencyInjectionEngine
                     doc.FilePath,
                     lineSpan.StartLinePosition.Line + 1,
                     callSite));
+            }
+
+            // Second pass: explicit ServiceDescriptor registrations
+            // new ServiceDescriptor(typeof(IFoo), typeof(Foo), ServiceLifetime.Singleton)
+            // new ServiceDescriptor(typeof(IFoo), sp => new Foo(...), ServiceLifetime.Singleton)
+            foreach (var objCreation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            {
+                var typeName = objCreation.Type.ToString().Split('.').Last();
+                if (!typeName.Equals("ServiceDescriptor", StringComparison.Ordinal)) continue;
+
+                var args = objCreation.ArgumentList?.Arguments;
+                if (args == null || args.Value.Count < 3) continue;
+
+                string svc = "Unknown", impl = "Unknown", svcLifetime = "Unknown";
+
+                if (args.Value[0].Expression is TypeOfExpressionSyntax t0)
+                    svc = t0.Type.ToString();
+
+                if (args.Value[1].Expression is TypeOfExpressionSyntax t1)
+                    impl = t1.Type.ToString();
+
+                var lifetimeArg = args.Value[2].Expression.ToString();
+                svcLifetime = lifetimeArg.Contains("Singleton") ? "Singleton"
+                           : lifetimeArg.Contains("Scoped")    ? "Scoped"
+                           : lifetimeArg.Contains("Transient") ? "Transient"
+                           : "Unknown";
+
+                var lineSpan2 = root.SyntaxTree.GetLineSpan(objCreation.Span);
+                var callSite2 = objCreation.ToString();
+                if (callSite2.Length > 200) callSite2 = callSite2[..200] + "...";
+
+                results.Add(new DiRegistration(svcLifetime, svc, impl == "Unknown" ? null : impl,
+                    doc.FilePath, lineSpan2.StartLinePosition.Line + 1, callSite2));
             }
         }
 
@@ -429,18 +463,28 @@ public class DependencyInjectionEngine
                 };
                 if (methodName == null || !_lifetimeMethods.Contains(methodName)) continue;
 
-                string lifetime;
-                if (methodName == "AddSingleton") lifetime = "Singleton";
-                else if (methodName == "AddScoped") lifetime = "Scoped";
-                else if (methodName == "AddTransient") lifetime = "Transient";
-                else continue;
+                string lifetime = methodName switch
+                {
+                    "AddSingleton" or "TryAddSingleton" => "Singleton",
+                    "AddScoped"    or "TryAddScoped"    => "Scoped",
+                    "AddTransient" or "TryAddTransient" or "TryAddEnumerable" => "Transient",
+                    _ => null!
+                };
+                if (lifetime == null) continue;
 
-                // Look for lambda argument: sp => new Foo(...)
-                var lambdaArg = inv.ArgumentList.Arguments
-                    .Select(a => a.Expression)
-                    .OfType<SimpleLambdaExpressionSyntax>()
-                    .FirstOrDefault();
-                if (lambdaArg?.Body is not ObjectCreationExpressionSyntax lambdaOc) continue;
+                // Look for lambda argument: sp => new Foo(...)  OR  (sp) => new Foo(...)
+                ObjectCreationExpressionSyntax? lambdaOc = null;
+                foreach (var arg in inv.ArgumentList.Arguments)
+                {
+                    lambdaOc = arg.Expression switch
+                    {
+                        SimpleLambdaExpressionSyntax simple => simple.Body as ObjectCreationExpressionSyntax,
+                        ParenthesizedLambdaExpressionSyntax paren => paren.Body as ObjectCreationExpressionSyntax,
+                        _ => null
+                    };
+                    if (lambdaOc != null) break;
+                }
+                if (lambdaOc == null) continue;
 
                 var implTypeName = lambdaOc.Type.ToString().Split('<')[0].Split('.').Last();
                 lifetimeMap.TryAdd(implTypeName, lifetime);

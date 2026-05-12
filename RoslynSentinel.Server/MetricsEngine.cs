@@ -231,12 +231,30 @@ public class MetricsEngine
             var suggestedSplits = new List<string>();
             if (components.Count > 1)
             {
-                foreach (var component in components.Values.Where(c => c.Count >= 2))
+                int splitIdx = 1;
+                foreach (var component in components.Values.OrderByDescending(c => c.Count))
                 {
-                    var methodNames = component.Select(i => methodUsages[i].MethodName);
-                    var compFields = component.SelectMany(i => methodUsages[i].FieldsUsed).Distinct();
-                    suggestedSplits.Add(
-                        $"Methods {{{string.Join(", ", methodNames)}}} use fields {{{string.Join(", ", compFields)}}} — possible separate class");
+                    var methodNames = component.Select(i => methodUsages[i].MethodName).ToList();
+                    var compFields = component.SelectMany(i => methodUsages[i].FieldsUsed).Distinct().ToList();
+                    var suggestedName = SuggestExtractedClassName(typeSymbol.Name, methodNames, splitIdx);
+
+                    if (component.Count >= 2)
+                    {
+                        var fieldsPart = compFields.Count > 0
+                            ? $" with fields [{string.Join(", ", compFields)}]"
+                            : " (no shared fields — extract as static helper class)";
+                        suggestedSplits.Add(
+                            $"Extract '{suggestedName}': [{string.Join(", ", methodNames)}]{fieldsPart}");
+                    }
+                    else
+                    {
+                        var onlyMethod = methodNames[0];
+                        var fieldsPart = compFields.Count > 0
+                            ? $"uses [{string.Join(", ", compFields)}] exclusively — move with the field(s)"
+                            : "uses no instance fields — extract as static method or move to a helper class";
+                        suggestedSplits.Add($"Isolated: '{onlyMethod}' {fieldsPart}");
+                    }
+                    splitIdx++;
                 }
             }
 
@@ -255,5 +273,41 @@ public class MetricsEngine
         }
 
         return results;
+    }
+
+    private static string SuggestExtractedClassName(string originalName, List<string> methodNames, int index)
+    {
+        // Look for a common leading word across all method names (e.g. all start with "Parse" → "Parser")
+        static string FirstWord(string name)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (var ch in name)
+            {
+                if (sb.Length > 0 && char.IsUpper(ch)) break;
+                sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        var firstWords = methodNames.Select(FirstWord).Where(w => w.Length >= 3).ToList();
+        var dominant = firstWords.GroupBy(w => w, StringComparer.OrdinalIgnoreCase)
+                                 .OrderByDescending(g => g.Count())
+                                 .FirstOrDefault();
+
+        if (dominant != null && dominant.Count() == methodNames.Count)
+        {
+            // All methods share the same leading verb — suggest a nominal form
+            var verb = dominant.Key;
+            var nominal = verb.EndsWith("e") ? verb + "r" : verb + "er"; // Parse→Parser, Validate→Validator
+            return $"{nominal}";
+        }
+
+        // Fall back to stripping a common suffix from the original class name and adding an ordinal
+        var baseName = originalName.EndsWith("Service") ? originalName[..^7]
+                     : originalName.EndsWith("Manager") ? originalName[..^7]
+                     : originalName.EndsWith("Handler") ? originalName[..^7]
+                     : originalName;
+
+        return $"{baseName}Part{index}";
     }
 }

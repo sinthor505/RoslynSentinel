@@ -291,20 +291,22 @@ public async Task<List<string>> FindStructuralSmells(
         => await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
 
     [McpServerTool]
-    [Description("Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Useful for auditing error handling patterns, finding where specific exceptions are raised, and reviewing exception message quality. Use exceptionType to narrow to e.g. 'ArgumentNullException' or 'InvalidOperation'.")]
+    [Description("Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Set sortByFrequency=true to rank results by how often each exception type is thrown (most frequent first) — useful for auditing dominant error patterns.")]
     public async Task<List<ThrowSiteInfo>> FindAllThrowSites(
         string? exceptionType = null,
         string? filePath = null,
-        string? projectName = null)
-        => await _discoveryEngine.FindAllThrowSitesAsync(exceptionType, filePath, projectName);
+        string? projectName = null,
+        bool sortByFrequency = false)
+        => await _discoveryEngine.FindAllThrowSitesAsync(exceptionType, filePath, projectName, sortByFrequency);
 
     [McpServerTool]
-    [Description("Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Useful for finding all places a class is instantiated, auditing factory usage, detecting missing factory patterns, or mapping the lifetime of objects. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context.")]
+    [Description("Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Set sortByFrequency=true to rank results by how often each resolved type is instantiated — useful when the typeName is broad (e.g. 'Exception') and you want the most-created types first. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context.")]
     public async Task<List<ObjectCreationSite>> FindObjectCreationSites(
         string typeName,
         string? filePath = null,
-        string? projectName = null)
-        => await _discoveryEngine.FindObjectCreationSitesAsync(typeName, filePath, projectName);
+        string? projectName = null,
+        bool sortByFrequency = false)
+        => await _discoveryEngine.FindObjectCreationSitesAsync(typeName, filePath, projectName, sortByFrequency);
 
     [McpServerTool]
     [Description("Returns the complete public API surface of a named project: all public types (classes, interfaces, records, structs), their public and protected methods, properties, and constructors. Each entry includes the type name, member name, full signature, kind (Class/Interface/Method/Property/Constructor/Record/Struct), virtuality/abstractness/sealed flags, and any XML documentation summary. Use includeMethods/includeProperties/includeTypes flags to filter output. Ideal for generating SDK documentation, comparing API surfaces across versions, or producing API review reports.")]
