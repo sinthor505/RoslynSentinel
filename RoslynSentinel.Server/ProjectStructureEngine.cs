@@ -141,11 +141,19 @@ public class ProjectStructureEngine
 
                 if ((typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.NameMismatch) && _config.IsFeatureEnabled("NameMismatch") && types.Count > 0)
                 {
-                    var primaryType = types[0].Identifier.Text;
-                    var fileName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
-                    if (fileName != primaryType)
+                    // AppHost projects intentionally use Aspire resource-name constants whose file
+                    // names don't correspond to class names — skip to avoid hundreds of false positives.
+                    bool isAppHostProject = project.Name.EndsWith(".AppHost", StringComparison.OrdinalIgnoreCase)
+                        || project.Name.Contains(".AppHost.", StringComparison.OrdinalIgnoreCase);
+
+                    if (!isAppHostProject)
                     {
-                         results.Add($"[NAME_MISMATCH] File '{document.Name}' in project '{project.Name}' does not match primary type '{primaryType}'.");
+                        var primaryType = types[0].Identifier.Text;
+                        var fileName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
+                        if (fileName != primaryType)
+                        {
+                            results.Add($"[NAME_MISMATCH] File '{document.Name}' in project '{project.Name}' does not match primary type '{primaryType}'.");
+                        }
                     }
                 }
 

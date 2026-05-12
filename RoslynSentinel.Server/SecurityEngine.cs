@@ -155,44 +155,61 @@ public class SecurityEngine
         return reports;
     }
 
-    public async Task<List<SecurityIssueReport>> FindHardcodedPathsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SecurityIssueReport>> FindHardcodedPathsAsync(
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<SecurityIssueReport>();
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<SecurityIssueReport>();
+        IEnumerable<Document?> docs;
+        if (!string.IsNullOrEmpty(filePath))
+            docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+            docs = solution.Projects
+                .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.Documents).Cast<Document?>();
+        else
+            docs = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
 
         var reports = new List<SecurityIssueReport>();
-        var strings = root.DescendantNodes().OfType<LiteralExpressionSyntax>()
-            .Where(l => l.IsKind(SyntaxKind.StringLiteralExpression));
 
-        foreach (var str in strings)
+        foreach (var document in docs)
         {
-            var text = str.Token.ValueText;
-            if (text.Contains(@":\") || text.Contains(@"/") || text.StartsWith(@"\\"))
+            if (document == null) continue;
+            var docPath = document.FilePath ?? document.Name;
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            var strings = root.DescendantNodes().OfType<LiteralExpressionSyntax>()
+                .Where(l => l.IsKind(SyntaxKind.StringLiteralExpression));
+
+            foreach (var str in strings)
             {
-                 var loc = str.GetLocation().GetLineSpan().StartLinePosition;
-                 reports.Add(new SecurityIssueReport(filePath, loc.Line + 1, loc.Character + 1, "HardcodedPath", "Avoid hardcoding file system paths. Use configuration or environment variables."));
+                var text = str.Token.ValueText;
+                if (text.Contains(@":\") || text.Contains(@"/") || text.StartsWith(@"\\"))
+                {
+                    var loc = str.GetLocation().GetLineSpan().StartLinePosition;
+                    reports.Add(new SecurityIssueReport(docPath, loc.Line + 1, loc.Character + 1,
+                        "HardcodedPath", "Avoid hardcoding file system paths. Use configuration or environment variables."));
+                }
             }
         }
         return reports;
     }
 
-    public async Task<List<SecurityIssueReport>> CheckForSqlInjectionAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SecurityIssueReport>> CheckForSqlInjectionAsync(
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<SecurityIssueReport>();
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<SecurityIssueReport>();
-
-        // Get semantic model to check if interpolation expressions are compile-time constants
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-
-        var reports = new List<SecurityIssueReport>();
+        IEnumerable<Document?> docs;
+        if (!string.IsNullOrEmpty(filePath))
+            docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+            docs = solution.Projects
+                .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.Documents).Cast<Document?>();
+        else
+            docs = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
 
         // Method names that take a SQL string as their first argument
         // Covers ADO.NET, Dapper, EF Core raw SQL, and similar ORMs
@@ -206,46 +223,60 @@ public class SecurityEngine
             "ExecuteQuery", "ExecuteReader"
         };
 
-        // Collect local string variables assigned an interpolated string — these may be passed to SQL methods
-        var interpolatedLocals = new HashSet<string>();
-        foreach (var localDecl in root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
+        var reports = new List<SecurityIssueReport>();
+
+        foreach (var document in docs)
         {
-            foreach (var variable in localDecl.Declaration.Variables)
+            if (document == null) continue;
+            var docPath = document.FilePath ?? document.Name;
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            // Get semantic model to check if interpolation expressions are compile-time constants
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+
+            // Collect local string variables assigned an interpolated string — these may be passed to SQL methods
+            var interpolatedLocals = new HashSet<string>();
+            foreach (var localDecl in root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
             {
-                if (variable.Initializer?.Value is InterpolatedStringExpressionSyntax interp &&
-                    HasNonConstInterpolation(interp, semanticModel, cancellationToken))
-                    interpolatedLocals.Add(variable.Identifier.Text);
+                foreach (var variable in localDecl.Declaration.Variables)
+                {
+                    if (variable.Initializer?.Value is InterpolatedStringExpressionSyntax interp &&
+                        HasNonConstInterpolation(interp, semanticModel, cancellationToken))
+                        interpolatedLocals.Add(variable.Identifier.Text);
+                }
             }
-        }
 
-        foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
-        {
-            string? methodName = inv.Expression switch
+            foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
-                IdentifierNameSyntax id => id.Identifier.Text,
-                _ => null
-            };
-            if (methodName == null || !sqlMethods.Contains(methodName)) continue;
-
-            foreach (var arg in inv.ArgumentList.Arguments)
-            {
-                bool suspect = arg.Expression switch
+                string? methodName = inv.Expression switch
                 {
-                    InterpolatedStringExpressionSyntax s => HasNonConstInterpolation(s, semanticModel, cancellationToken),
-                    BinaryExpressionSyntax b => IsDynamicStringConcat(b),
-                    // Variable previously assigned an interpolated string
-                    IdentifierNameSyntax id => interpolatedLocals.Contains(id.Identifier.Text),
-                    _ => false
+                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                    IdentifierNameSyntax id => id.Identifier.Text,
+                    _ => null
                 };
+                if (methodName == null || !sqlMethods.Contains(methodName)) continue;
 
-                if (suspect)
+                foreach (var arg in inv.ArgumentList.Arguments)
                 {
-                    var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
-                    reports.Add(new SecurityIssueReport(filePath, loc.Line + 1, loc.Character + 1,
-                        "PossibleSqlInjection",
-                        $"Possible SQL injection: '{methodName}' called with a dynamic/interpolated string. Use parameterized queries."));
-                    break;
+                    bool suspect = arg.Expression switch
+                    {
+                        InterpolatedStringExpressionSyntax s => HasNonConstInterpolation(s, semanticModel, cancellationToken),
+                        BinaryExpressionSyntax b => IsDynamicStringConcat(b),
+                        // Variable previously assigned an interpolated string
+                        IdentifierNameSyntax id => interpolatedLocals.Contains(id.Identifier.Text),
+                        _ => false
+                    };
+
+                    if (suspect)
+                    {
+                        var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
+                        reports.Add(new SecurityIssueReport(docPath, loc.Line + 1, loc.Character + 1,
+                            "PossibleSqlInjection",
+                            $"Possible SQL injection: '{methodName}' called with a dynamic/interpolated string. Use parameterized queries."));
+                        break;
+                    }
                 }
             }
         }

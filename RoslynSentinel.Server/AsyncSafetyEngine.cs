@@ -972,12 +972,19 @@ public class AsyncSafetyEngine
     /// Finds unawaited fire-and-forget Task calls including the <c>_ = MethodAsync()</c>
     /// discard-assignment pattern.
     /// </summary>
-    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForgetAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForgetAsync(
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var documents = string.IsNullOrEmpty(filePath)
-            ? solution.Projects.SelectMany(p => p.Documents)
-            : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+            documents = solution.Projects
+                .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(p => p.Documents).Cast<Document?>();
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
 
         var reports = new List<AsyncSafetyReport>();
 
@@ -1154,25 +1161,65 @@ public class AsyncSafetyEngine
                 if (method.Body == null) continue;
 
                 var statements = method.Body.Statements;
-                for (int i = 0; i < statements.Count - 1; i++)
+
+                // Group consecutive independent awaits into one finding (avoids N-1 duplicate reports
+                // for a block of N sequential awaits that could all be parallelised together).
+                int stmtIdx = 0;
+                while (stmtIdx < statements.Count)
                 {
-                    // Must be: var x = await F();
-                    if (!TryGetAwaitedVarDecl(statements[i], out var varName1, out var awaitExpr1)) continue;
-                    if (!TryGetAwaitedVarDecl(statements[i + 1], out var varName2, out var awaitExpr2)) continue;
+                    if (!TryGetAwaitedVarDecl(statements[stmtIdx], out var firstVar, out var firstExpr))
+                    {
+                        stmtIdx++;
+                        continue;
+                    }
 
-                    // Neither await expression must reference the other's variable
-                    bool secondUsesFirst = awaitExpr2!.ToString().Contains(varName1!);
-                    bool firstUsesSecond = awaitExpr1!.ToString().Contains(varName2!);
-                    if (secondUsesFirst || firstUsesSecond) continue;
+                    // Skip if this await is already WhenAll/WhenAny
+                    if (firstExpr!.ToString().Contains("WhenAll") || firstExpr.ToString().Contains("WhenAny"))
+                    {
+                        stmtIdx++;
+                        continue;
+                    }
 
-                    // Skip if either is a Task.WhenAll/WhenAny (already parallel)
-                    if (awaitExpr1.ToString().Contains("WhenAll") || awaitExpr1.ToString().Contains("WhenAny")) continue;
-                    if (awaitExpr2.ToString().Contains("WhenAll") || awaitExpr2.ToString().Contains("WhenAny")) continue;
+                    // Grow the block: collect all consecutive awaited-var-decls where
+                    // each new expr is independent of every var accumulated so far.
+                    // Use identifier-node matching (not substring Contains) to avoid false
+                    // positives when variable names are substrings of keywords (e.g. 'a' in 'Task').
+                    var blockVars = new List<string> { firstVar! };
+                    var blockExprs = new List<ExpressionSyntax> { firstExpr! };
+                    int next = stmtIdx + 1;
 
-                    var line = statements[i].GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
-                        $"Line {line}: '{varName1}' and '{varName2}' are awaited sequentially but are independent. " +
-                        "Consider 'await Task.WhenAll(...)' to run both concurrently."));
+                    while (next < statements.Count)
+                    {
+                        if (!TryGetAwaitedVarDecl(statements[next], out var nextVar, out var nextExpr)) break;
+                        if (nextExpr!.ToString().Contains("WhenAll") || nextExpr.ToString().Contains("WhenAny")) break;
+
+                        // Check dependency via actual IdentifierNameSyntax nodes, not substring matching.
+                        bool nextDependsOnBlock = blockVars.Any(v =>
+                            nextExpr!.DescendantNodes().OfType<IdentifierNameSyntax>()
+                                .Any(id => id.Identifier.Text == v));
+                        bool blockDependsOnNext = blockExprs.Any(e =>
+                            e.DescendantNodes().OfType<IdentifierNameSyntax>()
+                                .Any(id => id.Identifier.Text == nextVar));
+                        if (nextDependsOnBlock || blockDependsOnNext) break;
+
+                        blockVars.Add(nextVar!);
+                        blockExprs.Add(nextExpr!);
+                        next++;
+                    }
+
+                    if (blockVars.Count >= 2)
+                    {
+                        var line = statements[stmtIdx].GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        var varList = string.Join(", ", blockVars.Select(v => $"'{v}'"));
+                        reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
+                            $"Line {line}: {varList} are awaited sequentially but are independent. " +
+                            $"Consider 'await Task.WhenAll(...)' to run all {blockVars.Count} concurrently."));
+                        stmtIdx = next; // skip the entire block — already reported as one finding
+                    }
+                    else
+                    {
+                        stmtIdx++;
+                    }
                 }
             }
         }

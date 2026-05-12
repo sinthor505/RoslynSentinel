@@ -226,9 +226,9 @@ public class SentinelQualityTools
         => await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
 
     [McpServerTool]
-    [Description("Scans a file for hardcoded file system paths.")]
-    public async Task<List<SecurityIssueReport>> FindHardcodedPaths(string filePath) 
-        => await _securityEngine.FindHardcodedPathsAsync(filePath);
+    [Description("Scans for hardcoded file system paths. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution.")]
+    public async Task<List<SecurityIssueReport>> FindHardcodedPaths(string? filePath = null, string? projectName = null)
+        => await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Finds public mutable properties (public setter) on non-DTO public classes. Reports classes that expose state directly rather than through controlled mutation. Classes whose names end with Request/Response/Dto/ViewModel/Model/Options/Settings/Config/Entity/Event/Command/Query are excluded. Scope to a file or project, or scan the whole solution.")]
@@ -259,22 +259,24 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Scans a file for potential SQL injection vulnerabilities.
-        
+        Scans for potential SQL injection vulnerabilities.
+        Pass filePath to scope to a single file, projectName to scope to a project,
+        or leave both null to scan the whole solution.
+
         Detects calls to common SQL execution methods (ExecuteNonQuery, ExecuteReader,
         ExecuteScalar, FromSqlRaw, Query, etc.) where the first argument is a dynamic
         string — either an interpolated string with expressions ($"...{x}...") or string
         concatenation involving a non-literal operand.
-        
+
         Returns a list of SecurityIssueReport with IssueType='PossibleSqlInjection',
         file path, line/column, and a description recommending parameterized queries.
         Does NOT check CommandText property assignments.
         """)]
-    public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string filePath)
+    public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string? filePath = null, string? projectName = null)
     {
         try
         {
-            return await _securityEngine.CheckForSqlInjectionAsync(filePath);
+            return await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
         }
         catch (Exception ex)
         {
@@ -436,9 +438,9 @@ public class SentinelQualityTools
         => await _asyncSafetyEngine.FindAsyncOverSyncAsync(filePath);
 
     [McpServerTool]
-    [Description("Finds Task-returning methods called without await (fire-and-forget). Exceptions will be silently swallowed. Identified by 'Async' suffix heuristic.")]
-    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForget(string filePath)
-        => await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath);
+    [Description("Finds Task-returning methods called without await (fire-and-forget). Exceptions will be silently swallowed. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution.")]
+    public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForget(string? filePath = null, string? projectName = null)
+        => await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Finds methods/constructors with >= minParameters (default 4) parameters. Excludes DI-only constructors (all params end with Service/Repository/Options/Factory).")]
