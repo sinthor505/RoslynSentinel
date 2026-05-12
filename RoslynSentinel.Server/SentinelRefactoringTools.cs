@@ -24,6 +24,7 @@ public class SentinelRefactoringTools
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly ModernizationEngine _modernizationEngine;
+    private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
@@ -44,6 +45,7 @@ public class SentinelRefactoringTools
         AdvancedRefactoringEngine advancedRefactoringEngine,
         LogicOptimizationEngine logicOptimizationEngine,
         ModernizationEngine modernizationEngine,
+        OutParamRefactoringEngine outParamRefactoringEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
@@ -63,6 +65,7 @@ public class SentinelRefactoringTools
         _advancedRefactoringEngine = advancedRefactoringEngine;
         _logicOptimizationEngine = logicOptimizationEngine;
         _modernizationEngine = modernizationEngine;
+        _outParamRefactoringEngine = outParamRefactoringEngine;
         _workspaceManager = workspaceManager;
         _config = config;
         _logger = logger;
@@ -918,4 +921,29 @@ public class SentinelRefactoringTools
                 $"ConvertToPattern failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
         return result;
     }
+
+    [McpServerTool]
+    [Description("""
+        Converts a method that uses 2+ 'out' parameters to return a ValueTuple instead.
+        Rewrites the method declaration (return type, parameter list, return statements)
+        and all call sites in the solution.
+
+        Transformation applied:
+          void M(T1 a, out T2 b, out T3 c)  →  (T2 b, T3 c) M(T1 a)
+          bool M(T1 a, out T2 b, out T3 c)  →  (bool result, T2 b, T3 c) M(T1 a)
+
+        Call site rewrites:
+          M(arg, out x, out y)          →  var (x, y) = M(arg);
+          bool ok = M(arg, out x, out y) →  var (ok, x, y) = M(arg);
+
+        Complex call sites (e.g. inline in conditional expressions) receive a TODO
+        comment and are listed in CallSiteWarnings for manual review.
+
+        Use FindMultipleOutParameterMethods first to identify candidates.
+        Changes are applied directly to the workspace via Roslyn's DocumentEditor.
+        """)]
+    public async Task<OutParamConversionResult> ConvertOutParamsToValueTuple(
+        string filePath,
+        string methodName)
+        => await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(filePath, methodName);
 }

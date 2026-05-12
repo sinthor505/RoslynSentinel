@@ -652,4 +652,42 @@ public class SentinelQualityTools
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
     public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
         => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("""
+        Finds methods with 2 or more 'out' parameters — a common sign that the method
+        is doing the work of returning multiple values through side-channels instead of
+        a proper return type.
+
+        Returns the current return type, the out-parameter names and types, and a suggested
+        ValueTuple signature. Use ConvertOutParamsToValueTuple to apply the conversion
+        automatically once you've reviewed the findings.
+
+        Scope to a file or project, or scan the entire solution.
+        """)]
+    public async Task<List<OutParamMethodFinding>> FindMultipleOutParameterMethods(
+        string? filePath = null,
+        string? projectName = null)
+        => await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
+
+    [McpServerTool]
+    [Description("""
+        Flags methods that reassign a parameter inside the method body in a way that
+        is invisible to the caller. Two warning patterns detected:
+
+        ValueTypeParameterReassigned: A value-type parameter (int, bool, struct, enum)
+        is reassigned but not returned — the caller's copy is unaffected. Use 'ref' or
+        return the value if caller visibility was the intent.
+
+        ReferenceTypeParameterReplaced: A reference-type parameter is replaced with a
+        new instance (new ...) but not returned. The caller's reference still points to
+        the original object.
+
+        Parameters with 'ref', 'out', or 'in' modifiers are excluded. No auto-fix —
+        these require developer judgement about intent.
+        """)]
+    public async Task<List<AntiPatternFinding>> FindValueTypeMutationIntent(
+        string? filePath = null,
+        string? projectName = null)
+        => await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
 }

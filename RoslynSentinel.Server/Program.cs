@@ -112,6 +112,8 @@ builder.Services.AddSingleton<ControlFlowEngine>();
 builder.Services.AddSingleton<HealthOrchestrationEngine>();
 builder.Services.AddSingleton<SymbolNavigationEngine>();
 builder.Services.AddSingleton<AntiPatternEngine>();
+builder.Services.AddSingleton<CloneDetectionEngine>();
+builder.Services.AddSingleton<OutParamRefactoringEngine>();
 builder.Services.AddSingleton<DiscoveryEngine>();
 builder.Services.AddSingleton<MsToolAugmentEngine>();
 builder.Services.AddSingleton<CodeStyleAnalysisEngine>();

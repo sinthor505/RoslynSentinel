@@ -23,6 +23,17 @@ public record MagicValueFinding(
     List<MagicValueLocation> Locations
 );
 
+public record OutParamMethodFinding(
+    string MethodName,
+    string ContainingType,
+    string FilePath,
+    int Line,
+    string CurrentReturnType,
+    List<string> OutParamNames,
+    List<string> OutParamTypes,
+    string SuggestedTupleReturn
+);
+
 public record MissingCancellationTokenFinding(
     string MethodName,
     string ContainingType,
@@ -1732,5 +1743,185 @@ public class AntiPatternEngine
                 "Warning", filePath,
                 loc.Line + 1, assignment.ToString());
         }
+    }
+
+    // ── Multiple out-parameter methods ────────────────────────────────────────
+
+    public async Task<List<OutParamMethodFinding>> FindMultipleOutParameterMethodsAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<OutParamMethodFinding>();
+
+        foreach (var doc in documents)
+        {
+            if (doc?.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var model = await doc.GetSemanticModelAsync(ct);
+            if (model == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                var outParams = method.ParameterList.Parameters
+                    .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword)))
+                    .ToList();
+
+                if (outParams.Count < 2) continue;
+
+                var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "<unknown>";
+                var outParamNames = outParams.Select(p => p.Identifier.Text).ToList();
+                var outParamTypes = outParams.Select(p => p.Type?.ToString() ?? "?").ToList();
+
+                var tupleElements = outParams.Select(p => $"{p.Type} {p.Identifier.Text}");
+                var currentReturn = method.ReturnType.ToString();
+                string suggestedReturn;
+                if (currentReturn == "void")
+                    suggestedReturn = $"({string.Join(", ", tupleElements)})";
+                else
+                    suggestedReturn = $"({currentReturn} result, {string.Join(", ", tupleElements)})";
+
+                var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                results.Add(new OutParamMethodFinding(
+                    method.Identifier.Text,
+                    containingType,
+                    doc.FilePath,
+                    line,
+                    currentReturn,
+                    outParamNames,
+                    outParamTypes,
+                    suggestedReturn));
+            }
+        }
+
+        return results;
+    }
+
+    // ── Value-type mutation intent warnings ───────────────────────────────────
+
+    public async Task<List<AntiPatternFinding>> FindValueTypeMutationIntentAsync(
+        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document?> documents;
+        if (!string.IsNullOrEmpty(filePath))
+            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
+        }
+        else
+            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+
+        var results = new List<AntiPatternFinding>();
+
+        foreach (var doc in documents)
+        {
+            if (doc?.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(ct);
+            if (root == null) continue;
+            var model = await doc.GetSemanticModelAsync(ct);
+            if (model == null) continue;
+
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+            {
+                var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
+                if (body == null) continue;
+
+                // Map parameter name → parameter symbol for fast lookup
+                var paramSymbols = new Dictionary<string, (IParameterSymbol Symbol, bool IsValueType)>();
+                foreach (var p in method.ParameterList.Parameters)
+                {
+                    // Skip ref/out/in — those are intentionally pass-by-reference
+                    if (p.Modifiers.Any(m =>
+                        m.IsKind(SyntaxKind.RefKeyword) ||
+                        m.IsKind(SyntaxKind.OutKeyword) ||
+                        m.IsKind(SyntaxKind.InKeyword)))
+                        continue;
+
+                    if (model.GetDeclaredSymbol(p, ct) is not IParameterSymbol sym) continue;
+                    paramSymbols[p.Identifier.Text] = (sym, sym.Type.IsValueType);
+                }
+
+                if (paramSymbols.Count == 0) continue;
+
+                // Find which parameters are mentioned in return statements
+                var returnedSymbols = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var ret in body.DescendantNodes().OfType<ReturnStatementSyntax>())
+                {
+                    if (ret.Expression == null) continue;
+                    foreach (var id in ret.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+                    {
+                        if (paramSymbols.ContainsKey(id.Identifier.Text))
+                            returnedSymbols.Add(id.Identifier.Text);
+                    }
+                }
+
+                // Find all simple assignments where LHS is a parameter (not a member access like param.Prop)
+                foreach (var assignment in body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+                {
+                    // LHS must be a bare identifier, not a member-access
+                    if (assignment.Left is not IdentifierNameSyntax lhsId) continue;
+                    var paramName = lhsId.Identifier.Text;
+                    if (!paramSymbols.TryGetValue(paramName, out var entry)) continue;
+
+                    // Verify via semantic model that it resolves to the parameter, not a local with the same name
+                    var resolvedSym = model.GetSymbolInfo(lhsId, ct).Symbol;
+                    if (!SymbolEqualityComparer.Default.Equals(resolvedSym, entry.Symbol)) continue;
+
+                    var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    bool isReturned = returnedSymbols.Contains(paramName);
+
+                    if (entry.IsValueType && !isReturned)
+                    {
+                        // Value type param reassigned but not returned — caller will never see the change
+                        results.Add(new AntiPatternFinding(
+                            "ValueTypeParameterReassigned",
+                            $"Parameter '{paramName}' ({entry.Symbol.Type.Name}) is a value type reassigned inside the method but not returned. " +
+                            "The caller's copy is unaffected. If caller visibility was the intent, use 'ref' or return the value.",
+                            "Warning",
+                            doc.FilePath,
+                            line,
+                            Truncate(assignment.ToString())));
+                    }
+                    else if (!entry.IsValueType && !isReturned)
+                    {
+                        // Reference type param replaced with new instance — caller's reference is unaffected
+                        // Only flag if RHS is an object creation (new ...) to reduce false positives
+                        bool rhsIsNewInstance =
+                            assignment.Right is ObjectCreationExpressionSyntax ||
+                            assignment.Right is ImplicitObjectCreationExpressionSyntax;
+
+                        if (rhsIsNewInstance)
+                        {
+                            results.Add(new AntiPatternFinding(
+                                "ReferenceTypeParameterReplaced",
+                                $"Parameter '{paramName}' ({entry.Symbol.Type.Name}) is replaced with a new instance but the new reference is not returned. " +
+                                "The caller's reference still points to the original object. If the intent was to return the new instance, add it to the return value.",
+                                "Warning",
+                                doc.FilePath,
+                                line,
+                                Truncate(assignment.ToString())));
+                        }
+                    }
+                }
+            }
+        }
+
+        return results;
     }
 }

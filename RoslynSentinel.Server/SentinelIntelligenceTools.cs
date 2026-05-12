@@ -25,6 +25,7 @@ public class SentinelIntelligenceTools
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly BreakingChangeEngine _breakingChangeEngine;
+    private readonly CloneDetectionEngine _cloneDetectionEngine;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -45,6 +46,7 @@ public class SentinelIntelligenceTools
         DiscoveryEngine discoveryEngine,
         ProjectConsistencyEngine projectConsistencyEngine,
         BreakingChangeEngine breakingChangeEngine,
+        CloneDetectionEngine cloneDetectionEngine,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
@@ -65,6 +67,7 @@ public class SentinelIntelligenceTools
         _discoveryEngine = discoveryEngine;
         _projectConsistencyEngine = projectConsistencyEngine;
         _breakingChangeEngine = breakingChangeEngine;
+        _cloneDetectionEngine = cloneDetectionEngine;
         _logger = logger;
     }
 
@@ -495,4 +498,53 @@ public async Task<List<string>> FindStructuralSmells(
         string? projectName = null,
         string? filePath = null)
         => await _discoveryEngine.FindAttributeUsagesAsync(attributeName, projectName, filePath);
+
+    [McpServerTool]
+    [Description("""
+        Finds duplicate statement sequences within the methods of a single class.
+        Uses structural hashing (SyntaxKind-based) so blocks match regardless of
+        variable names or literal values — the same control-flow shape is a clone.
+
+        Returns groups of matching block locations including:
+        • StatementCount — how many statements the clone spans
+        • HasControlFlowExit — true if any statement is a return/break/continue/throw
+          (flag only; does not block the finding)
+        • SnippetPreview — first 120 chars of the first statement
+        • CapturedVariables — variables that would need to become parameters if extracted
+        • ProducedVariables — variables that would need to be returned if extracted
+        • Occurrences — method name, start line, end line, file path for each copy
+
+        Use this to find Extract-Method candidates within a single class before the
+        duplication spreads. Set minStatements lower (e.g. 3) for aggressive detection,
+        higher (e.g. 6) for only substantial clones.
+        """)]
+    public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClass(
+        string filePath,
+        string className,
+        int minStatements = 4)
+        => await _cloneDetectionEngine.FindDuplicateBlocksInClassAsync(filePath, className, minStatements);
+
+    [McpServerTool]
+    [Description("""
+        Finds duplicate statement sequences across all types in an inheritance or
+        interface hierarchy — base class, derived classes, and implementing types.
+
+        Scoped to avoid noise: only types that share a common ancestor or interface
+        with the named type are included. Cross-hierarchy clones (unrelated types)
+        are excluded. This makes findings directly actionable: duplicates in a hierarchy
+        are candidates for extraction to the base class or a shared abstract method.
+
+        Returns the same DuplicateBlockGroup shape as FindDuplicateBlocksInClass,
+        with ContainingType and MethodName populated per occurrence so you can see
+        exactly which derived class has the copy.
+
+        typeName: the root type to anchor the hierarchy search (class or interface name).
+        projectName: optional filter to limit the search scope.
+        minStatements: minimum window size (default 4).
+        """)]
+    public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchy(
+        string typeName,
+        string? projectName = null,
+        int minStatements = 4)
+        => await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(typeName, projectName, minStatements);
 }
