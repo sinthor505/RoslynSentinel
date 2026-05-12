@@ -74,9 +74,13 @@ public class DependencyInjectionTests
         services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<SymbolNavigationEngine>();
         services.AddSingleton<AntiPatternEngine>();
+        services.AddSingleton<CloneDetectionEngine>();
+        services.AddSingleton<OutParamRefactoringEngine>();
         services.AddSingleton<DiscoveryEngine>();
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<CodeStyleAnalysisEngine>();
+        services.AddSingleton<ProjectConsistencyEngine>();
+        services.AddSingleton<BreakingChangeEngine>();
 
         // 3. Register all tool classes
         services.AddSingleton<SentinelWorkspaceTools>();

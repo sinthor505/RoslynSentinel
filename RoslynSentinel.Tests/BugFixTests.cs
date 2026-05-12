@@ -4048,6 +4048,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         new AdvancedRefactoringEngine(_workspaceManager),
         new LogicOptimizationEngine(_workspaceManager),
         new ModernizationEngine(_workspaceManager, _config),
+        new OutParamRefactoringEngine(_workspaceManager),
         _workspaceManager,
         _config,
         NullLogger<SentinelRefactoringTools>.Instance);

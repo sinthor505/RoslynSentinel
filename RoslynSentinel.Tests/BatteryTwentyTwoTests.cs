@@ -130,7 +130,9 @@ public class OrderService : IOrderService
             _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine,
             _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine,
             _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
-            _discoveryEngine, _config, NullLogger<SentinelIntelligenceTools>.Instance);
+            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager),
+            new CloneDetectionEngine(_workspaceManager),
+            _config, NullLogger<SentinelIntelligenceTools>.Instance);
     }
 
     [TearDown]

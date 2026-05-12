@@ -35,7 +35,7 @@ public class MassiveRefactoringTests
         var logicOpt = new LogicOptimizationEngine(_workspaceManager);
         var modernization = new ModernizationEngine(_workspaceManager, config);
         
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, logicOpt, modernization, _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
+        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, logicOpt, modernization, new OutParamRefactoringEngine(_workspaceManager), _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
     }
 
     [TearDown]

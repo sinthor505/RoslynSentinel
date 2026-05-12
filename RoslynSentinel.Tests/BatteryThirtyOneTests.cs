@@ -62,6 +62,7 @@ public class BatteryThirtyOneTests
             _advancedLogicEngine, _refinementEngine, _advancedTypeEngine,
             _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine,
             _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine,
+            new OutParamRefactoringEngine(_workspaceManager),
             _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
     }
 
