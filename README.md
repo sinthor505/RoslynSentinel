@@ -344,7 +344,7 @@ Powered by `CodeStyleEngine`, `SyntaxUpgradeEngine`, `ModernizationEngine`, `IDE
 
 ---
 
-## 🔍 Intelligence & Analysis — 61 tools
+## 🔍 Intelligence & Analysis — 73 tools
 
 Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `ArchitecturalEngine`, `DeadCodeEngine`, `AsyncSafetyEngine`, `AsyncOptimizationEngine`, `ThreadSafetyEngine`, `DependencyInjectionEngine`, `DiscoveryEngine`, and `SemanticSearchEngine`.
 
@@ -372,6 +372,12 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 |------|--------------|---|
 | `find_circular_dependencies` | Detect circular project references (Tarjan's SCC algorithm) | ⭐⭐⭐⭐⭐ |
 | `check_package_inconsistency` | Flag NuGet packages referenced at different versions across projects | ⭐⭐⭐⭐⭐ |
+| `check_project_consistency` | Check solution-wide TargetFramework alignment and project naming convention adherence | ⭐⭐⭐⭐⭐ |
+| `get_project_framework_summary` | Return a per-project TargetFramework summary; run before `check_project_consistency` | ⭐⭐⭐⭐⭐ |
+| `detect_layer_violations` | Detect namespace-level architecture violations (e.g. Controllers importing Data directly) | ⭐⭐⭐⭐⭐ |
+| `detect_breaking_changes` | Compare a captured API surface snapshot against the current code and report removed/changed members | ⭐⭐⭐⭐⭐ |
+| `get_public_api_surface_snapshot` | Capture a baseline of all public/protected types and members for use with `detect_breaking_changes` | ⭐⭐⭐⭐⭐ |
+| `find_circular_type_references` | Detect circular constructor-injection dependencies that would cause DI container failures at startup | ⭐⭐⭐⭐⭐ |
 | `convert_to_background_service` | Scaffold a class into an `IHostedService` background worker | ⭐⭐⭐⭐⭐ |
 | `fix_mismatched_namespaces` | Fix all files whose namespace doesn't match their folder path | ⭐⭐⭐⭐⭐ |
 | `move_file_to_namespace_folder` | Move a file to the folder that matches its namespace | ⭐⭐⭐⭐⭐ |
@@ -404,6 +410,12 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 | `find_best_insertion_point` | Return the optimal line to insert a field/ctor/property/method by convention | ⭐⭐⭐⭐⭐ |
 | `find_todo_fixme_comments` | Scan `TODO`/`FIXME`/`HACK`/`BUG`/`REVIEW` comments, severity-ranked | ⭐⭐⭐⭐⭐ |
 | `find_large_switch_statements` | Flag `switch` statements with many cases | ⭐⭐⭐⭐⭐ |
+| `find_large_types` | Find types (classes, structs, records, interfaces) exceeding a line count threshold | ⭐⭐⭐⭐⭐ |
+| `find_large_methods` | Find methods exceeding a line count threshold; prime extract-method candidates | ⭐⭐⭐⭐⭐ |
+| `find_duplicate_methods` | Find structurally duplicate method implementations across the solution (hash-based, ignores identifiers) | ⭐⭐⭐⭐⭐ |
+| `find_interface_extraction_candidates` | Find public classes with 3+ public methods but no corresponding interface | ⭐⭐⭐⭐⭐ |
+| `find_missing_generic_constraints` | Find generic methods using `new T()` or `param == null` without the required type constraint | ⭐⭐⭐⭐⭐ |
+| `find_types_by_attribute` | Find all types (classes, interfaces, records, structs, enums) decorated with a specific attribute | ⭐⭐⭐⭐⭐ |
 | `find_structural_smells` | Detect classes that are too large, too coupled, or have too many responsibilities | ⭐⭐⭐⭐⭐ |
 | `find_readonly_field_candidates` | Find fields that are never written after construction (should be `readonly`) | ⭐⭐⭐⭐⭐ |
 | `analyze_type_cohesion` | LCOM cohesion score — how tightly related a class's methods are | ⭐⭐⭐⭐⭐ |
@@ -447,7 +459,7 @@ Powered by `AnalysisEngine`, `MetricsEngine`, `SymbolNavigationEngine`, `Archite
 
 ---
 
-## 🔎 Quality & Anti-Patterns — 72 tools
+## 🔎 Quality & Anti-Patterns — 77 tools
 
 Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingEngine`, `CodeStyleEngine`, `CodeStyleAnalysisEngine`, `ThreadSafetyEngine`, `AsyncSafetyEngine`, and `DiagnosticEngine`.
 
@@ -469,6 +481,7 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 | `check_for_sql_injection` | Specifically scan for concatenated SQL strings | ⭐⭐⭐⭐⭐ |
 | `find_hardcoded_paths` | Flag hardcoded file system paths | ⭐⭐⭐⭐⭐ |
 | `find_string_magic_values` | Flag unexplained string literals that should be constants | ⭐⭐⭐⭐⭐ |
+| `detect_json_anti_patterns` | Detect `JsonDocument.Parse()` without `using` (memory leak) and `GetProperty()` instead of `TryGetProperty()` (runtime throws) | ⭐⭐⭐⭐⭐ |
 
 ### Code Health
 
@@ -488,6 +501,9 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 | `find_possible_deadlocks` | Detect nested lock acquisition patterns prone to deadlock | ⭐⭐⭐⭐⭐ |
 | `analyze_semaphore_usage` | Detect `SemaphoreSlim` misuse (never released, released without acquire) | ⭐⭐⭐⭐⭐ |
 | `get_diagnostics_summary` | Compiler diagnostics grouped by `CS` code, sorted by frequency | ⭐⭐⭐⭐⭐ |
+| `detect_unreachable_code` | Detect statements unreachable due to preceding return/throw/break on all code paths | ⭐⭐⭐⭐⭐ |
+| `find_non_exhaustive_enum_switches` | Find `switch` statements on enum types that are missing cases and have no `default` | ⭐⭐⭐⭐⭐ |
+| `get_method_complexity` | Calculate cyclomatic complexity of a method with a 1–4/5–7/8–10/>10 guide | ⭐⭐⭐⭐⭐ |
 
 ### Precision Detectors (v2 additions)
 
@@ -549,6 +565,7 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 | `generate_test_skeleton` | Scaffold an NUnit/xUnit test class with one test per public method | ⭐⭐⭐⭐⭐ |
 | `generate_test_scaffold` | Generate a richer test file with Arrange/Act/Assert stubs | ⭐⭐⭐⭐⭐ |
 | `analyze_path_coverage` | Report which code paths lack test coverage for a file | ⭐⭐⭐⭐⭐ |
+| `get_test_coverage_map` | Cross-reference execution paths to test methods that cover them; shows BranchesToTest and CoveringTests | ⭐⭐⭐⭐⭐ |
 | `add_guard_clauses` | Add null-guard clauses to all method parameters | ⭐⭐⭐⭐⭐ |
 | `add_benchmark_stub` | Add a BenchmarkDotNet stub for every public method | ⭐⭐⭐⭐⭐ |
 | `detect_long_parameter_lists` | (Intelligence context) Flag long parameter lists project-wide | ⭐⭐⭐⭐⭐ |

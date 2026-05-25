@@ -5352,17 +5352,37 @@ public async Task<string> InterpolateStringSafe(string filePath, string contextS
 
 **Type:** Tool Class  
 
-**Tools:** 16
+**Tools:** 28
 
 
 **Tools in this source:**
 
 
+- CheckProjectConsistency
+
 - ConvertToBackgroundService
+
+- DetectBreakingChanges
+
+- DetectLayerViolations
 
 - DocumentPocoFields
 
 - FindBestInsertionPoint
+
+- FindCircularTypeReferences
+
+- FindDuplicateMethods
+
+- FindInterfaceExtractionCandidates
+
+- FindLargeMethods
+
+- FindLargeTypes
+
+- FindMissingGenericConstraints
+
+- FindTypesByAttribute
 
 - FixMismatchedNamespaces
 
@@ -5379,6 +5399,10 @@ public async Task<string> InterpolateStringSafe(string filePath, string contextS
 - GetCodeInventory
 
 - GetComprehensiveHealthReport
+
+- GetProjectFrameworkSummary
+
+- GetPublicApiSurfaceSnapshot
 
 - GetReverseCallGraph
 
@@ -5668,6 +5692,210 @@ Code analysis and refactoring tool
 
 ```csharp
 public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+```
+
+
+---
+
+
+### CheckProjectConsistency
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<ProjectConsistencyIssue>> CheckProjectConsistency()
+```
+
+
+---
+
+
+### DetectBreakingChanges
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<BreakingChange>> DetectBreakingChanges(List<PublicApiMember> baseline, string? projectName = null, string? filePath = null)
+```
+
+
+---
+
+
+### DetectLayerViolations
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<ArchitecturalEngine.LayerViolation>> DetectLayerViolations(string? projectName = null, string? filePath = null)
+```
+
+
+---
+
+
+### FindCircularTypeReferences
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<string>> FindCircularTypeReferences(string? projectName = null)
+```
+
+
+---
+
+
+### FindDuplicateMethods
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<DuplicateMethodGroup>> FindDuplicateMethods(int minStatements = 5, string? projectName = null)
+```
+
+
+---
+
+
+### FindInterfaceExtractionCandidates
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
+```
+
+
+---
+
+
+### FindLargeMethods
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<LargeMethodReport>> FindLargeMethods(int maxLines = 50, string? projectName = null)
+```
+
+
+---
+
+
+### FindLargeTypes
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<LargeTypeReport>> FindLargeTypes(int maxLines = 500, string? projectName = null)
+```
+
+
+---
+
+
+### FindMissingGenericConstraints
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<string>> FindMissingGenericConstraints(string? projectName = null, string? filePath = null)
+```
+
+
+---
+
+
+### FindTypesByAttribute
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<SearchResult>> FindTypesByAttribute(string attributeName)
+```
+
+
+---
+
+
+### GetProjectFrameworkSummary
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummary()
+```
+
+
+---
+
+
+### GetPublicApiSurfaceSnapshot
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<PublicApiMember>> GetPublicApiSurfaceSnapshot(string? projectName = null, string? filePath = null)
 ```
 
 
@@ -6150,7 +6378,7 @@ public async Task<string> UseTimeProvider(string filePath)
 
 **Type:** Tool Class  
 
-**Tools:** 15
+**Tools:** 20
 
 
 **Tools in this source:**
@@ -6174,17 +6402,27 @@ public async Task<string> UseTimeProvider(string filePath)
 
 - ConvertToAsyncEnumerable
 
+- DetectJsonAntiPatterns
+
+- DetectUnreachableCode
+
+- FindMisboundOverloadChains
+
+- FindNonExhaustiveEnumSwitches
+
 - GenerateTestScaffold
 
 - GenerateTestSkeleton
 
 - GetDiagnosticsSummary
 
+- GetMethodComplexity
+
+- GetTestCoverageMap
+
 - MakeMethodThreadSafe
 
 - RemoveConfigureAwaitFalse
-
-- FindMisboundOverloadChains
 
 
 ---
@@ -6457,6 +6695,91 @@ public async Task<List<string>> FindMisboundOverloadChains(string? projectName =
 - `projectName` *(optional)* — scope analysis to a single project; omit to scan the entire solution
 
 **Returns:** List of findings in the format `{filePath}:{line} [{Kind}] — {description}. Fix: {recommendation}`
+
+
+---
+
+
+### DetectJsonAntiPatterns
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<SecurityIssueReport>> DetectJsonAntiPatterns(string filePath)
+```
+
+
+---
+
+
+### DetectUnreachableCode
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<string>> DetectUnreachableCode(string filePath, string methodName)
+```
+
+
+---
+
+
+### FindNonExhaustiveEnumSwitches
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<List<EnumSwitchGap>> FindNonExhaustiveEnumSwitches(string? filePath = null, string? projectName = null)
+```
+
+
+---
+
+
+### GetMethodComplexity
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
+```
+
+
+---
+
+
+### GetTestCoverageMap
+
+
+**Purpose:**
+Code analysis and refactoring tool
+
+
+**Signature:**
+
+```csharp
+public async Task<TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
+```
 
 
 ---
