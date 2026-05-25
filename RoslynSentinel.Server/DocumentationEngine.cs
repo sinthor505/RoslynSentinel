@@ -16,8 +16,9 @@ public class DocumentationEngine
     public async Task<string> GenerateXmlDocumentationStubsAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        var normalizedPath = Path.GetFullPath(filePath);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null) throw new Exception($"File not found in solution: {normalizedPath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null) return string.Empty;

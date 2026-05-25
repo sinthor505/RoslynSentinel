@@ -1555,7 +1555,7 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
-            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+            documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
@@ -1825,7 +1825,7 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
-            documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+            documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));

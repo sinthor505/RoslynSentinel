@@ -26,7 +26,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return new List<SecurityIssueReport>();
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -162,7 +162,7 @@ public class SecurityEngine
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
-            docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+            docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
         else if (!string.IsNullOrEmpty(projectName))
             docs = solution.Projects
                 .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -203,7 +203,7 @@ public class SecurityEngine
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
-            docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+            docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
         else if (!string.IsNullOrEmpty(projectName))
             docs = solution.Projects
                 .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -334,7 +334,7 @@ public class SecurityEngine
         string filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return [];
 
         var root = await document.GetSyntaxRootAsync(ct);
@@ -419,7 +419,7 @@ public class SecurityEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var issues = new List<SecurityIssueReport>();
 
-        var docIds = solution.GetDocumentIdsWithFilePath(filePath);
+        var docIds = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath));
         foreach (var docId in docIds)
         {
             var doc = solution.GetDocument(docId);
@@ -520,7 +520,7 @@ public class SecurityEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var issues = new List<SecurityIssueReport>();
 
-        var docIds = solution.GetDocumentIdsWithFilePath(filePath);
+        var docIds = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath));
         foreach (var docId in docIds)
         {
             var doc = solution.GetDocument(docId);
@@ -565,7 +565,7 @@ public class SecurityEngine
         string filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
         if (document == null) return [];
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);

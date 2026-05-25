@@ -363,7 +363,7 @@ public class DiscoveryEngine
     {
         if (!string.IsNullOrEmpty(filePath))
         {
-            return solution.GetDocumentIdsWithFilePath(filePath)
+            return solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath))
                 .Select(solution.GetDocument)
                 .Where(d => d != null)!;
         }

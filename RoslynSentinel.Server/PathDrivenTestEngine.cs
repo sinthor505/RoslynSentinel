@@ -53,7 +53,7 @@ public class PathDrivenTestEngine
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
+        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath))
             .Select(solution.GetDocument)
             .FirstOrDefault();
 

@@ -7,12 +7,13 @@
 // Tests are written to assert CORRECT behavior → they FAIL on the current code,
 // confirming the bug. They will PASS once fixed.
 
-#pragma warning disable CS8618
-namespace RoslynSentinel.Tests;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests;
 
 [TestFixture]
 public class BugHuntTests
