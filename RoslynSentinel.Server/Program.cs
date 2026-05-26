@@ -1,5 +1,5 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 using RoslynSentinel.Server;
@@ -7,7 +7,7 @@ using RoslynSentinel.Server;
 using Serilog;
 using Serilog.Extensions.Logging;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = Host.CreateApplicationBuilder(args);
 
 // --- Command Line Argument Parsing ---
 var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
@@ -123,8 +123,7 @@ try
     builder.Services.AddSingleton<StackOverflowEngine>();
 
     // --- Configure MCP Server Transport ---
-    var mcpBuilder = builder.Services.AddMcpServer()
-    .WithHttpTransport(options => { options.Stateless = true; });
+    var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
 
     // --- Tool Registration ---
     if (activeModes.Contains("Workspace"))
@@ -160,35 +159,35 @@ try
         mcpBuilder.WithTools<SentinelGenerationTools>();
     }
 
-    var app = builder.Build();
-    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    using var host = builder.Build();
+    var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
-    // pre-warm same as before
-    logger.LogInformation("Pre-warming MSBuildLocator...");
+    // --- Pre-Warm MSBuildLocator (prevents 8s delay on first tools/list call) ---
+    // MSBuildLocator.RegisterDefaults() in PersistentWorkspaceManager takes ~5-8s.
+    // By forcing construction here (at startup), tools/list responds instantly.
+    logger.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
     var warmupStart = System.Diagnostics.Stopwatch.StartNew();
-    _ = app.Services.GetRequiredService<PersistentWorkspaceManager>();
+    _ = host.Services.GetRequiredService<PersistentWorkspaceManager>();
     warmupStart.Stop();
-    logger.LogInformation("Pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+    logger.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
 
+    // --- Auto-Load Solution if Provided ---
     if (!string.IsNullOrEmpty(solutionPath))
     {
-        var workspaceManager = app.Services.GetRequiredService<PersistentWorkspaceManager>();
+        var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
         logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
         _ = workspaceManager.LoadSolutionAsync(solutionPath)
             .ContinueWith(
-                t => logger.LogError(t.Exception!.GetBaseException(), "Auto-load failed"),
+                t => logger.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
                 TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    app.MapMcp("/mcp");
-
-    logger.LogInformation("Roslyn Sentinel HTTP MCP Server starting on http://localhost:5100/mcp");
+    logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes}", string.Join(", ", activeModes));
     Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
-
 
     try
     {
-        await app.RunAsync("http://localhost:5100");
+        await host.RunAsync();
         logger.LogInformation("Host shut down cleanly.");
     }
     catch (Exception runEx)

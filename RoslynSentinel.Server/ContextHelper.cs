@@ -37,6 +37,19 @@ public static class ContextHelper
         }
 
         if (allMatches.Count == 0)
+        {
+            // Fallback: try matching with collapsed whitespace
+            var snippetNorm = System.Text.RegularExpressions.Regex.Replace(contextSnippet.Trim(), @"\s+", " ");
+            var lines = sourceText.Lines;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var lineNorm = System.Text.RegularExpressions.Regex.Replace(lines[i].ToString().Trim(), @"\s+", " ");
+                if (lineNorm.Contains(snippetNorm, StringComparison.OrdinalIgnoreCase))
+                    allMatches.Add(lines[i].Start);
+            }
+        }
+
+        if (allMatches.Count == 0)
             throw new InvalidOperationException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
 
         if (allMatches.Count == 1)
