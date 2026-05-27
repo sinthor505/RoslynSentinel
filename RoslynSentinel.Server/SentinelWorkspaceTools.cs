@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -194,8 +195,8 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Applies a Unified Diff to a file and returns the resulting full content.")]
-    public async Task<string> ApplyProposedDiff(string filePath, string unifiedDiff)
+    [Description("Applies a Unified Diff to a file and writes the result to disk. Returns ApplyChangesResult with SucceededFiles, WorkspaceInSync, and WorkspaceVersion. To preview the result without writing, use validate_proposed_diff instead.")]
+    public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyProposedDiff(string filePath, string unifiedDiff)
     {
         try
         {
@@ -204,7 +205,9 @@ public class SentinelWorkspaceTools
                 .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
             if (document == null) throw new InvalidOperationException("File not found.");
             var oldText = await document.GetTextAsync();
-            return _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+            var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+            return await _workspaceManager.ApplyProposedChangesAsync(
+                new Dictionary<string, string> { [filePath] = newContent });
         }
         catch (InvalidOperationException) { throw; }
         catch (Exception ex)
