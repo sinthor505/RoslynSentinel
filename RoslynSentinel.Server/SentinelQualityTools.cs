@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -773,4 +774,26 @@ public class SentinelQualityTools
         string filePath,
         bool includeInformational = false)
         => await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(filePath, includeInformational);
+
+    [McpServerTool]
+    [Description("""
+        Finds all call sites that invoke a method decorated with [Obsolete].
+        Designed for tracking CS0618 migration progress — every result is a call site that still
+        needs to be migrated away from the deprecated (Asyncify-bridge) method.
+
+        Parameters:
+        - messagePattern: Optional substring to filter by the [Obsolete] attribute message (case-insensitive).
+          Use "Asyncify-bridge" to restrict to bridge wrappers created by the async migration.
+        - filePath: Optional; restrict results to call sites in this file.
+        - projectName: Optional; restrict results to call sites in this project.
+
+        Returns ObsoleteCallerFinding records: ObsoleteMethodName, ObsoleteMessage, DeclaringType,
+        CallerMethod, CallerType, FilePath, Line, CodeSnippet.
+        """)]
+    public async Task<List<ObsoleteCallerFinding>> FindObsoleteCallers(
+        string? messagePattern = null,
+        string? filePath = null,
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+        => await _antiPatternEngine.FindObsoleteCallersAsync(messagePattern, filePath, projectName, cancellationToken);
 }

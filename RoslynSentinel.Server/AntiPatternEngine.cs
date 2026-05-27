@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Server;
@@ -50,6 +51,26 @@ public record ExceptionHandlingFinding(
     string FilePath,
     int Line,
     string Snippet
+);
+
+/// <summary>A call site that invokes a method decorated with <see cref="ObsoleteAttribute"/>.</summary>
+/// <param name="ObsoleteMethodName">Simple name of the [Obsolete]-decorated method.</param>
+/// <param name="ObsoleteMessage">The message from the [Obsolete] attribute, or empty string.</param>
+/// <param name="DeclaringType">Fully-qualified type name that declares the obsolete method.</param>
+/// <param name="CallerMethod">Name of the method containing the call site.</param>
+/// <param name="CallerType">Fully-qualified type name containing the caller.</param>
+/// <param name="FilePath">Absolute path of the file containing the call site.</param>
+/// <param name="Line">1-based line number of the call site.</param>
+/// <param name="CodeSnippet">Short source snippet around the call site.</param>
+public record ObsoleteCallerFinding(
+    string ObsoleteMethodName,
+    string ObsoleteMessage,
+    string DeclaringType,
+    string CallerMethod,
+    string CallerType,
+    string FilePath,
+    int Line,
+    string CodeSnippet
 );
 
 public class AntiPatternEngine
@@ -1927,6 +1948,131 @@ public class AntiPatternEngine
                                 doc.FilePath,
                                 line,
                                 Truncate(assignment.ToString())));
+                        }
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Finds all call sites that invoke a method decorated with <see cref="ObsoleteAttribute"/>.
+    /// Useful for tracking CS0618 migration progress — every result is a caller that still needs
+    /// to be migrated away from the deprecated (bridge) method.
+    /// </summary>
+    /// <param name="messagePattern">Optional substring to filter by the [Obsolete] message text (case-insensitive).</param>
+    /// <param name="filePath">Optional: restrict results to call sites in this file.</param>
+    /// <param name="projectName">Optional: restrict results to call sites in this project.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<List<ObsoleteCallerFinding>> FindObsoleteCallersAsync(
+        string? messagePattern = null,
+        string? filePath = null,
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<ObsoleteCallerFinding>();
+
+        // Collect all [Obsolete]-decorated method symbols across the solution.
+        foreach (var project in solution.Projects)
+        {
+            if (projectName != null && !project.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            if (compilation == null) continue;
+
+            foreach (var syntaxTree in compilation.SyntaxTrees)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+
+                // Walk all method declarations in this file, looking for [Obsolete].
+                foreach (var methodDecl in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
+                    if (methodSymbol == null) continue;
+
+                    var obsoleteAttr = methodSymbol.GetAttributes()
+                        .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute" or "Obsolete");
+                    if (obsoleteAttr == null) continue;
+
+                    // Extract the message text from the attribute constructor.
+                    var obsoleteMessage = obsoleteAttr.ConstructorArguments.Length > 0
+                        ? obsoleteAttr.ConstructorArguments[0].Value?.ToString() ?? string.Empty
+                        : string.Empty;
+
+                    // Filter by message pattern if provided.
+                    if (messagePattern != null &&
+                        !obsoleteMessage.Contains(messagePattern, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    // Use SymbolFinder to find all references to this symbol across the solution.
+                    var references = await SymbolFinder.FindReferencesAsync(
+                        methodSymbol, solution, cancellationToken).ConfigureAwait(false);
+
+                    foreach (var refSymbol in references)
+                    {
+                        foreach (var location in refSymbol.Locations)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+
+                            if (!location.Location.IsInSource) continue;
+
+                            var refDoc = solution.GetDocument(location.Document.Id);
+                            if (refDoc == null) continue;
+
+                            var refFilePath = refDoc.FilePath ?? string.Empty;
+
+                            // Filter by filePath if provided.
+                            if (filePath != null &&
+                                !refFilePath.Equals(filePath, StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            // Skip the declaration itself.
+                            if (refFilePath == (syntaxTree.FilePath ?? string.Empty) &&
+                                location.Location.SourceSpan == methodDecl.Identifier.Span)
+                                continue;
+
+                            var refRoot = await location.Document.GetSyntaxRootAsync(cancellationToken)
+                                .ConfigureAwait(false);
+                            if (refRoot == null) continue;
+
+                            var refNode = refRoot.FindNode(location.Location.SourceSpan);
+                            var refLine = location.Location.GetLineSpan().StartLinePosition.Line + 1;
+                            var snippet = Truncate(refNode.Parent?.ToString() ?? refNode.ToString());
+
+                            // Find the enclosing method to report the caller.
+                            var callerMethod = refNode.Ancestors()
+                                .OfType<MethodDeclarationSyntax>()
+                                .FirstOrDefault();
+                            var callerMethodName = callerMethod?.Identifier.Text ?? "<top-level>";
+
+                            var refSemanticModel = compilation.GetSemanticModel(
+                                await location.Document.GetSyntaxTreeAsync(cancellationToken)
+                                    .ConfigureAwait(false) ?? syntaxTree);
+
+                            string callerTypeName = "<unknown>";
+                            if (callerMethod != null)
+                            {
+                                var callerSymbol = refSemanticModel.GetDeclaredSymbol(callerMethod, cancellationToken);
+                                callerTypeName = callerSymbol?.ContainingType?.ToDisplayString() ?? "<unknown>";
+                            }
+
+                            results.Add(new ObsoleteCallerFinding(
+                                ObsoleteMethodName: methodSymbol.Name,
+                                ObsoleteMessage: obsoleteMessage,
+                                DeclaringType: methodSymbol.ContainingType?.ToDisplayString() ?? string.Empty,
+                                CallerMethod: callerMethodName,
+                                CallerType: callerTypeName,
+                                FilePath: refFilePath,
+                                Line: refLine,
+                                CodeSnippet: snippet
+                            ));
                         }
                     }
                 }
