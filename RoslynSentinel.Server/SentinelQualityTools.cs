@@ -109,30 +109,48 @@ public record MigrationCandidateFinding(
     string? Reason,
     string? FlaggedDate,
     int     Line
-);
+)
+{
+    /// <summary>
+    /// Human-readable one-liner combining the most useful fields.
+    /// Example: <c>"AsyncBridge (score=70): Calls search/isExistedInDB — updateSettlement"</c>.
+    /// </summary>
+    public string Summary =>
+        $"{Pattern} (score={Score})" +
+        (string.IsNullOrWhiteSpace(Reason) ? "" : $": {Reason}") +
+        $" — {MethodName}";
+}
 
 /// <summary>
-/// Return type for <c>flag_migration_candidate</c>.
-/// Contains all file-path → source-content pairs that must be written to disk.
+/// Slim return type for <c>flag_migration_candidate</c>.
+/// The attribute has already been written to disk before this result is returned.
 /// </summary>
-/// <param name="Changes">
-/// Dictionary mapping file path to updated/new source content.
-/// Always contains the target file. May also contain a second entry for the newly-injected
-/// <c>MigrationCandidateAttribute.cs</c> when the attribute class did not previously exist.
-/// Pass to <c>apply_proposed_changes</c> or use <c>ChangeId</c> with <c>apply_staged_changes</c>.
+/// <param name="FilePath">Absolute path of the file that was modified.</param>
+/// <param name="MethodName">Name of the method that received the <c>[MigrationCandidate]</c> attribute.</param>
+/// <param name="Pattern">Migration pattern string that was applied (e.g. <c>"AsyncBridge"</c>).</param>
+/// <param name="Line">1-based source line of the method declaration after rewriting.</param>
+/// <param name="WasAlreadyFlagged">
+/// <c>true</c> if the method already carried a <c>[MigrationCandidate]</c> attribute with this exact
+/// pattern — the attribute was replaced (idempotent update); <c>false</c> for a fresh flag.
+/// </param>
+/// <param name="PreviousPattern">
+/// The pattern string from a pre-existing <c>[MigrationCandidate]</c> attribute, or <c>null</c>
+/// if the method was not previously flagged.
 /// </param>
 /// <param name="AttributeClassInjected">
-/// <c>true</c> if a new <c>MigrationCandidateAttribute.cs</c> file was generated and included in
-/// <see cref="Changes"/>; <c>false</c> if the class was already present in the solution.
+/// <c>true</c> if a new <c>MigrationCandidateAttribute.cs</c> file was generated alongside the
+/// modification; <c>false</c> if the attribute class was already present in the solution.
 /// </param>
-/// <param name="ChangeId">
-/// Set when <c>autoStage=true</c> (default). Pass to <c>apply_staged_changes</c>.
-/// <c>null</c> when <c>autoStage=false</c>.
-/// </param>
+/// <param name="Summary">Human-readable summary of the flag action for log display.</param>
 public record FlagMigrationCandidateResult(
-    Dictionary<string, string> Changes,
-    bool   AttributeClassInjected,
-    string? ChangeId
+    string  FilePath,
+    string  MethodName,
+    string  Pattern,
+    int     Line,
+    bool    WasAlreadyFlagged,
+    string? PreviousPattern,
+    bool    AttributeClassInjected,
+    string  Summary
 );
 
 [McpServerToolType]
@@ -639,11 +657,9 @@ public class SentinelQualityTools
         async migration refactoring pass. The attribute is source-injected — no new project
         references are required.
 
-        If the MigrationCandidateAttribute class is not yet defined in the loaded solution, a
-        self-contained 'MigrationCandidateAttribute.cs' file is generated in the same directory
-        as the target file and included in the returned Changes dictionary. Write all entries in
-        Changes to disk (use apply_staged_changes with autoStage=true, or apply_proposed_changes
-        with autoStage=false).
+        Writes the change directly to disk — no apply_staged_changes or apply_proposed_changes
+        step needed. If MigrationCandidateAttribute.cs does not yet exist in the project it is
+        also generated in the same directory.
 
         Known patterns: AsyncBridge, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
         Re-flagging a method with the same pattern is idempotent: the existing attribute is
@@ -652,27 +668,25 @@ public class SentinelQualityTools
         The specialist tool (e.g. convert_to_async_bridge) automatically removes [MigrationCandidate]
         when it processes the method. Remove the attribute manually if the method is ruled ineligible.
 
-        Returns FlagMigrationCandidateResult:
-          autoStage=true (default): ChangeId is set; apply all changes with apply_staged_changes(changeId).
-          autoStage=false: Changes dictionary is populated; pass each entry to apply_proposed_changes.
+        Returns FlagMigrationCandidateResult with slim metadata only (no file source in the payload).
+        WasAlreadyFlagged and PreviousPattern indicate idempotency state.
         """)]
     public async Task<FlagMigrationCandidateResult> FlagMigrationCandidate(
         string  filePath,
         string  methodName,
         string  pattern,
-        int     score    = 0,
-        string? reason   = null,
-        bool    autoStage = true)
+        int     score  = 0,
+        string? reason = null)
     {
-        Dictionary<string, string> changes;
+        AsyncOptimizationEngine.FlagMigrationCandidateEngineResult engineResult;
         try
         {
-            changes = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+            engineResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                 filePath, methodName, pattern, score, reason);
         }
         catch (InvalidOperationException)
         {
-            throw; // precondition failures propagate verbatim
+            throw;
         }
         catch (Exception ex)
         {
@@ -684,15 +698,228 @@ public class SentinelQualityTools
                 $"{ex.GetType().Name}: {ex.Message}", ex);
         }
 
-        var attributeInjected = changes.Count > 1; // second entry = the attribute class file
+        // Auto-write to disk immediately — no staging step needed.
+        await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
 
-        if (!autoStage)
-            return new FlagMigrationCandidateResult(changes, attributeInjected, null);
+        var summary = $"[{pattern}] flagged on '{methodName}'" +
+                      (engineResult.WasAlreadyFlagged ? $" (replaced previous [{engineResult.PreviousPattern}])" : "") +
+                      $" @ line {engineResult.Line} in '{Path.GetFileName(filePath)}'";
 
-        var cid = _workspaceManager.StageChanges(
-            changes,
-            $"flag_migration_candidate: [{pattern}] on '{methodName}' in '{Path.GetFileName(filePath)}'");
-        return new FlagMigrationCandidateResult(changes, attributeInjected, cid);
+        return new FlagMigrationCandidateResult(
+            FilePath:              filePath,
+            MethodName:            methodName,
+            Pattern:               pattern,
+            Line:                  engineResult.Line,
+            WasAlreadyFlagged:     engineResult.WasAlreadyFlagged,
+            PreviousPattern:       engineResult.PreviousPattern,
+            AttributeClassInjected: engineResult.AttributeClassInjected,
+            Summary:               summary);
+    }
+
+    // ── Batch item / result records ───────────────────────────────────────────
+
+    /// <summary>One item in a <c>flag_migration_candidates_batch</c> request.</summary>
+    /// <param name="FilePath">Absolute path to the source file containing the target method.</param>
+    /// <param name="MethodName">Exact name of the method to flag (case-sensitive).</param>
+    /// <param name="Pattern">Migration pattern string (e.g. <c>"AsyncBridge"</c>).</param>
+    /// <param name="Score">Optional numeric score from the Scout analysis.</param>
+    /// <param name="Reason">Optional human-readable rationale.</param>
+    public record FlagMigrationCandidatesBatchItem(
+        string  FilePath,
+        string  MethodName,
+        string  Pattern,
+        int     Score  = 0,
+        string? Reason = null
+    );
+
+    /// <summary>Per-method outcome within a <c>flag_migration_candidates_batch</c> response.</summary>
+    /// <param name="MethodName">Method that was processed.</param>
+    /// <param name="FilePath">Source file path.</param>
+    /// <param name="Line">1-based line of the method declaration.</param>
+    /// <param name="Pattern">Pattern that was applied.</param>
+    /// <param name="WasAlreadyFlagged"><c>true</c> if the attribute was replaced rather than freshly added.</param>
+    /// <param name="Summary">Human-readable summary line.</param>
+    public record FlagMigrationCandidatesBatchOutcome(
+        string MethodName,
+        string FilePath,
+        int    Line,
+        string Pattern,
+        bool   WasAlreadyFlagged,
+        string Summary
+    );
+
+    /// <summary>Return type for <c>flag_migration_candidates_batch</c>.</summary>
+    /// <param name="Succeeded">Outcomes for each successfully flagged method.</param>
+    /// <param name="Failed">Index-and-error pairs for items that could not be processed.</param>
+    /// <param name="AttributeClassInjected"><c>true</c> if <c>MigrationCandidateAttribute.cs</c> was generated.</param>
+    /// <param name="TotalWritten">Number of source files actually written to disk.</param>
+    public record FlagMigrationCandidatesBatchResult(
+        IReadOnlyList<FlagMigrationCandidatesBatchOutcome> Succeeded,
+        IReadOnlyList<(int Index, string Error)>           Failed,
+        bool AttributeClassInjected,
+        int  TotalWritten
+    );
+
+    [McpServerTool]
+    [Description("""
+        Flags multiple methods with [MigrationCandidate] attributes in a single call. Groups
+        rewrites by file so each source file is read once and written once — avoids line-number
+        drift that occurs when sequential single-method calls modify the same file.
+
+        items: array of { FilePath, MethodName, Pattern, Score?, Reason? } objects.
+
+        Writes all changes directly to disk. Returns FlagMigrationCandidatesBatchResult with
+        per-method outcomes and any errors (items that failed do not abort the batch).
+
+        Prefer flag_migration_candidates_in_project when you want autonomous discovery.
+        Use this tool when you already have a specific list of methods to flag.
+        """)]
+    public async Task<FlagMigrationCandidatesBatchResult> FlagMigrationCandidatesBatch(
+        FlagMigrationCandidatesBatchItem[] items)
+    {
+        var tuples = items.Select(i =>
+            (FilePath: i.FilePath, MethodName: i.MethodName, Pattern: i.Pattern, Score: i.Score, Reason: i.Reason))
+            .ToList();
+
+        var (results, errors) = await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
+
+        // Collect unique file changes across all results.
+        var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        bool attrClassInjected = false;
+        var succeeded = new List<FlagMigrationCandidatesBatchOutcome>();
+
+        for (int i = 0; i < results.Count; i++)
+        {
+            var r = results[i];
+            if (r.Line == -1) continue; // error case
+            foreach (var kv in r.Changes) allChanges[kv.Key] = kv.Value;
+            if (r.AttributeClassInjected) attrClassInjected = true;
+
+            var item = items[i];
+            succeeded.Add(new FlagMigrationCandidatesBatchOutcome(
+                MethodName:       item.MethodName,
+                FilePath:         item.FilePath,
+                Line:             r.Line,
+                Pattern:          item.Pattern,
+                WasAlreadyFlagged: r.WasAlreadyFlagged,
+                Summary: $"[{item.Pattern}] flagged on '{item.MethodName}'" +
+                         (r.WasAlreadyFlagged ? $" (replaced [{r.PreviousPattern}])" : "") +
+                         $" @ line {r.Line}"));
+        }
+
+        if (allChanges.Count > 0)
+            await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+
+        return new FlagMigrationCandidatesBatchResult(
+            Succeeded:             succeeded,
+            Failed:                errors,
+            AttributeClassInjected: attrClassInjected,
+            TotalWritten:          allChanges.Count);
+    }
+
+    // ── Project-level autonomous scan + flag ──────────────────────────────────
+
+    /// <summary>Per-method entry in <c>flag_migration_candidates_in_project</c> results.</summary>
+    /// <param name="FilePath">Source file path.</param>
+    /// <param name="MethodName">Method name.</param>
+    /// <param name="ClassName">Containing class name.</param>
+    /// <param name="Line">1-based line number.</param>
+    /// <param name="Score">Computed score.</param>
+    /// <param name="Reason">Scoring rationale tokens.</param>
+    public record FlagCandidatesInProjectItem(
+        string FilePath,
+        string MethodName,
+        string ClassName,
+        int    Line,
+        int    Score,
+        string Reason
+    );
+
+    /// <summary>Return type for <c>flag_migration_candidates_in_project</c>.</summary>
+    /// <param name="Flagged">Methods that were flagged (score ≥ minScore, written to disk unless dryRun).</param>
+    /// <param name="Skipped">Methods that were scored but fell below <c>minScore</c>.</param>
+    /// <param name="AlreadyFlagged">Methods that already carried <c>[MigrationCandidate("pattern")]</c> and were left unchanged.</param>
+    /// <param name="AttributeClassInjected"><c>true</c> if <c>MigrationCandidateAttribute.cs</c> was generated.</param>
+    /// <param name="TotalMethodsExamined">Total method declarations scanned across all files.</param>
+    /// <param name="TotalFilesWritten">Number of source files written to disk (0 when dryRun=true).</param>
+    public record FlagCandidatesInProjectResult(
+        IReadOnlyList<FlagCandidatesInProjectItem> Flagged,
+        IReadOnlyList<FlagCandidatesInProjectItem> Skipped,
+        IReadOnlyList<FlagCandidatesInProjectItem> AlreadyFlagged,
+        bool AttributeClassInjected,
+        int  TotalMethodsExamined,
+        int  TotalFilesWritten
+    );
+
+    [McpServerTool]
+    [Description("""
+        Autonomously scans every method in a project (or the whole solution), scores each
+        against the specified migration pattern, and stamps qualifying methods with
+        [MigrationCandidate("pattern")] — all in a single call. No agent iteration over
+        files or methods required.
+
+        projectName: name of the project to scan (case-insensitive). Omit to scan the whole solution.
+        pattern:     migration pattern to apply. Default "AsyncBridge".
+                     Known patterns: AsyncBridge, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+        minScore:    minimum score a method must reach to be flagged. Default 20.
+        dryRun:      when true, scores methods and returns what WOULD be flagged without writing any
+                     files. Use to preview before committing.
+
+        Scoring heuristics (AsyncBridge):
+          +40 — body contains blocking calls (.GetAwaiter().GetResult(), .Result, .Wait())
+          +30 — body calls CommonSearch.search or similar sync DB entry point
+          +25 — body uses SqlCommand / SqlConnection / getDataContext / DataContext
+          +15 — class name ends with Service
+          +10 — method is static (easier to bridge in isolation)
+          -20 — method is virtual or override (interface widening may be required)
+          disqualified — abstract, extern, already async, name ends with Async,
+                         has yield return, has ref/out parameters
+
+        Returns FlagCandidatesInProjectResult:
+          Flagged        — methods written (or that would be written when dryRun=true)
+          Skipped        — methods scored but below minScore
+          AlreadyFlagged — methods that already had [MigrationCandidate("pattern")]
+          TotalMethodsExamined / TotalFilesWritten for progress tracking
+        """)]
+    public async Task<FlagCandidatesInProjectResult> FlagMigrationCandidatesInProject(
+        string? projectName = null,
+        string  pattern     = "AsyncBridge",
+        int     minScore    = 20,
+        bool    dryRun      = false)
+    {
+        AsyncOptimizationEngine.FlagCandidatesInProjectEngineResult engineResult;
+        try
+        {
+            engineResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
+                projectName, pattern, minScore, dryRun);
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "FlagMigrationCandidatesInProject unexpected exception for project '{ProjectName}'",
+                projectName ?? "(all)");
+            throw new InvalidOperationException(
+                $"FlagMigrationCandidatesInProject failed for project '{projectName ?? "(all)"}': " +
+                $"{ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        if (!dryRun && engineResult.Changes.Count > 0)
+            await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+
+        static FlagCandidatesInProjectItem ToItem(AsyncOptimizationEngine.CandidateScoredItem s)
+            => new(s.FilePath, s.MethodName, s.ClassName, s.Line, s.Score, s.Reason);
+
+        return new FlagCandidatesInProjectResult(
+            Flagged:               engineResult.Flagged.Select(ToItem).ToList(),
+            Skipped:               engineResult.Skipped.Select(ToItem).ToList(),
+            AlreadyFlagged:        engineResult.AlreadyFlagged.Select(ToItem).ToList(),
+            AttributeClassInjected: engineResult.AttributeClassInjected,
+            TotalMethodsExamined:  engineResult.TotalMethodsExamined,
+            TotalFilesWritten:     engineResult.Changes.Count);
     }
 
     [McpServerTool]
@@ -708,8 +935,9 @@ public class SentinelQualityTools
         Uses syntax-level analysis — no compilation needed — so results are accurate even
         immediately after flag_migration_candidate without a solution reload.
 
-        Returns one MigrationCandidateFinding per flagged method per attribute. A method
-        flagged for two different patterns appears twice.
+        Returns one MigrationCandidateFinding per flagged method per attribute.
+        Each finding includes a Summary field for human-readable log output.
+        A method flagged for two different patterns appears twice.
         """)]
     public async Task<List<MigrationCandidateFinding>> FindMigrationCandidates(
         string? filePath    = null,

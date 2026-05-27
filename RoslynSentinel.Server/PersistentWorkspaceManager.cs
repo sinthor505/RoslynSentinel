@@ -239,7 +239,8 @@ public class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync();
         try
         {
-            return _currentSolution ?? throw new InvalidOperationException("Solution not loaded.");
+            return _currentSolution ?? throw new InvalidOperationException(
+                "No solution is loaded. Call load_solution with a .sln or .csproj path.");
         }
         finally
         {

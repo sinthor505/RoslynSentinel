@@ -1052,6 +1052,20 @@ public class AsyncOptimizationEngine
     private const string MigrationCandidateShortName = "MigrationCandidate";
     private const string MigrationCandidateFullName  = "MigrationCandidateAttribute";
 
+    /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
+    public record FlagMigrationCandidateEngineResult(
+        /// <summary>File path → updated source for every file that must be written to disk.</summary>
+        Dictionary<string, string> Changes,
+        /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
+        bool    WasAlreadyFlagged,
+        /// <summary>The pattern string from the previous attribute, or <c>null</c> if the method was not previously flagged.</summary>
+        string? PreviousPattern,
+        /// <summary><c>true</c> if a new <c>MigrationCandidateAttribute.cs</c> file was generated.</summary>
+        bool    AttributeClassInjected,
+        /// <summary>1-based line number of the method declaration.</summary>
+        int     Line
+    );
+
     /// <summary>
     /// Returns the source text of a self-contained <c>MigrationCandidateAttribute</c> class
     /// to be injected as a new file in the target project when the attribute is not yet present.
@@ -1147,15 +1161,15 @@ namespace {ns}
     /// <param name="reason">Optional human-readable rationale for the flag.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>
-    /// A dictionary mapping file paths to updated source content.
-    /// Always contains the target file. May also contain a second entry for the newly-injected
-    /// <c>MigrationCandidateAttribute.cs</c> file if the attribute class did not already exist
-    /// in the project.
+    /// A <see cref="FlagMigrationCandidateEngineResult"/> containing the changes to write,
+    /// idempotency metadata (<see cref="FlagMigrationCandidateEngineResult.WasAlreadyFlagged"/>,
+    /// <see cref="FlagMigrationCandidateEngineResult.PreviousPattern"/>), and the method's
+    /// 1-based line number.
     /// </returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when the file or method is not found in the loaded solution.
     /// </exception>
-    public async Task<Dictionary<string, string>> FlagMigrationCandidateAsync(
+    public async Task<FlagMigrationCandidateEngineResult> FlagMigrationCandidateAsync(
         string filePath,
         string methodName,
         string pattern,
@@ -1182,6 +1196,26 @@ namespace {ns}
         if (methodNode == null)
             throw new InvalidOperationException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+
+        var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+        // ── Detect whether the method is already flagged with this pattern ───
+        bool   wasAlreadyFlagged = false;
+        string? previousPattern  = null;
+        foreach (var al in methodNode.AttributeLists)
+        {
+            foreach (var a in al.Attributes)
+            {
+                var name = a.Name.ToString();
+                if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                    continue;
+                var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                var argPattern = (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
+                if (previousPattern == null) previousPattern = argPattern; // record first found
+                if (argPattern == pattern) { wasAlreadyFlagged = true; break; }
+            }
+            if (wasAlreadyFlagged) break;
+        }
 
         // ── Strip any existing [MigrationCandidate("pattern")] for idempotency ─
         // Only strips attributes whose first positional argument matches the given pattern
@@ -1210,7 +1244,8 @@ namespace {ns}
                         ? null
                         : al.WithAttributes(SyntaxFactory.SeparatedList(filteredAttrs));
                 })
-                .Where(al => al != null)!);
+                .Where(al => al != null)
+                .Select(al => al!));
 
         // ── Build the new [MigrationCandidate(...)] attribute ────────────────
         var today     = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
@@ -1278,6 +1313,7 @@ namespace {ns}
                             .Equals($"{MigrationCandidateFullName}.cs",
                                     StringComparison.OrdinalIgnoreCase));
 
+        bool attributeClassInjected = false;
         if (!alreadyDefined)
         {
             // Detect namespace from the target file so the injected type is visible
@@ -1288,9 +1324,196 @@ namespace {ns}
                 System.IO.Path.GetDirectoryName(filePath) ?? ".",
                 $"{MigrationCandidateFullName}.cs");
             result[attrPath] = attrSrc;
+            attributeClassInjected = true;
         }
 
-        return result;
+        return new FlagMigrationCandidateEngineResult(
+            Changes:               result,
+            WasAlreadyFlagged:     wasAlreadyFlagged,
+            PreviousPattern:       previousPattern,
+            AttributeClassInjected: attributeClassInjected,
+            Line:                  methodLine);
+    }
+
+    /// <summary>
+    /// Applies <see cref="FlagMigrationCandidateAsync"/> to multiple methods, grouping rewrites
+    /// by file so each source file is parsed, rewritten, and returned only once — avoiding the
+    /// line-number drift that occurs when sequential single-method calls modify the same file
+    /// between calls.
+    /// </summary>
+    /// <param name="items">List of (filePath, methodName, pattern, score, reason) tuples to flag.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// One <see cref="FlagMigrationCandidateEngineResult"/> per input item, in the same order.
+    /// Items that fail (method not found, file not found) have their <see cref="FlagMigrationCandidateEngineResult.Changes"/>
+    /// set to an empty dictionary and <see cref="FlagMigrationCandidateEngineResult.Line"/> set to -1;
+    /// the error is recorded separately in the caller's error list.
+    /// </returns>
+    public async Task<(List<FlagMigrationCandidateEngineResult> Results, List<(int Index, string Error)> Errors)>
+        FlagMultipleMigrationCandidatesAsync(
+            IReadOnlyList<(string FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
+            CancellationToken cancellationToken = default)
+    {
+        // Group by file so we rewrite each file once.
+        var byFile = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < items.Count; i++)
+        {
+            var fp = items[i].FilePath;
+            if (!byFile.TryGetValue(fp, out var bucket)) byFile[fp] = bucket = new List<int>();
+            bucket.Add(i);
+        }
+
+        var resultSlots = new FlagMigrationCandidateEngineResult[items.Count];
+        var errors      = new List<(int Index, string Error)>();
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        foreach (var (filePath, indices) in byFile)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var document = solution.GetDocumentIdsWithFilePath(filePath)
+                                   .Select(solution.GetDocument)
+                                   .FirstOrDefault();
+            if (document == null)
+            {
+                foreach (var i in indices)
+                    errors.Add((i, $"File '{filePath}' not found in the loaded solution."));
+                continue;
+            }
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null)
+            {
+                foreach (var i in indices)
+                    errors.Add((i, $"Could not get syntax root for '{filePath}'."));
+                continue;
+            }
+
+            bool attrClassInjected = false;
+
+            // Apply each item for this file sequentially on the same evolving root.
+            foreach (var idx in indices)
+            {
+                var (_, methodName, pattern, score, reason) = items[idx];
+                var methodNode = root.DescendantNodes()
+                                     .OfType<MethodDeclarationSyntax>()
+                                     .FirstOrDefault(m => m.Identifier.Text == methodName);
+                if (methodNode == null)
+                {
+                    errors.Add((idx, $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive."));
+                    resultSlots[idx] = new FlagMigrationCandidateEngineResult(
+                        new Dictionary<string, string>(), false, null, false, -1);
+                    continue;
+                }
+
+                var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+                // Detect previous flag.
+                bool   wasAlreadyFlagged = false;
+                string? previousPattern  = null;
+                foreach (var al in methodNode.AttributeLists)
+                    foreach (var a in al.Attributes)
+                    {
+                        var name = a.Name.ToString();
+                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName) continue;
+                        var fp2 = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                        var ap = (fp2?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
+                        if (previousPattern == null) previousPattern = ap;
+                        if (ap == pattern) { wasAlreadyFlagged = true; break; }
+                    }
+
+                // Strip existing same-pattern attribute.
+                var stripped = SyntaxFactory.List(
+                    methodNode.AttributeLists
+                        .Select(al =>
+                        {
+                            var filtered = al.Attributes.Where(a =>
+                            {
+                                var n = a.Name.ToString();
+                                if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return true;
+                                var fa  = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                                var ap2 = (fa?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
+                                return ap2 != pattern;
+                            }).ToList();
+                            if (filtered.Count == al.Attributes.Count) return al;
+                            return filtered.Count == 0 ? null : al.WithAttributes(SyntaxFactory.SeparatedList(filtered));
+                        })
+                        .Where(al => al != null)
+                        .Select(al => al!));
+
+                // Build new attribute.
+                var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+                var args  = new List<AttributeArgumentSyntax>
+                {
+                    SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
+                        SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(pattern)))
+                };
+                if (score != 0)
+                    args.Add(SyntaxFactory.AttributeArgument(
+                        SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")), null,
+                        SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(score))));
+                if (!string.IsNullOrWhiteSpace(reason))
+                    args.Add(SyntaxFactory.AttributeArgument(
+                        SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Reason")), null,
+                        SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(reason))));
+                args.Add(SyntaxFactory.AttributeArgument(
+                    SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")), null,
+                    SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(today))));
+
+                var newAttr = SyntaxFactory.Attribute(
+                    SyntaxFactory.IdentifierName(MigrationCandidateShortName),
+                    SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
+
+                var updatedMethod = methodNode
+                    .WithAttributeLists(stripped)
+                    .AddAttributeLists(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttr)));
+
+                root = root.ReplaceNode(methodNode, updatedMethod);
+
+                resultSlots[idx] = new FlagMigrationCandidateEngineResult(
+                    Changes:               new Dictionary<string, string>(), // populated below after all methods in file
+                    WasAlreadyFlagged:     wasAlreadyFlagged,
+                    PreviousPattern:       previousPattern,
+                    AttributeClassInjected: false, // set on first item for this file
+                    Line:                  methodLine);
+            }
+
+            // Write final combined source once for all methods in this file.
+            var finalSource = root.NormalizeWhitespace().ToFullString();
+            var fileChanges = new Dictionary<string, string> { { filePath, finalSource } };
+
+            // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
+            var alreadyDefined = solution.Projects.SelectMany(p => p.Documents)
+                .Any(d => d.FilePath != null &&
+                          System.IO.Path.GetFileName(d.FilePath)
+                                .Equals($"{MigrationCandidateFullName}.cs", StringComparison.OrdinalIgnoreCase));
+            if (!alreadyDefined && !attrClassInjected)
+            {
+                var ns      = DetectNamespace(root);
+                var attrSrc = BuildMigrationCandidateAttributeSource(ns);
+                var attrPath = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(filePath) ?? ".", $"{MigrationCandidateFullName}.cs");
+                fileChanges[attrPath] = attrSrc;
+                attrClassInjected = true;
+            }
+
+            // Assign the combined changes to every result slot for this file.
+            foreach (var idx in indices)
+            {
+                if (resultSlots[idx] != null && resultSlots[idx].Line != -1)
+                {
+                    var r = resultSlots[idx];
+                    resultSlots[idx] = r with
+                    {
+                        Changes               = fileChanges,
+                        AttributeClassInjected = attrClassInjected && idx == indices[0]
+                    };
+                }
+            }
+        }
+
+        return (resultSlots.ToList(), errors);
     }
 
     /// <summary>
@@ -1402,6 +1625,300 @@ namespace {ns}
         }
 
         return findings;
+    }
+
+    // ── Project-level autonomous candidate discovery ─────────────────────────
+
+    /// <summary>Internal per-method scoring output used by <see cref="FlagCandidatesInProjectAsync"/>.</summary>
+    public record CandidateScoredItem(
+        string  FilePath,
+        string  MethodName,
+        string  ClassName,
+        int     Line,
+        int     Score,
+        string  Reason
+    );
+
+    /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
+    public record FlagCandidatesInProjectEngineResult(
+        /// <summary>All file paths → updated source that must be written to disk.</summary>
+        Dictionary<string, string> Changes,
+        /// <summary>Details for every method that was flagged.</summary>
+        IReadOnlyList<CandidateScoredItem> Flagged,
+        /// <summary>Details for every method that was scored but fell below <c>minScore</c>.</summary>
+        IReadOnlyList<CandidateScoredItem> Skipped,
+        /// <summary>Details for every method that was skipped because it is already flagged.</summary>
+        IReadOnlyList<CandidateScoredItem> AlreadyFlagged,
+        /// <summary><c>true</c> if <c>MigrationCandidateAttribute.cs</c> was generated as part of this run.</summary>
+        bool AttributeClassInjected,
+        /// <summary>Total methods examined across all files in the project.</summary>
+        int TotalMethodsExamined
+    );
+
+    /// <summary>
+    /// Scans every method in <paramref name="projectName"/>, scores each against the specified
+    /// <paramref name="pattern"/>, and stamps qualifying methods with a
+    /// <c>[MigrationCandidate("pattern")]</c> attribute — all in a single pass. No agent iteration
+    /// required; the agent only needs to call this once per project.
+    /// </summary>
+    /// <remarks>
+    /// Scoring heuristics for <c>AsyncBridge</c>:
+    /// <list type="bullet">
+    ///   <item>+40 — body contains blocking calls (<c>.GetAwaiter().GetResult()</c>, <c>.Result</c>, <c>.Wait()</c>)</item>
+    ///   <item>+30 — body calls <c>CommonSearch.search</c> or another known sync DB entry point</item>
+    ///   <item>+25 — body uses <c>SqlCommand</c>, <c>SqlConnection</c>, or <c>getDataContext</c></item>
+    ///   <item>+15 — class name ends with <c>Service</c></item>
+    ///   <item>+10 — method is <c>static</c> (easier to bridge in isolation)</item>
+    ///   <item>−20 — method is <c>virtual</c> or <c>override</c> (interface widening may be required)</item>
+    ///   <item>−∞ — hard disqualifiers: <c>abstract</c>, <c>extern</c>, already <c>async</c>,
+    ///              name ends with <c>Async</c>, has <c>yield return</c>, has <c>ref</c>/<c>out</c> params,
+    ///              already carries <c>[MigrationCandidate("pattern")]</c></item>
+    /// </list>
+    /// </remarks>
+    /// <param name="projectName">
+    /// Name of the project to scan (case-insensitive). Scans the whole solution when <c>null</c>.
+    /// </param>
+    /// <param name="pattern">
+    /// Migration pattern to apply (e.g. <c>"AsyncBridge"</c>). Defaults to <c>"AsyncBridge"</c>.
+    /// </param>
+    /// <param name="minScore">Minimum score threshold for a method to be flagged. Defaults to 20.</param>
+    /// <param name="dryRun">
+    /// When <c>true</c>, scores and categorizes methods without writing any files. Use to preview
+    /// what would be flagged before committing.
+    /// </param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public async Task<FlagCandidatesInProjectEngineResult> FlagCandidatesInProjectAsync(
+        string? projectName  = null,
+        string  pattern      = "AsyncBridge",
+        int     minScore     = 20,
+        bool    dryRun       = false,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        // ── Select projects ──────────────────────────────────────────────────
+        IEnumerable<Microsoft.CodeAnalysis.Project> projects = solution.Projects;
+        if (!string.IsNullOrWhiteSpace(projectName))
+        {
+            projects = projects.Where(p =>
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            if (!projects.Any())
+                throw new InvalidOperationException(
+                    $"Project '{projectName}' not found in the loaded solution.");
+        }
+
+        // ── Collect documents (no designer files) ────────────────────────────
+        var documents = projects
+            .SelectMany(p => p.Documents)
+            .Where(d => d.FilePath != null &&
+                        !d.FilePath.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        var flagged       = new List<CandidateScoredItem>();
+        var skipped       = new List<CandidateScoredItem>();
+        var alreadyFlagged = new List<CandidateScoredItem>();
+        var fileChanges   = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        int totalExamined = 0;
+        bool attrClassInjected = false;
+
+        // Check once whether MigrationCandidateAttribute.cs already exists.
+        bool attrClassAlreadyDefined = solution.Projects.SelectMany(p => p.Documents)
+            .Any(d => d.FilePath != null &&
+                      System.IO.Path.GetFileName(d.FilePath)
+                            .Equals($"{MigrationCandidateFullName}.cs", StringComparison.OrdinalIgnoreCase));
+
+        foreach (var document in documents)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            var methods = root.DescendantNodes()
+                              .OfType<MethodDeclarationSyntax>()
+                              .ToList();
+            if (methods.Count == 0) continue;
+
+            bool fileModified = false;
+
+            foreach (var method in methods)
+            {
+                totalExamined++;
+
+                var containingClass = method.Ancestors()
+                    .OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault();
+                var className = containingClass?.Identifier.Text ?? string.Empty;
+                var lineNo    = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+                // ── Check if already flagged for this exact pattern ──────────
+                bool isAlreadyFlagged = method.AttributeLists
+                    .SelectMany(al => al.Attributes)
+                    .Any(a =>
+                    {
+                        var n = a.Name.ToString();
+                        if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return false;
+                        var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                        return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
+                    });
+                if (isAlreadyFlagged)
+                {
+                    alreadyFlagged.Add(new CandidateScoredItem(
+                        document.FilePath!, method.Identifier.Text, className, lineNo, 0, "already-flagged"));
+                    continue;
+                }
+
+                // ── Score the method ─────────────────────────────────────────
+                var (score, reason) = ScoreMethodForPattern(method, className, pattern);
+                if (score < 0) continue; // hard disqualifier — don't even record
+
+                if (score < minScore)
+                {
+                    skipped.Add(new CandidateScoredItem(
+                        document.FilePath!, method.Identifier.Text, className, lineNo, score, reason));
+                    continue;
+                }
+
+                flagged.Add(new CandidateScoredItem(
+                    document.FilePath!, method.Identifier.Text, className, lineNo, score, reason));
+            }
+
+            if (!dryRun && flagged.Any(f => f.FilePath == document.FilePath!))
+            {
+                // Apply all flagged methods for this file in one rewrite pass.
+                var flaggedInThisFile = flagged.Where(f => f.FilePath == document.FilePath!).ToList();
+                var rewrittenRoot = root;
+                var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+                foreach (var item in flaggedInThisFile)
+                {
+                    var methodNode = rewrittenRoot.DescendantNodes()
+                        .OfType<MethodDeclarationSyntax>()
+                        .FirstOrDefault(m => m.Identifier.Text == item.MethodName &&
+                                             m.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == item.Line);
+                    if (methodNode == null)
+                    {
+                        // Line shifted after earlier rewrites — fall back to name-only match.
+                        methodNode = rewrittenRoot.DescendantNodes()
+                            .OfType<MethodDeclarationSyntax>()
+                            .FirstOrDefault(m => m.Identifier.Text == item.MethodName);
+                    }
+                    if (methodNode == null) continue;
+
+                    var args = new List<AttributeArgumentSyntax>
+                    {
+                        SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
+                            SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(pattern))),
+                        SyntaxFactory.AttributeArgument(
+                            SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")), null,
+                            SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(item.Score))),
+                        SyntaxFactory.AttributeArgument(
+                            SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Reason")), null,
+                            SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(item.Reason))),
+                        SyntaxFactory.AttributeArgument(
+                            SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")), null,
+                            SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(today)))
+                    };
+
+                    var newAttr = SyntaxFactory.Attribute(
+                        SyntaxFactory.IdentifierName(MigrationCandidateShortName),
+                        SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
+
+                    rewrittenRoot = rewrittenRoot.ReplaceNode(methodNode,
+                        methodNode.AddAttributeLists(SyntaxFactory.AttributeList(
+                            SyntaxFactory.SingletonSeparatedList(newAttr))));
+                    fileModified = true;
+                }
+
+                if (fileModified)
+                    fileChanges[document.FilePath!] = rewrittenRoot.NormalizeWhitespace().ToFullString();
+            }
+        }
+
+        // ── Inject MigrationCandidateAttribute.cs if needed ─────────────────
+        if (!dryRun && flagged.Count > 0 && !attrClassAlreadyDefined && fileChanges.Count > 0)
+        {
+            // Use namespace from the first modified file.
+            var firstFile = fileChanges.Keys.First();
+            var firstDoc  = documents.First(d => string.Equals(d.FilePath, firstFile, StringComparison.OrdinalIgnoreCase));
+            var firstRoot = await firstDoc.GetSyntaxRootAsync(cancellationToken);
+            if (firstRoot != null)
+            {
+                var ns       = DetectNamespace(firstRoot);
+                var attrSrc  = BuildMigrationCandidateAttributeSource(ns);
+                var attrPath = System.IO.Path.Combine(
+                    System.IO.Path.GetDirectoryName(firstFile) ?? ".", $"{MigrationCandidateFullName}.cs");
+                fileChanges[attrPath] = attrSrc;
+                attrClassInjected = true;
+            }
+        }
+
+        return new FlagCandidatesInProjectEngineResult(
+            Changes:             fileChanges,
+            Flagged:             flagged,
+            Skipped:             skipped,
+            AlreadyFlagged:      alreadyFlagged,
+            AttributeClassInjected: attrClassInjected,
+            TotalMethodsExamined: totalExamined);
+    }
+
+    /// <summary>
+    /// Scores a method declaration against the specified migration <paramref name="pattern"/>.
+    /// Returns <c>(-1, "")</c> for hard disqualifiers (caller must skip the method entirely).
+    /// </summary>
+    private static (int Score, string Reason) ScoreMethodForPattern(
+        MethodDeclarationSyntax method,
+        string                  className,
+        string                  pattern)
+    {
+        // ── Hard disqualifiers ───────────────────────────────────────────────
+        if (method.Modifiers.Any(SyntaxKind.AbstractKeyword)) return (-1, "");
+        if (method.Modifiers.Any(SyntaxKind.ExternKeyword))   return (-1, "");
+        if (method.Modifiers.Any(SyntaxKind.AsyncKeyword))    return (-1, "");
+        if (method.Identifier.Text.EndsWith("Async", StringComparison.OrdinalIgnoreCase)) return (-1, "");
+        if (method.Body?.Statements.OfType<YieldStatementSyntax>().Any() == true) return (-1, "");
+        if (method.ParameterList.Parameters.Any(p =>
+                p.Modifiers.Any(SyntaxKind.RefKeyword) ||
+                p.Modifiers.Any(SyntaxKind.OutKeyword))) return (-1, "");
+
+        if (pattern != "AsyncBridge") return (0, ""); // only AsyncBridge scoring implemented
+
+        var body   = method.Body?.ToString() ?? method.ExpressionBody?.ToString() ?? "";
+        int score  = 0;
+        var reasons = new System.Text.StringBuilder();
+
+        // Blocking calls
+        if (body.Contains(".GetAwaiter().GetResult()") ||
+            body.Contains(".GetAwaiter()\r\n") ||
+            body.Contains(".Wait(") ||
+            (body.Contains(".Result") && !body.Contains("// ")))
+        {
+            score += 40; reasons.Append("blocking-calls ");
+        }
+
+        // CommonSearch / raw SQL entry points
+        if (body.Contains("CommonSearch") || body.Contains(".search(") || body.Contains("search("))
+        { score += 30; reasons.Append("calls-CommonSearch "); }
+
+        // SQL / data context access
+        if (body.Contains("SqlCommand") || body.Contains("SqlConnection") ||
+            body.Contains("getDataContext") || body.Contains("DataContext"))
+        { score += 25; reasons.Append("sql-access "); }
+
+        // Service class
+        if (className.EndsWith("Service", StringComparison.OrdinalIgnoreCase))
+        { score += 15; reasons.Append("service-class "); }
+
+        // Static method (easier to bridge in isolation)
+        if (method.Modifiers.Any(SyntaxKind.StaticKeyword))
+        { score += 5; reasons.Append("static "); }
+
+        // Virtual/override penalty (interface widening may be required)
+        if (method.Modifiers.Any(SyntaxKind.VirtualKeyword) ||
+            method.Modifiers.Any(SyntaxKind.OverrideKeyword))
+        { score -= 20; reasons.Append("virtual/override-penalty "); }
+
+        return (score, reasons.ToString().TrimEnd());
     }
 }
 

@@ -67,9 +67,12 @@ namespace Avaal.Service
     }
 }", "TripService.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "TripService.cs", "GetTrips", "AsyncBridge");
+        var changes = result.Changes;
 
+        Assert.That(result.AttributeClassInjected, Is.True,
+            "AttributeClassInjected should be true when the attribute class was absent.");
         // Should have two entries: the updated file and the new attribute class file.
         Assert.That(changes.Count, Is.EqualTo(2),
             "Should return exactly two changes: target file + MigrationCandidateAttribute.cs.");
@@ -95,8 +98,9 @@ namespace Avaal.Service
     }
 }", "TripService.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "TripService.cs", "GetCount", "AsyncBridge");
+        var changes = result.Changes;
 
         var attrKey = changes.Keys.FirstOrDefaultByFileNameSuffix("MigrationCandidateAttribute.cs");
         Assert.That(attrKey, Is.Not.Null);
@@ -132,9 +136,12 @@ namespace Avaal.Service
     }
 }"));
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "TripService.cs", "GetCount", "AsyncBridge");
+        var changes = result.Changes;
 
+        Assert.That(result.AttributeClassInjected, Is.False,
+            "AttributeClassInjected should be false when the class was already present.");
         Assert.That(changes.Count, Is.EqualTo(1),
             "Should only update the target file — no new attribute class injection needed.");
     }
@@ -152,8 +159,10 @@ public class Svc
     public int Search(string q) => 0;
 }", "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var result = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var changes = result.Changes;
 
+        Assert.That(result.WasAlreadyFlagged, Is.False, "Fresh flag should not report WasAlreadyFlagged.");
         var targetSrc = changes["Svc.cs"];
         Assert.That(targetSrc, Does.Contain("[MigrationCandidate(\"AsyncBridge\""),
             "Target file should have [MigrationCandidate(\"AsyncBridge\"...)] on the method.");
@@ -165,8 +174,9 @@ public class Svc
         SetSource(@"
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "Svc.cs", "Search", "AsyncBridge", score: 18);
+        var changes = result.Changes;
 
         Assert.That(changes["Svc.cs"], Does.Contain("Score = 18"),
             "Score named argument should appear when score != 0.");
@@ -178,8 +188,9 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
         SetSource(@"
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "Svc.cs", "Search", "HandlerExtract", reason: "3 non-thin handlers");
+        var changes = result.Changes;
 
         Assert.That(changes["Svc.cs"], Does.Contain("Reason = \"3 non-thin handlers\""),
             "Reason named argument should appear when reason is provided.");
@@ -191,8 +202,9 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
         SetSource(@"
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "Svc.cs", "Search", "AsyncBridge", score: 0);
+        var changes = result.Changes;
 
         Assert.That(changes["Svc.cs"], Does.Not.Contain("Score"),
             "Score named argument should be omitted when score is 0.");
@@ -204,7 +216,8 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
         SetSource(@"
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var result = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var changes = result.Changes;
 
         Assert.That(changes["Svc.cs"], Does.Contain("FlaggedDate = \""),
             "FlaggedDate named argument should always be included.");
@@ -233,9 +246,14 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
 }";
         SetSource(preFlagged, "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "Svc.cs", "Search", "AsyncBridge", score: 20);
+        var changes = result.Changes;
 
+        Assert.That(result.WasAlreadyFlagged, Is.True,
+            "WasAlreadyFlagged should be true when the same pattern is applied a second time.");
+        Assert.That(result.PreviousPattern, Is.EqualTo("AsyncBridge"),
+            "PreviousPattern should reflect the replaced attribute's pattern.");
         // Count occurrences of [MigrationCandidate in the target source.
         var src = changes["Svc.cs"];
         var count = StringCountHelper.CountOccurrences(src, "[MigrationCandidate(");
@@ -263,9 +281,12 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
 }";
         SetSource(preFlagged, "Svc.cs");
 
-        var changes = await _engine.FlagMigrationCandidateAsync(
+        var result = await _engine.FlagMigrationCandidateAsync(
             "Svc.cs", "Search", "HandlerExtract");
+        var changes = result.Changes;
 
+        Assert.That(result.WasAlreadyFlagged, Is.False,
+            "WasAlreadyFlagged should be false when adding a new (different) pattern.");
         var src = changes["Svc.cs"];
         Assert.That(src, Does.Contain("[MigrationCandidate(\"AsyncBridge\""),
             "Original AsyncBridge flag should be preserved.");
