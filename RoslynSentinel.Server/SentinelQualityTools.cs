@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,42 @@ public record SourceTransformResult(
     string? ChangeId = null
 );
 
+/// <summary>
+/// Return type for <c>apply_cancellation_token_to_file</c>.
+/// Reports which methods were modified and whether the file was written to disk.
+/// </summary>
+/// <param name="ModifiedMethods">Names of methods that received the new CancellationToken parameter.</param>
+/// <param name="SkippedMethods">Names of methods that were skipped (already had CT, abstract, event handlers, or not in <c>methodNames</c> filter).</param>
+/// <param name="TotalModified">Count of modified methods.</param>
+/// <param name="WroteToFile"><c>true</c> if the updated source was written to disk successfully.</param>
+public record ApplyCancellationTokenToFileResult(
+    List<string> ModifiedMethods,
+    List<string> SkippedMethods,
+    int TotalModified,
+    bool WroteToFile
+);
+
+/// <summary>
+/// Return type for <c>get_async_migration_progress</c>.
+/// Aggregated async-migration statistics for the solution or a single project.
+/// </summary>
+/// <param name="TotalAsyncMethods">All async or Task/ValueTask-returning methods found.</param>
+/// <param name="WithCancellationToken">Subset that already have a CancellationToken parameter.</param>
+/// <param name="WithoutCancellationToken">Subset that are still missing a CancellationToken parameter.</param>
+/// <param name="CancellationTokenPct">Percentage of async methods that carry a CancellationToken (0–100).</param>
+/// <param name="BridgeWrappers">Methods decorated with [Obsolete] where the message contains "Asyncify-bridge".</param>
+/// <param name="PendingObsoleteCallers">Call sites of those bridge wrappers that still need to be migrated.</param>
+/// <param name="AsyncVoidEventHandlers">Count of <c>async void</c> methods (informational — signatures are fixed).</param>
+public record AsyncMigrationProgressReport(
+    int TotalAsyncMethods,
+    int WithCancellationToken,
+    int WithoutCancellationToken,
+    double CancellationTokenPct,
+    int BridgeWrappers,
+    int PendingObsoleteCallers,
+    int AsyncVoidEventHandlers
+);
+
 [McpServerToolType]
 public class SentinelQualityTools
 {
@@ -41,6 +78,7 @@ public class SentinelQualityTools
     private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
     private readonly StackOverflowEngine _stackOverflowEngine;
+    private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelQualityTools> _logger;
 
     public SentinelQualityTools(
@@ -58,6 +96,7 @@ public class SentinelQualityTools
         CodeStyleAnalysisEngine codeStyleAnalysisEngine,
         PathDrivenTestEngine pathDrivenTestEngine,
         StackOverflowEngine stackOverflowEngine,
+        PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelQualityTools> logger)
     {
         _performanceEngine = performanceEngine;
@@ -74,6 +113,7 @@ public class SentinelQualityTools
         _codeStyleAnalysisEngine = codeStyleAnalysisEngine;
         _pathDrivenTestEngine = pathDrivenTestEngine;
         _stackOverflowEngine = stackOverflowEngine;
+        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 
@@ -433,15 +473,28 @@ public class SentinelQualityTools
         => await _asyncSafetyEngine.DetectValueTaskMisuseAsync(filePath);
 
     [McpServerTool]
-    [Description("Adds 'CancellationToken cancellationToken = default' as the last parameter to a method and propagates it to async callees in the method body that have a CancellationToken overload. Also adds cancellationToken to Task.Delay() calls. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> AddCancellationTokenToMethod(string filePath, string methodName)
+    [Description("""
+        Adds 'CancellationToken cancellationToken = default' as the last parameter to a method
+        and propagates it to async callees in the method body that have a CancellationToken
+        overload. Also adds cancellationToken to Task.Delay() calls.
+        autoStage=true (default): stages the updated source and returns a change ID string.
+          Apply with apply_staged_changes(changeId). Inspect with get_staged_changes(changeId).
+        autoStage=false: returns SourceTransformResult with the updated source. Pass to
+          apply_proposed_changes to save.
+        """)]
+    public async Task<object> AddCancellationTokenToMethod(string filePath, string methodName, bool autoStage = true)
     {
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
+        if (string.IsNullOrEmpty(result) || result.StartsWith("// Error:"))
             throw new InvalidOperationException(
                 $"AddCancellationTokenToMethod failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
-        return new SourceTransformResult(result, false, false, filePath);
+        if (!autoStage)
+            return new SourceTransformResult(result, false, false, filePath);
+        // Stage the change and return the change ID for apply_staged_changes / get_staged_changes.
+        return _workspaceManager.StageChanges(
+            new Dictionary<string, string> { { filePath, result } },
+            $"Add CancellationToken to '{methodName}' in '{Path.GetFileName(filePath)}'");
     }
 
     [McpServerTool]
@@ -796,4 +849,59 @@ public class SentinelQualityTools
         string? projectName = null,
         CancellationToken cancellationToken = default)
         => await _antiPatternEngine.FindObsoleteCallersAsync(messagePattern, filePath, projectName, cancellationToken);
+
+    // ── Phase 7: apply_cancellation_token_to_file ─────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        Adds 'CancellationToken cancellationToken = default' to all eligible async methods in a
+        file in a single Roslyn rewrite pass, then writes the result to disk and updates the
+        in-memory workspace.
+
+        Eligible methods: async or Task/ValueTask-returning, no existing CancellationToken
+        parameter, and not event handlers (fixed-signature delegates).
+
+        methodNames: optional array of method names to limit the scope. When omitted, all eligible
+        methods in the file are processed.
+
+        Returns ModifiedMethods (changed), SkippedMethods (already have CT, abstract, event handlers,
+        or outside the requested scope), TotalModified, and WroteToFile.
+        """)]
+    public async Task<ApplyCancellationTokenToFileResult> ApplyCancellationTokenToFile(
+        string filePath,
+        string[]? methodNames = null,
+        CancellationToken cancellationToken = default)
+    {
+        var (updatedSource, modified, skipped) =
+            await _asyncOptimizationEngine.ApplyCancellationTokenToFileAsync(filePath, methodNames, cancellationToken);
+
+        bool wrote = false;
+        if (modified.Count > 0 && !updatedSource.StartsWith("// Error:"))
+        {
+            // Write the transformed source to disk and sync the in-memory workspace.
+            var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                new Dictionary<string, string> { { filePath, updatedSource } });
+            wrote = applyResult.Success;
+        }
+
+        return new ApplyCancellationTokenToFileResult(modified, skipped, modified.Count, wrote);
+    }
+
+    // ── Phase 8: get_async_migration_progress ─────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        Returns async migration progress statistics for the solution or a single project.
+        Reports: total async Task/ValueTask methods, how many already have a CancellationToken
+        parameter (and how many still need one), percentage coverage, number of Asyncify-bridge
+        wrapper methods ([Obsolete("Asyncify-bridge:...")]), number of call sites that still
+        invoke those bridge wrappers (CS0618 sites pending migration), and count of async void
+        event handlers (informational — their signatures cannot be extended).
+
+        projectName: restrict statistics to a single project; null = entire solution.
+        """)]
+    public async Task<AsyncMigrationProgressReport> GetAsyncMigrationProgress(
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+        => await _antiPatternEngine.GetAsyncMigrationProgressAsync(projectName, cancellationToken);
 }

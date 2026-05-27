@@ -613,4 +613,221 @@ public class AsyncOptimizationEngine
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
         return newRoot.ToFullString();
     }
+
+    // ── ApplyCancellationTokenToFile ──────────────────────────────────────────
+
+    /// <summary>
+    /// Adds a <c>CancellationToken cancellationToken = default</c> parameter to every eligible
+    /// async method in a file in a single Roslyn rewrite pass.
+    /// Eligible methods are async or Task/ValueTask-returning, have no existing CancellationToken
+    /// parameter, and are not event handlers (fixed-signature delegates).
+    /// When <paramref name="methodNames"/> is supplied only those methods are processed; all
+    /// others are reported as skipped.
+    /// </summary>
+    /// <returns>
+    /// A tuple of the full updated source string, a list of method names that were modified,
+    /// and a list of names that were skipped (already have CT or not in <paramref name="methodNames"/>).
+    /// </returns>
+    public async Task<(string UpdatedSource, List<string> Modified, List<string> Skipped)>
+        ApplyCancellationTokenToFileAsync(
+            string filePath,
+            string[]? methodNames = null,
+            CancellationToken cancellationToken = default)
+    {
+        var modified = new List<string>();
+        var skipped  = new List<string>();
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+            return ($"// Error: File '{filePath}' not found in the loaded solution.", modified, skipped);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            return ("// Error: Failed to get syntax root.", modified, skipped);
+
+        SemanticModel? semanticModel = null;
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+
+        // Build the set of requested names for fast lookup (null = all).
+        var requested = methodNames != null
+            ? new HashSet<string>(methodNames, StringComparer.Ordinal)
+            : null;
+
+        // Collect all methods that should receive a CT parameter.
+        var methodReplacements = new Dictionary<MethodDeclarationSyntax, MethodDeclarationSyntax>();
+
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            var name       = method.Identifier.Text;
+            bool isAsync   = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+            var returnType = method.ReturnType.ToString();
+            bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
+
+            // Only process async or Task/ValueTask-returning methods.
+            if (!isAsync && !returnsTask) { skipped.Add(name); continue; }
+
+            // Skip abstract methods (no body to rewrite).
+            if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) { skipped.Add(name); continue; }
+
+            // Skip methods that already carry a CancellationToken parameter.
+            if (method.ParameterList.Parameters.Any(p =>
+                    p.Type?.ToString() is string t &&
+                    (t == "CancellationToken" || t.EndsWith(".CancellationToken"))))
+            { skipped.Add(name); continue; }
+
+            // Skip event handlers (object sender, XxxEventArgs e) — fixed delegate signature.
+            if (IsEventHandlerSignature(method)) { skipped.Add(name); continue; }
+
+            // Skip if caller requested specific methods and this one isn't in the list.
+            if (requested != null && !requested.Contains(name)) { skipped.Add(name); continue; }
+
+            // Build the replacement method node (same logic as AddCancellationTokenToMethodAsync
+            // but extracted here so we can batch all replacements into one ReplaceNodes call).
+            var newMethod = BuildMethodWithCancellationToken(method, semanticModel, cancellationToken);
+            methodReplacements[method] = newMethod;
+            modified.Add(name);
+        }
+
+        if (methodReplacements.Count == 0)
+            return (root.ToFullString(), modified, skipped);
+
+        // Replace all eligible methods in a single Roslyn rewrite pass.
+        var newRoot = root.ReplaceNodes(
+            methodReplacements.Keys,
+            (orig, _) => methodReplacements[orig]);
+
+        return (newRoot.ToFullString(), modified, skipped);
+    }
+
+    /// <summary>
+    /// Rewrites a single <paramref name="method"/> node to include
+    /// <c>CancellationToken cancellationToken = default</c> and propagates the token to
+    /// async callees in the body.  This is extracted from
+    /// <see cref="AddCancellationTokenToMethodAsync"/> so that
+    /// <see cref="ApplyCancellationTokenToFileAsync"/> can batch-replace without reloading
+    /// the document tree after each method.
+    /// </summary>
+    private static MethodDeclarationSyntax BuildMethodWithCancellationToken(
+        MethodDeclarationSyntax methodNode,
+        SemanticModel?          semanticModel,
+        CancellationToken       cancellationToken)
+    {
+        // Build CancellationToken parameter — trailing space becomes whitespace trivia between
+        // the type name and the parameter identifier.
+        var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancellationToken"))
+            .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
+            .WithDefault(SyntaxFactory.EqualsValueClause(
+                SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
+
+        // Insert before any 'params' parameter; otherwise append at end.
+        var parameters = methodNode.ParameterList.Parameters.ToList();
+        var paramsIdx  = parameters.FindIndex(p =>
+            p.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword)));
+        ParameterListSyntax newParamList;
+        if (paramsIdx >= 0)
+        {
+            parameters.Insert(paramsIdx, ctParam);
+            newParamList = methodNode.ParameterList.WithParameters(
+                SyntaxFactory.SeparatedList(parameters));
+        }
+        else
+        {
+            newParamList = methodNode.ParameterList.AddParameters(ctParam);
+        }
+
+        // Rewrite callee invocations in the method body to forward the token.
+        SyntaxNode bodyToRewrite = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody!;
+        var invocations  = bodyToRewrite.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+        var replacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
+
+        foreach (var inv in invocations)
+        {
+            // Skip invocations that already pass cancellationToken.
+            if (inv.ArgumentList.Arguments.Any(a =>
+                    a.Expression.ToString().Contains("cancellationToken") ||
+                    (a.Expression is MemberAccessExpressionSyntax maCheck &&
+                     maCheck.Name.Identifier.Text.Contains("cancellationToken"))))
+                continue;
+
+            bool shouldAdd = false;
+
+            if (semanticModel != null)
+            {
+                var symbolInfo = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                var candidates = new List<ISymbol>();
+                if (symbolInfo.Symbol != null) candidates.Add(symbolInfo.Symbol);
+                candidates.AddRange(symbolInfo.CandidateSymbols);
+
+                foreach (var sym in candidates)
+                {
+                    if (sym is not IMethodSymbol methodSym) continue;
+                    var containingType = methodSym.ContainingType;
+                    if (containingType != null)
+                    {
+                        var overloads = containingType.GetMembers(methodSym.Name)
+                            .OfType<IMethodSymbol>();
+                        if (overloads.Any(o => o.Parameters.Any(p =>
+                                p.Type.ToDisplayString() == "System.Threading.CancellationToken")))
+                        { shouldAdd = true; break; }
+                    }
+                    if (methodSym.Parameters.Any(p =>
+                            p.Type.ToDisplayString() == "System.Threading.CancellationToken"))
+                    { shouldAdd = true; break; }
+                }
+            }
+            else
+            {
+                // Syntactic fallback: methods ending in Async or Task.Delay.
+                var methodText = inv.Expression.ToString();
+                shouldAdd = methodText.EndsWith("Async") ||
+                            (inv.Expression is MemberAccessExpressionSyntax ma2 &&
+                             ma2.Expression.ToString() == "Task" &&
+                             ma2.Name.Identifier.Text == "Delay");
+            }
+
+            // Task.Delay always accepts a CancellationToken — ensure it is propagated.
+            if (inv.Expression is MemberAccessExpressionSyntax maDelay &&
+                maDelay.Expression.ToString() == "Task" &&
+                maDelay.Name.Identifier.Text == "Delay")
+                shouldAdd = true;
+
+            if (shouldAdd)
+            {
+                var ctArg       = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
+                var newArgList  = inv.ArgumentList.AddArguments(ctArg);
+                replacements[inv] = inv.WithArgumentList(newArgList);
+            }
+        }
+
+        var newMethodNode = methodNode.WithParameterList(newParamList);
+        if (replacements.Count > 0)
+        {
+            var newBody = bodyToRewrite.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
+            if (newBody is BlockSyntax block)
+                newMethodNode = newMethodNode.WithBody(block);
+            else if (newBody is ArrowExpressionClauseSyntax arrow)
+                newMethodNode = newMethodNode.WithExpressionBody(arrow);
+        }
+        return newMethodNode;
+    }
+
+    /// <summary>
+    /// Returns <c>true</c> when <paramref name="method"/> looks like a delegate-based event handler
+    /// (two parameters: first is <c>object</c> or <c>object?</c>, second ends with <c>EventArgs</c>).
+    /// Event-handler signatures are fixed by the delegate contract and cannot receive an extra
+    /// CancellationToken parameter without breaking the calling convention.
+    /// </summary>
+    private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
+    {
+        var parms = method.ParameterList.Parameters;
+        if (parms.Count != 2) return false;
+        var first  = parms[0].Type?.ToString() ?? "";
+        var second = parms[1].Type?.ToString() ?? "";
+        return (first == "object" || first == "object?") &&
+               second.EndsWith("EventArgs") || second.EndsWith("EventArgs?");
+    }
 }
+

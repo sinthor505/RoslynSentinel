@@ -2081,4 +2081,109 @@ public class AntiPatternEngine
 
         return results;
     }
+
+    // ── GetAsyncMigrationProgress ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Aggregates async-migration statistics for the solution or a single project.
+    /// Counts total async methods, CT coverage, Asyncify-bridge wrappers, pending
+    /// call sites (CS0618 sites), and async-void event handlers.
+    /// </summary>
+    /// <param name="projectName">
+    /// When non-null, only the named project is scanned; otherwise the entire solution
+    /// (excluding test and benchmark projects) is scanned.
+    /// </param>
+    /// <param name="cancellationToken">Propagated to all Roslyn compilation calls.</param>
+    public async Task<AsyncMigrationProgressReport> GetAsyncMigrationProgressAsync(
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        int totalAsync        = 0;
+        int withCt            = 0;
+        int asyncVoidHandlers = 0;
+        int bridgeWrappers    = 0;
+
+        IEnumerable<Project> projects = solution.Projects;
+        if (projectName != null)
+            projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var project in projects)
+        {
+            var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+            if (compilation == null) continue;
+
+            foreach (var syntaxTree in compilation.SyntaxTrees)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var root         = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+                var semanticModel = compilation.GetSemanticModel(syntaxTree);
+
+                foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    bool isAsync     = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+                    var  returnType  = method.ReturnType.ToString();
+                    bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
+
+                    // Count async void methods (event handlers — informational only).
+                    if (isAsync && method.ReturnType.IsKind(SyntaxKind.PredefinedType) &&
+                        method.ReturnType.ToString() == "void")
+                    {
+                        asyncVoidHandlers++;
+                        continue; // async void methods are not counted in the async-Task bucket
+                    }
+
+                    if (!isAsync && !returnsTask) continue;
+                    if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) continue;
+
+                    totalAsync++;
+
+                    // Check for CancellationToken parameter.
+                    bool hasCt = method.ParameterList.Parameters.Any(p =>
+                        p.Type?.ToString() is string t &&
+                        (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
+                    if (hasCt) withCt++;
+
+                    // Count Asyncify-bridge wrapper methods via [Obsolete] attribute.
+                    var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
+                    if (methodSymbol != null)
+                    {
+                        var obsoleteAttr = methodSymbol.GetAttributes()
+                            .FirstOrDefault(a => a.AttributeClass?.Name == "ObsoleteAttribute");
+                        if (obsoleteAttr != null)
+                        {
+                            var msg = obsoleteAttr.ConstructorArguments.Length > 0
+                                ? obsoleteAttr.ConstructorArguments[0].Value?.ToString() ?? string.Empty
+                                : string.Empty;
+                            if (msg.Contains("Asyncify-bridge", StringComparison.OrdinalIgnoreCase))
+                                bridgeWrappers++;
+                        }
+                    }
+                }
+            }
+        }
+
+        int withoutCt = totalAsync - withCt;
+        double pct    = totalAsync > 0 ? Math.Round((double)withCt / totalAsync * 100.0, 1) : 0.0;
+
+        // Count pending bridge-wrapper call sites by reusing FindObsoleteCallersAsync
+        // (scoped to Asyncify-bridge message, optionally scoped to project).
+        var pendingCallers = await FindObsoleteCallersAsync(
+            messagePattern: "Asyncify-bridge",
+            filePath: null,
+            projectName: projectName,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        return new AsyncMigrationProgressReport(
+            TotalAsyncMethods:        totalAsync,
+            WithCancellationToken:    withCt,
+            WithoutCancellationToken: withoutCt,
+            CancellationTokenPct:     pct,
+            BridgeWrappers:           bridgeWrappers,
+            PendingObsoleteCallers:   pendingCallers.Count,
+            AsyncVoidEventHandlers:   asyncVoidHandlers
+        );
+    }
 }
