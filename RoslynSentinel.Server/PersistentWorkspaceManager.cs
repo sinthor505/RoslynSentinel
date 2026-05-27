@@ -20,6 +20,7 @@ public class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentDictionary<string, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
+    private volatile int _workspaceVersion = 0;
     private readonly Timer _debounceTimer;
 
     public record StagedChangeSummary(
@@ -341,12 +342,17 @@ public class PersistentWorkspaceManager : IDisposable
 
     /// <summary>
     /// Result of an attempt to apply multiple file changes to disk.
+    /// <para><see cref="WorkspaceInSync"/> indicates whether the in-memory workspace was
+    /// successfully refreshed after the write. If <c>false</c>, call <c>load_solution</c>
+    /// to resync before making further semantic queries.</para>
     /// </summary>
     public record ApplyChangesResult(
         bool Success,
         List<string> SucceededFiles,
         Dictionary<string, string> FailedFiles,
-        string Summary
+        string Summary,
+        bool WorkspaceInSync = false,
+        int WorkspaceVersion = 0
     );
 
     /// <summary>
@@ -414,14 +420,24 @@ public class PersistentWorkspaceManager : IDisposable
             }
 
             // --- Proactive Workspace Sync ---
+            bool workspaceInSync = false;
             if (succeeded.Count > 0)
             {
                 _logger.LogInformation("Synchronizing workspace with disk changes...");
-                await RefreshWorkspaceInternalAsync(succeeded);
+                try
+                {
+                    await RefreshWorkspaceInternalAsync(succeeded);
+                    workspaceInSync = true;
+                    Interlocked.Increment(ref _workspaceVersion);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call load_solution to resync.");
+                }
             }
 
             var summary = $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
-            return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary);
+            return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary, workspaceInSync, _workspaceVersion);
         }
         finally
         {
