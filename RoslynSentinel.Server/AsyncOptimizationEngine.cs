@@ -404,12 +404,16 @@ public class AsyncOptimizationEngine
             .WithDefault(SyntaxFactory.EqualsValueClause(
                 SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
 
-        // Strip any [Obsolete] attributes from the async overload (rare, but ensures clean output).
+        // Strip any [Obsolete] and [MigrationCandidate] attributes from the async overload:
+        // [Obsolete] must not propagate (the overload is the canonical version).
+        // [MigrationCandidate] is removed because the method has been processed.
         var cleanAttributeLists = SyntaxFactory.List(
             methodNode.AttributeLists.Where(al =>
                 !al.Attributes.Any(a =>
                     a.Name.ToString() == "Obsolete" ||
-                    a.Name.ToString() == "System.Obsolete")));
+                    a.Name.ToString() == "System.Obsolete" ||
+                    a.Name.ToString() == MigrationCandidateShortName ||
+                    a.Name.ToString() == MigrationCandidateFullName)));
 
         var asyncMethod = methodNode
             .WithAttributeLists(cleanAttributeLists)
@@ -485,7 +489,16 @@ public class AsyncOptimizationEngine
 
         // ── Apply both changes to the class node ─────────────────────────────
         // Step 1: replace original method node with the bridge wrapper.
+        // Strip [MigrationCandidate] from the bridge wrapper — the method has been processed
+        // so the candidate marker is no longer applicable.
+        var bridgeAttributeLists = SyntaxFactory.List(
+            methodNode.AttributeLists.Where(al =>
+                !al.Attributes.Any(a =>
+                    a.Name.ToString() == MigrationCandidateShortName ||
+                    a.Name.ToString() == MigrationCandidateFullName)));
+
         var bridgeWrapper = methodNode
+            .WithAttributeLists(bridgeAttributeLists)
             .WithBody(bridgeBlock)
             .WithExpressionBody(null)
             .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken))
@@ -1033,6 +1046,362 @@ public class AsyncOptimizationEngine
         var second = parms[1].Type?.ToString() ?? "";
         return (first == "object" || first == "object?") &&
                second.EndsWith("EventArgs") || second.EndsWith("EventArgs?");
+    }
+
+    // ── MigrationCandidate attribute name constants ─────────────────────────
+    private const string MigrationCandidateShortName = "MigrationCandidate";
+    private const string MigrationCandidateFullName  = "MigrationCandidateAttribute";
+
+    /// <summary>
+    /// Returns the source text of a self-contained <c>MigrationCandidateAttribute</c> class
+    /// to be injected as a new file in the target project when the attribute is not yet present.
+    /// The attribute is <c>internal sealed</c> so it requires no inter-project references.
+    /// </summary>
+    /// <param name="ns">The namespace to emit the class into (matched from the target file).</param>
+    /// <returns>Complete C# source for the attribute class file.</returns>
+    private static string BuildMigrationCandidateAttributeSource(string ns)
+    {
+        return
+$@"using System;
+
+namespace {ns}
+{{
+    /// <summary>
+    /// Marks a method as a candidate for an async migration refactoring pass.
+    /// Added by <c>flag_migration_candidate</c>. Removed automatically when the
+    /// corresponding specialist tool (e.g. <c>convert_to_async_bridge</c>) processes
+    /// the method. Remove manually if the method is determined ineligible after review.
+    /// </summary>
+    /// <remarks>
+    /// Known patterns: <c>AsyncBridge</c>, <c>HandlerExtract</c>,
+    /// <c>HandlerToAsync</c>, <c>AsyncCallerUplift</c>.
+    /// </remarks>
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
+    internal sealed class MigrationCandidateAttribute : Attribute
+    {{
+        /// <summary>Initialises a new <see cref=""MigrationCandidateAttribute""/>.</summary>
+        /// <param name=""pattern"">The refactoring pattern (e.g., ""AsyncBridge"").</param>
+        public MigrationCandidateAttribute(string pattern)
+        {{
+            Pattern = pattern;
+        }}
+
+        /// <summary>The refactoring pattern this candidate is earmarked for.</summary>
+        public string Pattern {{ get; }}
+
+        /// <summary>Eligibility score assigned by the scout tool (0 = unscored).</summary>
+        public int Score {{ get; set; }}
+
+        /// <summary>Human-readable rationale for the flag.</summary>
+        public string Reason {{ get; set; }}
+
+        /// <summary>ISO date (yyyy-MM-dd) when the method was flagged.</summary>
+        public string FlaggedDate {{ get; set; }}
+    }}
+}}
+";
+    }
+
+    /// <summary>
+    /// Determines the primary namespace of a source file by returning the identifier
+    /// of the first <c>NamespaceDeclarationSyntax</c> or <c>FileScopedNamespaceDeclarationSyntax</c>
+    /// found in its syntax root, falling back to <c>"Global"</c> if none exists.
+    /// </summary>
+    /// <param name="root">The syntax root of the source file to inspect.</param>
+    /// <returns>The namespace name string, e.g. <c>"Avaal.Service"</c>.</returns>
+    private static string DetectNamespace(SyntaxNode root)
+    {
+        // File-scoped namespace (C# 10+): namespace Foo;
+        var fileScoped = root.DescendantNodes()
+            .OfType<FileScopedNamespaceDeclarationSyntax>()
+            .FirstOrDefault();
+        if (fileScoped != null) return fileScoped.Name.ToString();
+
+        // Block-scoped namespace: namespace Foo { ... }
+        var blockScoped = root.DescendantNodes()
+            .OfType<NamespaceDeclarationSyntax>()
+            .FirstOrDefault();
+        if (blockScoped != null) return blockScoped.Name.ToString();
+
+        return "Global";
+    }
+
+    /// <summary>
+    /// Flags a method as a migration candidate by adding a
+    /// <c>[MigrationCandidate("pattern", Score = N, Reason = "...", FlaggedDate = "yyyy-MM-dd")]</c>
+    /// attribute. If the <c>MigrationCandidateAttribute</c> class is not yet defined anywhere in
+    /// the loaded solution, a self-contained source file is generated and included in the result so
+    /// the caller can write it alongside the method file — no project reference changes are needed.
+    /// </summary>
+    /// <remarks>
+    /// Re-flagging an already-flagged method with the same pattern is idempotent: the old attribute
+    /// is stripped first, then the new one (with updated score/reason/date) is added.
+    /// </remarks>
+    /// <param name="filePath">Absolute or workspace-relative path of the source file.</param>
+    /// <param name="methodName">Exact (case-sensitive) name of the method to flag.</param>
+    /// <param name="pattern">
+    /// The refactoring pattern: <c>"AsyncBridge"</c>, <c>"HandlerExtract"</c>,
+    /// <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, or any custom string.
+    /// </param>
+    /// <param name="score">Optional eligibility score (default 0 = unscored).</param>
+    /// <param name="reason">Optional human-readable rationale for the flag.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>
+    /// A dictionary mapping file paths to updated source content.
+    /// Always contains the target file. May also contain a second entry for the newly-injected
+    /// <c>MigrationCandidateAttribute.cs</c> file if the attribute class did not already exist
+    /// in the project.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the file or method is not found in the loaded solution.
+    /// </exception>
+    public async Task<Dictionary<string, string>> FlagMigrationCandidateAsync(
+        string filePath,
+        string methodName,
+        string pattern,
+        int    score  = 0,
+        string? reason = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+            throw new InvalidOperationException(
+                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+
+        // ── Find the target method ───────────────────────────────────────────
+        var methodNode = root.DescendantNodes()
+                             .OfType<MethodDeclarationSyntax>()
+                             .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+
+        // ── Strip any existing [MigrationCandidate("pattern")] for idempotency ─
+        // Only strips attributes whose first positional argument matches the given pattern
+        // so that multiple different-pattern flags on the same method are preserved.
+        var strippedAttributeLists = SyntaxFactory.List(
+            methodNode.AttributeLists
+                .Select(al =>
+                {
+                    var filteredAttrs = al.Attributes.Where(a =>
+                    {
+                        var name = a.Name.ToString();
+                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                            return true; // keep — unrelated attribute
+                        // Remove only if the pattern positional arg matches.
+                        var firstArg = a.ArgumentList?.Arguments
+                            .FirstOrDefault(arg => arg.NameEquals == null);
+                        var argPattern = (firstArg?.Expression as LiteralExpressionSyntax)
+                            ?.Token.ValueText;
+                        return argPattern != pattern; // keep if different pattern
+                    }).ToList();
+
+                    if (filteredAttrs.Count == al.Attributes.Count)
+                        return al; // unchanged
+
+                    return filteredAttrs.Count == 0
+                        ? null
+                        : al.WithAttributes(SyntaxFactory.SeparatedList(filteredAttrs));
+                })
+                .Where(al => al != null)!);
+
+        // ── Build the new [MigrationCandidate(...)] attribute ────────────────
+        var today     = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var arguments = new System.Collections.Generic.List<AttributeArgumentSyntax>
+        {
+            // Positional: "pattern"
+            SyntaxFactory.AttributeArgument(
+                SyntaxFactory.LiteralExpression(
+                    SyntaxKind.StringLiteralExpression,
+                    SyntaxFactory.Literal(pattern)))
+        };
+
+        if (score != 0)
+        {
+            // Named: Score = N
+            arguments.Add(SyntaxFactory.AttributeArgument(
+                SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")),
+                null,
+                SyntaxFactory.LiteralExpression(
+                    SyntaxKind.NumericLiteralExpression,
+                    SyntaxFactory.Literal(score))));
+        }
+
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            // Named: Reason = "..."
+            arguments.Add(SyntaxFactory.AttributeArgument(
+                SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Reason")),
+                null,
+                SyntaxFactory.LiteralExpression(
+                    SyntaxKind.StringLiteralExpression,
+                    SyntaxFactory.Literal(reason))));
+        }
+
+        // Named: FlaggedDate = "yyyy-MM-dd"
+        arguments.Add(SyntaxFactory.AttributeArgument(
+            SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")),
+            null,
+            SyntaxFactory.LiteralExpression(
+                SyntaxKind.StringLiteralExpression,
+                SyntaxFactory.Literal(today))));
+
+        var newAttr = SyntaxFactory.Attribute(
+            SyntaxFactory.IdentifierName(MigrationCandidateShortName),
+            SyntaxFactory.AttributeArgumentList(
+                SyntaxFactory.SeparatedList(arguments)));
+
+        var newAttrList = SyntaxFactory.AttributeList(
+            SyntaxFactory.SingletonSeparatedList(newAttr));
+
+        var updatedMethod = methodNode
+            .WithAttributeLists(strippedAttributeLists)
+            .AddAttributeLists(newAttrList);
+
+        var newRoot    = root.ReplaceNode(methodNode, updatedMethod);
+        var newSource  = newRoot.NormalizeWhitespace().ToFullString();
+
+        var result = new Dictionary<string, string> { { filePath, newSource } };
+
+        // ── Inject MigrationCandidateAttribute.cs if not yet in the solution ─
+        var alreadyDefined = solution.Projects
+            .SelectMany(p => p.Documents)
+            .Any(d => d.FilePath != null &&
+                      System.IO.Path.GetFileName(d.FilePath)
+                            .Equals($"{MigrationCandidateFullName}.cs",
+                                    StringComparison.OrdinalIgnoreCase));
+
+        if (!alreadyDefined)
+        {
+            // Detect namespace from the target file so the injected type is visible
+            // in the same namespace without a using directive.
+            var ns       = DetectNamespace(root);
+            var attrSrc  = BuildMigrationCandidateAttributeSource(ns);
+            var attrPath = System.IO.Path.Combine(
+                System.IO.Path.GetDirectoryName(filePath) ?? ".",
+                $"{MigrationCandidateFullName}.cs");
+            result[attrPath] = attrSrc;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Finds all methods in the solution (or scoped to a file/project) that carry a
+    /// <c>[MigrationCandidate]</c> attribute. Uses syntax-level analysis — no compilation
+    /// or semantic model required — so it works on files that have not been reloaded after
+    /// a recent <c>flag_migration_candidate</c> call.
+    /// </summary>
+    /// <param name="filePath">
+    /// When provided, restricts the scan to a single file (matched by full path suffix).
+    /// </param>
+    /// <param name="projectName">
+    /// When provided, restricts the scan to a single project by name (case-insensitive).
+    /// </param>
+    /// <param name="pattern">
+    /// When provided, returns only candidates flagged for this exact pattern string
+    /// (e.g. <c>"AsyncBridge"</c>).
+    /// </param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>One <see cref="MigrationCandidateFinding"/> per flagged method per pattern.</returns>
+    public async Task<List<MigrationCandidateFinding>> FindMigrationCandidatesAsync(
+        string? filePath     = null,
+        string? projectName  = null,
+        string? pattern      = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var findings = new List<MigrationCandidateFinding>();
+
+        // Enumerate all documents, applying scope filters.
+        var projects = solution.Projects.AsEnumerable();
+        if (projectName != null)
+            projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var project in projects)
+        {
+            var docs = project.Documents.AsEnumerable();
+            if (filePath != null)
+                docs = docs.Where(d => d.FilePath != null &&
+                                       d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase));
+
+            foreach (var doc in docs)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var root = await doc.GetSyntaxRootAsync(cancellationToken);
+                if (root == null) continue;
+
+                foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    foreach (var attrList in method.AttributeLists)
+                    {
+                        foreach (var attr in attrList.Attributes)
+                        {
+                            var name = attr.Name.ToString();
+                            if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                                continue;
+
+                            // Extract positional pattern argument.
+                            var firstArg = attr.ArgumentList?.Arguments
+                                .FirstOrDefault(a => a.NameEquals == null);
+                            var attrPattern = (firstArg?.Expression as LiteralExpressionSyntax)
+                                ?.Token.ValueText ?? string.Empty;
+
+                            // Apply pattern filter.
+                            if (pattern != null &&
+                                !attrPattern.Equals(pattern, StringComparison.Ordinal))
+                                continue;
+
+                            // Extract optional named arguments.
+                            var namedArgs = attr.ArgumentList?.Arguments
+                                .Where(a => a.NameEquals != null)
+                                .ToDictionary(
+                                    a => a.NameEquals!.Name.Identifier.Text,
+                                    a => a.Expression) ?? new Dictionary<string, ExpressionSyntax>();
+
+                            int attrScore = 0;
+                            if (namedArgs.TryGetValue("Score", out var scoreExpr) &&
+                                scoreExpr is LiteralExpressionSyntax scoreLit &&
+                                scoreLit.Token.Value is int scoreVal)
+                                attrScore = scoreVal;
+
+                            string? attrReason = null;
+                            if (namedArgs.TryGetValue("Reason", out var reasonExpr) &&
+                                reasonExpr is LiteralExpressionSyntax reasonLit)
+                                attrReason = reasonLit.Token.ValueText;
+
+                            string? attrDate = null;
+                            if (namedArgs.TryGetValue("FlaggedDate", out var dateExpr) &&
+                                dateExpr is LiteralExpressionSyntax dateLit)
+                                attrDate = dateLit.Token.ValueText;
+
+                            // Determine containing class name.
+                            var classNode = method.FirstAncestorOrSelf<ClassDeclarationSyntax>();
+                            var lineSpan  = method.GetLocation().GetLineSpan();
+
+                            findings.Add(new MigrationCandidateFinding(
+                                FilePath:    doc.FilePath ?? string.Empty,
+                                MethodName:  method.Identifier.Text,
+                                ClassName:   classNode?.Identifier.Text ?? string.Empty,
+                                Pattern:     attrPattern,
+                                Score:       attrScore,
+                                Reason:      attrReason,
+                                FlaggedDate: attrDate,
+                                Line:        lineSpan.StartLinePosition.Line + 1));
+                        }
+                    }
+                }
+            }
+        }
+
+        return findings;
     }
 }
 

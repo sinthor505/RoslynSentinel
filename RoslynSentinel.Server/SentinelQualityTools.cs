@@ -86,6 +86,55 @@ public record AsyncMigrationProgressReport(
     int AsyncVoidEventHandlers
 );
 
+/// <summary>
+/// A single method flagged by a scout tool via <c>flag_migration_candidate</c>.
+/// </summary>
+/// <param name="FilePath">Absolute path of the source file containing the method.</param>
+/// <param name="MethodName">The method's identifier (case-sensitive).</param>
+/// <param name="ClassName">The class that declares the method.</param>
+/// <param name="Pattern">
+/// The refactoring pattern the method is earmarked for:
+/// <c>"AsyncBridge"</c>, <c>"HandlerExtract"</c>, <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, etc.
+/// </param>
+/// <param name="Score">Eligibility score from the scout tool (0 = unscored).</param>
+/// <param name="Reason">Human-readable rationale for the flag, or <c>null</c> if none was supplied.</param>
+/// <param name="FlaggedDate">ISO date string (yyyy-MM-dd) when the method was flagged, or <c>null</c>.</param>
+/// <param name="Line">1-based source line of the method declaration.</param>
+public record MigrationCandidateFinding(
+    string  FilePath,
+    string  MethodName,
+    string  ClassName,
+    string  Pattern,
+    int     Score,
+    string? Reason,
+    string? FlaggedDate,
+    int     Line
+);
+
+/// <summary>
+/// Return type for <c>flag_migration_candidate</c>.
+/// Contains all file-path → source-content pairs that must be written to disk.
+/// </summary>
+/// <param name="Changes">
+/// Dictionary mapping file path to updated/new source content.
+/// Always contains the target file. May also contain a second entry for the newly-injected
+/// <c>MigrationCandidateAttribute.cs</c> when the attribute class did not previously exist.
+/// Pass to <c>apply_proposed_changes</c> or use <c>ChangeId</c> with <c>apply_staged_changes</c>.
+/// </param>
+/// <param name="AttributeClassInjected">
+/// <c>true</c> if a new <c>MigrationCandidateAttribute.cs</c> file was generated and included in
+/// <see cref="Changes"/>; <c>false</c> if the class was already present in the solution.
+/// </param>
+/// <param name="ChangeId">
+/// Set when <c>autoStage=true</c> (default). Pass to <c>apply_staged_changes</c>.
+/// <c>null</c> when <c>autoStage=false</c>.
+/// </param>
+public record FlagMigrationCandidateResult(
+    Dictionary<string, string> Changes,
+    bool   AttributeClassInjected,
+    string? ChangeId
+);
+
 [McpServerToolType]
 public class SentinelQualityTools
 {
@@ -583,6 +632,90 @@ public class SentinelQualityTools
             $"Asyncify-bridge: convert '{methodName}' → '{methodName}Async' in '{Path.GetFileName(filePath)}'");
         return new CancellationTokenResult(changeId, null);
     }
+
+    [McpServerTool]
+    [Description("""
+        Adds a [MigrationCandidate("pattern")] attribute to a method, marking it for a future
+        async migration refactoring pass. The attribute is source-injected — no new project
+        references are required.
+
+        If the MigrationCandidateAttribute class is not yet defined in the loaded solution, a
+        self-contained 'MigrationCandidateAttribute.cs' file is generated in the same directory
+        as the target file and included in the returned Changes dictionary. Write all entries in
+        Changes to disk (use apply_staged_changes with autoStage=true, or apply_proposed_changes
+        with autoStage=false).
+
+        Known patterns: AsyncBridge, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+        Re-flagging a method with the same pattern is idempotent: the existing attribute is
+        replaced with the updated score/reason/date.
+
+        The specialist tool (e.g. convert_to_async_bridge) automatically removes [MigrationCandidate]
+        when it processes the method. Remove the attribute manually if the method is ruled ineligible.
+
+        Returns FlagMigrationCandidateResult:
+          autoStage=true (default): ChangeId is set; apply all changes with apply_staged_changes(changeId).
+          autoStage=false: Changes dictionary is populated; pass each entry to apply_proposed_changes.
+        """)]
+    public async Task<FlagMigrationCandidateResult> FlagMigrationCandidate(
+        string  filePath,
+        string  methodName,
+        string  pattern,
+        int     score    = 0,
+        string? reason   = null,
+        bool    autoStage = true)
+    {
+        Dictionary<string, string> changes;
+        try
+        {
+            changes = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                filePath, methodName, pattern, score, reason);
+        }
+        catch (InvalidOperationException)
+        {
+            throw; // precondition failures propagate verbatim
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "FlagMigrationCandidate unexpected exception for '{MethodName}' in '{FilePath}'",
+                methodName, filePath);
+            throw new InvalidOperationException(
+                $"FlagMigrationCandidate for '{methodName}' in '{filePath}' failed: " +
+                $"{ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        var attributeInjected = changes.Count > 1; // second entry = the attribute class file
+
+        if (!autoStage)
+            return new FlagMigrationCandidateResult(changes, attributeInjected, null);
+
+        var cid = _workspaceManager.StageChanges(
+            changes,
+            $"flag_migration_candidate: [{pattern}] on '{methodName}' in '{Path.GetFileName(filePath)}'");
+        return new FlagMigrationCandidateResult(changes, attributeInjected, cid);
+    }
+
+    [McpServerTool]
+    [Description("""
+        Returns all methods in the solution (or scoped to a file/project) that carry a
+        [MigrationCandidate] attribute added by flag_migration_candidate.
+
+        filePath:    restrict to a single file (full or partial path suffix).
+        projectName: restrict to a single project (case-insensitive name).
+        pattern:     restrict to one pattern — "AsyncBridge", "HandlerExtract",
+                     "HandlerToAsync", "AsyncCallerUplift", etc. Omit to return all patterns.
+
+        Uses syntax-level analysis — no compilation needed — so results are accurate even
+        immediately after flag_migration_candidate without a solution reload.
+
+        Returns one MigrationCandidateFinding per flagged method per attribute. A method
+        flagged for two different patterns appears twice.
+        """)]
+    public async Task<List<MigrationCandidateFinding>> FindMigrationCandidates(
+        string? filePath    = null,
+        string? projectName = null,
+        string? pattern     = null)
+        => await _asyncOptimizationEngine.FindMigrationCandidatesAsync(filePath, projectName, pattern);
 
     [McpServerTool]
     [Description("Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
