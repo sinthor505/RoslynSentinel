@@ -104,6 +104,7 @@ public class BatteryThirtyThreeTests
             new CodeStyleAnalysisEngine(_workspaceManager),
             new PathDrivenTestEngine(_workspaceManager),
             new StackOverflowEngine(_workspaceManager),
+            _workspaceManager,
             NullLogger<SentinelQualityTools>.Instance);
     }
 

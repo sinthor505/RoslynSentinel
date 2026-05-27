@@ -3686,6 +3686,7 @@ public class AddGuardClausesNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
+        _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
@@ -3727,7 +3728,7 @@ public class AddGuardClausesNullReturnRegressionTests
         // When the engine returns non-empty content (no changes needed), the tool
         // returns that content rather than throwing — only file-not-found triggers IOE.
         var tools = CreateTools();
-        string? result = null;
+        SourceTransformResult? result = null;
 
         Assert.DoesNotThrowAsync(async () =>
             result = await tools.AddGuardClauses("Stub.cs", "NonExistentMethod"));
@@ -3778,6 +3779,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
+        _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
@@ -3819,7 +3821,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
         // When the engine returns non-empty content (no changes needed), the tool
         // returns that content rather than throwing — only file-not-found triggers IOE.
         var tools = CreateTools();
-        string? result = null;
+        SourceTransformResult? result = null;
 
         Assert.DoesNotThrowAsync(async () =>
             result = await tools.AddBenchmarkStub("Calc.cs", "NonExistentClass", "Add"));

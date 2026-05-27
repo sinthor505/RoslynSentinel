@@ -206,8 +206,11 @@ public class SentinelWorkspaceTools
             if (document == null) throw new InvalidOperationException("File not found.");
             var oldText = await document.GetTextAsync();
             var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+            // Use document.FilePath (absolute) as the key so ApplyProposedChangesAsync writes to
+            // the correct location even when the caller passed a short filename matched by d.Name.
+            var targetPath = document.FilePath ?? filePath;
             return await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<string, string> { [filePath] = newContent });
+                new Dictionary<string, string> { [targetPath] = newContent });
         }
         catch (InvalidOperationException) { throw; }
         catch (Exception ex)

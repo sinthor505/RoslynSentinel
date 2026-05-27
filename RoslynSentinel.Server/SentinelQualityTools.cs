@@ -16,13 +16,11 @@ namespace RoslynSentinel.Server;
 /// <param name="WroteToFile">Always <c>false</c> — these tools never write to disk.</param>
 /// <param name="WorkspaceUpdated">Always <c>false</c> — these tools never update the in-memory workspace.</param>
 /// <param name="FilePath">Echo of the input file path for routing to <c>apply_proposed_changes</c>.</param>
-/// <param name="ChangeId">Reserved; <c>null</c> for all current callers.</param>
 public record SourceTransformResult(
     string UpdatedSource,
     bool WroteToFile,
     bool WorkspaceUpdated,
-    string FilePath,
-    string? ChangeId = null
+    string FilePath
 );
 
 /// <summary>
@@ -30,14 +28,41 @@ public record SourceTransformResult(
 /// Reports which methods were modified and whether the file was written to disk.
 /// </summary>
 /// <param name="ModifiedMethods">Names of methods that received the new CancellationToken parameter.</param>
-/// <param name="SkippedMethods">Names of methods that were skipped (already had CT, abstract, event handlers, or not in <c>methodNames</c> filter).</param>
+/// <param name="SkippedMethods">
+/// Names of async/Task-returning methods that were skipped for a specific reason
+/// (already had CT, abstract, event handler, or not in the requested <c>methodNames</c> filter).
+/// Sync methods are silently excluded and do not appear here.
+/// </param>
 /// <param name="TotalModified">Count of modified methods.</param>
 /// <param name="WroteToFile"><c>true</c> if the updated source was written to disk successfully.</param>
+/// <param name="WorkspaceInSync">
+/// <c>true</c> if the in-memory workspace was successfully updated after writing.
+/// If <c>false</c>, call <c>load_solution</c> before running further semantic analysis.
+/// </param>
+/// <param name="WorkspaceVersion">Monotonically increasing workspace version counter; increments on every successful workspace refresh.</param>
 public record ApplyCancellationTokenToFileResult(
     List<string> ModifiedMethods,
     List<string> SkippedMethods,
     int TotalModified,
-    bool WroteToFile
+    bool WroteToFile,
+    bool WorkspaceInSync = false,
+    int WorkspaceVersion = 0
+);
+
+/// <summary>
+/// Return type for <c>add_cancellation_token_to_method</c> when called with a known <c>autoStage</c> setting.
+/// Exactly one of <see cref="ChangeId"/> or <see cref="Source"/> is non-null.
+/// </summary>
+/// <param name="ChangeId">
+/// Set when <c>autoStage=true</c> (default). Pass to <c>apply_staged_changes</c> to write to disk,
+/// or <c>get_staged_changes</c> to preview.
+/// </param>
+/// <param name="Source">
+/// Set when <c>autoStage=false</c>. Contains the full updated source; pass to <c>apply_proposed_changes</c> to save.
+/// </param>
+public record CancellationTokenResult(
+    string? ChangeId,
+    SourceTransformResult? Source
 );
 
 /// <summary>
@@ -477,12 +502,11 @@ public class SentinelQualityTools
         Adds 'CancellationToken cancellationToken = default' as the last parameter to a method
         and propagates it to async callees in the method body that have a CancellationToken
         overload. Also adds cancellationToken to Task.Delay() calls.
-        autoStage=true (default): stages the updated source and returns a change ID string.
-          Apply with apply_staged_changes(changeId). Inspect with get_staged_changes(changeId).
-        autoStage=false: returns SourceTransformResult with the updated source. Pass to
-          apply_proposed_changes to save.
+        Returns CancellationTokenResult where exactly one field is populated:
+          autoStage=true (default): ChangeId is set; apply with apply_staged_changes(changeId).
+          autoStage=false: Source is set; pass Source.UpdatedSource to apply_proposed_changes to save.
         """)]
-    public async Task<object> AddCancellationTokenToMethod(string filePath, string methodName, bool autoStage = true)
+    public async Task<CancellationTokenResult> AddCancellationTokenToMethod(string filePath, string methodName, bool autoStage = true)
     {
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result) || result.StartsWith("// Error:"))
@@ -490,11 +514,12 @@ public class SentinelQualityTools
                 $"AddCancellationTokenToMethod failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
         if (!autoStage)
-            return new SourceTransformResult(result, false, false, filePath);
+            return new CancellationTokenResult(null, new SourceTransformResult(result, false, false, filePath));
         // Stage the change and return the change ID for apply_staged_changes / get_staged_changes.
-        return _workspaceManager.StageChanges(
+        var changeId = _workspaceManager.StageChanges(
             new Dictionary<string, string> { { filePath, result } },
             $"Add CancellationToken to '{methodName}' in '{Path.GetFileName(filePath)}'");
+        return new CancellationTokenResult(changeId, null);
     }
 
     [McpServerTool]
@@ -864,8 +889,10 @@ public class SentinelQualityTools
         methodNames: optional array of method names to limit the scope. When omitted, all eligible
         methods in the file are processed.
 
-        Returns ModifiedMethods (changed), SkippedMethods (already have CT, abstract, event handlers,
-        or outside the requested scope), TotalModified, and WroteToFile.
+        Returns ModifiedMethods (changed), SkippedMethods (eligible async methods skipped for a
+        specific reason — already have CT, abstract, event handler, or outside the requested scope;
+        sync methods are not included), TotalModified, WroteToFile, WorkspaceInSync, and
+        WorkspaceVersion. If WorkspaceInSync is false, call load_solution before further analysis.
         """)]
     public async Task<ApplyCancellationTokenToFileResult> ApplyCancellationTokenToFile(
         string filePath,
@@ -876,15 +903,19 @@ public class SentinelQualityTools
             await _asyncOptimizationEngine.ApplyCancellationTokenToFileAsync(filePath, methodNames, cancellationToken);
 
         bool wrote = false;
+        bool workspaceInSync = false;
+        int workspaceVersion = 0;
         if (modified.Count > 0 && !updatedSource.StartsWith("// Error:"))
         {
             // Write the transformed source to disk and sync the in-memory workspace.
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<string, string> { { filePath, updatedSource } });
             wrote = applyResult.Success;
+            workspaceInSync = applyResult.WorkspaceInSync;
+            workspaceVersion = applyResult.WorkspaceVersion;
         }
 
-        return new ApplyCancellationTokenToFileResult(modified, skipped, modified.Count, wrote);
+        return new ApplyCancellationTokenToFileResult(modified, skipped, modified.Count, wrote, workspaceInSync, workspaceVersion);
     }
 
     // ── Phase 8: get_async_migration_progress ─────────────────────────────────

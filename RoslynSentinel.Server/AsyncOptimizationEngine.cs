@@ -89,7 +89,7 @@ public class AsyncOptimizationEngine
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
         // We locate consecutive await statements and group independent ones.
-        
+
         var statements = methodNode.Body.Statements.ToList();
         var newStatements = new List<StatementSyntax>();
 
@@ -254,7 +254,7 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         var methodNode = classNode?.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        
+
         if (classNode == null || methodNode == null) throw new InvalidOperationException("Class or method not found.");
 
         var asyncMethodName = methodName + "Async";
@@ -667,7 +667,9 @@ public class AsyncOptimizationEngine
             bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
 
             // Only process async or Task/ValueTask-returning methods.
-            if (!isAsync && !returnsTask) { skipped.Add(name); continue; }
+            // Ineligible sync methods are silently ignored — they are not actionable
+            // and would flood SkippedMethods with noise in large files.
+            if (!isAsync && !returnsTask) continue;
 
             // Skip abstract methods (no body to rewrite).
             if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) { skipped.Add(name); continue; }
