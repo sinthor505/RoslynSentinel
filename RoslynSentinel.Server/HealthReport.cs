@@ -23,7 +23,11 @@ public record WorkspaceStatus(
     bool SolutionLoaded,
     string? SolutionPath,
     int ProjectCount,
-    int DocumentCount
+    int DocumentCount,
+    DateTime? LastLoadedAt = null,
+    int StaleDocumentCount = 0,
+    bool RequiresReload = false,
+    List<string>? SampleStaleFiles = null
 );
 
 public record HealthIssue(

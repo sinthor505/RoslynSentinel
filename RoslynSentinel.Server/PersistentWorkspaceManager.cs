@@ -21,6 +21,7 @@ public class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentDictionary<string, Dictionary<string, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
+    private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
 
     public record StagedChangeSummary(
@@ -100,6 +101,7 @@ public class PersistentWorkspaceManager : IDisposable
                 }
             }
 
+            _lastLoadedAt = DateTime.UtcNow;
             SetupWatcher(Path.GetDirectoryName(solutionPath)!);
         }
         finally
@@ -331,12 +333,34 @@ public class PersistentWorkspaceManager : IDisposable
 
     public WorkspaceStatus GetWorkspaceStatus()
     {
+        // Compute staleness: count workspace documents whose on-disk file is newer than
+        // the last time the workspace was loaded.
+        var sampleStaleFiles = new List<string>();
+        int staleCount = 0;
+        if (_currentSolution != null && _lastLoadedAt != DateTime.MinValue)
+        {
+            foreach (var doc in _currentSolution.Projects.SelectMany(p => p.Documents))
+            {
+                var path = doc.FilePath;
+                if (path == null || !File.Exists(path)) continue;
+                if (File.GetLastWriteTimeUtc(path) > _lastLoadedAt)
+                {
+                    staleCount++;
+                    if (sampleStaleFiles.Count < 5) sampleStaleFiles.Add(path);
+                }
+            }
+        }
+
         return new WorkspaceStatus(
             State: _currentSolution != null ? 2 : 0,
             SolutionLoaded: _currentSolution != null,
             SolutionPath: SolutionPath,
             ProjectCount: ProjectCount,
-            DocumentCount: _currentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0
+            DocumentCount: _currentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0,
+            LastLoadedAt: _lastLoadedAt == DateTime.MinValue ? null : _lastLoadedAt,
+            StaleDocumentCount: staleCount,
+            RequiresReload: staleCount > 0,
+            SampleStaleFiles: sampleStaleFiles.Count > 0 ? sampleStaleFiles : null
         );
     }
 
@@ -467,6 +491,7 @@ public class PersistentWorkspaceManager : IDisposable
             var oldWorkspace = _workspace;
             _workspace = newWorkspace;
             oldWorkspace.Dispose();
+            _lastLoadedAt = DateTime.UtcNow;
         }
     }
 
