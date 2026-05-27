@@ -270,11 +270,11 @@ public class AnalysisEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        
+
         // Parse methodName which may be in format "ClassName.MethodName" or just "MethodName"
         string? className = null;
         string actualMethodName = methodName;
-        
+
         if (methodName.Contains("."))
         {
             var parts = methodName.Split('.');
@@ -284,21 +284,21 @@ public class AnalysisEngine
                 actualMethodName = parts[1];
             }
         }
-        
+
         // Find the method(s) matching the criteria
-        IEnumerable<MethodDeclarationSyntax> candidateMethods = 
+        IEnumerable<MethodDeclarationSyntax> candidateMethods =
             root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(m => m.Identifier.Text == actualMethodName) ?? Enumerable.Empty<MethodDeclarationSyntax>();
-        
+
         // If className was provided, filter to implementations in that class
         if (className != null)
         {
-            candidateMethods = candidateMethods.Where(m => 
+            candidateMethods = candidateMethods.Where(m =>
             {
                 var classNode = m.Parent;
                 while (classNode != null && classNode is not ClassDeclarationSyntax && classNode is not StructDeclarationSyntax)
                     classNode = classNode.Parent;
-                
+
                 if (classNode is ClassDeclarationSyntax classDecl)
                     return classDecl.Identifier.Text == className;
                 if (classNode is StructDeclarationSyntax structDecl)
@@ -306,10 +306,10 @@ public class AnalysisEngine
                 return false;
             });
         }
-        
+
         var methodNode = candidateMethods.FirstOrDefault();
         if (methodNode == null || semanticModel == null) return "Method not found.";
-        
+
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (methodSymbol == null) return "Symbol not found.";
 
@@ -957,9 +957,12 @@ public class AnalysisEngine
 
                 // Skip: the invocation is the receiver in a method chain consumed by the chain itself
                 // e.g. MethodAsync().ContinueWith(...)  — the returned Task feeds the chain
+                // Also skip .GetAwaiter().GetResult() chains — these are intentional blocking
+                // sync-over-async wrappers (bridge pattern). find_blocking_calls_in covers them.
                 if (invocation.Parent is MemberAccessExpressionSyntax chainedMa &&
                     chainedMa.Parent is InvocationExpressionSyntax chainedCall &&
-                    chainedMa.Name.Identifier.Text is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask")
+                    chainedMa.Name.Identifier.Text is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask"
+                        or "GetAwaiter" or "GetResult")
                     continue;
 
                 // Skip: result stored in a local variable that is later awaited in this document
@@ -1079,7 +1082,7 @@ public class AnalysisEngine
             {
                 var typeInfo = target.SemanticModel.GetTypeInfo(cast.Expression, cancellationToken);
                 var castTypeInfo = target.SemanticModel.GetTypeInfo(cast, cancellationToken);
-                
+
                 if (typeInfo.Type != null && castTypeInfo.Type != null && SymbolEqualityComparer.Default.Equals(typeInfo.Type, castTypeInfo.Type))
                 {
                     results.Add($"Redundant cast in {target.Document.Name} at line {cast.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Expression is already of type {castTypeInfo.Type.Name}.");
@@ -1107,7 +1110,7 @@ public class AnalysisEngine
                 {
                     if (variable.Initializer == null) continue;
                     var typeInfo = target.SemanticModel.GetTypeInfo(variable.Initializer.Value, cancellationToken);
-                    
+
                     if (typeInfo.Type != null && typeInfo.Type.AllInterfaces.Any(i => i.Name == "IDisposable") && !disposalExclusions.Contains(typeInfo.Type.Name))
                     {
                         var isDisposeHandled = decl.Ancestors().Any(a => a is UsingStatementSyntax || a is LocalDeclarationStatementSyntax l && l.UsingKeyword.IsKind(SyntaxKind.UsingKeyword));
@@ -1196,13 +1199,13 @@ public class AnalysisEngine
             foreach (var declarator in declarators)
             {
                 if (declarator.Initializer == null) continue;
-                
+
                 var symbol = target.SemanticModel.GetDeclaredSymbol(declarator, cancellationToken);
                 ITypeSymbol? leftType = null;
 
                 if (symbol is ILocalSymbol local) leftType = local.Type;
                 else if (symbol is IFieldSymbol field) leftType = field.Type;
-                
+
                 if (leftType != null)
                 {
                     var rightType = target.SemanticModel.GetTypeInfo(declarator.Initializer.Value, cancellationToken).Type;

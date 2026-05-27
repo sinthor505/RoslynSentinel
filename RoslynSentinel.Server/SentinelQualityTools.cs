@@ -76,12 +76,12 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes a file for potential security vulnerabilities.")]
-    public async Task<List<SecurityIssueReport>> AnalyzeSecurity(string filePath) 
+    public async Task<List<SecurityIssueReport>> AnalyzeSecurity(string filePath)
         => await _securityEngine.AnalyzeSecurityAsync(filePath);
 
     [McpServerTool]
     [Description("Generates a unit test skeleton for a class.")]
-    public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className) 
+    public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className)
         => await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
 
     [McpServerTool]
@@ -128,12 +128,12 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Scans for common string comparison pitfalls. Optionally filtered by project.")]
-    public async Task<List<string>> DetectInefficientStringComparisons(string? filePath = null, string? projectName = null) 
+    public async Task<List<string>> DetectInefficientStringComparisons(string? filePath = null, string? projectName = null)
         => await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Finds potential boxing allocations. Optionally filtered by project.")]
-    public async Task<List<string>> FindBoxingAllocations(string? filePath = null, string? projectName = null) 
+    public async Task<List<string>> FindBoxingAllocations(string? filePath = null, string? projectName = null)
         => await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
 
     [McpServerTool]
@@ -165,52 +165,52 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes SemaphoreSlim usage to find potentially missing Release() calls.")]
-    public async Task<List<string>> AnalyzeSemaphoreUsage(string filePath) 
+    public async Task<List<string>> AnalyzeSemaphoreUsage(string filePath)
         => await _analysisEngine.AnalyzeSemaphoreUsageAsync(filePath);
 
     [McpServerTool]
     [Description("Scans a file for potential memory leaks (e.g. unhooked events).")]
-    public async Task<List<string>> DetectMemoryLeaks(string filePath) 
+    public async Task<List<string>> DetectMemoryLeaks(string filePath)
         => await _analysisEngine.DetectMemoryLeaksAsync(filePath);
 
     [McpServerTool]
     [Description("Detects dangerous 'async void' usage that can crash the application.")]
-    public async Task<List<AsyncSafetyReport>> FindTaskVoidUsage(string filePath) 
+    public async Task<List<AsyncSafetyReport>> FindTaskVoidUsage(string filePath)
         => await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(filePath);
 
     [McpServerTool]
     [Description("Detects Task.Yield() calls.")]
-    public async Task<List<AsyncSafetyReport>> FindTaskYieldUsage(string filePath) 
+    public async Task<List<AsyncSafetyReport>> FindTaskYieldUsage(string filePath)
         => await _asyncSafetyEngine.FindTaskYieldUsageAsync(filePath);
 
     [McpServerTool]
     [Description("Scans for System.Reflection usage. Optionally filtered by project.")]
-    public async Task<List<string>> DetectReflectionUsage(string? filePath = null, string? projectName = null) 
+    public async Task<List<string>> DetectReflectionUsage(string? filePath = null, string? projectName = null)
         => await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Scans for empty catch blocks. Optionally filtered by project.")]
-    public async Task<List<string>> CheckForEmptyCatchBlocks(string? filePath = null, string? projectName = null) 
+    public async Task<List<string>> CheckForEmptyCatchBlocks(string? filePath = null, string? projectName = null)
         => await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Detects Task.Delay() usage.")]
-    public async Task<List<AsyncSafetyReport>> FindTaskDelayUsage(string filePath) 
+    public async Task<List<AsyncSafetyReport>> FindTaskDelayUsage(string filePath)
         => await _asyncSafetyEngine.FindTaskDelayUsageAsync(filePath);
 
     [McpServerTool]
     [Description("Detects redundant type casts. Optionally filtered by project.")]
-    public async Task<List<string>> CheckForRedundantCast(string? filePath = null, string? projectName = null) 
+    public async Task<List<string>> CheckForRedundantCast(string? filePath = null, string? projectName = null)
         => await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Detects redundant Task.Delay(0) calls.")]
-    public async Task<List<AsyncSafetyReport>> FindTaskDelayZeroUsage(string filePath) 
+    public async Task<List<AsyncSafetyReport>> FindTaskDelayZeroUsage(string filePath)
         => await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(filePath);
 
     [McpServerTool]
     [Description("Detects sequential await calls that could be parallelized.")]
-    public async Task<List<AsyncSafetyReport>> FindTaskWhenAllUsage(string filePath) 
+    public async Task<List<AsyncSafetyReport>> FindTaskWhenAllUsage(string filePath)
         => await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(filePath);
 
     [McpServerTool]
@@ -223,12 +223,12 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Analyzes a file for potential infinite loops.")]
-    public async Task<List<string>> FindPossibleInfiniteLoops(string filePath) 
+    public async Task<List<string>> FindPossibleInfiniteLoops(string filePath)
         => await _analysisEngine.FindPossibleInfiniteLoopsAsync(filePath);
 
     [McpServerTool]
-    [Description("Detects unawaited Task calls. Optionally filtered by project.")]
-    public async Task<List<string>> DetectMismatchedAwait(string? filePath = null, string? projectName = null) 
+    [Description("Detects Task-returning method calls that are not awaited (potential fire-and-forget bugs). Skips intentional patterns: discard assignments (_ = MethodAsync()), Task.WhenAll/WhenAny arguments, return/arrow-body expressions, .GetAwaiter().GetResult() chains (those are blocking sync-over-async — use find_blocking_calls_in instead), ContinueWith/ConfigureAwait chains, field assignments, and variables later passed to WhenAll. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the solution.")]
+    public async Task<List<string>> DetectMismatchedAwait(string? filePath = null, string? projectName = null)
         => await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
 
     [McpServerTool]
@@ -254,7 +254,7 @@ public class SentinelQualityTools
         => await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, minOccurrences);
 
     [McpServerTool]
-    [Description("Finds async methods that lack a CancellationToken parameter but call at least one method that accepts one. These are methods that should be threading cancellation through but aren't. Returns method name, containing type, file/line, and the callee names that accept CancellationToken.")]
+    [Description("Finds async Task/ValueTask methods that lack a CancellationToken parameter but call at least one method that accepts one. These are methods that should thread cancellation through but aren't. Excludes: event handler methods with (object sender, XxxEventArgs e) signatures (delegate-bound, cannot accept CT), abstract methods, and methods that already have a CT parameter. Returns method name, containing type, file/line, and the callee names that accept CancellationToken.")]
     public async Task<List<MissingCancellationTokenFinding>> FindMissingCancellationTokens(string? filePath = null, string? projectName = null)
         => await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
 
@@ -294,14 +294,14 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("""
         Analyzes control flow for an entire method body using Roslyn's semantic analysis.
-        
+
         Unlike the raw line-based analyze_control_flow tool, this takes a method name — no
         need to count line numbers or worry about accidentally including the method signature
         (which causes a 'statements not within the same statement list' error in line-based tools).
-        
+
         Returns: EndPointIsReachable (false = all code paths return/throw), ReturnStatements,
         ThrowStatements, BreakStatements, ContinueStatements.
-        
+
         If the method has multiple overloads, supply disambiguateLine (any line number that
         falls inside the desired overload's body) to select the correct one.
         """)]
@@ -314,14 +314,14 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("""
         Analyzes data flow for an entire method body using Roslyn's semantic analysis.
-        
+
         Unlike the raw line-based analyze_data_flow tool, this takes a method name — no
         need to count line numbers or worry about accidentally including the method signature.
-        
+
         Returns: DataFlowsIn (variables read but declared outside), DataFlowsOut (variables
         assigned inside and read outside), VariablesDeclared (locals), AlwaysAssigned (always
         initialized on all code paths), ReadInside, WrittenInside.
-        
+
         If the method has multiple overloads, supply disambiguateLine (any line number that
         falls inside the desired overload's body) to select the correct one.
         """)]

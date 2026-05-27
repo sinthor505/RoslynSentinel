@@ -1170,6 +1170,10 @@ public class AntiPatternEngine
                     (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
                 if (hasCt) continue;
 
+                // Skip event handlers — their delegate signature is fixed (object sender, XxxEventArgs e)
+                // and cannot be extended with a CancellationToken parameter.
+                if (IsEventHandlerSignature(method)) continue;
+
                 var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
                 if (body == null) continue;
 
