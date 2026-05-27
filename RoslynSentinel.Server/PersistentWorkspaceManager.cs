@@ -35,7 +35,7 @@ public class PersistentWorkspaceManager : IDisposable
     {
         _logger = logger;
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
-        
+
         if (!MSBuildLocator.IsRegistered)
         {
             _logger.LogInformation("Registering MSBuild defaults...");
@@ -67,7 +67,7 @@ public class PersistentWorkspaceManager : IDisposable
         try
         {
             _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
-            
+
             _workspace?.Dispose();
             // Suppress NuGet vulnerability audit during workspace load — this is a code-analysis
             // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
@@ -78,7 +78,7 @@ public class PersistentWorkspaceManager : IDisposable
                 { "NuGetAuditLevel", "critical" }
             });
             _workspaceLoadErrors.Clear();
-            _workspace.RegisterWorkspaceFailedHandler((d) => 
+            _workspace.RegisterWorkspaceFailedHandler((d) =>
             {
                 _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
                 _workspaceLoadErrors.Add(d.Diagnostic.Message);
@@ -164,7 +164,7 @@ public class PersistentWorkspaceManager : IDisposable
                     solutionNeedsReload = true;
                     break;
                 }
-                
+
                 if (ext == ".csproj")
                 {
                     var project = _currentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
@@ -283,7 +283,7 @@ public class PersistentWorkspaceManager : IDisposable
     {
         var changes = GetStagedChanges(changeId);
         var result = await ApplyProposedChangesAsync(changes, retryCount);
-        
+
         if (result.Success)
         {
             _stagedChanges.TryRemove(changeId, out _);
@@ -294,11 +294,11 @@ public class PersistentWorkspaceManager : IDisposable
             var remaining = changes
                 .Where(kvp => !result.SucceededFiles.Contains(kvp.Key))
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-            
+
             _stagedChanges[changeId] = remaining;
             _logger.LogInformation("Updated staged change '{Id}' with remaining {Count} failures.", changeId, remaining.Count);
         }
-        
+
         return result;
     }
 
@@ -313,8 +313,8 @@ public class PersistentWorkspaceManager : IDisposable
     public HealthComponents GetHealthComponents()
     {
         var roslynVersion = typeof(Solution).Assembly.GetName().Version?.ToString() ?? "Unknown";
-        var msbuildInstance = MSBuildLocator.IsRegistered 
-            ? MSBuildLocator.QueryVisualStudioInstances().FirstOrDefault(i => i.MSBuildPath == MSBuildLocator.QueryVisualStudioInstances().First().MSBuildPath) 
+        var msbuildInstance = MSBuildLocator.IsRegistered
+            ? MSBuildLocator.QueryVisualStudioInstances().FirstOrDefault(i => i.MSBuildPath == MSBuildLocator.QueryVisualStudioInstances().First().MSBuildPath)
             : null; // Simplified logic to find registered instance
 
         // Better way to find if any instance is registered
@@ -388,7 +388,7 @@ public class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync();
         var succeeded = new List<string>();
         var failed = new Dictionary<string, string>();
-        
+
         // Clear retry cache for this specific batch
         foreach (var key in changes.Keys) _failedChangesCache.TryRemove(key, out _);
 
@@ -474,20 +474,20 @@ public class PersistentWorkspaceManager : IDisposable
         if (_workspace == null || _currentSolution == null) return;
 
         // MSBuildWorkspace can be finicky with refreshing individual projects.
-        // The most reliable way to ensure a consistent, fresh view of the solution 
+        // The most reliable way to ensure a consistent, fresh view of the solution
         // after multiple file writes and additions is to trigger a reload.
-        
+
         var slnPath = _workspace.CurrentSolution.FilePath;
         if (!string.IsNullOrEmpty(slnPath))
         {
             _logger.LogInformation("Reloading solution to synchronize changes: {SlnPath}", slnPath);
-            
+
             // We create a new workspace instance to ensure no cached metadata remains
             var newWorkspace = MSBuildWorkspace.Create();
             newWorkspace.RegisterWorkspaceFailedHandler((d) => _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message));
-            
+
             _currentSolution = await newWorkspace.OpenSolutionAsync(slnPath);
-            
+
             var oldWorkspace = _workspace;
             _workspace = newWorkspace;
             oldWorkspace.Dispose();
@@ -501,7 +501,7 @@ public class PersistentWorkspaceManager : IDisposable
     public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3)
     {
         var toRetry = new Dictionary<string, string>();
-        
+
         if (specificFiles == null || specificFiles.Count == 0)
         {
             foreach (var kvp in _failedChangesCache) toRetry[kvp.Key] = kvp.Value;

@@ -135,7 +135,7 @@ public class SentinelWorkspaceTools
                 {
                     errors.Add(new HealthIssue("5005", "Workspace load error", error, "Check project file for syntax errors, missing NuGet packages, or SDK version mismatches."));
                 }
-                
+
                 if (loadErrors.Count == 0)
                 {
                     warnings.Add(new HealthIssue("4001", "Solution loaded but no projects found. Check for unsupported project types."));
@@ -168,7 +168,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Validates a proposed Unified Diff in-memory and returns compiler diagnostics.")]
-    public async Task<DiagnosticReport> ValidateProposedDiff(string filePath, string unifiedDiff) 
+    public async Task<DiagnosticReport> ValidateProposedDiff(string filePath, string unifiedDiff)
         => await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
 
     [McpServerTool]
@@ -259,17 +259,17 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase.")]
-    public async Task<string> SafeDelete(string filePath, int line, int column) 
+    public async Task<string> SafeDelete(string filePath, int line, int column)
         => await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
 
     [McpServerTool]
     [Description("Synchronizes the filename to match the primary type declared within it.")]
-    public async Task<string> SyncTypeAndFilename(string filePath) 
+    public async Task<string> SyncTypeAndFilename(string filePath)
         => await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
 
     [McpServerTool]
     [Description("Creates a new project and adds it to the current solution.")]
-    public async Task<string> CreateProject(string projectName, string projectType = "console") 
+    public async Task<string> CreateProject(string projectName, string projectType = "console")
         => await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
 
     [McpServerTool]
