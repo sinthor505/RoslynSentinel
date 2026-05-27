@@ -301,6 +301,209 @@ public class AsyncOptimizationEngine
     }
 
     /// <summary>
+    /// Converts a synchronous method to the Asyncify-bridge pattern in one atomic step:
+    /// <list type="number">
+    ///   <item>Creates an async overload named <c>&lt;methodName&gt;Async</c> with the original
+    ///         body copied verbatim, <c>CancellationToken cancellationToken = default</c> appended
+    ///         as the last parameter, and the <c>async</c> modifier added.
+    ///         Expression-bodied methods are converted to block bodies in the async overload
+    ///         so that downstream CT-propagation tools can operate on them.</item>
+    ///   <item>Replaces the original sync method's body with the bridge call:
+    ///         <c>return &lt;methodName&gt;Async(params…).GetAwaiter().GetResult();</c>
+    ///         (or a bare expression statement for void-returning methods).</item>
+    ///   <item>Adds <c>[Obsolete("Asyncify-bridge: call &lt;methodName&gt;Async instead.", false)]</c>
+    ///         to the original sync method so that CS0618 warnings at call sites drive incremental
+    ///         caller migration.</item>
+    /// </list>
+    /// The async body is NOT further transformed — use <c>apply_cancellation_token_to_file</c>
+    /// or <c>add_cancellation_token_to_method</c> in a follow-up step to propagate the token.
+    /// </summary>
+    /// <param name="filePath">Absolute path to the source file containing the method.</param>
+    /// <param name="methodName">Exact case-sensitive name of the synchronous method to bridge.</param>
+    /// <param name="cancellationToken">Optional cancellation token for the Roslyn operations.</param>
+    /// <returns>Full updated source for the file. Does NOT write to disk; pass to
+    ///          <c>apply_proposed_changes</c> or stage via <c>autoStage=true</c> to persist.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown for any precondition failure: file/method not found, method already async,
+    /// method name ends with "Async", method is abstract, method is an event handler,
+    /// method has ref/out parameters, or the async overload already exists.
+    /// </exception>
+    public async Task<string> ConvertToAsyncBridgeAsync(
+        string filePath,
+        string methodName,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+            throw new InvalidOperationException(
+                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+
+        // Find the class that contains the named method.
+        var classNode = root.DescendantNodes()
+                            .OfType<ClassDeclarationSyntax>()
+                            .FirstOrDefault(c => c.Members
+                                .OfType<MethodDeclarationSyntax>()
+                                .Any(m => m.Identifier.Text == methodName));
+        var methodNode = classNode?.Members
+                                   .OfType<MethodDeclarationSyntax>()
+                                   .FirstOrDefault(m => m.Identifier.Text == methodName);
+
+        if (classNode == null || methodNode == null)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+
+        // ── Precondition checks ──────────────────────────────────────────────
+        if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            throw new InvalidOperationException(
+                $"Method '{methodName}' is already async — it cannot be converted to a bridge.");
+
+        if (methodName.EndsWith("Async", StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"Method '{methodName}' already ends with 'Async' — it is likely already the async overload.");
+
+        if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
+            throw new InvalidOperationException(
+                $"Method '{methodName}' is abstract — abstract methods have no body and cannot be bridged.");
+
+        if (IsEventHandlerSignature(methodNode))
+            throw new InvalidOperationException(
+                $"Method '{methodName}' appears to be an event handler (object sender, XxxEventArgs e). " +
+                "Fixed delegate signatures cannot receive an extra CancellationToken parameter.");
+
+        // Reject ref/out parameters: the bridge call cannot forward them without matching ref/out
+        // keywords on the argument, and the async overload signature becomes ambiguous.
+        var refOrOutParam = methodNode.ParameterList.Parameters
+            .FirstOrDefault(p => p.Modifiers.Any(m =>
+                m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword)));
+        if (refOrOutParam != null)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' has a ref/out parameter '{refOrOutParam.Identifier.Text}'. " +
+                "ref/out parameters are not supported by the Asyncify-bridge pattern.");
+
+        var asyncMethodName = methodName + "Async";
+        if (classNode.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == asyncMethodName))
+            throw new InvalidOperationException(
+                $"An overload named '{asyncMethodName}' already exists in the class. " +
+                "Remove it first, or use add_cancellation_token_to_method to add CT to the existing overload.");
+
+        // ── Build the async overload ─────────────────────────────────────────
+        var returnTypeStr = methodNode.ReturnType.ToString().Trim();
+        var isVoid        = returnTypeStr == "void";
+        var newReturnType = isVoid ? "Task" : $"Task<{returnTypeStr}>";
+
+        // CancellationToken parameter: trailing space in type name becomes whitespace trivia.
+        var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancellationToken"))
+            .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
+            .WithDefault(SyntaxFactory.EqualsValueClause(
+                SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
+
+        // Strip any [Obsolete] attributes from the async overload (rare, but ensures clean output).
+        var cleanAttributeLists = SyntaxFactory.List(
+            methodNode.AttributeLists.Where(al =>
+                !al.Attributes.Any(a =>
+                    a.Name.ToString() == "Obsolete" ||
+                    a.Name.ToString() == "System.Obsolete")));
+
+        var asyncMethod = methodNode
+            .WithAttributeLists(cleanAttributeLists)
+            .WithIdentifier(SyntaxFactory.Identifier(asyncMethodName))
+            .WithReturnType(SyntaxFactory.ParseTypeName(newReturnType))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword))
+            .AddParameterListParameters(ctParam);
+
+        // Convert expression-bodied originals to block-bodied async overloads so that
+        // downstream CT-propagation tools (which operate on block bodies) work correctly.
+        if (methodNode.ExpressionBody != null && methodNode.Body == null)
+        {
+            // Expression body: `=> expr` → `{ return expr; }` (or `{ expr; }` for void).
+            StatementSyntax convertedStmt = isVoid
+                ? SyntaxFactory.ExpressionStatement(methodNode.ExpressionBody.Expression)
+                : SyntaxFactory.ReturnStatement(methodNode.ExpressionBody.Expression);
+            asyncMethod = asyncMethod
+                .WithBody(SyntaxFactory.Block(convertedStmt))
+                .WithExpressionBody(null)
+                .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken));
+        }
+
+        // ── Build the bridge body for the original sync method ───────────────
+        // Forward all original parameters as positional arguments.
+        var callArgs    = methodNode.ParameterList.Parameters
+                                    .Select(p => SyntaxFactory.Argument(
+                                        SyntaxFactory.IdentifierName(p.Identifier.Text)));
+        var callArgList = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(callArgs));
+
+        // MethodNameAsync(args).GetAwaiter().GetResult()
+        var asyncCallExpr = SyntaxFactory.InvocationExpression(
+            SyntaxFactory.IdentifierName(asyncMethodName), callArgList);
+        var getAwaiterCall = SyntaxFactory.InvocationExpression(
+            SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                asyncCallExpr,
+                SyntaxFactory.IdentifierName("GetAwaiter")),
+            SyntaxFactory.ArgumentList());
+        var getResultCall = SyntaxFactory.InvocationExpression(
+            SyntaxFactory.MemberAccessExpression(
+                SyntaxKind.SimpleMemberAccessExpression,
+                getAwaiterCall,
+                SyntaxFactory.IdentifierName("GetResult")),
+            SyntaxFactory.ArgumentList());
+
+        // For void methods the bridge is a bare expression statement; otherwise a return statement.
+        StatementSyntax bridgeStatement = isVoid
+            ? SyntaxFactory.ExpressionStatement(getResultCall)
+            : (StatementSyntax)SyntaxFactory.ReturnStatement(getResultCall);
+
+        // Inline comment clarifies intent for anyone reading the bridge body.
+        bridgeStatement = bridgeStatement.WithLeadingTrivia(
+            SyntaxFactory.Comment($"// Asyncify-bridge: synchronous wrapper over {asyncMethodName}."),
+            SyntaxFactory.CarriageReturnLineFeed);
+
+        var bridgeBlock = SyntaxFactory.Block(bridgeStatement);
+
+        // ── Build [Obsolete] attribute ───────────────────────────────────────
+        var obsoleteAttr = SyntaxFactory.Attribute(
+            SyntaxFactory.IdentifierName("Obsolete"),
+            SyntaxFactory.AttributeArgumentList(
+                SyntaxFactory.SeparatedList(new[]
+                {
+                    SyntaxFactory.AttributeArgument(
+                        SyntaxFactory.LiteralExpression(
+                            SyntaxKind.StringLiteralExpression,
+                            SyntaxFactory.Literal($"Asyncify-bridge: call {asyncMethodName} instead."))),
+                    SyntaxFactory.AttributeArgument(
+                        SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression))
+                })));
+        var obsoleteAttrList = SyntaxFactory.AttributeList(
+            SyntaxFactory.SingletonSeparatedList(obsoleteAttr));
+
+        // ── Apply both changes to the class node ─────────────────────────────
+        // Step 1: replace original method node with the bridge wrapper.
+        var bridgeWrapper = methodNode
+            .WithBody(bridgeBlock)
+            .WithExpressionBody(null)
+            .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken))
+            .AddAttributeLists(obsoleteAttrList);
+
+        var classWithBridge = classNode.ReplaceNode(methodNode, bridgeWrapper);
+
+        // Step 2: insert the async overload immediately after the bridge wrapper.
+        var bridgeInNewClass = classWithBridge.Members
+                                              .OfType<MethodDeclarationSyntax>()
+                                              .First(m => m.Identifier.Text == methodName);
+        var classWithBoth = classWithBridge.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
+
+        var newRoot = root.ReplaceNode(classNode, classWithBoth);
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    /// <summary>
     /// Adds .ConfigureAwait(false) (or true) to all await expressions that don't already have it.
     /// </summary>
     public async Task<string> AddConfigureAwaitFalseAsync(string filePath, bool libraryMode = true, CancellationToken cancellationToken = default)

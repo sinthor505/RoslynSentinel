@@ -523,6 +523,68 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
+    [Description("""
+        Converts a synchronous method to the Asyncify-bridge pattern in one atomic step.
+
+        Three things happen:
+          1. A new async overload '<methodName>Async' is inserted immediately after the original.
+             It has the original body copied verbatim (NOT a Task.Run wrapper or scaffold),
+             'CancellationToken cancellationToken = default' appended as the last parameter,
+             and the 'async' modifier added. Expression-bodied originals are converted to block
+             bodies so downstream CT-propagation tools can operate on them.
+          2. The original sync method body is replaced with the bridge call:
+               return <methodName>Async(params...).GetAwaiter().GetResult();
+             (bare expression statement for void-returning methods)
+          3. [Obsolete("Asyncify-bridge: call <methodName>Async instead.", false)] is added
+             to the original sync method — CS0618 warnings at call sites are the migration
+             tracking mechanism.
+
+        The async body is NOT further transformed. Use apply_cancellation_token_to_file or
+        add_cancellation_token_to_method in a follow-up step to propagate the CancellationToken
+        to inner async callees.
+
+        Returns CancellationTokenResult where exactly one field is populated:
+          autoStage=true (default): ChangeId is set; apply with apply_staged_changes(changeId).
+          autoStage=false: Source is set; pass Source.UpdatedSource to apply_proposed_changes.
+
+        Hard preconditions (throws if any fail): method must not already be async; must not
+        end with 'Async'; must not be abstract; must not be an event handler; must not have
+        ref/out parameters; '<methodName>Async' must not already exist in the class.
+        """)]
+    public async Task<CancellationTokenResult> ConvertToAsyncBridge(
+        string filePath,
+        string methodName,
+        bool autoStage = true)
+    {
+        string result;
+        try
+        {
+            result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(filePath, methodName);
+        }
+        catch (InvalidOperationException)
+        {
+            throw; // precondition failures propagate verbatim
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "ConvertToAsyncBridge unexpected exception for '{MethodName}' in '{FilePath}'",
+                methodName, filePath);
+            throw new InvalidOperationException(
+                $"ConvertToAsyncBridge for '{methodName}' in '{filePath}' failed: " +
+                $"{ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        if (!autoStage)
+            return new CancellationTokenResult(null, new SourceTransformResult(result, false, false, filePath));
+
+        var changeId = _workspaceManager.StageChanges(
+            new Dictionary<string, string> { { filePath, result } },
+            $"Asyncify-bridge: convert '{methodName}' → '{methodName}Async' in '{Path.GetFileName(filePath)}'");
+        return new CancellationTokenResult(changeId, null);
+    }
+
+    [McpServerTool]
     [Description("Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
     public async Task<SourceTransformResult> MakeMethodThreadSafe(string filePath, string methodName, string lockFieldName = "_lock")
     {

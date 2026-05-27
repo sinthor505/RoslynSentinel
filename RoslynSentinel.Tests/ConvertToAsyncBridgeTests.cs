@@ -1,0 +1,407 @@
+using System;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
+using NUnit.Framework;
+using RoslynSentinel.Server;
+
+#pragma warning disable CS8618
+
+namespace RoslynSentinel.Tests;
+
+/// <summary>
+/// Tests for <see cref="AsyncOptimizationEngine.ConvertToAsyncBridgeAsync"/>.
+/// Verifies the three-step Asyncify-bridge transformation:
+///   1. async overload created with original body + CancellationToken + async modifier
+///   2. original sync method body replaced with bridge call (.GetAwaiter().GetResult())
+///   3. [Obsolete("Asyncify-bridge: call XxxAsync instead.", false)] added to original
+/// </summary>
+[TestFixture]
+public class ConvertToAsyncBridgeTests
+{
+    private PersistentWorkspaceManager _workspaceManager;
+    private AsyncOptimizationEngine _engine;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _engine = new AsyncOptimizationEngine(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager.Dispose();
+
+    private void SetSource(string source, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Happy-path: bridge structure
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_TaskReturn_ProducesAsyncOverload()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        // Async overload should exist with the right signature.
+        Assert.That(result, Does.Contain("GetTripsAsync"),
+            "Async overload should be named GetTripsAsync.");
+        Assert.That(result, Does.Contain("Task<DataTable>"),
+            "Async overload should return Task<DataTable>.");
+        Assert.That(result, Does.Contain("CancellationToken cancellationToken"),
+            "Async overload should have a CancellationToken parameter.");
+        Assert.That(result, Does.Contain("async"),
+            "Async overload should carry the async modifier.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_TaskReturn_OriginalBodyReplacedWithBridgeCall()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        // Bridge body: return GetTripsAsync(companyId).GetAwaiter().GetResult();
+        Assert.That(result, Does.Contain("GetTripsAsync"),
+            "Bridge body should call GetTripsAsync.");
+        Assert.That(result, Does.Contain("GetAwaiter"),
+            "Bridge body should use GetAwaiter().");
+        Assert.That(result, Does.Contain("GetResult"),
+            "Bridge body should use GetResult().");
+        // Original sync body (DataHelper.Search) should be in the ASYNC overload, not deleted entirely.
+        Assert.That(result, Does.Contain("DataHelper.Search"),
+            "Original body expression should appear in the async overload.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_TaskReturn_ObsoleteAttributeAddedToOriginal()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        Assert.That(result, Does.Contain("Obsolete"),
+            "[Obsolete] attribute must be added to the bridge wrapper.");
+        Assert.That(result, Does.Contain("Asyncify-bridge"),
+            "Obsolete message must contain 'Asyncify-bridge' to match CS0618 tracking convention.");
+        Assert.That(result, Does.Contain("call GetTripsAsync instead"),
+            "Obsolete message should name the replacement async method.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_TaskReturn_InlineCommentAddedToBridgeBody()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        Assert.That(result, Does.Contain("// Asyncify-bridge: synchronous wrapper over GetTripsAsync."),
+            "Bridge body should have the standard inline comment for readability.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_VoidMethod_BridgeUsesExpressionStatement()
+    {
+        SetSource(@"
+public class NotificationService
+{
+    public void Notify(string message)
+    {
+        Console.WriteLine(message);
+    }
+}", "NotificationService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("NotificationService.cs", "Notify");
+
+        // void bridge: NotifyAsync(message).GetAwaiter().GetResult() — no 'return' keyword.
+        Assert.That(result, Does.Contain("NotifyAsync"),
+            "Async overload should be named NotifyAsync.");
+        Assert.That(result, Does.Contain("Task NotifyAsync") | Does.Contain("Task\r\nNotifyAsync") | Does.Contain("async Task"),
+            "Async overload should return Task (not Task<void>).");
+        // No return keyword in the bridge call (void bridge = expression statement).
+        // The async method may have return, but the bridge itself must not have 'return GetAwaiter'.
+        Assert.That(result, Does.Contain("GetAwaiter"),
+            "Bridge body should use GetAwaiter() even for void methods.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_MultipleParameters_AllForwardedInBridgeCall()
+    {
+        SetSource(@"
+using System.Data;
+public class DriverService
+{
+    public DataTable GetDrivers(int companyId, string status, int limit)
+    {
+        return DataHelper.Query(companyId, status, limit);
+    }
+}", "DriverService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("DriverService.cs", "GetDrivers");
+
+        // Bridge call should forward all three parameter names.
+        Assert.That(result, Does.Contain("GetDriversAsync(companyId, status, limit)"),
+            "All original parameter names should be forwarded in the bridge call.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_ExpressionBodiedMethod_AsyncOverloadGetsBlockBody()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId) => DataHelper.Search(companyId);
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        // The async overload should have a block body (with braces) for CT-propagation tool compatibility.
+        // Verify the original body expression is preserved inside the async method.
+        Assert.That(result, Does.Contain("GetTripsAsync"),
+            "Async overload should exist.");
+        Assert.That(result, Does.Contain("DataHelper.Search"),
+            "Original body expression should be carried into the async overload.");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_StaticMethod_Works()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public static DataTable GetAllTrips()
+    {
+        return DataHelper.GetAll();
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetAllTrips");
+
+        Assert.That(result, Does.Contain("GetAllTripsAsync"),
+            "Static methods should also be convertible to bridge pattern.");
+        Assert.That(result, Does.Contain("GetAwaiter"),
+            "Bridge body should use GetAwaiter().");
+    }
+
+    [Test, Timeout(5000)]
+    public async Task ConvertToAsyncBridge_AsyncMethodInsertedAfterOriginal()
+    {
+        SetSource(@"
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+}", "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        // The bridge wrapper (GetTrips) should appear before the async overload (GetTripsAsync).
+        var bridgeIdx = result.IndexOf("GetAwaiter", StringComparison.Ordinal);
+        var asyncBodyIdx = result.IndexOf("DataHelper.Search", StringComparison.Ordinal);
+
+        // Bridge body (GetAwaiter) should appear before the async overload's body (DataHelper.Search).
+        Assert.That(bridgeIdx, Is.LessThan(asyncBodyIdx),
+            "The bridge wrapper should be emitted before the async overload in the file.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Precondition failures
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_AlreadyAsync_Throws()
+    {
+        SetSource(@"
+using System.Threading.Tasks;
+public class Service
+{
+    public async Task<int> GetValue()
+    {
+        return await Task.FromResult(1);
+    }
+}", "Service.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetValue"),
+            "Should throw when method is already async.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_AlreadyHasAsyncSuffix_Throws()
+    {
+        SetSource(@"
+using System.Threading.Tasks;
+using System.Data;
+public class Service
+{
+    public DataTable GetTripsAsync(int id)
+    {
+        return DataHelper.Search(id);
+    }
+}", "Service.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetTripsAsync"),
+            "Should throw when method name already ends with 'Async'.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_AbstractMethod_Throws()
+    {
+        SetSource(@"
+using System.Data;
+public abstract class BaseService
+{
+    public abstract DataTable GetTrips(int companyId);
+}", "BaseService.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("BaseService.cs", "GetTrips"),
+            "Should throw for abstract methods (no body to copy).");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_EventHandlerSignature_Throws()
+    {
+        SetSource(@"
+using System;
+public class Form1
+{
+    public void Button_Click(object sender, EventArgs e)
+    {
+        Console.WriteLine(""clicked"");
+    }
+}", "Form1.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Form1.cs", "Button_Click"),
+            "Should throw for event handler methods (fixed delegate signature).");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_RefParameter_Throws()
+    {
+        SetSource(@"
+public class Service
+{
+    public int ComputeRef(ref int value)
+    {
+        value++;
+        return value;
+    }
+}", "Service.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "ComputeRef"),
+            "Should throw when method has ref parameters.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_OutParameter_Throws()
+    {
+        SetSource(@"
+public class Service
+{
+    public bool TryGet(out int result)
+    {
+        result = 0;
+        return true;
+    }
+}", "Service.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "TryGet"),
+            "Should throw when method has out parameters.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_AsyncOverloadAlreadyExists_Throws()
+    {
+        SetSource(@"
+using System.Threading;
+using System.Threading.Tasks;
+using System.Data;
+public class TripService
+{
+    public DataTable GetTrips(int companyId)
+    {
+        return DataHelper.Search(companyId);
+    }
+
+    public async Task<DataTable> GetTripsAsync(int companyId, CancellationToken ct = default)
+    {
+        return await Task.FromResult(DataHelper.Search(companyId));
+    }
+}", "TripService.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips"),
+            "Should throw when GetTripsAsync already exists in the class.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_MethodNotFound_Throws()
+    {
+        SetSource(@"
+public class Service
+{
+    public int GetValue() => 42;
+}", "Service.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "NonExistentMethod"),
+            "Should throw when the named method does not exist in the file.");
+    }
+
+    [Test, Timeout(5000)]
+    public void ConvertToAsyncBridge_FileNotFound_Throws()
+    {
+        SetSource(@"public class Dummy {}", "Dummy.cs");
+
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _engine.ConvertToAsyncBridgeAsync("DoesNotExist.cs", "SomeMethod"),
+            "Should throw when the file is not found in the loaded solution.");
+    }
+}
