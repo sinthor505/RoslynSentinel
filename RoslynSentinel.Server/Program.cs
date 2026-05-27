@@ -13,9 +13,19 @@ var builder = Host.CreateApplicationBuilder(args);
 var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
 var solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution="))?.Replace("--solution=", "");
 
-var activeModes = modeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
+// ── Named toolset aliases ────────────────────────────────────────────────────
+// Toolset1: Async-migration / ongoing refactoring work.
+//   Includes: Workspace + Quality + Intelligence + Refactor (+ Augment).
+//   Excludes: Modernize (language-upgrade tools), Generation (scaffolding tools).
+//   Use --mode=Toolset1 in mcp.json args to load only these ~254 tools instead of
+//   all 294, keeping the tool list focused on async migration and code analysis.
+var resolvedModeArg = modeArg.Equals("Toolset1", StringComparison.OrdinalIgnoreCase)
+    ? "Workspace,Quality,Intelligence,Refactor"
+    : modeArg;
+
+var activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
     ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
-    : modeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 Console.Error.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
 
@@ -182,7 +192,8 @@ try
                 TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes}", string.Join(", ", activeModes));
+    logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
+        string.Join(", ", activeModes), modeArg);
     Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
 
     try

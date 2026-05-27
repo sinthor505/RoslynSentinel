@@ -3,6 +3,7 @@
     "roslyn-sentinel": {
       "type": "stdio",
       "command": "${workspaceFolder}/publish/RoslynSentinel.Server.exe",
+      "args": ["--mode=all"],
       "env": {
         "DOTNET_ROOT": "C:\\Program Files\\dotnet",
         "MSBUILD_EXE_PATH": "C:\\Program Files\\dotnet\\sdk\\10.0.203\\MSBuild.dll"
