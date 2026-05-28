@@ -3720,7 +3720,8 @@ public class AddGuardClausesNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
-        _workspaceManager,
+        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance),
+    _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
@@ -3813,6 +3814,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
+        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance),
         _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 

@@ -170,6 +170,34 @@ try
         mcpBuilder.WithTools<SentinelGenerationTools>();
     }
 
+    // --- Centralized error-to-success filter ---
+    // The MCP SDK converts unhandled exceptions from [McpServerTool] methods into
+    // CallToolResult { IsError = true }, but GitHub Copilot silently drops the content
+    // of IsError=true results, showing only a generic "An error occurred" message.
+    // This filter catches InvalidOperationException (thrown when no solution is loaded)
+    // and returns it as a successful result so Copilot can display the helpful message.
+    mcpBuilder.WithRequestFilters(filters =>
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                try
+                {
+                    return await next(context, cancellationToken);
+                }
+                catch (InvalidOperationException ex) when (ex.Message.StartsWith("No solution is loaded", StringComparison.Ordinal))
+                {
+                    return new ModelContextProtocol.Protocol.CallToolResult
+                    {
+                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
+                        IsError = false,
+                    };
+                }
+            }));
+    });
+
     using var host = builder.Build();
     var logger = host.Services.GetRequiredService<ILogger<Program>>();
 

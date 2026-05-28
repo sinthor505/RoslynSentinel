@@ -51,8 +51,10 @@ public class BatteryThirtyThreeTests
     private ControlFlowEngine _controlFlowEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
+    private AsyncBatchEngine _asyncBatchEngine;
     private DiagnosticEngine _diagnosticEngine;
     private SentinelQualityTools _qualityTools;
+    private DiffEngine _diffEngine;
 
     [SetUp]
     public void SetUp()
@@ -93,6 +95,8 @@ public class BatteryThirtyThreeTests
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _diffEngine = new DiffEngine(_workspaceManager);
+        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance);
 
         _qualityTools = new SentinelQualityTools(
             _performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine,
@@ -102,8 +106,7 @@ public class BatteryThirtyThreeTests
             new CodeStyleAnalysisEngine(_workspaceManager),
             new PathDrivenTestEngine(_workspaceManager),
             new StackOverflowEngine(_workspaceManager),
-            _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            _asyncBatchEngine, _workspaceManager, NullLogger<SentinelQualityTools>.Instance);
     }
 
     [TearDown]

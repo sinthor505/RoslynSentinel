@@ -2,7 +2,7 @@
 // Tests all 46 public methods of SentinelQualityTools in-memory via TestSolutionBuilder.
 
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -21,6 +21,7 @@ public class BatteryTwentyThreeTests
     private AnalysisEngine _analysisEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
+    private AsyncBatchEngine _asyncBatchEngine;
     private DiagnosticEngine _diagnosticEngine;
     private SentinelQualityTools _tools;
 
@@ -125,6 +126,7 @@ public class QualityClass
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance);
         _tools = new SentinelQualityTools(
             _performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine,
             _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine,
@@ -133,6 +135,7 @@ public class QualityClass
             new CodeStyleAnalysisEngine(_workspaceManager),
             new PathDrivenTestEngine(_workspaceManager),
             new StackOverflowEngine(_workspaceManager),
+            _asyncBatchEngine,
             _workspaceManager,
             NullLogger<SentinelQualityTools>.Instance);
     }
