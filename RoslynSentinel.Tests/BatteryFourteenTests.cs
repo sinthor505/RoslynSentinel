@@ -56,7 +56,7 @@ public class AdvancedLogicEngineTests
 namespace MyNs;
 public static class MyExtensions
 {
-    public static string Shout(this string s) => s.ToUpper();
+    public static string Shout(this string s) => s.ToUpperInvariant();
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Extensions.cs", source)]);

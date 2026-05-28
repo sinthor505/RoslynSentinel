@@ -5,7 +5,11 @@ $publishDir = "$repoRoot\publish"
 
 Write-Host "--- Roslyn Sentinel Installer ---" -ForegroundColor Cyan
 
-# 1. Build and Publish
+# 1. Kill any running server (it locks the .exe, causing MSB3027 on publish)
+Write-Host "Stopping any running RoslynSentinel.Server processes..."
+& "$PSScriptRoot\kill-server.ps1"
+
+# 2. Build and Publish
 Write-Host "Building and publishing server to $publishDir..."
 dotnet publish "$repoRoot\RoslynSentinel.Server\RoslynSentinel.Server.csproj" -c Release -o "$publishDir"
 

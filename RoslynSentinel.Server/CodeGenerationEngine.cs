@@ -1,9 +1,9 @@
+using System.Text.Json;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
-using System.Text.Json;
 
 namespace RoslynSentinel.Server;
 
@@ -38,6 +38,11 @@ public class CodeGenerationEngine
     {
         _workspaceManager = workspaceManager;
     }
+
+    private JsonSerializerOptions defaultJsonSerializerOptions = new()
+    {
+        WriteIndented = true
+    };
 
     /// <summary>
     /// Generates C# classes from a JSON string.
@@ -125,7 +130,9 @@ public class CodeGenerationEngine
         // Primary: semantic type info
         var resolved = semanticModel.GetTypeInfo(receiverSyntax, ct).Type;
         if (resolved != null)
+        {
             return configTypeNames.Contains(resolved.Name);
+        }
 
         // Fallback 1: look at the declared type text of the identifier in the syntax tree
         if (receiverSyntax is IdentifierNameSyntax id)
@@ -138,7 +145,10 @@ public class CodeGenerationEngine
                 if (paramSyntax.Identifier.Text == receiverName && paramSyntax.Type != null)
                 {
                     var typeName = paramSyntax.Type.ToString();
-                    if (configTypeNames.Any(n => typeName.Contains(n))) return true;
+                    if (configTypeNames.Any(n => typeName.Contains(n)))
+                    {
+                        return true;
+                    }
                 }
             }
 
@@ -149,7 +159,10 @@ public class CodeGenerationEngine
                     if (v.Identifier.Text == receiverName)
                     {
                         var typeName = varDecl.Type.ToString();
-                        if (configTypeNames.Any(n => typeName.Contains(n))) return true;
+                        if (configTypeNames.Any(n => typeName.Contains(n)))
+                        {
+                            return true;
+                        }
                     }
                 }
             }
@@ -166,15 +179,23 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return string.Empty;
+        if (classNode == null)
+        {
+            return string.Empty;
+        }
 
         if (classNode.Members.OfType<ConstructorDeclarationSyntax>().Any())
+        {
             return root!.ToFullString();
+        }
 
         var fields = classNode.Members
             .OfType<FieldDeclarationSyntax>()
@@ -185,7 +206,10 @@ public class CodeGenerationEngine
                 Type: f.Declaration.Type.ToString())))
             .ToList();
 
-        if (!fields.Any()) return root!.ToFullString();
+        if (fields.Count == 0)
+        {
+            return root!.ToFullString();
+        }
 
         var parameters = fields.Select(f =>
         {
@@ -219,7 +243,7 @@ public class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(ctor);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot));
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: ct);
         return (await formatted.GetTextAsync(ct)).ToString();
     }
 
@@ -253,20 +277,26 @@ public class CodeGenerationEngine
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
+        {
             return new GenerateToStringResult(string.Empty, [], [], "File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
+        {
             return new GenerateToStringResult(string.Empty, [], [], $"Class '{className}' not found.");
+        }
 
         var alreadyOverrides = classNode.Members
             .OfType<MethodDeclarationSyntax>()
             .Any(m => m.Identifier.Text == "ToString" &&
                       m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)));
         if (alreadyOverrides)
+        {
             return new GenerateToStringResult(root!.ToFullString(), [], [], "ToString() override already exists — nothing changed.");
+        }
 
         var allPublicProps = classNode.Members
             .OfType<PropertyDeclarationSyntax>()
@@ -274,17 +304,21 @@ public class CodeGenerationEngine
             .Select(p => p.Identifier.Text)
             .ToList();
 
-        if (!allPublicProps.Any())
+        if (allPublicProps.Count == 0)
+        {
             return new GenerateToStringResult(root!.ToFullString(), [], [], "No public properties found — nothing generated.");
+        }
 
         var userExcluded = excludeProperties ?? [];
         var autoExcluded = allPublicProps.Where(IsSensitivePropertyName).ToList();
-        var allExcluded  = userExcluded.Union(autoExcluded, StringComparer.OrdinalIgnoreCase).ToList();
-        var included     = allPublicProps.Where(p => !allExcluded.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
+        var allExcluded = userExcluded.Union(autoExcluded, StringComparer.OrdinalIgnoreCase).ToList();
+        var included = allPublicProps.Where(p => !allExcluded.Contains(p, StringComparer.OrdinalIgnoreCase)).ToList();
 
-        if (!included.Any())
+        if (included.Count == 0)
+        {
             return new GenerateToStringResult(root!.ToFullString(), [], allExcluded,
                 "All public properties were excluded (sensitive names or explicitly excluded). No ToString() generated.");
+        }
 
         var parts = string.Join(", ", included.Select(p => p + " = {" + p + "}"));
         var returnStatement = "return $\"" + className + " {{ " + parts + " }}\";";
@@ -299,7 +333,7 @@ public class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(method);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot));
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: ct);
         var updatedContent = (await formatted.GetTextAsync(ct)).ToString();
 
         string? warning = allExcluded.Count > 0
@@ -316,7 +350,10 @@ public class CodeGenerationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project == null) throw new Exception("Project not found.");
+        if (project == null)
+        {
+            throw new InvalidOperationException("Project not found.");
+        }
 
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -336,17 +373,39 @@ public class CodeGenerationEngine
         foreach (var document in project.Documents)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            if (semanticModel == null) continue;
+            if (semanticModel == null)
+            {
+                continue;
+            }
 
             // Pattern 1: config["Key"] — only when receiver is IConfiguration
             foreach (var access in root.DescendantNodes().OfType<ElementAccessExpressionSyntax>())
             {
-                if (access.ArgumentList.Arguments.Count != 1) continue;
-                if (access.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax lit) continue;
-                if (!lit.IsKind(SyntaxKind.StringLiteralExpression)) continue;
-                if (!IsConfigurationReceiver(access.Expression, semanticModel, configTypeNames, root, cancellationToken)) continue;
+                if (access.ArgumentList.Arguments.Count != 1)
+                {
+                    continue;
+                }
+
+                if (access.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax lit)
+                {
+                    continue;
+                }
+
+                if (!lit.IsKind(SyntaxKind.StringLiteralExpression))
+                {
+                    continue;
+                }
+
+                if (!IsConfigurationReceiver(access.Expression, semanticModel, configTypeNames, root, cancellationToken))
+                {
+                    continue;
+                }
 
                 collectedKeys.Add(lit.Token.ValueText);
             }
@@ -354,13 +413,35 @@ public class CodeGenerationEngine
             // Pattern 2: config.GetValue<T>("Key"), config.GetSection("Key"), etc.
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
-                if (!getValueMethodNames.Contains(ma.Name.Identifier.Text)) continue;
-                if (inv.ArgumentList.Arguments.Count == 0) continue;
+                if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                {
+                    continue;
+                }
 
-                if (inv.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax keyLit) continue;
-                if (!keyLit.IsKind(SyntaxKind.StringLiteralExpression)) continue;
-                if (!IsConfigurationReceiver(ma.Expression, semanticModel, configTypeNames, root, cancellationToken)) continue;
+                if (!getValueMethodNames.Contains(ma.Name.Identifier.Text))
+                {
+                    continue;
+                }
+
+                if (inv.ArgumentList.Arguments.Count == 0)
+                {
+                    continue;
+                }
+
+                if (inv.ArgumentList.Arguments[0].Expression is not LiteralExpressionSyntax keyLit)
+                {
+                    continue;
+                }
+
+                if (!keyLit.IsKind(SyntaxKind.StringLiteralExpression))
+                {
+                    continue;
+                }
+
+                if (!IsConfigurationReceiver(ma.Expression, semanticModel, configTypeNames, root, cancellationToken))
+                {
+                    continue;
+                }
 
                 collectedKeys.Add(keyLit.Token.ValueText);
             }
@@ -383,10 +464,12 @@ public class CodeGenerationEngine
             }
             var leafKey = parts[^1];
             if (!current.ContainsKey(leafKey))
+            {
                 current[leafKey] = "TODO: Set default value";
+            }
         }
 
-        return JsonSerializer.Serialize(root2, new JsonSerializerOptions { WriteIndented = true });
+        return JsonSerializer.Serialize(root2, defaultJsonSerializerOptions);
     }
 
     /// <summary>
@@ -398,12 +481,18 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) throw new Exception($"File not found: {filePath}");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception($"Class '{className}' not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException($"Class '{className}' not found.");
+        }
 
         // Determine namespace
         var ns = root?.DescendantNodes()
@@ -502,8 +591,10 @@ public class CodeGenerationEngine
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
         if (document == null)
+        {
             return new FluentBuilderResult("", "", "",
                 Error: $"File not found: '{filePath}'. Verify the path and ensure the solution is loaded.");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
 
@@ -514,8 +605,10 @@ public class CodeGenerationEngine
                    .FirstOrDefault(r => r.Identifier.Text == className);
 
         if (typeNode == null)
+        {
             return new FluentBuilderResult("", "", "",
                 Error: $"Class or record '{className}' not found in '{filePath}'. Check spelling and that the file contains this type.");
+        }
 
         var ns = root?.DescendantNodes()
             .OfType<BaseNamespaceDeclarationSyntax>()
@@ -530,7 +623,9 @@ public class CodeGenerationEngine
             foreach (var param in recordNode.ParameterList.Parameters)
             {
                 if (param.Type != null && param.Identifier.Text.Length > 0)
+                {
                     properties.Add((param.Identifier.Text, param.Type.ToString()));
+                }
             }
         }
 
@@ -545,14 +640,18 @@ public class CodeGenerationEngine
         foreach (var bp in bodyProps)
         {
             if (!properties.Any(p => p.Name == bp.Name))
+            {
                 properties.Add(bp);
+            }
         }
 
         if (properties.Count == 0)
+        {
             return new FluentBuilderResult("", "", "",
                 Error: $"No settable public properties or primary constructor parameters found on '{className}'. " +
                        $"generate_fluent_builder is designed for POCOs and records with settable properties, not " +
                        $"DI-injected classes. Consider exposing public properties or using a record type.");
+        }
 
         var builderClassName = className + "Builder";
         var sb = new System.Text.StringBuilder();
@@ -572,7 +671,10 @@ public class CodeGenerationEngine
             sb.AppendLine($"    private {type} {fieldName};");
         }
 
-        if (properties.Any()) sb.AppendLine();
+        if (properties.Count != 0)
+        {
+            sb.AppendLine();
+        }
 
         foreach (var (name, type) in properties)
         {
@@ -632,15 +734,25 @@ public class CodeGenerationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             interfaceSymbol = compilation
                 .GetSymbolsWithName(interfaceName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
-            if (interfaceSymbol != null) break;
+            if (interfaceSymbol != null)
+            {
+                break;
+            }
         }
 
-        if (interfaceSymbol == null) return null;
+        if (interfaceSymbol == null)
+        {
+            return null;
+        }
 
         var ns = interfaceSymbol.ContainingNamespace?.IsGlobalNamespace == true
             ? null : interfaceSymbol.ContainingNamespace?.ToDisplayString();
@@ -688,11 +800,16 @@ public class CodeGenerationEngine
 
                 sb.AppendLine($"    public {returnType} {method.Name}{typeParams}({paramList})");
                 sb.AppendLine("    {");
-                sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLower()} cross-cutting concern here");
+                sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLowerInvariant()} cross-cutting concern here");
                 if (returnType == "void")
+                {
                     sb.AppendLine($"        _inner.{method.Name}{typeParams}({argList});");
+                }
                 else
+                {
                     sb.AppendLine($"        return _inner.{method.Name}{typeParams}({argList});");
+                }
+
                 sb.AppendLine("    }");
                 sb.AppendLine();
             }
@@ -703,7 +820,7 @@ public class CodeGenerationEngine
                 sb.AppendLine("    {");
                 if (!property.IsWriteOnly)
                 {
-                    sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLower()} cross-cutting concern here");
+                    sb.AppendLine($"        // TODO: Add {decoratorPrefix.ToLowerInvariant()} cross-cutting concern here");
                     sb.AppendLine($"        get => _inner.{property.Name};");
                 }
                 if (!property.IsReadOnly)
@@ -730,24 +847,38 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return $"File '{filePath}' not found in solution.";
+        if (document == null)
+        {
+            return $"File '{filePath}' not found in solution.";
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null || semanticModel == null) return "Could not load semantic model.";
+        if (root == null || semanticModel == null)
+        {
+            return "Could not load semantic model.";
+        }
 
         var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classDecl == null) return $"Class '{className}' not found in file.";
+        if (classDecl == null)
+        {
+            return $"Class '{className}' not found in file.";
+        }
 
-        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
-        if (classSymbol == null) return "Could not get class symbol.";
+        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: ct) as INamedTypeSymbol;
+        if (classSymbol == null)
+        {
+            return "Could not get class symbol.";
+        }
 
         var ifaceSymbol = classSymbol.AllInterfaces
             .FirstOrDefault(i => i.Name == interfaceName ||
                 i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);
         if (ifaceSymbol == null)
+        {
             return $"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.";
+        }
 
         var unimplemented = ifaceSymbol.GetMembers()
             .Where(m => m.Kind == SymbolKind.Method || m.Kind == SymbolKind.Property)
@@ -758,7 +889,10 @@ public class CodeGenerationEngine
             })
             .ToList();
 
-        if (!unimplemented.Any()) return $"All members of '{interfaceName}' are already implemented.";
+        if (unimplemented.Count == 0)
+        {
+            return $"All members of '{interfaceName}' are already implemented.";
+        }
 
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var member in unimplemented)
@@ -795,9 +929,15 @@ public class CodeGenerationEngine
                         SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
                             .WithArgumentList(SyntaxFactory.ArgumentList())));
                 if (!prop.IsWriteOnly)
+                {
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(throwBody));
+                }
+
                 if (!prop.IsReadOnly)
+                {
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(throwBody));
+                }
+
                 var propDecl = SyntaxFactory.PropertyDeclaration(propType, prop.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
@@ -831,17 +971,27 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         PropertyDeclarationSyntax? propNode = null;
         if (contextSnippet != null)
         {
             var srcText = await document.GetTextAsync(ct);
             var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
-            if (pos < 0) return $"Error: {snippetError}";
+            if (pos < 0)
+            {
+                return $"Error: {snippetError}";
+            }
+
             propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf()
                 .OfType<PropertyDeclarationSyntax>()
@@ -852,7 +1002,10 @@ public class CodeGenerationEngine
             .OfType<PropertyDeclarationSyntax>()
             .FirstOrDefault(p => p.Identifier.Text == propertyName);
 
-        if (propNode == null) return string.Empty;
+        if (propNode == null)
+        {
+            return string.Empty;
+        }
 
         SyntaxNode newRoot = direction switch
         {
@@ -886,10 +1039,14 @@ public class CodeGenerationEngine
 
         var accessors = new List<AccessorDeclarationSyntax>();
         if (hasGetter)
+        {
             accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
                 .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(SyntaxFactory.IdentifierName(fieldName)))
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        }
+
         if (hasSetter)
+        {
             accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
                 .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
                     SyntaxFactory.AssignmentExpression(
@@ -897,6 +1054,7 @@ public class CodeGenerationEngine
                         SyntaxFactory.IdentifierName(fieldName),
                         SyntaxFactory.IdentifierName("value"))))
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        }
 
         var newPropNode = SyntaxFactory.PropertyDeclaration(propType, propNode.Identifier)
             .WithModifiers(propNode.Modifiers)
@@ -923,30 +1081,43 @@ public class CodeGenerationEngine
 
         var accessors = new List<AccessorDeclarationSyntax>();
         if (hasGetter)
+        {
             accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        }
+
         if (hasSetter)
+        {
             accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        }
 
         var newProp = SyntaxFactory.PropertyDeclaration(propType, propNode.Identifier)
             .WithModifiers(propNode.Modifiers)
             .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
 
         if (fieldInitializer != null)
+        {
             newProp = newProp
                 .WithInitializer(fieldInitializer.WithoutTrivia())
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+        }
 
         var members = typeDecl.Members.ToList();
         var propIdx = members.FindIndex(m => ReferenceEquals(m, propNode));
-        if (propIdx < 0) return root;
+        if (propIdx < 0)
+        {
+            return root;
+        }
 
         members[propIdx] = newProp;
         if (backingField != null)
         {
             var fieldIdx = members.FindIndex(m => ReferenceEquals(m, backingField));
-            if (fieldIdx >= 0) members.RemoveAt(fieldIdx);
+            if (fieldIdx >= 0)
+            {
+                members.RemoveAt(fieldIdx);
+            }
         }
 
         var newTypeDecl = SetTypeMembers(typeDecl, SyntaxFactory.List(members));
@@ -960,7 +1131,10 @@ public class CodeGenerationEngine
         var typeDecl = propNode.Ancestors().OfType<TypeDeclarationSyntax>().First();
         var members = typeDecl.Members.ToList();
         var propIdx = members.FindIndex(m => ReferenceEquals(m, propNode));
-        if (propIdx < 0) return root;
+        if (propIdx < 0)
+        {
+            return root;
+        }
 
         members[propIdx] = newPropNode;
         members.Insert(propIdx, fieldDecl);
@@ -995,15 +1169,23 @@ public class CodeGenerationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var srcText = await document.GetTextAsync(ct);
         var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
+        {
             return $"Error: {snippetError}";
+        }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
             .AncestorsAndSelf()
@@ -1011,11 +1193,15 @@ public class CodeGenerationEngine
             .FirstOrDefault(IsStringFormatCall);
 
         if (invocation == null)
+        {
             return "No string.Format call found at the given context snippet.";
+        }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
+        {
             return "string.Format call has no arguments.";
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
 
@@ -1032,7 +1218,9 @@ public class CodeGenerationEngine
             {
                 var constVal = semanticModel.GetConstantValue(formatArgExpr, ct);
                 if (constVal.HasValue && constVal.Value is string s)
+                {
                     formatString = s;
+                }
             }
             catch (Exception ex)
             {
@@ -1043,7 +1231,9 @@ public class CodeGenerationEngine
         }
 
         if (formatString == null)
+        {
             return "Could not resolve the format string (not a string literal or const string).";
+        }
 
         var fmtArgs = args.Skip(1).Select(a => a.Expression.ToString()).ToList();
         var interpolated = BuildInterpolatedString(formatString, fmtArgs);
@@ -1060,8 +1250,8 @@ public class CodeGenerationEngine
     {
         if (invocation.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Format")
         {
-            return ma.Expression is PredefinedTypeSyntax pts && pts.Keyword.IsKind(SyntaxKind.StringKeyword)
-                || ma.Expression is IdentifierNameSyntax id && id.Identifier.Text is "String" or "string";
+            return (ma.Expression is PredefinedTypeSyntax pts && pts.Keyword.IsKind(SyntaxKind.StringKeyword))
+                || (ma.Expression is IdentifierNameSyntax id && id.Identifier.Text is "String" or "string");
         }
         return false;
     }
@@ -1092,7 +1282,7 @@ public class CodeGenerationEngine
                     var spec = format.Substring(i + 1, end - i - 1);
                     var colonIdx = spec.IndexOf(':');
                     var indexStr = colonIdx >= 0 ? spec.Substring(0, colonIdx) : spec;
-                    var formatSpec = colonIdx >= 0 ? ":" + spec.Substring(colonIdx + 1) : "";
+                    var formatSpec = colonIdx >= 0 ? string.Concat(":", spec.AsSpan(colonIdx + 1)) : "";
                     if (int.TryParse(indexStr.Trim(), out int idx) && idx < args.Count)
                     {
                         sb.Append('{').Append(args[idx]).Append(formatSpec).Append('}');
@@ -1101,8 +1291,15 @@ public class CodeGenerationEngine
                     }
                 }
             }
-            if (format[i] == '"') sb.Append("\\\"");
-            else sb.Append(format[i]);
+            if (format[i] == '"')
+            {
+                sb.Append("\\\"");
+            }
+            else
+            {
+                sb.Append(format[i]);
+            }
+
             i++;
         }
         sb.Append('"');

@@ -1,7 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Server;
 using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -127,5 +128,4 @@ public class RefactoringTests
         Assert.That(partialCode, Contains.Substring("partial class C"));
         Assert.That(partialCode, Contains.Substring("void M2()"));
     }
-
 }

@@ -19,10 +19,16 @@ public class PerformanceEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<PerformanceIssueReport>();
+        if (document == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<PerformanceIssueReport>();
+        if (root == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var issues = new List<PerformanceIssueReport>();
 
@@ -49,7 +55,10 @@ public class PerformanceEngine
         foreach (var assign in assignConcats)
         {
             var inLoop = assign.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax || a is DoStatementSyntax);
-            if (!inLoop) continue;
+            if (!inLoop)
+            {
+                continue;
+            }
 
             // Use semantic model if available, otherwise fall back to literal heuristic
             bool isStringAssign = false;
@@ -245,8 +254,15 @@ public class PerformanceEngine
         // 8. Select().Select() — two projections can be merged into one
         foreach (var outerSelect in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (outerSelect.Expression is not MemberAccessExpressionSyntax outerMa) continue;
-            if (outerMa.Name.Identifier.Text != "Select") continue;
+            if (outerSelect.Expression is not MemberAccessExpressionSyntax outerMa)
+            {
+                continue;
+            }
+
+            if (outerMa.Name.Identifier.Text != "Select")
+            {
+                continue;
+            }
 
             if (outerMa.Expression is InvocationExpressionSyntax innerSelect &&
                 innerSelect.Expression is MemberAccessExpressionSyntax innerMa &&
@@ -283,7 +299,10 @@ public class PerformanceEngine
         {
             var containingMethod = lockStmt.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
             bool isAsync = containingMethod?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
-            if (!isAsync) continue;
+            if (!isAsync)
+            {
+                continue;
+            }
 
             bool hasAsyncCalls = lockStmt.Statement.DescendantNodes()
                 .OfType<InvocationExpressionSyntax>()
@@ -304,10 +323,21 @@ public class PerformanceEngine
         // 12. .OrderBy(...).First() or .OrderByDescending(...).First() — use MinBy/MaxBy
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax outerMa) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax outerMa)
+            {
+                continue;
+            }
+
             var outerName = outerMa.Name.Identifier.Text;
-            if (outerName is not ("First" or "FirstOrDefault")) continue;
-            if (inv.ArgumentList.Arguments.Count != 0) continue;
+            if (outerName is not ("First" or "FirstOrDefault"))
+            {
+                continue;
+            }
+
+            if (inv.ArgumentList.Arguments.Count != 0)
+            {
+                continue;
+            }
 
             if (outerMa.Expression is InvocationExpressionSyntax innerInvSort &&
                 innerInvSort.Expression is MemberAccessExpressionSyntax innerMaSort)
@@ -336,8 +366,15 @@ public class PerformanceEngine
                 foreach (var declarator in method.DescendantNodes().OfType<VariableDeclaratorSyntax>())
                 {
                     var localSymbol = semanticModel.GetDeclaredSymbol(declarator, cancellationToken) as ILocalSymbol;
-                    if (localSymbol == null) continue;
-                    if (!SemanticTypeHelper.IsNonMaterializedSequence(localSymbol.Type)) continue;
+                    if (localSymbol == null)
+                    {
+                        continue;
+                    }
+
+                    if (!SemanticTypeHelper.IsNonMaterializedSequence(localSymbol.Type))
+                    {
+                        continue;
+                    }
 
                     // Count references to this symbol inside the method (excluding the declaration itself)
                     var uses = method.DescendantNodes()
@@ -377,13 +414,18 @@ public class PerformanceEngine
             {
                 isRegex = oc.Type.ToString() is "Regex" or "System.Text.RegularExpressions.Regex";
             }
-            if (!isRegex) continue;
+            if (!isRegex)
+            {
+                continue;
+            }
 
             // OK if it's inside a static field initializer (that IS the correct pattern)
             var containingField = oc.Ancestors().OfType<FieldDeclarationSyntax>().FirstOrDefault();
             if (containingField != null &&
                 containingField.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword) || m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+            {
                 continue;
+            }
 
             // Flag if created inside a method body
             if (oc.Ancestors().OfType<MethodDeclarationSyntax>().Any())
@@ -399,21 +441,38 @@ public class PerformanceEngine
         // e.g. s.Contains("x") → s.Contains('x') — avoids string allocation, uses faster comparison
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax sma) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax sma)
+            {
+                continue;
+            }
+
             var mName = sma.Name.Identifier.Text;
-            if (mName is not ("Contains" or "IndexOf" or "StartsWith" or "EndsWith" or "LastIndexOf")) continue;
-            if (inv.ArgumentList.Arguments.Count < 1) continue;
+            if (mName is not ("Contains" or "IndexOf" or "StartsWith" or "EndsWith" or "LastIndexOf"))
+            {
+                continue;
+            }
+
+            if (inv.ArgumentList.Arguments.Count < 1)
+            {
+                continue;
+            }
 
             var firstArg = inv.ArgumentList.Arguments[0].Expression;
             if (firstArg is not LiteralExpressionSyntax lit ||
                 !lit.IsKind(SyntaxKind.StringLiteralExpression) ||
-                lit.Token.ValueText.Length != 1) continue;
+                lit.Token.ValueText.Length != 1)
+            {
+                continue;
+            }
 
             bool receiverIsString = true;
             if (semanticModel != null)
             {
                 var rt = semanticModel.GetTypeInfo(sma.Expression, cancellationToken).Type;
-                if (rt != null) receiverIsString = rt.SpecialType == SpecialType.System_String;
+                if (rt != null)
+                {
+                    receiverIsString = rt.SpecialType == SpecialType.System_String;
+                }
             }
 
             if (receiverIsString)
@@ -429,8 +488,16 @@ public class PerformanceEngine
         // 16. Where().Where() — two filter passes when one would do
         foreach (var outerWhere in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (outerWhere.Expression is not MemberAccessExpressionSyntax owMa) continue;
-            if (owMa.Name.Identifier.Text != "Where") continue;
+            if (outerWhere.Expression is not MemberAccessExpressionSyntax owMa)
+            {
+                continue;
+            }
+
+            if (owMa.Name.Identifier.Text != "Where")
+            {
+                continue;
+            }
+
             if (owMa.Expression is InvocationExpressionSyntax inner &&
                 inner.Expression is MemberAccessExpressionSyntax iwMa &&
                 iwMa.Name.Identifier.Text == "Where")
@@ -445,7 +512,10 @@ public class PerformanceEngine
         // 17. Loop invariant condition — .Count() or .Count/.Length evaluated on every for-loop iteration
         foreach (var forLoop in root.DescendantNodes().OfType<ForStatementSyntax>())
         {
-            if (forLoop.Condition == null) continue;
+            if (forLoop.Condition == null)
+            {
+                continue;
+            }
 
             // .Count() LINQ extension — O(n) per-iteration check
             foreach (var call in forLoop.Condition.DescendantNodesAndSelf()
@@ -469,7 +539,10 @@ public class PerformanceEngine
                 if (semanticModel != null)
                 {
                     var receiverType = semanticModel.GetTypeInfo(ma.Expression, cancellationToken).Type;
-                    if (receiverType?.TypeKind == TypeKind.Array) continue;
+                    if (receiverType?.TypeKind == TypeKind.Array)
+                    {
+                        continue;
+                    }
                 }
                 var loc = ma.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
@@ -493,9 +566,21 @@ public class PerformanceEngine
         // 19. Local variable typed as 'object' — prefer specific type or generics to avoid boxing
         foreach (var pts in root.DescendantNodes().OfType<PredefinedTypeSyntax>())
         {
-            if (!pts.Keyword.IsKind(SyntaxKind.ObjectKeyword)) continue;
-            if (pts.Parent is not VariableDeclarationSyntax objVd) continue;
-            if (objVd.Parent is not LocalDeclarationStatementSyntax) continue;
+            if (!pts.Keyword.IsKind(SyntaxKind.ObjectKeyword))
+            {
+                continue;
+            }
+
+            if (pts.Parent is not VariableDeclarationSyntax objVd)
+            {
+                continue;
+            }
+
+            if (objVd.Parent is not LocalDeclarationStatementSyntax)
+            {
+                continue;
+            }
+
             var varName = objVd.Variables.FirstOrDefault()?.Identifier.Text ?? "variable";
             var loc = pts.GetLocation().GetLineSpan().StartLinePosition;
             issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
@@ -506,11 +591,27 @@ public class PerformanceEngine
         // 20. Enum.Parse / Enum.TryParse inside a loop — re-parses string on every iteration
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax enumMa) continue;
-            if (enumMa.Expression.ToString() is not ("Enum" or "System.Enum")) continue;
-            if (enumMa.Name.Identifier.Text is not ("Parse" or "TryParse")) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax enumMa)
+            {
+                continue;
+            }
+
+            if (enumMa.Expression.ToString() is not ("Enum" or "System.Enum"))
+            {
+                continue;
+            }
+
+            if (enumMa.Name.Identifier.Text is not ("Parse" or "TryParse"))
+            {
+                continue;
+            }
+
             if (!inv.Ancestors().Any(a => a is ForStatementSyntax || a is ForEachStatementSyntax ||
-                                         a is WhileStatementSyntax || a is DoStatementSyntax)) continue;
+                                         a is WhileStatementSyntax || a is DoStatementSyntax))
+            {
+                continue;
+            }
+
             var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
             issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
                 "EnumParseInLoop",
@@ -520,20 +621,34 @@ public class PerformanceEngine
         // 21. .Aggregate() with string concatenation in lambda — string.Join() avoids N-1 intermediate allocations
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax aggMa) continue;
-            if (aggMa.Name.Identifier.Text != "Aggregate") continue;
-            if (inv.ArgumentList.Arguments.Count < 1) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax aggMa)
+            {
+                continue;
+            }
+
+            if (aggMa.Name.Identifier.Text != "Aggregate")
+            {
+                continue;
+            }
+
+            if (inv.ArgumentList.Arguments.Count < 1)
+            {
+                continue;
+            }
 
             var firstArg = inv.ArgumentList.Arguments[0].Expression;
             var lambdaBody = (firstArg as SimpleLambdaExpressionSyntax)?.Body
                           ?? (firstArg as ParenthesizedLambdaExpressionSyntax)?.Body;
-            if (lambdaBody == null) continue;
+            if (lambdaBody == null)
+            {
+                continue;
+            }
 
             var hasStringLiteralConcat = lambdaBody.DescendantNodesAndSelf()
                 .OfType<BinaryExpressionSyntax>()
                 .Any(b => b.IsKind(SyntaxKind.AddExpression) &&
-                          (b.Left is LiteralExpressionSyntax l1 && l1.IsKind(SyntaxKind.StringLiteralExpression) ||
-                           b.Right is LiteralExpressionSyntax l2 && l2.IsKind(SyntaxKind.StringLiteralExpression)));
+                          ((b.Left is LiteralExpressionSyntax l1 && l1.IsKind(SyntaxKind.StringLiteralExpression)) ||
+                           (b.Right is LiteralExpressionSyntax l2 && l2.IsKind(SyntaxKind.StringLiteralExpression))));
 
             if (hasStringLiteralConcat)
             {
@@ -571,16 +686,26 @@ public class PerformanceEngine
         {
             foreach (var inv in loopNode.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (inv.Expression is not MemberAccessExpressionSyntax refMa) continue;
+                if (inv.Expression is not MemberAccessExpressionSyntax refMa)
+                {
+                    continue;
+                }
+
                 var name = refMa.Name.Identifier.Text;
                 if (name is not ("GetMethod" or "GetProperty" or "GetField" or "GetEvent" or
                                   "GetConstructor" or "GetMembers" or "GetMethods" or "GetProperties" or
-                                  "GetFields" or "GetInterface" or "GetInterfaces" or "GetType")) continue;
+                                  "GetFields" or "GetInterface" or "GetInterfaces" or "GetType"))
+                {
+                    continue;
+                }
 
                 // Skip GetType() called on instances (not typeof), which is commonly needed
                 if (name == "GetType" && inv.ArgumentList.Arguments.Count == 0 &&
                     refMa.Expression is not IdentifierNameSyntax { Identifier.Text: "Type" } and
-                    not MemberAccessExpressionSyntax { Name.Identifier.Text: "Assembly" }) continue;
+                    not MemberAccessExpressionSyntax { Name.Identifier.Text: "Assembly" })
+                {
+                    continue;
+                }
 
                 var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
@@ -596,16 +721,25 @@ public class PerformanceEngine
             {
                 foreach (var variable in localDecl.Declaration.Variables)
                 {
-                    if (variable.Initializer?.Value is not ObjectCreationExpressionSyntax oc) continue;
+                    if (variable.Initializer?.Value is not ObjectCreationExpressionSyntax oc)
+                    {
+                        continue;
+                    }
 
                     var typeName = oc.Type.ToString();
                     bool isGrowableCollection =
                         typeName.StartsWith("List<") || typeName.StartsWith("System.Collections.Generic.List<") ||
                         typeName.StartsWith("HashSet<") || typeName.StartsWith("Dictionary<");
-                    if (!isGrowableCollection) continue;
+                    if (!isGrowableCollection)
+                    {
+                        continue;
+                    }
 
                     // Already has a capacity argument — fine
-                    if (oc.ArgumentList != null && oc.ArgumentList.Arguments.Count > 0) continue;
+                    if (oc.ArgumentList != null && oc.ArgumentList.Arguments.Count > 0)
+                    {
+                        continue;
+                    }
 
                     var varName = variable.Identifier.Text;
 
@@ -617,7 +751,10 @@ public class PerformanceEngine
                                         lma.Name.Identifier.Text == "Add" &&
                                         lma.Expression.ToString() == varName));
 
-                    if (!hasLoopAdd) continue;
+                    if (!hasLoopAdd)
+                    {
+                        continue;
+                    }
 
                     var loc = localDecl.GetLocation().GetLineSpan().StartLinePosition;
                     issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1,
@@ -636,7 +773,9 @@ public class PerformanceEngine
         {
             var key = (issue.FilePath, issue.Line, issue.IssueType);
             if (seen.Add(key))
+            {
                 deduped.Add(issue);
+            }
         }
         return deduped;
     }
@@ -645,11 +784,17 @@ public class PerformanceEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<PerformanceIssueReport>();
+        if (document == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<PerformanceIssueReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var issues = new List<PerformanceIssueReport>();
         var objectCreations = root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
@@ -661,10 +806,14 @@ public class PerformanceEngine
             // HttpClient must be long-lived (IHttpClientFactory manages lifetime);
             // Socket is pooled by the OS; disposing per-use is harmful.
             if (typeInfo != null && (SemanticTypeHelper.IsHttpClient(typeInfo) ||
-                typeInfo.Name is "Socket" or "TcpClient" or "UdpClient")) continue;
+                typeInfo.Name is "Socket" or "TcpClient" or "UdpClient"))
+            {
+                continue;
+            }
+
             if (typeInfo != null && typeInfo.AllInterfaces.Any(i => i.Name == "IDisposable"))
             {
-                var isDisposed = creation.Ancestors().Any(a => a is UsingStatementSyntax || a is LocalDeclarationStatementSyntax lds && lds.UsingKeyword.IsKind(SyntaxKind.UsingKeyword));
+                var isDisposed = creation.Ancestors().Any(a => a is UsingStatementSyntax || (a is LocalDeclarationStatementSyntax lds && lds.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)));
                 if (!isDisposed)
                 {
                     var loc = creation.GetLocation().GetLineSpan().StartLinePosition;
@@ -680,10 +829,16 @@ public class PerformanceEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<PerformanceIssueReport>();
+        if (document == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<PerformanceIssueReport>();
+        if (root == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var issues = new List<PerformanceIssueReport>();
         var binaryExprs = root.DescendantNodes().OfType<BinaryExpressionSyntax>()
@@ -694,11 +849,11 @@ public class PerformanceEngine
             var left = bin.Left.ToString();
             var right = bin.Right.ToString();
 
-            if (left.Contains(".ToLower()") || left.Contains(".ToUpper()") || 
-                right.Contains(".ToLower()") || right.Contains(".ToUpper()"))
+            if (left.Contains(".ToLowerInvariant()") || left.Contains(".ToUpperInvariant()") || 
+                right.Contains(".ToLowerInvariant()") || right.Contains(".ToUpperInvariant()"))
             {
                 var loc = bin.GetLocation().GetLineSpan().StartLinePosition;
-                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "InefficientStringComparison", "Avoid using .ToLower() or .ToUpper() for comparison. Use string.Equals with StringComparison.OrdinalIgnoreCase instead."));
+                issues.Add(new PerformanceIssueReport(filePath, loc.Line + 1, loc.Character + 1, "InefficientStringComparison", "Avoid using .ToLowerInvariant() or .ToUpperInvariant() for comparison. Use string.Equals with StringComparison.OrdinalIgnoreCase instead."));
             }
         }
 
@@ -709,11 +864,17 @@ public class PerformanceEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<PerformanceIssueReport>();
+        if (document == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<PerformanceIssueReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<PerformanceIssueReport>();
+        }
 
         var issues = new List<PerformanceIssueReport>();
         // Simple heuristic: passing value type to method expecting object or dynamic
@@ -787,7 +948,11 @@ public class PerformanceEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             // Find all for/foreach/while loop bodies
@@ -802,9 +967,16 @@ public class PerformanceEngine
                 // Find all LINQ terminal invocations inside this loop
                 foreach (var inv in loop.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
-                    if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
+                    if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                    {
+                        continue;
+                    }
+
                     var terminalName = ma.Name.Identifier.Text;
-                    if (!LinqTerminals.Contains(terminalName)) continue;
+                    if (!LinqTerminals.Contains(terminalName))
+                    {
+                        continue;
+                    }
 
                     // The receiver must look like a LINQ chain (contains .Where / .Select / etc.)
                     var chain = ma.Expression.ToString();
@@ -816,7 +988,10 @@ public class PerformanceEngine
                     bool terminalTakesLoopVar = loopVar != null &&
                         inv.ArgumentList.Arguments.Any(a => a.ToString().Contains(loopVar));
 
-                    if (!isLinqChain && !terminalTakesLoopVar) continue;
+                    if (!isLinqChain && !terminalTakesLoopVar)
+                    {
+                        continue;
+                    }
 
                     // Confirm the loop variable appears inside the LINQ chain (the filter uses the per-item value)
                     bool usesLoopVar = loopVar == null ||
@@ -824,7 +999,10 @@ public class PerformanceEngine
                             .Any(id => id.Identifier.Text == loopVar) ||
                         inv.ArgumentList.Arguments.Any(a => a.ToString().Contains(loopVar));
 
-                    if (!usesLoopVar && loopVar != null) continue;
+                    if (!usesLoopVar && loopVar != null)
+                    {
+                        continue;
+                    }
 
                     var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                     issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,
@@ -857,7 +1035,11 @@ public class PerformanceEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             static bool IsInsideLoop(SyntaxNode n) =>
@@ -867,9 +1049,16 @@ public class PerformanceEngine
             // $"..." interpolated strings in loops that contain non-literal expressions
             foreach (var interp in root.DescendantNodes().OfType<InterpolatedStringExpressionSyntax>())
             {
-                if (!IsInsideLoop(interp)) continue;
+                if (!IsInsideLoop(interp))
+                {
+                    continue;
+                }
                 // Only flag when the interpolation has dynamic content (not a pure constant)
-                if (!interp.Contents.OfType<InterpolationSyntax>().Any()) continue;
+                if (!interp.Contents.OfType<InterpolationSyntax>().Any())
+                {
+                    continue;
+                }
+
                 var loc = interp.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,
                     "InterpolatedStringInLoop",
@@ -880,10 +1069,26 @@ public class PerformanceEngine
             // string.Format(...) in loops
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (!IsInsideLoop(inv)) continue;
-                if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
-                if (ma.Expression.ToString() != "string" && ma.Expression.ToString() != "String") continue;
-                if (ma.Name.Identifier.Text != "Format") continue;
+                if (!IsInsideLoop(inv))
+                {
+                    continue;
+                }
+
+                if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                {
+                    continue;
+                }
+
+                if (ma.Expression.ToString() != "string" && ma.Expression.ToString() != "String")
+                {
+                    continue;
+                }
+
+                if (ma.Name.Identifier.Text != "Format")
+                {
+                    continue;
+                }
+
                 var loc = inv.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,
                     "StringFormatInLoop",
@@ -920,12 +1125,19 @@ public class PerformanceEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (method.Body == null) continue;
+                if (method.Body == null)
+                {
+                    continue;
+                }
 
                 // Collect IEnumerable/IQueryable locals and parameters (not already materialized)
                 var enumerableLocals = new HashSet<string>(StringComparer.Ordinal);
@@ -936,7 +1148,9 @@ public class PerformanceEngine
                     var typeName = param.Type?.ToString() ?? "";
                     if (typeName.StartsWith("IEnumerable") || typeName.StartsWith("IQueryable") ||
                         typeName.StartsWith("IOrderedEnumerable"))
+                    {
                         enumerableLocals.Add(param.Identifier.Text);
+                    }
                 }
 
                 foreach (var decl in method.Body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
@@ -947,7 +1161,10 @@ public class PerformanceEngine
                                         typeName.StartsWith("IOrderedEnumerable") ||
                                         typeName == "var"; // conservative: include var-typed, filter by usage
 
-                    if (!isEnumerable) continue;
+                    if (!isEnumerable)
+                    {
+                        continue;
+                    }
 
                     // Skip if the initializer itself materializes (= someList.Where(...).ToList())
                     foreach (var v in decl.Declaration.Variables)
@@ -955,11 +1172,16 @@ public class PerformanceEngine
                         var init = v.Initializer?.Value?.ToString() ?? "";
                         bool alreadyMaterialized = MaterializingMethods.Any(m => init.Contains("." + m + "("));
                         if (!alreadyMaterialized)
+                        {
                             enumerableLocals.Add(v.Identifier.Text);
+                        }
                     }
                 }
 
-                if (enumerableLocals.Count == 0) continue;
+                if (enumerableLocals.Count == 0)
+                {
+                    continue;
+                }
 
                 // For each candidate, count how many times it's enumerated (foreach + LINQ terminal calls)
                 foreach (var varName in enumerableLocals)
@@ -970,20 +1192,36 @@ public class PerformanceEngine
                     foreach (var fe in method.Body.DescendantNodes().OfType<ForEachStatementSyntax>())
                     {
                         if (fe.Expression is IdentifierNameSyntax id && id.Identifier.Text == varName)
+                        {
                             useSites.Add(fe.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
+                        }
                     }
 
                     foreach (var inv in method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>())
                     {
-                        if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
-                        if (!LinqTerminals.Contains(ma.Name.Identifier.Text)) continue;
+                        if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                        {
+                            continue;
+                        }
+
+                        if (!LinqTerminals.Contains(ma.Name.Identifier.Text))
+                        {
+                            continue;
+                        }
                         // The receiver (before the terminal) must reference our variable
                         if (!ma.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
-                                .Any(i => i.Identifier.Text == varName)) continue;
+                                .Any(i => i.Identifier.Text == varName))
+                        {
+                            continue;
+                        }
+
                         useSites.Add(inv.GetLocation().GetLineSpan().StartLinePosition.Line + 1);
                     }
 
-                    if (useSites.Count < 2) continue;
+                    if (useSites.Count < 2)
+                    {
+                        continue;
+                    }
 
                     issues.Add(new PerformanceIssueReport(fp, useSites[0], 1,
                         "MultipleEnumeration",
@@ -1024,26 +1262,54 @@ public class PerformanceEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var outer in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 // Pattern: outer = something.Where(pred).Terminal()
-                if (outer.Expression is not MemberAccessExpressionSyntax outerMa) continue;
+                if (outer.Expression is not MemberAccessExpressionSyntax outerMa)
+                {
+                    continue;
+                }
+
                 var terminalName = outerMa.Name.Identifier.Text;
-                if (!RedundantAfterWhere.Contains(terminalName)) continue;
+                if (!RedundantAfterWhere.Contains(terminalName))
+                {
+                    continue;
+                }
 
                 // The receiver of Terminal() must itself be a .Where(...) call
-                if (outerMa.Expression is not InvocationExpressionSyntax whereInv) continue;
-                if (whereInv.Expression is not MemberAccessExpressionSyntax whereMa) continue;
-                if (whereMa.Name.Identifier.Text != "Where") continue;
+                if (outerMa.Expression is not InvocationExpressionSyntax whereInv)
+                {
+                    continue;
+                }
+
+                if (whereInv.Expression is not MemberAccessExpressionSyntax whereMa)
+                {
+                    continue;
+                }
+
+                if (whereMa.Name.Identifier.Text != "Where")
+                {
+                    continue;
+                }
 
                 // Where must have exactly one argument (the predicate)
-                if (whereInv.ArgumentList.Arguments.Count != 1) continue;
+                if (whereInv.ArgumentList.Arguments.Count != 1)
+                {
+                    continue;
+                }
 
                 // Terminal must be called with NO arguments (Where already provides the predicate)
-                if (outer.ArgumentList.Arguments.Count != 0) continue;
+                if (outer.ArgumentList.Arguments.Count != 0)
+                {
+                    continue;
+                }
 
                 var loc = outer.GetLocation().GetLineSpan().StartLinePosition;
                 var pred = whereInv.ArgumentList.Arguments[0].ToString();
@@ -1077,23 +1343,44 @@ public class PerformanceEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var model = await doc.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var cast in root.DescendantNodes().OfType<CastExpressionSyntax>())
             {
                 var targetType = cast.Type.ToString();
-                if (targetType is not ("object" or "Object" or "dynamic")) continue;
+                if (targetType is not ("object" or "Object" or "dynamic"))
+                {
+                    continue;
+                }
 
                 var exprTypeInfo = model.GetTypeInfo(cast.Expression, ct);
                 var exprType = exprTypeInfo.Type as INamedTypeSymbol;
-                if (exprType == null) continue;
+                if (exprType == null)
+                {
+                    continue;
+                }
 
                 // Nullable<T> is a generic struct whose original definition is Nullable<T>
-                if (!exprType.IsValueType) continue;
-                if (exprType.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T) continue;
+                if (!exprType.IsValueType)
+                {
+                    continue;
+                }
+
+                if (exprType.OriginalDefinition.SpecialType != SpecialType.System_Nullable_T)
+                {
+                    continue;
+                }
 
                 var loc = cast.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new PerformanceIssueReport(fp, loc.Line + 1, loc.Character + 1,

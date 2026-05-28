@@ -1,13 +1,10 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
-using System.IO;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace RoslynSentinel.Server;
 
@@ -70,6 +67,7 @@ public class RefactoringEngine
     private readonly ILogger<RefactoringEngine> _logger;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
+    private static readonly string[] separator = new[] { "\r\n", "\r", "\n" };
 
     public RefactoringEngine(ILogger<RefactoringEngine> logger, PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
@@ -82,7 +80,11 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var formatted = await Formatter.FormatAsync(document, null, ct);
         return (await formatted.GetTextAsync(ct)).ToString();
     }
@@ -92,23 +94,46 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(ct);
-        if (root == null || semanticModel == null) return new Dictionary<string, string>();
+        if (root == null || semanticModel == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodDecl == null) return new Dictionary<string, string>();
+        if (methodDecl == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var parameters = methodDecl.ParameterList.Parameters.ToList();
-        if (parameters.Count == 0) return new Dictionary<string, string>();
+        if (parameters.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
 
         // Validate order array
-        if (newParameterOrder.Length != parameters.Count) return new Dictionary<string, string>();
-        if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count)) return new Dictionary<string, string>();
-        if (newParameterOrder.Distinct().Count() != parameters.Count) return new Dictionary<string, string>();
+        if (newParameterOrder.Length != parameters.Count)
+        {
+            return new Dictionary<string, string>();
+        }
+
+        if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count))
+        {
+            return new Dictionary<string, string>();
+        }
+
+        if (newParameterOrder.Distinct().Count() != parameters.Count)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
         var newParamList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(reorderedParams));
@@ -122,7 +147,7 @@ public class RefactoringEngine
         };
 
         // Reorder arguments at all call sites
-        var symbol = semanticModel.GetDeclaredSymbol(methodDecl) as IMethodSymbol;
+        var symbol = semanticModel.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
         if (symbol != null)
         {
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
@@ -130,18 +155,31 @@ public class RefactoringEngine
             {
                 foreach (var location in reference.Locations)
                 {
-                    if (location.IsImplicit || location.Document.FilePath == null) continue;
+                    if (location.IsImplicit || location.Document.FilePath == null)
+                    {
+                        continue;
+                    }
+
                     var refDoc = location.Document;
                     var refRoot = await refDoc.GetSyntaxRootAsync(ct);
-                    if (refRoot == null) continue;
+                    if (refRoot == null)
+                    {
+                        continue;
+                    }
 
                     var span = location.Location.SourceSpan;
                     var token = refRoot.FindToken(span.Start);
                     var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
-                    if (invocation == null) continue;
+                    if (invocation == null)
+                    {
+                        continue;
+                    }
 
                     var args = invocation.ArgumentList.Arguments.ToList();
-                    if (args.Count != parameters.Count) continue;
+                    if (args.Count != parameters.Count)
+                    {
+                        continue;
+                    }
 
                     var docPath = refDoc.FilePath!;
                     // Work from the already-pending content if we've updated this doc
@@ -151,7 +189,10 @@ public class RefactoringEngine
                     var targetInv = currentRoot.DescendantNodes()
                         .OfType<InvocationExpressionSyntax>()
                         .FirstOrDefault(inv => inv.Span == invocation.Span);
-                    if (targetInv == null) continue;
+                    if (targetInv == null)
+                    {
+                        continue;
+                    }
 
                     var reorderedArgs = newParameterOrder.Select(i => args[i]).ToList();
                     var newArgList = invocation.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(reorderedArgs));
@@ -186,38 +227,54 @@ public class RefactoringEngine
         string newMethodName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractMethod"))
+        {
             return new ExtractMethodResult(false, "ExtractMethod feature is disabled.", null, null, null, null);
+        }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
+        {
             return new ExtractMethodResult(false, $"File '{filePath}' not found in solution.", null, null, null, null);
+        }
 
         var text = await document.GetTextAsync(ct);
         if (startLine < 1 || startLine > text.Lines.Count)
+        {
             return new ExtractMethodResult(false, $"startLine {startLine} out of range (file has {text.Lines.Count} lines).", null, null, null, null);
+        }
+
         if (endLine < startLine || endLine > text.Lines.Count)
+        {
             return new ExtractMethodResult(false, $"endLine {endLine} is out of range.", null, null, null, null);
+        }
 
         // Stale-file validation: physical line text must match what the caller observed
         var actualStart = text.Lines[startLine - 1].ToString().Trim();
-        var actualEnd   = text.Lines[endLine   - 1].ToString().Trim();
+        var actualEnd = text.Lines[endLine - 1].ToString().Trim();
         if (actualStart != startLineText.Trim())
+        {
             return new ExtractMethodResult(false,
                 $"startLine mismatch: expected '{startLineText.Trim()}' but found '{actualStart}'. File may have changed.", null, null, null, null);
+        }
+
         if (actualEnd != endLineText.Trim())
+        {
             return new ExtractMethodResult(false,
                 $"endLine mismatch: expected '{endLineText.Trim()}' but found '{actualEnd}'. File may have changed.", null, null, null, null);
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(ct);
         if (root == null || semanticModel == null)
+        {
             return new ExtractMethodResult(false, "Could not obtain syntax root or semantic model.", null, null, null, null);
+        }
 
         var startPos = text.Lines[startLine - 1].Start;
-        var endPos   = text.Lines[endLine   - 1].End;
-        var span     = new TextSpan(startPos, endPos - startPos);
+        var endPos = text.Lines[endLine - 1].End;
+        var span = new TextSpan(startPos, endPos - startPos);
 
         // Find the method body that fully contains the selection
         var containingMethod = root.DescendantNodes()
@@ -225,15 +282,19 @@ public class RefactoringEngine
             .Where(m => m.Body != null)
             .FirstOrDefault(m => m.Body!.Span.Contains(span));
         if (containingMethod?.Body == null)
+        {
             return new ExtractMethodResult(false,
                 "Selected range must be inside a block-body method (expression-bodied methods are not supported).", null, null, null, null);
+        }
 
         // Collect direct body statements that overlap the selection
         var selectedStatements = containingMethod.Body.Statements
             .Where(s => s.Span.IntersectsWith(span))
             .ToList();
         if (selectedStatements.Count == 0)
+        {
             return new ExtractMethodResult(false, "No complete statements found in the selected line range.", null, null, null, null);
+        }
 
         // Data flow analysis to infer parameters and return type
         DataFlowAnalysis dataFlow;
@@ -259,31 +320,35 @@ public class RefactoringEngine
             .Where(p => p.RefKind != RefKind.None && !p.IsThis)
             .ToList();
         if (refOutFlowOut.Count > 0)
+        {
             return new ExtractMethodResult(false,
                 $"Cannot extract: ref/out parameter(s) '{string.Join(", ", refOutFlowOut.Select(p => p.Name))}' are " +
                 "written inside the selection and read after it. This case cannot be auto-extracted — refactor manually.",
                 null, null, null, null);
+        }
 
         // Return value: local variables assigned inside that are used after the region
         var flowsOut = dataFlow.DataFlowsOut
             .Where(s => s.Kind == SymbolKind.Local)
             .ToList();
         if (flowsOut.Count > 1)
+        {
             return new ExtractMethodResult(false,
                 $"Multiple variables flow out ({string.Join(", ", flowsOut.Select(s => s.Name))}). " +
                 "Cannot auto-determine return type — narrow the selection or handle manually.", null, null, null, null);
+        }
 
-        ILocalSymbol? returnVar   = flowsOut.Count == 1 ? (ILocalSymbol)flowsOut[0] : null;
-        bool isAsync              = selectedStatements.Any(s => s.DescendantTokens().Any(t => t.IsKind(SyntaxKind.AwaitKeyword)));
-        bool parentStatic         = containingMethod.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+        ILocalSymbol? returnVar = flowsOut.Count == 1 ? (ILocalSymbol)flowsOut[0] : null;
+        bool isAsync = selectedStatements.Any(s => s.DescendantTokens().Any(t => t.IsKind(SyntaxKind.AwaitKeyword)));
+        bool parentStatic = containingMethod.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 
         // Build return type syntax
         TypeSyntax returnType = (returnVar, isAsync) switch
         {
-            ({ } rv, true)  => SyntaxFactory.ParseTypeName($"Task<{rv.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>"),
+            ({ } rv, true) => SyntaxFactory.ParseTypeName($"Task<{rv.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>"),
             ({ } rv, false) => SyntaxFactory.ParseTypeName(rv.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)),
-            (null,   true)  => SyntaxFactory.ParseTypeName("Task"),
-            _               => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
+            (null, true) => SyntaxFactory.ParseTypeName("Task"),
+            _ => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
         };
 
         // Build parameter list — include ref/out/in modifiers for parameter symbols
@@ -308,8 +373,8 @@ public class RefactoringEngine
                 var kw = refKind switch
                 {
                     RefKind.Out => SyntaxKind.OutKeyword,
-                    RefKind.In  => SyntaxKind.InKeyword,
-                    _           => SyntaxKind.RefKeyword
+                    RefKind.In => SyntaxKind.InKeyword,
+                    _ => SyntaxKind.RefKeyword
                 };
                 param = param.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(kw)));
             }
@@ -322,11 +387,20 @@ public class RefactoringEngine
             .Cast<StatementSyntax>()
             .ToList();
         if (returnVar != null)
+        {
             bodyStmts.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(returnVar.Name)));
+        }
 
         var modifiers = new List<SyntaxToken> { SyntaxFactory.Token(SyntaxKind.PrivateKeyword) };
-        if (parentStatic) modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
-        if (isAsync)      modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+        if (parentStatic)
+        {
+            modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+        }
+
+        if (isAsync)
+        {
+            modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+        }
 
         var extractedMethod = SyntaxFactory
             .MethodDeclaration(returnType, newMethodName)
@@ -344,8 +418,8 @@ public class RefactoringEngine
                 var kw = p.RefKind switch
                 {
                     RefKind.Out => SyntaxFactory.Token(SyntaxKind.OutKeyword),
-                    RefKind.In  => SyntaxFactory.Token(SyntaxKind.InKeyword),
-                    _           => SyntaxFactory.Token(SyntaxKind.RefKeyword)
+                    RefKind.In => SyntaxFactory.Token(SyntaxKind.InKeyword),
+                    _ => SyntaxFactory.Token(SyntaxKind.RefKeyword)
                 };
                 arg = arg.WithRefKindKeyword(kw);
             }
@@ -395,15 +469,17 @@ public class RefactoringEngine
 
         // Rewrite method body: replace selected statements with the call site
         var origStmts = containingMethod.Body.Statements.ToList();
-        int insertAt  = origStmts.IndexOf(selectedStatements[0]);
-        var newStmts  = origStmts.ToList();
+        int insertAt = origStmts.IndexOf(selectedStatements[0]);
+        var newStmts = origStmts.ToList();
         newStmts.RemoveRange(insertAt, selectedStatements.Count);
         newStmts.Insert(insertAt, callStatement);
         var updatedMethod = containingMethod.WithBody(
             containingMethod.Body.WithStatements(SyntaxFactory.List(newStmts)));
 
         if (containingMethod.Parent is not TypeDeclarationSyntax parentType)
+        {
             return new ExtractMethodResult(false, "Could not find the containing type declaration.", null, null, null, null);
+        }
 
         // Append extracted method after the type's existing members
         var newParent = parentType
@@ -411,11 +487,11 @@ public class RefactoringEngine
             .AddMembers(extractedMethod);
         var newRoot = root.ReplaceNode(parentType, newParent);
 
-        var formattedDoc   = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, ct);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, ct);
         var updatedContent = (await formattedDoc.GetTextAsync(ct)).ToString();
 
-        var beforeSnippet       = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
-        var callSiteText        = callStatement.NormalizeWhitespace().ToFullString().Trim();
+        var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
+        var callSiteText = callStatement.NormalizeWhitespace().ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
 
         return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
@@ -423,14 +499,24 @@ public class RefactoringEngine
 
     public async Task<Dictionary<string, string>> MoveTypeToFileAsync(string filePath, string typeName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("MoveTypeToFile")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("MoveTypeToFile"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var typeNode = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == typeName);
-        if (typeNode == null) return new Dictionary<string, string>();
+        if (typeNode == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
         var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
@@ -440,7 +526,10 @@ public class RefactoringEngine
             var newNs = ns is FileScopedNamespaceDeclarationSyntax ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name) : SyntaxFactory.NamespaceDeclaration(ns.Name);
             newRoot = newRoot.AddMembers(newNs.AddMembers(cleanTypeNode));
         }
-        else newRoot = newRoot.AddMembers(cleanTypeNode);
+        else
+        {
+            newRoot = newRoot.AddMembers(cleanTypeNode);
+        }
 
         var sourceDirectory = Path.GetDirectoryName(document.FilePath ?? filePath);
         var newPath = string.IsNullOrEmpty(sourceDirectory)
@@ -449,7 +538,9 @@ public class RefactoringEngine
 
         // Guard: if the type's name already matches the source file name, it's already in its own file — nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
+        {
             return new Dictionary<string, string>();
+        }
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
 
@@ -467,20 +558,29 @@ public class RefactoringEngine
     private async Task<Dictionary<string, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
-        if (root == null) return new Dictionary<string, string>();
+        if (root == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var allTypes = root.DescendantNodes()
             .OfType<BaseTypeDeclarationSyntax>()
             .Where(t => t.Parent is CompilationUnitSyntax || t.Parent is BaseNamespaceDeclarationSyntax)
             .ToList();
 
-        if (allTypes.Count <= 1) return new Dictionary<string, string>();
+        if (allTypes.Count <= 1)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var fileBaseName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
         var primaryType = allTypes.FirstOrDefault(t => t.Identifier.Text == fileBaseName) ?? allTypes[0];
         var typesToMove = allTypes.Where(t => t != primaryType).ToList();
 
-        if (typesToMove.Count == 0) return new Dictionary<string, string>();
+        if (typesToMove.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var changes = new Dictionary<string, string>();
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
@@ -565,11 +665,20 @@ public class RefactoringEngine
         int depth = 0;
         foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
         {
-            if (trivia.IsKind(SyntaxKind.RegionDirectiveTrivia)) depth++;
+            if (trivia.IsKind(SyntaxKind.RegionDirectiveTrivia))
+            {
+                depth++;
+            }
             else if (trivia.IsKind(SyntaxKind.EndRegionDirectiveTrivia))
             {
-                if (depth == 0) toRemove.Add(trivia);
-                else depth--;
+                if (depth == 0)
+                {
+                    toRemove.Add(trivia);
+                }
+                else
+                {
+                    depth--;
+                }
             }
         }
         return toRemove.Count == 0
@@ -579,54 +688,84 @@ public class RefactoringEngine
 
     public async Task<Dictionary<string, string>> MoveAllTypesToFilesAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("MoveTypeToFile")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("MoveTypeToFile"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
+
         return await MoveAllTypesToFilesForDocumentAsync(document, ct);
     }
 
     public async Task<Dictionary<string, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("MoveTypeToFile")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("MoveTypeToFile"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
-            ?? throw new Exception($"Project '{projectName}' not found.");
+            ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
 
         var allChanges = new Dictionary<string, string>();
         foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
+            {
                 allChanges[kvp.Key] = kvp.Value;
+            }
         }
         return allChanges;
     }
 
     public async Task<Dictionary<string, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("MoveTypeToFile")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("MoveTypeToFile"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
         var allChanges = new Dictionary<string, string>();
         foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
+            {
                 allChanges[kvp.Key] = kvp.Value;
+            }
         }
         return allChanges;
     }
 
     public async Task<Dictionary<string, string>> ExtractInterfaceAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ExtractInterface")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("ExtractInterface"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return new Dictionary<string, string>();
+        if (classNode == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         // Extract public instance methods (exclude static, constructors)
         var methods = classNode.Members.OfType<MethodDeclarationSyntax>()
@@ -719,26 +858,37 @@ public class RefactoringEngine
         static RenameSymbolResult Err(string msg, string n) =>
             new("", n, new Dictionary<string, string>(), new List<RenameFileChange>(), msg);
 
-        if (!_config.IsFeatureEnabled("Rename")) return Err("Feature 'Rename' is disabled.", newName);
+        if (!_config.IsFeatureEnabled("Rename"))
+        {
+            return Err("Feature 'Rename' is disabled.", newName);
+        }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return Err($"File not found in solution: {filePath}", newName);
+        if (document == null)
+        {
+            return Err($"File not found in solution: {filePath}", newName);
+        }
 
-        var text       = await document.GetTextAsync(ct);
+        var text = await document.GetTextAsync(ct);
         var fullSource = text.ToString();
 
         // Locate contextSnippet — must match exactly once, or use lineBefore/lineAfter to disambiguate
         int firstIdx = fullSource.IndexOf(contextSnippet, StringComparison.Ordinal);
         if (firstIdx < 0)
+        {
             return Err($"Context snippet not found in file. Verify the snippet is copied verbatim from the source: \"{contextSnippet}\"", newName);
+        }
 
         int secondIdx = fullSource.IndexOf(contextSnippet, firstIdx + 1, StringComparison.Ordinal);
         if (secondIdx >= 0)
         {
             if (lineBefore == null && lineAfter == null)
+            {
                 return Err($"Context snippet matches multiple locations in the file. Use a longer or more unique snippet, or provide lineBefore/lineAfter to pin the symbol.", newName);
+            }
+
             try { firstIdx = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
             catch (InvalidOperationException ex) { return Err(ex.Message, newName); }
         }
@@ -746,26 +896,30 @@ public class RefactoringEngine
         // Find symbolName as a word-boundary identifier within the matched snippet
         int symOffset = FindIdentifierInSnippet(contextSnippet, symbolName);
         if (symOffset < 0)
+        {
             return Err($"'{symbolName}' not found as a distinct identifier in the context snippet \"{contextSnippet}\". Ensure the symbol appears verbatim and is not part of a larger identifier.", newName);
+        }
 
-        var pos    = firstIdx + symOffset;
-        var model  = await document.GetSemanticModelAsync(ct);
+        var pos = firstIdx + symOffset;
+        var model = await document.GetSemanticModelAsync(ct);
         var symbol = await SymbolFinder.FindSymbolAtPositionAsync(model!, pos, solution.Workspace, ct);
         if (symbol == null)
+        {
             return Err($"No Roslyn symbol resolved at the identified position. The context may be pointing at a keyword or non-symbol token.", newName);
+        }
 
         var oldName = symbol.Name;
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(
             solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, ct);
 
         var pendingChanges = new Dictionary<string, string>();
-        var fileChanges    = new List<RenameFileChange>();
+        var fileChanges = new List<RenameFileChange>();
         foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())
             {
-                var newDoc     = updated.GetDocument(docId)!;
-                var filePth    = newDoc.FilePath ?? newDoc.Name;
+                var newDoc = updated.GetDocument(docId)!;
+                var filePth = newDoc.FilePath ?? newDoc.Name;
                 var newContent = (await newDoc.GetTextAsync(ct)).ToString();
                 pendingChanges[filePth] = newContent;
 
@@ -778,16 +932,20 @@ public class RefactoringEngine
 
     private static List<RenameHunk> ComputeRenameHunks(string oldContent, string newContent, int contextLines = 2)
     {
-        var oldLines = oldContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var newLines = newContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var hunks    = new List<RenameHunk>();
+        var oldLines = oldContent.Split(separator, StringSplitOptions.None);
+        var newLines = newContent.Split(separator, StringSplitOptions.None);
+        var hunks = new List<RenameHunk>();
         // Use Max so lines added/removed at the end (e.g. new using directives) are included
-        int len      = Math.Max(oldLines.Length, newLines.Length);
+        int len = Math.Max(oldLines.Length, newLines.Length);
         for (int i = 0; i < len; i++)
         {
             var oldLine = i < oldLines.Length ? oldLines[i] : "";
             var newLine = i < newLines.Length ? newLines[i] : "";
-            if (oldLine == newLine) continue;
+            if (oldLine == newLine)
+            {
+                continue;
+            }
+
             var ctxBefore = i > 0
                 ? string.Join("\n", oldLines[Math.Max(0, i - contextLines)..Math.Min(i, oldLines.Length)])
                 : null;
@@ -807,10 +965,18 @@ public class RefactoringEngine
         while (true)
         {
             int idx = snippet.IndexOf(symbolName, searchFrom, StringComparison.Ordinal);
-            if (idx < 0) return -1;
-            bool leftBound  = idx == 0 || !IsIdentChar(snippet[idx - 1]);
+            if (idx < 0)
+            {
+                return -1;
+            }
+
+            bool leftBound = idx == 0 || !IsIdentChar(snippet[idx - 1]);
             bool rightBound = idx + symbolName.Length >= snippet.Length || !IsIdentChar(snippet[idx + symbolName.Length]);
-            if (leftBound && rightBound) return idx;
+            if (leftBound && rightBound)
+            {
+                return idx;
+            }
+
             searchFrom = idx + 1;
         }
     }
@@ -819,14 +985,24 @@ public class RefactoringEngine
 
     public async Task<string> ConvertIndexerToMethodAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ConvertIndexerToMethod")) return string.Empty;
+        if (!_config.IsFeatureEnabled("ConvertIndexerToMethod"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var indexer = root?.DescendantNodes().OfType<IndexerDeclarationSyntax>().FirstOrDefault();
-        if (indexer == null) return root?.ToFullString() ?? "";
+        if (indexer == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var blockBody = indexer.AccessorList?.Accessors
             .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration))?.Body;
@@ -861,19 +1037,29 @@ public class RefactoringEngine
 
     public async Task<string> AddRemoveParamsAsync(string filePath, string methodName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("AddRemoveParams")) return string.Empty;
+        if (!_config.IsFeatureEnabled("AddRemoveParams"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || !method.ParameterList.Parameters.Any()) return root?.ToFullString() ?? "";
+        if (method == null || !method.ParameterList.Parameters.Any())
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var lastParam = method.ParameterList.Parameters.Last();
         var hasParams = lastParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword));
 
-        var newModifiers = hasParams 
+        var newModifiers = hasParams
             ? lastParam.Modifiers.Remove(lastParam.Modifiers.First(m => m.IsKind(SyntaxKind.ParamsKeyword)))
             : lastParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ParamsKeyword));
 
@@ -886,13 +1072,25 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
-        if (member == null) return root?.ToFullString() ?? "";
+        if (member == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
-        if (newMember == null) return root?.ToFullString() ?? "";
+        if (newMember == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
+
         return root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString();
     }
 
@@ -900,13 +1098,26 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
-        if (container == null) return root?.ToFullString() ?? "";
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
+
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null) return root?.ToFullString() ?? "";
-        var newContainer = container switch {
+        if (newMember == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
+
+        var newContainer = container switch
+        {
             ClassDeclarationSyntax c => (BaseTypeDeclarationSyntax)c.AddMembers(newMember),
             InterfaceDeclarationSyntax i => (BaseTypeDeclarationSyntax)i.AddMembers(newMember),
             RecordDeclarationSyntax r => (BaseTypeDeclarationSyntax)r.AddMembers(newMember),
@@ -920,11 +1131,18 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
-        if (member == null) return root?.ToFullString() ?? "";
+        if (member == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         // Check for usages using SymbolFinder before removing
         var semanticModel = await document.GetSemanticModelAsync(ct);
@@ -935,7 +1153,7 @@ public class RefactoringEngine
             {
                 var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
                 var usageCount = references.Sum(r => r.Locations.Count());
-                
+
                 if (usageCount > 0)
                 {
                     return $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}";
@@ -948,16 +1166,30 @@ public class RefactoringEngine
 
     public async Task<string> ConvertToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("PrimaryConstructors")) return string.Empty;
+        if (!_config.IsFeatureEnabled("PrimaryConstructors"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return root?.ToFullString() ?? "";
+        if (classNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var ctor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
-        if (ctor == null || ctor.ParameterList.Parameters.Count == 0) return root?.ToFullString() ?? "";
+        if (ctor == null || ctor.ParameterList.Parameters.Count == 0)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         // Minimal implementation for tests: convert to class C(int x) and remove fields/ctor
         var newClass = SyntaxFactory.ClassDeclaration(classNode.Identifier)
@@ -973,22 +1205,37 @@ public class RefactoringEngine
 
     public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("SafeDelete")) return new Dictionary<string, string>();
+        if (!_config.IsFeatureEnabled("SafeDelete"))
+        {
+            return new Dictionary<string, string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
         var text = await document.GetTextAsync(ct);
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
-        if (pos < 0) return new Dictionary<string, string>();
+        if (pos < 0)
+        {
+            return new Dictionary<string, string>();
+        }
+
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
         // Walk up ancestors to find the nearest declaration symbol (FindNode may return a child token/identifier)
         var symbol = node.AncestorsAndSelf()
             .Select(n => model!.GetDeclaredSymbol(n, ct))
             .FirstOrDefault(s => s != null)
             ?? model!.GetSymbolInfo(node, ct).Symbol;
-        if (symbol == null) return new Dictionary<string, string>();
+        if (symbol == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         // Check for reflection usage
         foreach (var proj in solution.Projects)
@@ -998,7 +1245,7 @@ public class RefactoringEngine
                 var docRoot = await doc.GetSyntaxRootAsync(ct);
                 var literals = docRoot?.DescendantNodes().OfType<LiteralExpressionSyntax>()
                     .Where(l => l.IsKind(SyntaxKind.StringLiteralExpression) && l.Token.ValueText == symbol.Name);
-                
+
                 if (literals?.Any() == true)
                 {
                     throw new InvalidOperationException(
@@ -1008,10 +1255,10 @@ public class RefactoringEngine
         }
 
         var refs = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
-        
+
         // Count all references, not just those with locations in the same document
         var totalRefCount = refs.Sum(r => r.Locations.Count());
-        
+
         // BUG-73 FIX: Explicit check that symbol is truly unused
         // If we have ANY references (including implicit ones), refuse deletion
         if (totalRefCount > 0)
@@ -1019,7 +1266,7 @@ public class RefactoringEngine
             _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
             return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {totalRefCount} location(s)." } };
         }
-        
+
         // Additional safety check: scan syntax tree for any identifier matching the symbol name
         // This catches usages that SymbolFinder might miss
         var declarationNode = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
@@ -1031,7 +1278,7 @@ public class RefactoringEngine
                 var semanticModel = await doc.GetSemanticModelAsync(ct);
                 var identifierNodes = docRoot?.DescendantNodes().OfType<IdentifierNameSyntax>()
                     .Where(id => id.Identifier.Text == symbol.Name);
-                
+
                 if (identifierNodes?.Any() == true)
                 {
                     // Check if any of these identifiers resolve to our symbol
@@ -1041,8 +1288,10 @@ public class RefactoringEngine
                         {
                             // Skip if this is inside the declaration node itself
                             if (declarationNode != null && id.Ancestors().Contains(declarationNode) && doc.Id == document.Id)
+                            {
                                 continue;
-                            
+                            }
+
                             var idSymbol = semanticModel!.GetSymbolInfo(id, ct).Symbol;
                             if (idSymbol != null && SymbolEqualityComparer.Default.Equals(idSymbol, symbol))
                             {
@@ -1056,21 +1305,31 @@ public class RefactoringEngine
                 }
             }
         }
-        
+
         var member = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
-        if (member == null) return new Dictionary<string, string>();
-        
+        if (member == null)
+        {
+            return new Dictionary<string, string>();
+        }
+
         return new Dictionary<string, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
     }
 
     public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ConvertExpressionBody")) return "";
+        if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
+        {
+            return "";
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
-        
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
 
@@ -1078,7 +1337,11 @@ public class RefactoringEngine
         if (contextSnippet != null)
         {
             var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
-            if (pos < 0) return $"Error: {snippetError}";
+            if (pos < 0)
+            {
+                return $"Error: {snippetError}";
+            }
+
             target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                 .AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
         }
@@ -1086,14 +1349,17 @@ public class RefactoringEngine
         {
             var candidates = root.DescendantNodes()
                 .OfType<MemberDeclarationSyntax>()
-                .Where(n => n is MethodDeclarationSyntax m && m.Identifier.Text == memberName ||
-                            n is PropertyDeclarationSyntax p && p.Identifier.Text == memberName ||
-                            n is ConstructorDeclarationSyntax c && c.Identifier.Text == memberName)
+                .Where(n => (n is MethodDeclarationSyntax m && m.Identifier.Text == memberName) ||
+                            (n is PropertyDeclarationSyntax p && p.Identifier.Text == memberName) ||
+                            (n is ConstructorDeclarationSyntax c && c.Identifier.Text == memberName))
                 .ToList();
             target = candidates.FirstOrDefault();
         }
 
-        if (target == null) return $"Error: Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.";
+        if (target == null)
+        {
+            return $"Error: Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.";
+        }
 
         SyntaxNode newTarget;
         if (direction == "ToExpressionBody")
@@ -1108,7 +1374,10 @@ public class RefactoringEngine
                         .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(ret.Expression))
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
                 }
-                else return $"Error: Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted.";
+                else
+                {
+                    return $"Error: Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted.";
+                }
             }
             else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
             {
@@ -1120,9 +1389,15 @@ public class RefactoringEngine
                         .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(pret.Expression))
                         .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
                 }
-                else return $"Error: Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement.";
+                else
+                {
+                    return $"Error: Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement.";
+                }
             }
-            else return $"Error: Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body.";
+            else
+            {
+                return $"Error: Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body.";
+            }
         }
         else // ToBlockBody
         {
@@ -1146,7 +1421,10 @@ public class RefactoringEngine
                     .WithSemicolonToken(default)
                     .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.SingletonList(getter)));
             }
-            else return $"Error: Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property).";
+            else
+            {
+                return $"Error: Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property).";
+            }
         }
 
         var newRoot = root.ReplaceNode(target, newTarget.NormalizeWhitespace());
@@ -1157,23 +1435,40 @@ public class RefactoringEngine
 
     public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ExtractConstant")) return "";
+        if (!_config.IsFeatureEnabled("ExtractConstant"))
+        {
+            return "";
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
-        if (pos < 0) return $"Error: {snippetError}";
+        if (pos < 0)
+        {
+            return $"Error: {snippetError}";
+        }
+
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
         var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault()
             ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
-        if (literal == null) return "";
+        if (literal == null)
+        {
+            return "";
+        }
 
         var containingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        if (containingType == null) return "";
+        if (containingType == null)
+        {
+            return "";
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
         TypeSyntax constType;
@@ -1185,7 +1480,9 @@ public class RefactoringEngine
                 : SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
         }
         else
+        {
             constType = SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.ObjectKeyword));
+        }
 
         var accessMod = visibility switch
         {
@@ -1224,21 +1521,30 @@ public class RefactoringEngine
     }
 
     public async Task<string> ExtractLocalVariableAsync(
-        string filePath, string contextSnippet, string? newVariableName = null, 
+        string filePath, string contextSnippet, string? newVariableName = null,
         string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ExtractLocalVariable")) return "";
-        
+        if (!_config.IsFeatureEnabled("ExtractLocalVariable"))
+        {
+            return "";
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
-        
+
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
-        if (pos < 0) return $"Error: {snippetError}";
+        if (pos < 0)
+        {
+            return $"Error: {snippetError}";
+        }
 
         // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync
         var trimmedSnippet = contextSnippet.Trim();
@@ -1249,18 +1555,30 @@ public class RefactoringEngine
             // Fallback: walk from the token at the position up to the first expression
             ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
 
-        if (expression == null) return "";
+        if (expression == null)
+        {
+            return "";
+        }
 
         // Find the containing method
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-        if (containingMethod == null || containingMethod.Body == null) return root.ToFullString();
+        if (containingMethod == null || containingMethod.Body == null)
+        {
+            return root.ToFullString();
+        }
 
         // Find the containing statement and block
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
-        if (containingStatement == null) return root.ToFullString();
+        if (containingStatement == null)
+        {
+            return root.ToFullString();
+        }
 
         var containingBlock = containingStatement.Parent as BlockSyntax;
-        if (containingBlock == null) return root.ToFullString();
+        if (containingBlock == null)
+        {
+            return root.ToFullString();
+        }
 
         // Skip if expression is already a standalone variable declaration
         if (containingStatement is LocalDeclarationStatementSyntax existingDecl &&
@@ -1272,7 +1590,10 @@ public class RefactoringEngine
         }
 
         // Skip if expression has potential side effects (method calls, assignments)
-        if (HasSideEffects(expression)) return "";
+        if (HasSideEffects(expression))
+        {
+            return "";
+        }
 
         // Generate or validate variable name
         var varName = newVariableName;
@@ -1318,18 +1639,21 @@ public class RefactoringEngine
 
         // Track all nodes that need to be replaced
         var trackedRoot = root.TrackNodes(new SyntaxNode[] { nodeToReplace, containingStatement, containingBlock });
-        
+
         // Replace the expression with variable reference
         var newRoot = trackedRoot.ReplaceNode(trackedRoot.GetCurrentNode(nodeToReplace)!, varRef);
-        
+
         // Get updated statement and block
         var currentStatement = newRoot.GetCurrentNode(containingStatement)!;
         var currentBlock = newRoot.GetCurrentNode(containingBlock)!;
-        
+
         // Find the index where we insert the variable declaration
         var idx = currentBlock.Statements.IndexOf(currentStatement);
-        if (idx < 0) return root.ToFullString();
-        
+        if (idx < 0)
+        {
+            return root.ToFullString();
+        }
+
         // Insert variable declaration before the statement
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
         newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
@@ -1341,19 +1665,31 @@ public class RefactoringEngine
     {
         // Check for method calls, assignments, and other side-effect operations
         var descendants = expression.DescendantNodesAndSelf();
-        
+
         // Method invocations are risky unless they're property getters
-        if (descendants.OfType<InvocationExpressionSyntax>().Any()) return true;
-        
-        // Assignment expressions always have side effects
-        if (descendants.OfType<AssignmentExpressionSyntax>().Any()) return true;
-        
-        // Pre/post increment/decrement
-        if (descendants.OfType<PostfixUnaryExpressionSyntax>().Any()) return true;
-        if (descendants.OfType<PrefixUnaryExpressionSyntax>().Any(p => 
-            p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression))) 
+        if (descendants.OfType<InvocationExpressionSyntax>().Any())
+        {
             return true;
-        
+        }
+
+        // Assignment expressions always have side effects
+        if (descendants.OfType<AssignmentExpressionSyntax>().Any())
+        {
+            return true;
+        }
+
+        // Pre/post increment/decrement
+        if (descendants.OfType<PostfixUnaryExpressionSyntax>().Any())
+        {
+            return true;
+        }
+
+        if (descendants.OfType<PrefixUnaryExpressionSyntax>().Any(p =>
+            p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression)))
+        {
+            return true;
+        }
+
         return false;
     }
 
@@ -1370,7 +1706,7 @@ public class RefactoringEngine
                 SyntaxKind.AsteriskToken => "product",
                 SyntaxKind.SlashToken => "quotient",
                 SyntaxKind.PercentToken => "remainder",
-                SyntaxKind.GreaterThanToken or SyntaxKind.LessThanToken or 
+                SyntaxKind.GreaterThanToken or SyntaxKind.LessThanToken or
                 SyntaxKind.GreaterThanEqualsToken or SyntaxKind.LessThanEqualsToken or
                 SyntaxKind.EqualsEqualsToken or SyntaxKind.ExclamationEqualsToken => "comparison",
                 SyntaxKind.AmpersandAmpersandToken or SyntaxKind.BarBarToken => "condition",
@@ -1394,7 +1730,10 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        if (document == null)
+        {
+            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
@@ -1404,18 +1743,30 @@ public class RefactoringEngine
         {
             var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
             if (pos >= 0)
+            {
                 method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                     .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+            }
         }
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method?.Body == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        if (method?.Body == null)
+        {
+            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
-        if (model == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        if (model == null)
+        {
+            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        }
 
         var flow = model.AnalyzeControlFlow(method.Body);
-        if (flow == null) return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        if (flow == null)
+        {
+            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+        }
+
         var returnPoints = flow.ReturnStatements
             .Select(r => r.ToString().Trim())
             .ToList();
@@ -1440,7 +1791,10 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        if (document == null)
+        {
+            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
         var text = await document.GetTextAsync(ct);
@@ -1450,15 +1804,23 @@ public class RefactoringEngine
         {
             var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
             if (pos >= 0)
+            {
                 method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
                     .AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+            }
         }
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method?.Body == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        if (method?.Body == null)
+        {
+            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
-        if (model == null) return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        if (model == null)
+        {
+            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+        }
 
         DataFlowAnalysis flow;
         try { flow = model.AnalyzeDataFlow(method.Body)!; }
@@ -1467,7 +1829,9 @@ public class RefactoringEngine
         var warnings = new List<string>();
         var writtenOnly = flow.WrittenInside.Except(flow.ReadInside).ToList();
         foreach (var v in writtenOnly)
+        {
             warnings.Add($"'{v.Name}' is written but never read — possible dead assignment.");
+        }
 
         return new DataFlowSummary(
             methodName,
@@ -1480,17 +1844,27 @@ public class RefactoringEngine
         );
     }
 
-    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)    {
+    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)
+    {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         // Idempotency check
         var targetName = namespaceName.StartsWith("static ") ? namespaceName[7..] : namespaceName;
         if (root.Usings.Any(u => u.Name?.ToString() == targetName))
+        {
             return root.ToFullString();
+        }
 
         UsingDirectiveSyntax newUsing;
         if (namespaceName.StartsWith("static "))
@@ -1515,10 +1889,17 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var enumNode = root?.DescendantNodes().OfType<EnumDeclarationSyntax>().FirstOrDefault(e => e.Identifier.Text == enumName);
-        if (enumNode == null) return root?.ToFullString() ?? "";
+        if (enumNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var newMember = SyntaxFactory.EnumMemberDeclaration(valueName);
         if (explicitValue.HasValue)
@@ -1538,13 +1919,23 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
-        if (container == null) return root?.ToFullString() ?? "";
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null) return root?.ToFullString() ?? "";
+        if (newMember == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -1552,9 +1943,14 @@ public class RefactoringEngine
             var idx = membersList.FindIndex(m => GetMemberName(m) == afterMemberName);
             SyntaxList<MemberDeclarationSyntax> newMembers;
             if (idx < 0)
+            {
                 newMembers = typeDecl.Members.Add(newMember);
+            }
             else
+            {
                 newMembers = SyntaxFactory.List(membersList.Take(idx + 1).Append(newMember).Concat(membersList.Skip(idx + 1)));
+            }
+
             var newContainer = typeDecl.WithMembers(newMembers);
             return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
         }
@@ -1567,13 +1963,23 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
-        if (container == null) return root?.ToFullString() ?? "";
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
-        if (newMember == null) return root?.ToFullString() ?? "";
+        if (newMember == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -1581,9 +1987,14 @@ public class RefactoringEngine
             var idx = membersList.FindIndex(m => GetMemberName(m) == beforeMemberName);
             SyntaxList<MemberDeclarationSyntax> newMembers;
             if (idx < 0)
+            {
                 newMembers = typeDecl.Members.Add(newMember);
+            }
             else
+            {
                 newMembers = SyntaxFactory.List(membersList.Take(idx).Append(newMember).Concat(membersList.Skip(idx)));
+            }
+
             var newContainer = typeDecl.WithMembers(newMembers);
             return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
         }
@@ -1595,17 +2006,29 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var normalizedSource = attributeSource.Trim();
         if (!normalizedSource.StartsWith("["))
+        {
             normalizedSource = $"[{normalizedSource}]";
+        }
         // Parse by embedding in a dummy class declaration
         var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedSource}\npublic class __Dummy__ {{}}");
         var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
-        if (attrList == null) return root.ToFullString();
+        if (attrList == null)
+        {
+            return root.ToFullString();
+        }
 
         // Try member first, then type declaration
         var memberNode = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
@@ -1631,14 +2054,23 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
-        if (container == null) return root?.ToFullString() ?? "";
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         // Idempotency check
         if (container.BaseList?.Types.Any(t => t.ToString().Contains(baseTypeName)) == true)
+        {
             return root!.ToFullString();
+        }
 
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName));
         var newContainer = container.AddBaseListTypes(baseType);
@@ -1649,9 +2081,16 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var attrCore = attributeName.EndsWith("Attribute") ? attributeName[..^9] : attributeName;
 
@@ -1666,7 +2105,10 @@ public class RefactoringEngine
         target ??= root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == targetName);
 
-        if (target is not MemberDeclarationSyntax memberTarget) return root.ToFullString();
+        if (target is not MemberDeclarationSyntax memberTarget)
+        {
+            return root.ToFullString();
+        }
 
         var newAttrLists = memberTarget.AttributeLists
             .Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a)))))
@@ -1681,11 +2123,22 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
-        if (container == null) return root?.ToFullString() ?? "";
-        if (container.BaseList == null) return root!.ToFullString();
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
+
+        if (container.BaseList == null)
+        {
+            return root!.ToFullString();
+        }
 
         var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
         TypeDeclarationSyntax newContainer = remaining.Count == 0
@@ -1699,19 +2152,26 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         SyntaxKind[] newKinds = accessibility.ToLowerInvariant() switch
         {
-            "public"             => [SyntaxKind.PublicKeyword],
-            "private"            => [SyntaxKind.PrivateKeyword],
-            "internal"           => [SyntaxKind.InternalKeyword],
-            "protected"          => [SyntaxKind.ProtectedKeyword],
+            "public" => [SyntaxKind.PublicKeyword],
+            "private" => [SyntaxKind.PrivateKeyword],
+            "internal" => [SyntaxKind.InternalKeyword],
+            "protected" => [SyntaxKind.ProtectedKeyword],
             "protected internal" => [SyntaxKind.ProtectedKeyword, SyntaxKind.InternalKeyword],
-            "private protected"  => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
-            _                    => [SyntaxKind.PublicKeyword]
+            "private protected" => [SyntaxKind.PrivateKeyword, SyntaxKind.ProtectedKeyword],
+            _ => [SyntaxKind.PublicKeyword]
         };
 
         var accessModifierKinds = new HashSet<SyntaxKind>
@@ -1722,7 +2182,10 @@ public class RefactoringEngine
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
-        if (target == null) return root.ToFullString();
+        if (target == null)
+        {
+            return root.ToFullString();
+        }
 
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
@@ -1734,17 +2197,34 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
-        if (target == null) return root.ToFullString();
+        if (target == null)
+        {
+            return root.ToFullString();
+        }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
-        if (kind == SyntaxKind.None) kind = SyntaxFacts.GetContextualKeywordKind(modifier);
-        if (target.Modifiers.Any(m => m.IsKind(kind))) return root.ToFullString(); // idempotent
+        if (kind == SyntaxKind.None)
+        {
+            kind = SyntaxFacts.GetContextualKeywordKind(modifier);
+        }
+
+        if (target.Modifiers.Any(m => m.IsKind(kind)))
+        {
+            return root.ToFullString(); // idempotent
+        }
 
         var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
         var newModifiers = target.Modifiers.Add(token);
@@ -1755,17 +2235,34 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
-        if (target == null) return root.ToFullString();
+        if (target == null)
+        {
+            return root.ToFullString();
+        }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
-        if (kind == SyntaxKind.None) kind = SyntaxFacts.GetContextualKeywordKind(modifier);
-        if (!target.Modifiers.Any(m => m.IsKind(kind))) return root.ToFullString(); // idempotent
+        if (kind == SyntaxKind.None)
+        {
+            kind = SyntaxFacts.GetContextualKeywordKind(modifier);
+        }
+
+        if (!target.Modifiers.Any(m => m.IsKind(kind)))
+        {
+            return root.ToFullString(); // idempotent
+        }
 
         var newModifiers = SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind)));
         return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
@@ -1775,13 +2272,23 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
-        if (target == null) return root.ToFullString();
+        if (target == null)
+        {
+            return root.ToFullString();
+        }
 
         var docText = $"/// <summary>\n/// {summaryText}\n/// </summary>\nvoid __Dummy__() {{}}";
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
@@ -1808,10 +2315,22 @@ public class RefactoringEngine
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
-        if (isStatic) parts.Append(" static");
-        if (isReadonly) parts.Append(" readonly");
+        if (isStatic)
+        {
+            parts.Append(" static");
+        }
+
+        if (isReadonly)
+        {
+            parts.Append(" readonly");
+        }
+
         parts.Append($" {fieldType} {fieldName}");
-        if (initializer != null) parts.Append($" = {initializer}");
+        if (initializer != null)
+        {
+            parts.Append($" = {initializer}");
+        }
+
         parts.Append(';');
         return await AddMemberAsync(filePath, containerName, parts.ToString(), ct);
     }
@@ -1820,25 +2339,32 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
-        if (container == null) return root?.ToFullString() ?? "";
+        if (container == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         static int CategoryOf(MemberDeclarationSyntax m) => m switch
         {
-            FieldDeclarationSyntax                                              => 0,
-            ConstructorDeclarationSyntax                                        => 1,
-            DestructorDeclarationSyntax                                         => 2,
-            PropertyDeclarationSyntax                                           => 3,
-            IndexerDeclarationSyntax                                            => 4,
-            EventDeclarationSyntax or EventFieldDeclarationSyntax               => 5,
-            MethodDeclarationSyntax                                             => 6,
-            OperatorDeclarationSyntax or ConversionOperatorDeclarationSyntax    => 7,
+            FieldDeclarationSyntax => 0,
+            ConstructorDeclarationSyntax => 1,
+            DestructorDeclarationSyntax => 2,
+            PropertyDeclarationSyntax => 3,
+            IndexerDeclarationSyntax => 4,
+            EventDeclarationSyntax or EventFieldDeclarationSyntax => 5,
+            MethodDeclarationSyntax => 6,
+            OperatorDeclarationSyntax or ConversionOperatorDeclarationSyntax => 7,
             ClassDeclarationSyntax or RecordDeclarationSyntax
                 or StructDeclarationSyntax or InterfaceDeclarationSyntax
-                or EnumDeclarationSyntax                                        => 8,
-            _                                                                   => 9
+                or EnumDeclarationSyntax => 8,
+            _ => 9
         };
 
         static bool IsStatic(MemberDeclarationSyntax m) =>
@@ -1858,34 +2384,47 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var tree = root.SyntaxTree;
 
         int StatementStartLine(StatementSyntax s) =>
-            tree.GetLineSpan(s.FullSpan).StartLinePosition.Line + 1;
+            tree.GetLineSpan(s.FullSpan, ct).StartLinePosition.Line + 1;
         int StatementEndLine(StatementSyntax s) =>
-            tree.GetLineSpan(s.FullSpan).EndLinePosition.Line + 1;
+            tree.GetLineSpan(s.FullSpan, ct).EndLinePosition.Line + 1;
 
         // Find the smallest block that fully contains the line range
         var block = root.DescendantNodes()
             .OfType<BlockSyntax>()
             .Where(b =>
             {
-                var ls = tree.GetLineSpan(b.Span);
+                var ls = tree.GetLineSpan(b.Span, ct);
                 return ls.StartLinePosition.Line + 1 <= startLine &&
                        ls.EndLinePosition.Line + 1 >= endLine;
             })
             .OrderBy(b => b.Span.Length)
             .FirstOrDefault();
-        if (block == null) return root.ToFullString();
+        if (block == null)
+        {
+            return root.ToFullString();
+        }
 
         var targeted = block.Statements
             .Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine)
             .ToList();
-        if (targeted.Count == 0) return root.ToFullString();
+        if (targeted.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
         var catchDecl = SyntaxFactory.CatchDeclaration(
@@ -1894,7 +2433,9 @@ public class RefactoringEngine
 
         StatementSyntax? catchStmt = null;
         if (catchBody != null)
+        {
             catchStmt = SyntaxFactory.ParseStatement(catchBody);
+        }
 
         var catchBlock = catchStmt != null
             ? SyntaxFactory.Block(catchStmt)
@@ -1906,8 +2447,16 @@ public class RefactoringEngine
         var newStatements = block.Statements
             .Select((s, i) =>
             {
-                if (s == targeted[0]) return (StatementSyntax)tryStatement;
-                if (targeted.Contains(s)) return null;
+                if (s == targeted[0])
+                {
+                    return (StatementSyntax)tryStatement;
+                }
+
+                if (targeted.Contains(s))
+                {
+                    return null;
+                }
+
                 return s;
             })
             .Where(s => s != null)
@@ -1922,13 +2471,23 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return root.ToFullString();
+        if (classNode == null)
+        {
+            return root.ToFullString();
+        }
 
         var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
 
@@ -1950,7 +2509,9 @@ public class RefactoringEngine
 
             BlockSyntax body;
             if (ctor.Body != null)
+            {
                 body = ctor.Body.AddStatements(assignmentStatement);
+            }
             else
             {
                 // expression body → convert to block
@@ -1974,11 +2535,18 @@ public class RefactoringEngine
         foreach (var m in classNode.Members)
         {
             if (ctor != null && m == ctor)
+            {
                 newMembers.Add(newCtor);
+            }
             else
+            {
                 newMembers.Add(m);
+            }
         }
-        if (ctor == null) newMembers.Add(newCtor);
+        if (ctor == null)
+        {
+            newMembers.Add(newCtor);
+        }
 
         var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers));
         return root.ReplaceNode(classNode, newClassNode).NormalizeWhitespace().ToFullString();
@@ -1988,7 +2556,11 @@ public class RefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var text = await document.GetTextAsync(ct);
 
         var lines = text.Lines;
@@ -1997,17 +2569,23 @@ public class RefactoringEngine
         {
             int lineNumber = i + 1; // 1-based
             if (lineNumber == startLine)
+            {
                 sb.AppendLine($"#region {regionName}");
+            }
+
             sb.AppendLine(lines[i].ToString());
             if (lineNumber == endLine)
+            {
                 sb.AppendLine("#endregion");
+            }
         }
         return sb.ToString();
     }
 
     private string? GetMemberName(MemberDeclarationSyntax member)
     {
-        return member switch {
+        return member switch
+        {
             MethodDeclarationSyntax m => m.Identifier.Text,
             PropertyDeclarationSyntax p => p.Identifier.Text,
             ClassDeclarationSyntax c => c.Identifier.Text,
@@ -2025,14 +2603,23 @@ public class RefactoringEngine
         // Find the class document
         var classDocument = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (classDocument == null) return "// Class file not found.";
+        if (classDocument == null)
+        {
+            return "// Class file not found.";
+        }
 
         var classRoot = await classDocument.GetSyntaxRootAsync(ct);
-        if (classRoot == null) return "// Could not parse class file.";
+        if (classRoot == null)
+        {
+            return "// Could not parse class file.";
+        }
 
         var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return "// Class not found.";
+        if (classNode == null)
+        {
+            return "// Class not found.";
+        }
 
         // Collect public non-static non-override methods and properties from the class
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
@@ -2065,9 +2652,17 @@ public class RefactoringEngine
             // Search all documents
             foreach (var doc in solution.Projects.SelectMany(p => p.Documents))
             {
-                if (doc == classDocument) continue;
+                if (doc == classDocument)
+                {
+                    continue;
+                }
+
                 var r = await doc.GetSyntaxRootAsync(ct);
-                if (r == null) continue;
+                if (r == null)
+                {
+                    continue;
+                }
+
                 var iface = r.DescendantNodes().OfType<InterfaceDeclarationSyntax>()
                     .FirstOrDefault(i => i.Identifier.Text == interfaceName);
                 if (iface != null)
@@ -2081,7 +2676,9 @@ public class RefactoringEngine
         }
 
         if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
+        {
             return "// Interface not found.";
+        }
 
         // Collect existing interface member signatures (for deduplication)
         var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>()
@@ -2098,7 +2695,10 @@ public class RefactoringEngine
         {
             var sig = method.Identifier.Text + "|" +
                       string.Join(",", method.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()));
-            if (existingMethodSigs.Contains(sig)) continue;
+            if (existingMethodSigs.Contains(sig))
+            {
+                continue;
+            }
 
             // Build interface method: return type + name + params, no body
             var ifaceMethod = SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier)
@@ -2113,7 +2713,10 @@ public class RefactoringEngine
 
         foreach (var prop in publicProperties)
         {
-            if (existingPropertyNames.Contains(prop.Identifier.Text)) continue;
+            if (existingPropertyNames.Contains(prop.Identifier.Text))
+            {
+                continue;
+            }
 
             // Build interface property
             var hasGetter = prop.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) == true
@@ -2123,14 +2726,22 @@ public class RefactoringEngine
 
             var accessors = new List<AccessorDeclarationSyntax>();
             if (hasGetter)
+            {
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration)
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            }
+
             if (hasSetter)
+            {
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration)
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            }
+
             if (hasInit)
+            {
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
                     .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+            }
 
             var ifaceProp = SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier)
                 .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
@@ -2140,7 +2751,9 @@ public class RefactoringEngine
         }
 
         if (newMembers.Count == 0)
+        {
             return interfaceRoot.ToFullString(); // Already up to date
+        }
 
         var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
         var newInterfaceRoot = interfaceRoot.ReplaceNode(interfaceNode, newInterfaceNode);
@@ -2160,14 +2773,23 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null) return root.ToFullString();
+        if (method == null)
+        {
+            return root.ToFullString();
+        }
 
         var currentParams = method.ParameterList.Parameters
             .Select(p => p.Identifier.Text)
@@ -2183,14 +2805,14 @@ public class RefactoringEngine
         {
             // Generate new XML doc
             var lines = new List<XmlNodeSyntax>();
-            
+
             // Add <summary> tag
             lines.Add(SyntaxFactory.XmlElement(
                 SyntaxFactory.XmlElementStartTag(SyntaxFactory.XmlName("summary")),
                 SyntaxFactory.SingletonList<XmlNodeSyntax>(
                     SyntaxFactory.XmlText("Description of " + methodName)),
                 SyntaxFactory.XmlElementEndTag(SyntaxFactory.XmlName("summary"))));
-            
+
             // Add <param> tags
             foreach (var param in currentParams)
             {
@@ -2206,7 +2828,7 @@ public class RefactoringEngine
             var newXmlDoc = SyntaxFactory.DocumentationCommentTrivia(
                 SyntaxKind.MultiLineDocumentationCommentTrivia,
                 SyntaxFactory.List(lines.Cast<XmlNodeSyntax>()));
-            
+
             var newTrivia = SyntaxFactory.Trivia(newXmlDoc);
             var newLeadingTrivia = method.GetLeadingTrivia().Insert(0, newTrivia);
             var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
@@ -2216,7 +2838,10 @@ public class RefactoringEngine
 
         // XML doc exists — update it
         var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
-        if (xmlDoc == null) return root.ToFullString();
+        if (xmlDoc == null)
+        {
+            return root.ToFullString();
+        }
 
         // Find existing param tags
         var existingParamTags = xmlDoc.Content
@@ -2233,20 +2858,26 @@ public class RefactoringEngine
         var toAdd = currentParams.Except(existingParamNames).ToList();
         // Param tags to remove (in XML but not in current signature)
         var toRemove = existingParamTags
-            .Where(e => {
+            .Where(e =>
+            {
                 var name = e.StartTag.Attributes.OfType<XmlNameAttributeSyntax>().FirstOrDefault()?.Identifier.Identifier.Text;
                 return name != null && !currentParams.Contains(name);
             })
             .ToList();
 
-        if (!toAdd.Any() && !toRemove.Any()) return root.ToFullString();
+        if (toAdd.Count == 0 && toRemove.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         // Build updated XML doc content
         var updatedContent = xmlDoc.Content.ToList();
 
         // Remove stale param tags
         foreach (var staleTag in toRemove)
+        {
             updatedContent.Remove(staleTag);
+        }
 
         // Add missing param tags
         foreach (var paramName in toAdd)
@@ -2280,14 +2911,19 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new FormatPreviewResult(false, 0, new List<FormatHunk>());
+        if (document == null)
+        {
+            return new FormatPreviewResult(false, 0, new List<FormatHunk>());
+        }
 
         var originalText = (await document.GetTextAsync(ct)).ToString();
         var formattedDoc = await Formatter.FormatAsync(document, null, ct);
         var formattedText = (await formattedDoc.GetTextAsync(ct)).ToString();
 
         if (originalText == formattedText)
+        {
             return new FormatPreviewResult(false, 0, new List<FormatHunk>());
+        }
 
         var originalLines = originalText.Split('\n');
         var formattedLines = formattedText.Split('\n');
@@ -2302,13 +2938,22 @@ public class RefactoringEngine
         var minLen = Math.Min(original.Length, formatted.Length);
 
         for (int i = 0; i < minLen; i++)
+        {
             if (original[i] != formatted[i])
+            {
                 changedLines.Add(i);
+            }
+        }
 
         for (int i = minLen; i < Math.Max(original.Length, formatted.Length); i++)
+        {
             changedLines.Add(i);
+        }
 
-        if (changedLines.Count == 0) return new List<FormatHunk>();
+        if (changedLines.Count == 0)
+        {
+            return new List<FormatHunk>();
+        }
 
         // Group nearby changed lines into hunks
         var groups = new List<(int start, int end)>();
@@ -2316,7 +2961,9 @@ public class RefactoringEngine
         for (int k = 1; k < changedLines.Count; k++)
         {
             if (changedLines[k] - gEnd <= contextLines * 2 + 1)
+            {
                 gEnd = changedLines[k];
+            }
             else
             {
                 groups.Add((gStart, gEnd));

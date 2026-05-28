@@ -18,21 +18,33 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         
         var variable = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.Text == boolName);
         ISymbol? symbol = null;
-        if (variable != null) symbol = semanticModel?.GetDeclaredSymbol(variable, cancellationToken);
+        if (variable != null)
+        {
+            symbol = semanticModel?.GetDeclaredSymbol(variable, cancellationToken);
+        }
         else 
         {
             var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == boolName);
-            if (method != null) symbol = semanticModel?.GetDeclaredSymbol(method, cancellationToken);
+            if (method != null)
+            {
+                symbol = semanticModel?.GetDeclaredSymbol(method, cancellationToken);
+            }
         }
 
-        if (symbol == null) return new Dictionary<string, string>();
+        if (symbol == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var updatedSolution = solution;
@@ -78,24 +90,41 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null) return root.ToFullString();
+        if (method == null)
+        {
+            return root.ToFullString();
+        }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
-        if (ifStmt == null) return root.ToFullString();
+        if (ifStmt == null)
+        {
+            return root.ToFullString();
+        }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
+        {
             return root.ToFullString();
+        }
 
         var arms = branches.Select(b =>
             SyntaxFactory.SwitchExpressionArm(SyntaxFactory.ConstantPattern(b.Pattern), b.Result)).ToList();
         if (defaultResult != null)
+        {
             arms.Add(SyntaxFactory.SwitchExpressionArm(SyntaxFactory.DiscardPattern(), defaultResult));
+        }
 
         var switchExpr = SyntaxFactory.SwitchExpression(
             SyntaxFactory.ParseExpression(condVar),
@@ -108,19 +137,34 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null) return root.ToFullString();
+        if (method == null)
+        {
+            return root.ToFullString();
+        }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
-        if (ifStmt == null) return root.ToFullString();
+        if (ifStmt == null)
+        {
+            return root.ToFullString();
+        }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
+        {
             return root.ToFullString();
+        }
 
         var sections = new List<SwitchSectionSyntax>();
         foreach (var branch in branches)
@@ -146,7 +190,11 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode != null && methodNode.ParameterList.Parameters.Any())
@@ -166,7 +214,11 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode != null && methodNode.ParameterList.Parameters.Any())
@@ -198,15 +250,25 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var forEach = root.DescendantNodes()
             .OfType<ForEachStatementSyntax>()
             .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
 
-        if (forEach == null) return root.ToFullString();
+        if (forEach == null)
+        {
+            return root.ToFullString();
+        }
 
         var collection = forEach.Expression;
         var varName = forEach.Identifier.Text;
@@ -218,22 +280,31 @@ public class AdvancedLogicEngine
         {
             var typeInfo = semanticModel.GetTypeInfo(collection, ct);
             if (typeInfo.Type?.TypeKind == TypeKind.Array)
+            {
                 lengthProp = "Length";
+            }
         }
         else
         {
             // Fallback: if the type syntax has [] it's an array
             if (forEach.Type.ToString().Contains("[]"))
+            {
                 lengthProp = "Length";
+            }
         }
 
         // Pick a safe index variable name
         var bodyText = forEach.Statement.ToFullString();
         string indexVar = "i";
         if (System.Text.RegularExpressions.Regex.IsMatch(bodyText, @"\bi\b"))
+        {
             indexVar = "j";
+        }
+
         if (indexVar == "j" && System.Text.RegularExpressions.Regex.IsMatch(bodyText, @"\bj\b"))
+        {
             indexVar = "k";
+        }
 
         var collectionStr = collection.ToString();
 
@@ -304,22 +375,39 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>()
             .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
-        if (forStmt == null) return root.ToFullString();
+        if (forStmt == null)
+        {
+            return root.ToFullString();
+        }
 
-        if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0) return root.ToFullString();
+        if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0)
+        {
+            return root.ToFullString();
+        }
+
         var indexVar = forStmt.Declaration.Variables[0].Identifier.Text;
 
         // Extract collection from condition: i < arr.Length or i < arr.Count
         if (forStmt.Condition is not BinaryExpressionSyntax condBin ||
             condBin.Right is not MemberAccessExpressionSyntax memberAccess ||
             (memberAccess.Name.Identifier.Text != "Length" && memberAccess.Name.Identifier.Text != "Count"))
+        {
             return root.ToFullString();
+        }
+
         var collectionStr = memberAccess.Expression.ToString();
 
         const string elementVar = "item";
@@ -340,30 +428,55 @@ public class AdvancedLogicEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>()
             .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
-        if (whileStmt == null) return root.ToFullString();
+        if (whileStmt == null)
+        {
+            return root.ToFullString();
+        }
 
         if (whileStmt.Condition is not BinaryExpressionSyntax condBin ||
             condBin.Left is not IdentifierNameSyntax counterIdent)
+        {
             return root.ToFullString();
+        }
+
         var counterName = counterIdent.Identifier.Text;
 
-        if (whileStmt.Parent is not BlockSyntax parentBlock) return root.ToFullString();
+        if (whileStmt.Parent is not BlockSyntax parentBlock)
+        {
+            return root.ToFullString();
+        }
+
         var whileIndex = parentBlock.Statements.IndexOf(whileStmt);
-        if (whileIndex <= 0) return root.ToFullString();
+        if (whileIndex <= 0)
+        {
+            return root.ToFullString();
+        }
 
         var prevStmt = parentBlock.Statements[whileIndex - 1];
         if (prevStmt is not LocalDeclarationStatementSyntax localDecl ||
             localDecl.Declaration.Variables.Count == 0 ||
             localDecl.Declaration.Variables[0].Identifier.Text != counterName)
+        {
             return root.ToFullString();
+        }
 
-        if (whileStmt.Statement is not BlockSyntax whileBody) return root.ToFullString();
+        if (whileStmt.Statement is not BlockSyntax whileBody)
+        {
+            return root.ToFullString();
+        }
 
         ExpressionStatementSyntax? incrementStmt = null;
         foreach (var s in whileBody.Statements)
@@ -378,7 +491,10 @@ public class AdvancedLogicEngine
                 break;
             }
         }
-        if (incrementStmt == null) return root.ToFullString();
+        if (incrementStmt == null)
+        {
+            return root.ToFullString();
+        }
 
         var newBody = whileBody.WithStatements(whileBody.Statements.Remove(incrementStmt));
         var incrementors = SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
@@ -394,7 +510,11 @@ public class AdvancedLogicEngine
         var newStmtList = new List<StatementSyntax>();
         foreach (var s in parentBlock.Statements)
         {
-            if (ReferenceEquals(s, localDecl)) continue;
+            if (ReferenceEquals(s, localDecl))
+            {
+                continue;
+            }
+
             newStmtList.Add(ReferenceEquals(s, whileStmt) ? (StatementSyntax)forStmt : s);
         }
         var newStatements = SyntaxFactory.List<StatementSyntax>(newStmtList);
@@ -414,20 +534,37 @@ public class AdvancedLogicEngine
         while (current != null)
         {
             if (current.Condition is not BinaryExpressionSyntax bin || !bin.IsKind(SyntaxKind.EqualsExpression))
+            {
                 return false;
+            }
 
             var leftStr = bin.Left.ToString();
-            if (condVar == "") condVar = leftStr;
-            else if (condVar != leftStr) return false;
+            if (condVar == "")
+            {
+                condVar = leftStr;
+            }
+            else if (condVar != leftStr)
+            {
+                return false;
+            }
 
             var result = GetSingleReturnExpression(current.Statement);
-            if (result == null) return false;
+            if (result == null)
+            {
+                return false;
+            }
 
             branches.Add(new IfBranch(bin.Right, result));
 
-            if (current.Else == null) break;
+            if (current.Else == null)
+            {
+                break;
+            }
+
             if (current.Else.Statement is IfStatementSyntax elseIf)
+            {
                 current = elseIf;
+            }
             else
             {
                 defaultResult = GetSingleReturnExpression(current.Else.Statement);
@@ -440,9 +577,17 @@ public class AdvancedLogicEngine
 
     private static ExpressionSyntax? GetSingleReturnExpression(StatementSyntax stmt)
     {
-        if (stmt is ReturnStatementSyntax ret) return ret.Expression;
+        if (stmt is ReturnStatementSyntax ret)
+        {
+            return ret.Expression;
+        }
+
         if (stmt is BlockSyntax block && block.Statements.Count == 1 &&
-            block.Statements[0] is ReturnStatementSyntax br) return br.Expression;
+            block.Statements[0] is ReturnStatementSyntax br)
+        {
+            return br.Expression;
+        }
+
         return null;
     }
 

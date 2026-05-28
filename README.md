@@ -469,7 +469,7 @@ Powered by `AntiPatternEngine`, `PerformanceEngine`, `SecurityEngine`, `TestingE
 |------|--------------|---|
 | `analyze_performance` | Full performance audit: boxing, LINQ materialization, string concat | ⭐⭐⭐⭐⭐ |
 | `find_boxing_allocations` | Flag value types boxed to `object` | ⭐⭐⭐⭐⭐ |
-| `detect_inefficient_string_comparisons` | Flag `ToLower()`/`ToUpper()` string comparisons | ⭐⭐⭐⭐⭐ |
+| `detect_inefficient_string_comparisons` | Flag `ToLowerInvariant()`/`ToUpperInvariant()` string comparisons | ⭐⭐⭐⭐⭐ |
 | `optimize_resource_disposal` | Find `IDisposable` objects not wrapped in `using` | ⭐⭐⭐⭐⭐ |
 | `find_use_frozen_collections` | Detect static dictionaries/sets that should be `FrozenDictionary`/`FrozenSet` | ⭐⭐⭐⭐⭐ |
 

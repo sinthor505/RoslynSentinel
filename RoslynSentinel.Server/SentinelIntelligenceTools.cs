@@ -1,6 +1,7 @@
 using System.ComponentModel;
-using System.IO;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -79,17 +80,17 @@ public class SentinelIntelligenceTools
         string? filePath = null,
         int offset = 0,
         int limit = 10,
-        int timeoutSeconds = 25) 
+        int timeoutSeconds = 25)
         => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
 
     [McpServerTool]
     [Description("Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns all call sites and affected projects.")]
-    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null) 
+    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
         => await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Finds all methods in the solution that return a specific type.")]
-    public async Task<List<SearchResult>> FindMethodsByReturnType(string returnType) 
+    public async Task<List<SearchResult>> FindMethodsByReturnType(string returnType)
         => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(returnType);
 
     [McpServerTool]
@@ -102,83 +103,82 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all unused private members in a class.")]
-    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembers(string filePath, string className) 
+    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembers(string filePath, string className)
         => await _deadCodeEngine.FindUnusedPrivateMembersAsync(filePath, className);
 
     [McpServerTool]
     [Description("Detects private fields that are never read or written in the file.")]
-    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFields(string filePath) 
+    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFields(string filePath)
         => await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(filePath);
 
     [McpServerTool]
     [Description("Identifies local variables that are declared but never used within their scope.")]
-    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariables(string filePath) 
+    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariables(string filePath)
         => await _deadCodeEngine.DetectUnusedLocalVariablesAsync(filePath);
 
     [McpServerTool]
     [Description("Detects methods with too many parameters and suggests a Parameter Object, optionally filtered by project.")]
-    public async Task<List<string>> DetectLongParameterLists(int threshold = 5, string? projectName = null) 
+    public async Task<List<string>> DetectLongParameterLists(int threshold = 5, string? projectName = null)
         => await _analysisEngine.DetectLongParameterListsAsync(threshold, projectName);
 
     [McpServerTool]
     [Description("Identifies classes that are never instantiated across the entire solution or a specific project.")]
-    public async Task<List<string>> FindUninstantiatedTypes(string? projectName = null) 
+    public async Task<List<string>> FindUninstantiatedTypes(string? projectName = null)
         => await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
-
 
     [McpServerTool]
     [Description("Identifies circular project references (A -> B -> A).")]
-    public async Task<List<string>> FindCircularDependencies() 
+    public async Task<List<string>> FindCircularDependencies()
         => await _analysisEngine.FindCircularDependenciesAsync();
 
     [McpServerTool]
     [Description("Generates a markdown call tree for a specific method.")]
-    public async Task<string> GenerateCallTree(string filePath, string methodName, int depth = 3) 
+    public async Task<string> GenerateCallTree(string filePath, string methodName, int depth = 3)
         => await _analysisEngine.GenerateCallTreeAsync(filePath, methodName, depth);
 
     [McpServerTool]
     [Description("Adds comprehensive [Description] comments to all fields in a POCO class.")]
-    public async Task<string> DocumentPocoFields(string filePath, string className) 
+    public async Task<string> DocumentPocoFields(string filePath, string className)
         => await _documentationEngine.DocumentPocoFieldsAsync(filePath, className);
 
     [McpServerTool]
     [Description("Generates Equals and GetHashCode overrides for a class.")]
-    public async Task<string> GenerateEqualityOverrides(string filePath, string className) 
+    public async Task<string> GenerateEqualityOverrides(string filePath, string className)
         => await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className);
 
     [McpServerTool]
     [Description("Identifies NuGet package references in a project that are not being used.")]
-    public async Task<List<string>> FindUnusedReferences(string projectName) 
+    public async Task<List<string>> FindUnusedReferences(string projectName)
         => await _dependencyEngine.FindUnusedReferencesAsync(projectName);
 
     [McpServerTool]
     [Description("Checks for NuGet package version inconsistencies across multiple projects.")]
-    public async Task<List<string>> CheckPackageInconsistency() 
+    public async Task<List<string>> CheckPackageInconsistency()
         => await _dependencyEngine.CheckPackageInconsistencyAsync();
 
     [McpServerTool]
     [Description("Identifies interfaces that are declared but never implemented in the solution or a specific project.")]
-    public async Task<List<string>> FindUnusedInterfaces(string? projectName = null) 
+    public async Task<List<string>> FindUnusedInterfaces(string? projectName = null)
         => await _analysisEngine.FindUnusedInterfacesAsync(projectName);
 
     [McpServerTool]
     [Description("Identifies internal classes that are only used in a single file and could be made private, optionally filtered by project.")]
-    public async Task<List<string>> FindInternalClassesThatCouldBePrivate(string? projectName = null) 
+    public async Task<List<string>> FindInternalClassesThatCouldBePrivate(string? projectName = null)
         => await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
 
     [McpServerTool]
     [Description("Finds switch statements with a large number of cases that may need refactoring, optionally filtered by project.")]
-    public async Task<List<string>> FindLargeSwitchStatements(int threshold = 10, string? projectName = null) 
+    public async Task<List<string>> FindLargeSwitchStatements(int threshold = 10, string? projectName = null)
         => await _analysisEngine.FindLargeSwitchStatementsAsync(threshold, projectName);
-[McpServerTool]
-[Description("Scans the solution for structural issues with granular filtering. typeFilter options: All, MultiType, NameMismatch.")]
-public async Task<List<string>> FindStructuralSmells(
-    ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All,
-    string? projectName = null,
-    string? filePath = null)
-{
-    return await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter, projectName, filePath);
-}
+    [McpServerTool]
+    [Description("Scans the solution for structural issues with granular filtering. typeFilter options: All, MultiType, NameMismatch.")]
+    public async Task<List<string>> FindStructuralSmells(
+        ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All,
+        string? projectName = null,
+        string? filePath = null)
+    {
+        return await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter, projectName, filePath);
+    }
 
     [McpServerTool]
     [Description("Identifies constructors that are never called in the entire solution.")]
@@ -198,12 +198,12 @@ public async Task<List<string>> FindStructuralSmells(
     [McpServerTool]
     [Description("Scans a file for event subscriptions that are never unsubscribed, potential memory leaks.")]
     public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptions(string filePath)
-        => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath);
+        => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath) ?? throw new InvalidOperationException("Unused event subscriptions not found.");
 
     [McpServerTool]
     [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
     public async Task<SymbolHoverInfo> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
-        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter) ?? throw new InvalidOperationException("Symbol info not found.");
 
     [McpServerTool]
     [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
@@ -258,10 +258,13 @@ public async Task<List<string>> FindStructuralSmells(
     {
         var result = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
         if (result == null)
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                 "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                 "Use get_document_outline to list available methods in the file.");
+        }
+
         return result;
     }
 
@@ -271,10 +274,13 @@ public async Task<List<string>> FindStructuralSmells(
     {
         var result = await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
         if (result == null)
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                 "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                 "Use get_document_outline to list available methods in the file.");
+        }
+
         return result;
     }
 
@@ -468,9 +474,12 @@ public async Task<List<string>> FindStructuralSmells(
     {
         var result = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"GenerateXmlDocumentationStubs failed for '{filePath}': " +
                 "file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 

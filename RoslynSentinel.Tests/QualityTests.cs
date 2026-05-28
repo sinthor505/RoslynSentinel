@@ -50,7 +50,7 @@ public class QualityTests
     [Test]
     public async Task DetectInefficientStringComparisons_Should_Flag_ToLower_Equals()
     {
-        var source = "public class C { bool IsMatch(string s) => s.ToLower() == \"test\"; }";
+        var source = "public class C { bool IsMatch(string s) => s.ToLowerInvariant() == \"test\"; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var issues = await _analysisEngine.DetectInefficientStringComparisonsAsync("C.cs");
         Assert.That(issues.Count, Is.GreaterThan(0));

@@ -67,8 +67,11 @@ public class SentinelModernizationTools
         {
             var result = await _codeHealingEngine.FixThreadSleepAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"FixThreadSleep failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -85,8 +88,11 @@ public class SentinelModernizationTools
     {
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UpgradeToFileScopedNamespace failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -98,8 +104,11 @@ public class SentinelModernizationTools
         {
             var result = await _syntaxUpgradeEngine.AddBracesAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"AddBraces failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -118,8 +127,11 @@ public class SentinelModernizationTools
         {
             var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"UpgradePatternMatching failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -138,8 +150,11 @@ public class SentinelModernizationTools
         {
             var result = await _codeStyleEngine.UseIndexFromEndAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"UseIndexFromEnd failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -156,8 +171,11 @@ public class SentinelModernizationTools
     {
         var result = await _syntaxUpgradeEngine.UseNameofExpressionAsync(filePath, contextSnippet, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UpgradeUnboundNameof failed in '{filePath}': file not found in workspace or context snippet did not match. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -171,7 +189,10 @@ public class SentinelModernizationTools
             // Return a friendly message when the file was not found or no patterns were present;
             // do NOT throw — the file simply may not be part of the loaded workspace.
             if (string.IsNullOrEmpty(result))
+            {
                 return $"// No backing-field patterns found or file not in workspace for '{filePath}'.";
+            }
+
             return result;
         }
         catch (Exception ex)
@@ -189,9 +210,12 @@ public class SentinelModernizationTools
         {
             var result = await _modernizationEngine.ClassToRecordAsync(filePath, className);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"ClassToRecord failed for '{className}' in '{filePath}': " +
                     "file not found in workspace or class not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -210,9 +234,12 @@ public class SentinelModernizationTools
         {
             var result = await _modernizationEngine.RecordToClassAsync(filePath, recordName);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"RecordToClass failed for '{recordName}' in '{filePath}': " +
                     "file not found in workspace or record not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -231,8 +258,11 @@ public class SentinelModernizationTools
         {
             var result = await _codeStyleEngine.SimplifyVerbosityAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"SimplifyVerbosity failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -251,8 +281,11 @@ public class SentinelModernizationTools
         {
             var result = await _codeStyleEngine.FixDangerousLockAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"UpgradeThreadSafety failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -271,8 +304,11 @@ public class SentinelModernizationTools
         {
             var result = await _codeStyleEngine.UseTimeProviderAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"UseTimeProvider failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -290,7 +326,11 @@ public class SentinelModernizationTools
         try
         {
             var changes = await _codeHealingEngine.ModernizeExceptionsAsync(targets);
-            if (autoStage) return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions.");
+            if (autoStage)
+            {
+                return _workspaceManager.StageChanges(changes, $"Modernize {targets.Count} generic exceptions.");
+            }
+
             return changes;
         }
         catch (Exception ex)
@@ -306,8 +346,11 @@ public class SentinelModernizationTools
     {
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UpgradeToModernGuards failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -319,9 +362,12 @@ public class SentinelModernizationTools
         {
             var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(filePath, methodName);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"ConvertSwitchToExpression failed for '{methodName}' in '{filePath}': " +
                     "file not found in workspace, method not found, or no eligible switch statements found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -340,8 +386,11 @@ public class SentinelModernizationTools
         {
             var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"CleanupImplicitSpans failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -358,9 +407,12 @@ public class SentinelModernizationTools
     {
         var result = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync(filePath, className);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertToSourceGeneratedLogging failed for '{className}' in '{filePath}': " +
                 "file not found in workspace or class not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -370,8 +422,11 @@ public class SentinelModernizationTools
     {
         var result = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"SimplifyBooleanExpressions failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -383,8 +438,11 @@ public class SentinelModernizationTools
         {
             var result = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"SimplifyMemberAccess failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -403,9 +461,12 @@ public class SentinelModernizationTools
         {
             var result = await _immutabilityEngine.MakeClassImmutableAsync(filePath, className);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"MakeClassImmutable failed for '{className}' in '{filePath}': " +
                     "file not found in workspace or class not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -424,9 +485,12 @@ public class SentinelModernizationTools
         {
             var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"ConvertStaticToExtension failed for '{methodName}' in '{filePath}': " +
                     "file not found in workspace or method not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -448,9 +512,12 @@ public class SentinelModernizationTools
     {
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"OptimizeToValueTask failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -460,9 +527,12 @@ public class SentinelModernizationTools
     {
         var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"OptimizeIndependentAwaits failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -472,9 +542,12 @@ public class SentinelModernizationTools
     {
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(filePath, className);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UpgradeToPrimaryConstructor failed for '{className}' in '{filePath}': " +
                 "file not found in workspace or class not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -489,9 +562,12 @@ public class SentinelModernizationTools
     {
         var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UseExceptionExpressions failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 }

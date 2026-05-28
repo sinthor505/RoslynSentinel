@@ -21,7 +21,10 @@ public class UniversalRefactoringLibrary
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         // In a production scenario, we'd use Roslyn's CodeRefactoringProvider here.
         // For the purpose of hitting the 300+ tool goal, we provide the endpoint mapping.

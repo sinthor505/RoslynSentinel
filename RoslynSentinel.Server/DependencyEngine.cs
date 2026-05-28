@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using System.IO;
 
 namespace RoslynSentinel.Server;
 
@@ -24,7 +23,10 @@ public class DependencyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-        if (project == null) throw new Exception($"Project '{projectName}' not found.");
+        if (project == null)
+        {
+            throw new InvalidOperationException($"Project '{projectName}' not found.");
+        }
 
         var projectRefs = project.ProjectReferences
             .Select(r => solution.Projects.First(p => p.Id == r.ProjectId).Name)
@@ -51,19 +53,31 @@ public class DependencyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project == null) return new List<string>();
+        if (project == null)
+        {
+            throw new InvalidOperationException($"Project '{projectName}' not found.");
+        }
 
         var compilation = await project.GetCompilationAsync(cancellationToken);
-        if (compilation == null) return new List<string>();
+        if (compilation == null)
+        {
+            throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
+        }
 
         var usedAssemblies = new HashSet<string>();
         foreach (var document in project.Documents)
         {
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            if (semanticModel == null) continue;
+            if (semanticModel == null)
+            {
+                continue;
+            }
 
             var nodes = (await document.GetSyntaxRootAsync(cancellationToken))?.DescendantNodes();
-            if (nodes == null) continue;
+            if (nodes == null)
+            {
+                continue;
+            }
 
             foreach (var node in nodes)
             {
@@ -78,12 +92,12 @@ public class DependencyEngine
         var unused = new List<string>();
         foreach (var reference in compilation.References)
         {
-            if (reference is CompilationReference compRef && !usedAssemblies.Contains(compRef.Compilation.AssemblyName))
+            if (reference is CompilationReference compRef && compRef.Compilation.AssemblyName != null && !usedAssemblies.Contains(compRef.Compilation.AssemblyName))
             {
                 unused.Add(compRef.Compilation.AssemblyName);
             }
         }
-        
+
         return unused;
     }
 
@@ -97,7 +111,11 @@ public class DependencyEngine
 
         foreach (var project in solution.Projects)
         {
-            if (project.FilePath == null) continue;
+            if (project.FilePath == null)
+            {
+                continue;
+            }
+
             var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
             var matches = System.Text.RegularExpressions.Regex.Matches(xml, @"<PackageReference\s+Include=""([^""]+)""\s+Version=""([^""]+)""");
 
@@ -105,8 +123,13 @@ public class DependencyEngine
             {
                 var id = match.Groups[1].Value;
                 var version = match.Groups[2].Value;
-                if (!packageVersions.ContainsKey(id)) packageVersions[id] = new List<(string, string)>();
-                packageVersions[id].Add((project.Name, version));
+                if (!packageVersions.TryGetValue(id, out List<(string Project, string Version)>? value))
+                {
+                    value = new List<(string, string)>();
+                    packageVersions[id] = value;
+                }
+
+                value.Add((project.Name, version));
             }
         }
 

@@ -4,7 +4,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
-public enum StackOverflowRisk { Definite, Suspicious, Informational }
+public enum StackOverflowRisk
+{
+    Definite, Suspicious, Informational
+}
 
 public sealed record StackOverflowFinding(
     string Kind,
@@ -74,10 +77,14 @@ public sealed class StackOverflowEngine
         }
 
         if (includeInformational)
+        {
             findings.AddRange(DetectDeepCallChain(root, filePath));
+        }
 
         if (!includeInformational)
+        {
             findings = findings.Where(f => f.Risk != StackOverflowRisk.Informational).ToList();
+        }
 
         findings = findings
             .DistinctBy(f => (f.Kind, f.LineNumber, f.ContainingMember))
@@ -104,11 +111,17 @@ public sealed class StackOverflowEngine
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             // Overrides get more precise treatment from DetectOverrideCallingSelf
-            if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.OverrideKeyword))) continue;
+            if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.OverrideKeyword)))
+            {
+                continue;
+            }
 
             var name = method.Identifier.Text;
             var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-            if (body == null) continue;
+            if (body == null)
+            {
+                continue;
+            }
 
             IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method) as IMethodSymbol;
 
@@ -125,7 +138,9 @@ public sealed class StackOverflowEngine
                 // Delegation inserts extra defaults (e.g., timeout, CancellationToken) that
                 // only exist on the target overload — this is a chain call, not recursion.
                 if (call.ArgumentList.Arguments.Count > method.ParameterList.Parameters.Count)
+                {
                     continue;
+                }
 
                 // Heuristic 2: call uses a named argument for a parameter that does not exist
                 // on this method. Named args like "timeoutSeconds: 30" targeting a param on the
@@ -133,7 +148,9 @@ public sealed class StackOverflowEngine
                 if (call.ArgumentList.Arguments.Any(a =>
                         a.NameColon != null &&
                         !callingParamNames.Contains(a.NameColon.Name.Identifier.Text)))
+                {
                     continue;
+                }
 
                 // ── Semantic overload check (when model available) ────────────────────────
                 // Resolves the call to its exact symbol and skips calls to a different overload,
@@ -145,7 +162,9 @@ public sealed class StackOverflowEngine
                     var calledSymbol = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) as IMethodSymbol;
                     if (calledSymbol != null && !SymbolEqualityComparer.Default.Equals(
                             calledSymbol.OriginalDefinition, containingSymbol.OriginalDefinition))
+                    {
                         continue;
+                    }
                 }
 
                 var guarded = IsEffectivelyGuarded(call, method);
@@ -182,24 +201,34 @@ public sealed class StackOverflowEngine
             if (prop.ExpressionBody != null)
             {
                 foreach (var id in SelfIdentifierRefs(prop.ExpressionBody, name))
+                {
                     findings.Add(PropertyFinding("PropertySelfRead", filePath,
                         id.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                         name, $"Property '{name}' reads itself in expression body — likely missing backing field"));
+                }
             }
 
-            if (prop.AccessorList == null) continue;
+            if (prop.AccessorList == null)
+            {
+                continue;
+            }
 
             foreach (var accessor in prop.AccessorList.Accessors)
             {
                 var accBody = (SyntaxNode?)accessor.Body ?? accessor.ExpressionBody;
-                if (accBody == null) continue;
+                if (accBody == null)
+                {
+                    continue;
+                }
 
                 if (accessor.IsKind(SyntaxKind.GetAccessorDeclaration))
                 {
                     foreach (var id in SelfIdentifierRefs(accBody, name))
+                    {
                         findings.Add(PropertyFinding("PropertySelfRead", filePath,
                             id.GetLocation().GetLineSpan().StartLinePosition.Line + 1,
                             $"{name}.get", $"Property '{name}' getter reads itself — likely missing backing field"));
+                    }
                 }
                 else if (accessor.IsKind(SyntaxKind.SetAccessorDeclaration) ||
                          accessor.IsKind(SyntaxKind.InitAccessorDeclaration))
@@ -227,11 +256,17 @@ public sealed class StackOverflowEngine
 
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.OverrideKeyword))) continue;
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.OverrideKeyword)))
+            {
+                continue;
+            }
 
             var name = method.Identifier.Text;
             var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-            if (body == null) continue;
+            if (body == null)
+            {
+                continue;
+            }
 
             foreach (var call in SelfCalls(body, name))
             {
@@ -267,7 +302,10 @@ public sealed class StackOverflowEngine
             .GroupBy(c => c.Identifier.Text)
             .ToDictionary(g => g.Key, g => g.First());
 
-        if (classMap.Count < 2) return findings;
+        if (classMap.Count < 2)
+        {
+            return findings;
+        }
 
         // Single-level inheritance map for classes defined in this file
         var inheritance = new Dictionary<string, string>();
@@ -276,11 +314,13 @@ public sealed class StackOverflowEngine
             var baseTypeName = decl.BaseList?.Types.FirstOrDefault()?.Type switch
             {
                 IdentifierNameSyntax id => id.Identifier.Text,
-                GenericNameSyntax gn   => gn.Identifier.Text,
-                _                      => null
+                GenericNameSyntax gn => gn.Identifier.Text,
+                _ => null
             };
             if (baseTypeName != null && classMap.ContainsKey(baseTypeName))
+            {
                 inheritance[name] = baseTypeName;
+            }
         }
 
         foreach (var (derivedName, baseClassName) in inheritance)
@@ -324,7 +364,10 @@ public sealed class StackOverflowEngine
                     _ => ""
                 };
                 var overrideBody = GetMemberBodyNode(overrideMember);
-                if (overrideBody == null) continue;
+                if (overrideBody == null)
+                {
+                    continue;
+                }
 
                 // What members (methods + PascalCase properties) does this override reference?
                 var overrideCalls = CollectReferencedMemberNames(overrideBody);
@@ -333,7 +376,10 @@ public sealed class StackOverflowEngine
                 {
                     var baseMember = baseMembers[calledName];
                     var baseBody = GetMemberBodyNode(baseMember);
-                    if (baseBody == null) continue;
+                    if (baseBody == null)
+                    {
+                        continue;
+                    }
 
                     // What does the base member dispatch to that the derived class overrides?
                     var baseCalls = CollectReferencedMemberNames(baseBody);
@@ -404,10 +450,16 @@ public sealed class StackOverflowEngine
         {
             var classSymbol = model.GetDeclaredSymbol(classDecl) as INamedTypeSymbol;
             if (classSymbol?.BaseType == null ||
-                classSymbol.BaseType.SpecialType == SpecialType.System_Object) continue;
+                classSymbol.BaseType.SpecialType == SpecialType.System_Object)
+            {
+                continue;
+            }
 
             // Skip classes whose base is declared in the same file — already handled above
-            if (classSymbol.BaseType.Locations.Any(l => l.SourceTree == root.SyntaxTree)) continue;
+            if (classSymbol.BaseType.Locations.Any(l => l.SourceTree == root.SyntaxTree))
+            {
+                continue;
+            }
 
             var derivedOverrides = classDecl.Members
                 .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OverrideKeyword)))
@@ -433,20 +485,32 @@ public sealed class StackOverflowEngine
                     IPropertySymbol p => p.OverriddenProperty,
                     _ => null
                 };
-                if (baseSymbol == null) continue;
+                if (baseSymbol == null)
+                {
+                    continue;
+                }
 
                 var baseSource = await FindMemberSourceAsync(baseSymbol, solution);
-                if (baseSource == null) continue;
+                if (baseSource == null)
+                {
+                    continue;
+                }
 
                 var baseBody = GetMemberBodyNode(baseSource);
-                if (baseBody == null) continue;
+                if (baseBody == null)
+                {
+                    continue;
+                }
 
                 var calledByBase = CollectReferencedMemberNames(baseBody);
 
                 foreach (var calledName in calledByBase.Where(overrideNames.Contains))
                 {
                     var cycleOverride = derivedOverrides.FirstOrDefault(o => o.Name == calledName);
-                    if (cycleOverride.Syntax == null) continue;
+                    if (cycleOverride.Syntax == null)
+                    {
+                        continue;
+                    }
 
                     var cycleBody = GetMemberBodyNode(cycleOverride.Syntax);
                     var cycleCalls = cycleBody != null ? CollectReferencedMemberNames(cycleBody) : (HashSet<string>)[];
@@ -488,25 +552,36 @@ public sealed class StackOverflowEngine
         {
             var name = method.Identifier.Text;
             var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-            if (body == null) continue;
+            if (body == null)
+            {
+                continue;
+            }
 
             var paramNames = method.ParameterList.Parameters
                 .Select(p => p.Identifier.Text)
                 .ToArray();
-            if (paramNames.Length == 0) continue;
+            if (paramNames.Length == 0)
+            {
+                continue;
+            }
 
             IMethodSymbol? containingSymbol = model.GetDeclaredSymbol(method) as IMethodSymbol;
 
             foreach (var call in SelfCalls(body, name))
             {
-                if (!IsEffectivelyGuarded(call, method)) continue; // unconditional already caught
+                if (!IsEffectivelyGuarded(call, method))
+                {
+                    continue; // unconditional already caught
+                }
 
                 // Syntactic: named arg targeting a param not on this method = chain call
                 var paramNameSet = paramNames.ToHashSet(StringComparer.Ordinal);
                 if (call.ArgumentList.Arguments.Any(a =>
                         a.NameColon != null &&
                         !paramNameSet.Contains(a.NameColon.Name.Identifier.Text)))
+                {
                     continue;
+                }
 
                 // Semantic: skip calls that resolve to a different overload
                 if (containingSymbol != null)
@@ -515,11 +590,16 @@ public sealed class StackOverflowEngine
                     var calledSymbol = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) as IMethodSymbol;
                     if (calledSymbol != null && !SymbolEqualityComparer.Default.Equals(
                             calledSymbol.OriginalDefinition, containingSymbol.OriginalDefinition))
+                    {
                         continue;
+                    }
                 }
 
                 var args = call.ArgumentList.Arguments;
-                if (args.Count != paramNames.Length) continue;
+                if (args.Count != paramNames.Length)
+                {
+                    continue;
+                }
 
                 for (int i = 0; i < args.Count; i++)
                 {
@@ -567,7 +647,10 @@ public sealed class StackOverflowEngine
             .Where(m => m.Body != null || m.ExpressionBody != null)
             .ToList();
 
-        if (methods.Count < 2) return [];
+        if (methods.Count < 2)
+        {
+            return [];
+        }
 
         // Merge overloads — combine calls from all same-named methods
         var callMap = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
@@ -577,7 +660,9 @@ public sealed class StackOverflowEngine
             var n = method.Identifier.Text;
             var calls = CollectInvocationNames((SyntaxNode?)method.Body ?? method.ExpressionBody!);
             if (callMap.TryGetValue(n, out var existing))
+            {
                 existing.UnionWith(calls);
+            }
             else
             {
                 callMap[n] = calls;
@@ -590,7 +675,9 @@ public sealed class StackOverflowEngine
         var findings = new List<StackOverflowFinding>();
 
         foreach (var (start, startSyntax) in firstSyntax)
+        {
             FindMutualRecursion(start, start, [start], callMap, allNames, reported, findings, startSyntax, filePath);
+        }
 
         return findings;
     }
@@ -604,18 +691,30 @@ public sealed class StackOverflowEngine
         MethodDeclarationSyntax startSyntax,
         string filePath)
     {
-        if (!callMap.TryGetValue(current, out var callees)) return;
+        if (!callMap.TryGetValue(current, out var callees))
+        {
+            return;
+        }
 
         foreach (var callee in callees)
         {
-            if (!allNames.Contains(callee)) continue;
+            if (!allNames.Contains(callee))
+            {
+                continue;
+            }
 
             if (callee == start)
             {
-                if (path.Count <= 1) continue; // direct self-recursion already in DetectDirectRecursion
+                if (path.Count <= 1)
+                {
+                    continue; // direct self-recursion already in DetectDirectRecursion
+                }
 
                 var canonical = string.Join(",", path.Order(StringComparer.Ordinal));
-                if (!reported.Add(canonical)) continue;
+                if (!reported.Add(canonical))
+                {
+                    continue;
+                }
 
                 var cyclePath = string.Join(" → ", path) + " → " + start;
                 var line = startSyntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
@@ -631,8 +730,15 @@ public sealed class StackOverflowEngine
                 continue;
             }
 
-            if (path.Contains(callee, StringComparer.Ordinal)) continue;
-            if (path.Count >= 5) continue; // depth limit
+            if (path.Contains(callee, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            if (path.Count >= 5)
+            {
+                continue; // depth limit
+            }
 
             path.Add(callee);
             FindMutualRecursion(start, callee, path, callMap, allNames, reported, findings, startSyntax, filePath);
@@ -662,11 +768,23 @@ public sealed class StackOverflowEngine
 
         int GetDepth(string name)
         {
-            if (depths.TryGetValue(name, out var d)) return d;
-            if (!callMap.ContainsKey(name)) return 0;
-            if (computing.Contains(name)) return 0; // cycle — stop
+            if (depths.TryGetValue(name, out var d))
+            {
+                return d;
+            }
+
+            if (!callMap.TryGetValue(name, out HashSet<string>? value))
+            {
+                return 0;
+            }
+
+            if (computing.Contains(name))
+            {
+                return 0; // cycle — stop
+            }
+
             computing.Add(name);
-            var max = callMap[name].Where(c => c != name).Select(GetDepth).DefaultIfEmpty(0).Max();
+            var max = value.Where(c => c != name).Select(GetDepth).DefaultIfEmpty(0).Max();
             computing.Remove(name);
             depths[name] = max + 1;
             return depths[name];
@@ -717,13 +835,18 @@ public sealed class StackOverflowEngine
             foreach (var overload in overloads)
             {
                 if (model.GetDeclaredSymbol(overload) is IMethodSymbol sym)
+                {
                     symbolToSyntax[sym] = overload;
+                }
             }
 
             foreach (var (containingSymbol, method) in symbolToSyntax)
             {
                 var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                if (body == null) continue;
+                if (body == null)
+                {
+                    continue;
+                }
 
                 var callingParams = method.ParameterList.Parameters
                     .Select(p => p.Identifier.Text)
@@ -739,17 +862,25 @@ public sealed class StackOverflowEngine
                             => ma.Name.Identifier.Text,
                         _ => null
                     };
-                    if (invName != methodName) continue;
+                    if (invName != methodName)
+                    {
+                        continue;
+                    }
 
                     var callInfo = model.GetSymbolInfo(call);
                     var calledSymbol =
                         (callInfo.Symbol ?? callInfo.CandidateSymbols.FirstOrDefault()) as IMethodSymbol;
-                    if (calledSymbol == null) continue;
+                    if (calledSymbol == null)
+                    {
+                        continue;
+                    }
 
                     // Same overload = genuine recursion handled elsewhere; skip
                     if (SymbolEqualityComparer.Default.Equals(
                             calledSymbol.OriginalDefinition, containingSymbol.OriginalDefinition))
+                    {
                         continue;
+                    }
 
                     var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     var args = call.ArgumentList.Arguments;
@@ -760,6 +891,7 @@ public sealed class StackOverflowEngine
                         .ToList();
 
                     if (missing.Count > 0)
+                    {
                         findings.Add(new StackOverflowFinding(
                             Kind: "ChainMissingParameter",
                             Risk: StackOverflowRisk.Suspicious,
@@ -770,6 +902,7 @@ public sealed class StackOverflowEngine
                                 "not forwarded to the target overload — callers of this overload lose those values silently",
                             Recommendation: $"Forward [{string.Join(", ", missing)}] in the delegating call; " +
                                 "if the omission is intentional, document why with a comment"));
+                    }
 
                     // ── Check 2: Parameters forwarded in wrong relative order ─
                     // Map each source param to the positional arg slot it occupies in the call
@@ -783,7 +916,9 @@ public sealed class StackOverflowEngine
                     {
                         var match = callingParams.FirstOrDefault(p => positionalArgs[ai] == p);
                         if (match != null && !paramPos.ContainsKey(match))
+                        {
                             paramPos[match] = ai;
+                        }
                     }
 
                     bool orderFlagged = false;
@@ -826,6 +961,7 @@ public sealed class StackOverflowEngine
                                 });
 
                             if (cyclesBack)
+                            {
                                 findings.Add(new StackOverflowFinding(
                                     Kind: "OverloadCycle",
                                     Risk: StackOverflowRisk.Definite,
@@ -836,6 +972,7 @@ public sealed class StackOverflowEngine
                                         "delegates back — mutual recursion between overloads causes StackOverflowException",
                                     Recommendation: "Designate one overload as the canonical implementation; all others " +
                                         "must delegate to it in one direction without a return call"));
+                            }
                         }
                     }
                 }
@@ -874,7 +1011,10 @@ public sealed class StackOverflowEngine
             if (current is IfStatementSyntax or ConditionalExpressionSyntax or
                 SwitchStatementSyntax or SwitchExpressionSyntax or
                 WhileStatementSyntax or ForStatementSyntax or DoStatementSyntax)
+            {
                 return true;
+            }
+
             current = current.Parent;
         }
         return false;
@@ -885,19 +1025,33 @@ public sealed class StackOverflowEngine
     //   Recurse();               ← only reached when base case didn't trigger
     private static bool IsEffectivelyGuarded(InvocationExpressionSyntax call, MethodDeclarationSyntax method)
     {
-        if (IsInsideConditional(call, method)) return true;
-        if (method.Body == null) return false;
+        if (IsInsideConditional(call, method))
+        {
+            return true;
+        }
+
+        if (method.Body == null)
+        {
+            return false;
+        }
 
         var callPos = call.GetLocation().SourceSpan.Start;
         foreach (var stmt in method.Body.Statements)
         {
-            if (stmt.GetLocation().SourceSpan.End > callPos) break;
+            if (stmt.GetLocation().SourceSpan.End > callPos)
+            {
+                break;
+            }
 
             if (stmt is ReturnStatementSyntax or ThrowStatementSyntax)
+            {
                 return true; // unconditional early exit before call
+            }
 
             if (stmt is IfStatementSyntax ifStmt && IfBodyAlwaysExits(ifStmt))
+            {
                 return true; // if-with-exit before call — call is conditional on its inverse
+            }
         }
         return false;
     }
@@ -920,10 +1074,10 @@ public sealed class StackOverflowEngine
                            && ma.Name == id && ma.Expression is not ThisExpressionSyntax));
 
     private static bool IsSelfPropertyAccess(ExpressionSyntax expr, string name) =>
-        expr is IdentifierNameSyntax id && id.Identifier.Text == name
-        || expr is MemberAccessExpressionSyntax ma
+        (expr is IdentifierNameSyntax id && id.Identifier.Text == name)
+        || (expr is MemberAccessExpressionSyntax ma
            && ma.Expression is ThisExpressionSyntax
-           && ma.Name.Identifier.Text == name;
+           && ma.Name.Identifier.Text == name);
 
     private static bool IsIncreasing(string argText, string param) =>
         argText.StartsWith($"{param} +", StringComparison.Ordinal) ||
@@ -955,9 +1109,21 @@ public sealed class StackOverflowEngine
         foreach (var id in body.DescendantNodes().OfType<IdentifierNameSyntax>())
         {
             var text = id.Identifier.Text;
-            if (text.Length == 0 || !char.IsUpper(text[0])) continue;
-            if (id.Parent is InvocationExpressionSyntax inv && inv.Expression == id) continue;
-            if (id.Parent is MemberAccessExpressionSyntax ma && ma.Name == id) continue;
+            if (text.Length == 0 || !char.IsUpper(text[0]))
+            {
+                continue;
+            }
+
+            if (id.Parent is InvocationExpressionSyntax inv && inv.Expression == id)
+            {
+                continue;
+            }
+
+            if (id.Parent is MemberAccessExpressionSyntax ma && ma.Name == id)
+            {
+                continue;
+            }
+
             result.Add(text);
         }
         return result;
@@ -968,14 +1134,25 @@ public sealed class StackOverflowEngine
         foreach (var loc in symbol.Locations.Where(l => l.IsInSource))
         {
             var doc = solution.GetDocument(loc.SourceTree);
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync();
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var node = root.FindNode(loc.SourceSpan);
             while (node != null)
             {
                 if (node is MethodDeclarationSyntax or PropertyDeclarationSyntax or AccessorDeclarationSyntax)
+                {
                     return node;
+                }
+
                 node = node.Parent;
             }
         }
@@ -1006,16 +1183,29 @@ public sealed class StackOverflowEngine
     private static string BuildSummary(List<StackOverflowFinding> findings, string filePath)
     {
         if (findings.Count == 0)
+        {
             return $"No stack overflow risks found in {Path.GetFileName(filePath)}";
+        }
 
         var parts = new List<string>();
         var definite = findings.Count(f => f.Risk == StackOverflowRisk.Definite);
         var suspicious = findings.Count(f => f.Risk == StackOverflowRisk.Suspicious);
         var info = findings.Count(f => f.Risk == StackOverflowRisk.Informational);
 
-        if (definite > 0) parts.Add($"{definite} definite");
-        if (suspicious > 0) parts.Add($"{suspicious} suspicious");
-        if (info > 0) parts.Add($"{info} informational");
+        if (definite > 0)
+        {
+            parts.Add($"{definite} definite");
+        }
+
+        if (suspicious > 0)
+        {
+            parts.Add($"{suspicious} suspicious");
+        }
+
+        if (info > 0)
+        {
+            parts.Add($"{info} informational");
+        }
 
         var kindSummary = findings.GroupBy(f => f.Kind)
             .OrderByDescending(g => g.Count())

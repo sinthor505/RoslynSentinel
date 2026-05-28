@@ -20,22 +20,27 @@ public class MappingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var compilation = await document.Project.GetCompilationAsync(cancellationToken);
 
         // Try fully-qualified name first, then fall back to simple name search
         var fromSymbol = compilation?.GetTypeByMetadataName(fromType)
-            ?? compilation?.GetSymbolsWithName(n => n == fromType || n == fromType.Split('.').Last(), SymbolFilter.Type)
+            ?? compilation?.GetSymbolsWithName(n => n == fromType || n == fromType.Split('.').Last(), SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>().FirstOrDefault();
         var toSymbol = compilation?.GetTypeByMetadataName(toType)
-            ?? compilation?.GetSymbolsWithName(n => n == toType || n == toType.Split('.').Last(), SymbolFilter.Type)
+            ?? compilation?.GetSymbolsWithName(n => n == toType || n == toType.Split('.').Last(), SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>().FirstOrDefault();
 
         if (fromSymbol == null || toSymbol == null)
+        {
             return $"// Could not resolve symbols for '{fromType}' or '{toType}'.\n" +
                    $"// Tip: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified metadata name\n" +
                    $"// (e.g. 'MyApp.Commands.CreateRecipeCommand').  Ensure the types are in the loaded solution.";
+        }
 
         var fromProps = fromSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
         var toProps = toSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
@@ -71,16 +76,22 @@ public class MappingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
-        
-        var nodes = root?.DescendantNodes(span).OfType<AssignmentExpressionSyntax>().ToList();
-        if (nodes == null || !nodes.Any()) return root?.ToFullString() ?? "";
 
-        var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) => 
+        var nodes = root?.DescendantNodes(span).OfType<AssignmentExpressionSyntax>().ToList();
+        if (nodes == null || nodes.Count == 0)
+        {
+            throw new InvalidOperationException($"No assignment expressions found in the specified range: {startLine}-{endLine}");
+        }
+
+        var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
             newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left));
 
         return newRoot.NormalizeWhitespace().ToFullString();

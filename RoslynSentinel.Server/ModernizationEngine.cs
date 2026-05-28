@@ -17,14 +17,24 @@ public class ModernizationEngine
 
     public async Task<string> ClassToRecordAsync(string filePath, string className, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("ClassToRecord")) return string.Empty;
+        if (!_config.IsFeatureEnabled("ClassToRecord"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) throw new InvalidOperationException("File not found.");
+        if (document == null)
+        {
+            throw new InvalidOperationException("File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return root?.ToFullString() ?? "";
+        if (classNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         // Extract properties
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>().ToList();
@@ -43,7 +53,7 @@ public class ModernizationEngine
 
             var positional = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
                 .WithModifiers(classNode.Modifiers)
-                .WithParameterList(parameters.Any() 
+                .WithParameterList(parameters.Count != 0
                     ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters))
                     : SyntaxFactory.ParameterList());
 
@@ -68,7 +78,11 @@ public class ModernizationEngine
             // Convert `set` accessors to `init` so the record remains immutable by convention.
             var convertedProperties = properties.Select(prop =>
             {
-                if (prop.AccessorList == null) return (MemberDeclarationSyntax)prop;
+                if (prop.AccessorList == null)
+                {
+                    return (MemberDeclarationSyntax)prop;
+                }
+
                 var newAccessors = prop.AccessorList.Accessors.Select(acc =>
                 {
                     if (acc.IsKind(SyntaxKind.SetAccessorDeclaration) && acc.Body == null && acc.ExpressionBody == null)
@@ -99,14 +113,24 @@ public class ModernizationEngine
 
     public async Task<string> RecordToClassAsync(string filePath, string recordName, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("RecordToClass")) return string.Empty;
+        if (!_config.IsFeatureEnabled("RecordToClass"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
-        if (recordNode == null) return root?.ToFullString() ?? "";
+        if (recordNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier).WithModifiers(recordNode.Modifiers);
         
@@ -143,7 +167,11 @@ public class ModernizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         
@@ -151,8 +179,14 @@ public class ModernizationEngine
         {
             var stmt = method.Body.Statements[0];
             ExpressionSyntax? expr = null;
-            if (stmt is ReturnStatementSyntax ret) expr = ret.Expression;
-            else if (stmt is ExpressionStatementSyntax es) expr = es.Expression;
+            if (stmt is ReturnStatementSyntax ret)
+            {
+                expr = ret.Expression;
+            }
+            else if (stmt is ExpressionStatementSyntax es)
+            {
+                expr = es.Expression;
+            }
 
             if (expr != null)
             {
@@ -171,10 +205,16 @@ public class ModernizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new PatternModernizationRewriter();
         var newRoot = rewriter.Visit(root);
@@ -271,7 +311,10 @@ public class ModernizationEngine
             result = null;
             var expressions = CollectOrChain(orExpr);
 
-            if (expressions.Count < 2) return false;
+            if (expressions.Count < 2)
+            {
+                return false;
+            }
 
             // Check if all expressions are comparisons with the same subject
             ExpressionSyntax? subject = null;
@@ -283,15 +326,27 @@ public class ModernizationEngine
                 {
                     if (IsLiteralOrIdentifier(binary.Right))
                     {
-                        if (subject == null) subject = binary.Left;
-                        else if (!AreExpressionsEquivalent(subject, binary.Left)) return false;
+                        if (subject == null)
+                        {
+                            subject = binary.Left;
+                        }
+                        else if (!AreExpressionsEquivalent(subject, binary.Left))
+                        {
+                            return false;
+                        }
 
                         caseValues.Add(binary.Right);
                     }
                     else if (IsLiteralOrIdentifier(binary.Left))
                     {
-                        if (subject == null) subject = binary.Right;
-                        else if (!AreExpressionsEquivalent(subject, binary.Right)) return false;
+                        if (subject == null)
+                        {
+                            subject = binary.Right;
+                        }
+                        else if (!AreExpressionsEquivalent(subject, binary.Right))
+                        {
+                            return false;
+                        }
 
                         caseValues.Add(binary.Left);
                     }
@@ -306,7 +361,10 @@ public class ModernizationEngine
                 }
             }
 
-            if (subject == null || caseValues.Count != expressions.Count) return false;
+            if (subject == null || caseValues.Count != expressions.Count)
+            {
+                return false;
+            }
 
             // Build or pattern: x is 1 or 2 or 3
             // Due to Roslyn API limitations, we'll try to build this using ConstantPatterns
@@ -358,7 +416,11 @@ public class ModernizationEngine
 
         private static bool AreExpressionsEquivalent(ExpressionSyntax? a, ExpressionSyntax? b)
         {
-            if (a == null || b == null) return false;
+            if (a == null || b == null)
+            {
+                return false;
+            }
+
             return a.IsEquivalentTo(b);
         }
     }

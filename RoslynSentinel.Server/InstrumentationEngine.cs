@@ -20,11 +20,17 @@ public class InstrumentationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
+        if (methodNode == null || methodNode.Body == null)
+        {
+            throw new InvalidOperationException($"Method or body not found: {methodName}");
+        }
 
         var catchBlock = SyntaxFactory.CatchClause(
             SyntaxFactory.CatchDeclaration(SyntaxFactory.ParseTypeName(exceptionType), SyntaxFactory.Identifier("ex")),
@@ -49,19 +55,25 @@ public class InstrumentationEngine
     /// </summary>
     public async Task<string> AddTryCatchToClassAsync(string filePath, string className, string exceptionType = "Exception", CancellationToken cancellationToken = default)
     {
-         var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException($"Class not found: {className}");
+        }
 
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && m.Body != null)
             .ToList();
 
-        var newRoot = root!.ReplaceNodes(publicMethods, (oldMethod, newMethod) => 
+        var newRoot = root!.ReplaceNodes(publicMethods, (oldMethod, newMethod) =>
         {
             var catchBlock = SyntaxFactory.CatchClause(
                 SyntaxFactory.CatchDeclaration(SyntaxFactory.ParseTypeName(exceptionType), SyntaxFactory.Identifier("ex")),
@@ -88,13 +100,22 @@ public class InstrumentationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
+        }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null || methodNode.Body == null) throw new Exception("Method or body not found.");
+        if (methodNode == null || methodNode.Body == null)
+        {
+            throw new InvalidOperationException($"Method or body not found: {methodName} in file: {filePath}");
+        }
 
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.Diagnostics"))
         {
@@ -115,13 +136,13 @@ public class InstrumentationEngine
 
         // If method returns void, just append. If it returns a value, we have to capture the return, log, then return.
         // Using a try/finally block is the most robust way to inject post-fix logic regardless of return statements.
-        
+
         var finallyClause = SyntaxFactory.FinallyClause(SyntaxFactory.Block(swLog));
         var tryStatement = SyntaxFactory.TryStatement(methodNode!.Body!, SyntaxFactory.List<CatchClauseSyntax>(), finallyClause);
-        
+
         var newBody = SyntaxFactory.Block(swStart, tryStatement);
         var newMethodNode = methodNode.WithBody(newBody);
-        
+
         var newRoot = root.ReplaceNode(methodNode, newMethodNode);
         return newRoot.NormalizeWhitespace().ToFullString();
     }

@@ -1,8 +1,8 @@
 #pragma warning disable CS8618
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
-using System.IO;
 
 namespace RoslynSentinel.Tests;
 
@@ -386,7 +386,7 @@ public class RegressionTests
                 public class Processor
                 {
                     public string Process(int id) => id.ToString();
-                    public string Process(string name) => name.ToUpper();
+                    public string Process(string name) => name.ToUpperInvariant();
                 }
                 """),
             ("Client.cs", """
@@ -1144,7 +1144,13 @@ public class RegressionTests
             Assert.That(result.UpdatedContent, Is.Not.EqualTo(malformatted),
                 "Formatted content should differ from malformatted input");
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Test]
@@ -1172,7 +1178,13 @@ public class RegressionTests
             Assert.That(diskContent, Is.Not.EqualTo(malformatted),
                 "Disk content should be formatted differently from the original");
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     // ── AnalyzeForeachForLinqConversion ───────────────────────────────────────
@@ -1192,7 +1204,7 @@ public class RegressionTests
                         var results = new List<string>();
                         foreach (var item in items)
                         {
-                            results.Add(item.ToUpper());
+                            results.Add(item.ToUpperInvariant());
                         }
                         return results;
                     }
@@ -1210,7 +1222,13 @@ public class RegressionTests
             Assert.That(analysis.StatementsBeforeForeach, Is.EqualTo(0));
             Assert.That(analysis.BlockingReason, Is.Null);
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Test]
@@ -1249,7 +1267,13 @@ public class RegressionTests
                 "At least one statement references the collection before the foreach");
             Assert.That(analysis.BlockingReason, Is.Not.Null.And.Not.Empty);
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     // ── GetWorkspaceHealth ────────────────────────────────────────────────────
@@ -1346,7 +1370,13 @@ public class RegressionTests
             Assert.That(result.UpdatedContent, Does.Contain("GreetingMessage"),
                 "All usages should be replaced with the constant name");
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Test]
@@ -1378,7 +1408,13 @@ public class RegressionTests
             Assert.That(result.UpdatedContent, Does.Contain("const string DefaultHost"),
                 "Constant declaration must be present");
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Test]
@@ -1397,7 +1433,13 @@ public class RegressionTests
                 "An invalid identifier should produce a failure result");
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty);
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     private static int CountStringOccurrences(string text, string value)

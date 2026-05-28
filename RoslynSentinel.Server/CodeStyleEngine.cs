@@ -17,13 +17,23 @@ public class CodeStyleEngine
 
     public async Task<string> FixDangerousLockAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("LockModernization")) return string.Empty;
+        if (!_config.IsFeatureEnabled("LockModernization"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new DangerousLockRewriter();
         var newRoot = rewriter.Visit(root) as CompilationUnitSyntax;
@@ -51,7 +61,7 @@ public class CodeStyleEngine
                     classesToUpdate,
                     (_, current) => current.WithMembers(current.Members.Insert(0, lockField)));
 
-                if (!newRoot.Usings.Any(u => u.Name.ToString() == "System.Threading"))
+                if (!newRoot.Usings.Any(u => u.Name?.ToString() == "System.Threading"))
                 {
                     newRoot = newRoot.AddUsings(
                         SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Threading")));
@@ -64,23 +74,35 @@ public class CodeStyleEngine
 
     public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string propertyName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ConvertPropertyToMethod")) return string.Empty;
+        if (!_config.IsFeatureEnabled("ConvertPropertyToMethod"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
-        if (prop == null) return root?.ToFullString() ?? "";
+        if (prop == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         // Only works for properties declared directly inside a class (not an interface or struct)
         var classNode = prop.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (classNode == null)
+        {
             return $"// ERROR: '{propertyName}' must be in a class — this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "");
+        }
 
         var type = prop.Type;
-        var fieldName = $"_{propertyName.ToLower()}";
-        
+        var fieldName = $"_{propertyName.ToLowerInvariant()}";
+
         var getter = SyntaxFactory.MethodDeclaration(type, $"Get{propertyName}")
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
             .WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(fieldName))));
@@ -101,12 +123,24 @@ public class CodeStyleEngine
 
     public async Task<string> SimplifyVerbosityAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("SimplifyVerbosity")) return string.Empty;
+        if (!_config.IsFeatureEnabled("SimplifyVerbosity"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var rewriter = new VerbosityRewriter(_config);
         var newRoot = rewriter.Visit(root);
         return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
@@ -114,12 +148,24 @@ public class CodeStyleEngine
 
     public async Task<string> UseCollectionExpressionsAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("CollectionExpressions")) return string.Empty;
+        if (!_config.IsFeatureEnabled("CollectionExpressions"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var rewriter = new CollectionExpressionRewriter();
         var newRoot = rewriter.Visit(root);
         return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
@@ -127,13 +173,24 @@ public class CodeStyleEngine
 
     public async Task<string> UseTimeProviderAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("TimeProviderInjection")) return string.Empty;
+        if (!_config.IsFeatureEnabled("TimeProviderInjection"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
-        
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         var providerField = classNode?.Members.OfType<FieldDeclarationSyntax>()
             .FirstOrDefault(f => f.Declaration.Type.ToString().Contains("TimeProvider"));
@@ -141,7 +198,10 @@ public class CodeStyleEngine
 
         var rewriter = new TimeAbstractionRewriter(fieldName);
         var cu = rewriter.Visit(root) as CompilationUnitSyntax;
-        if (cu == null) return string.Empty;
+        if (cu == null)
+        {
+            return string.Empty;
+        }
 
         var newClassNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (newClassNode != null && providerField == null)
@@ -154,24 +214,48 @@ public class CodeStyleEngine
 
     public async Task<string> SimplifyAllNamesAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("IDE0001")) return string.Empty;
+        if (!_config.IsFeatureEnabled("IDE0001"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var rewriter = new NameSimplifierRewriter();
         return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> UseIndexFromEndAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("LengthMinusOneToIndex")) return string.Empty;
+        if (!_config.IsFeatureEnabled("LengthMinusOneToIndex"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var rewriter = new IndexFromEndRewriter();
         return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
@@ -183,31 +267,53 @@ public class CodeStyleEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<AntiPatternFinding>();
         var targetTypes = new[] { "Dictionary", "HashSet" };
 
         foreach (var doc in documents)
         {
-            if (doc == null || doc.FilePath == null) continue;
+            if (doc == null || doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
             {
                 // Must be private static readonly
                 var mods = field.Modifiers;
-                if (!mods.Any(SyntaxKind.PrivateKeyword)) continue;
-                if (!mods.Any(SyntaxKind.StaticKeyword)) continue;
-                if (!mods.Any(SyntaxKind.ReadOnlyKeyword)) continue;
+                if (!mods.Any(SyntaxKind.PrivateKeyword))
+                {
+                    continue;
+                }
+
+                if (!mods.Any(SyntaxKind.StaticKeyword))
+                {
+                    continue;
+                }
+
+                if (!mods.Any(SyntaxKind.ReadOnlyKeyword))
+                {
+                    continue;
+                }
 
                 var typeStr = field.Declaration.Type.ToString();
                 string? matchedType = null;
@@ -219,11 +325,17 @@ public class CodeStyleEngine
                         break;
                     }
                 }
-                if (matchedType == null) continue;
+                if (matchedType == null)
+                {
+                    continue;
+                }
 
                 // Must have an initializer
                 var hasInit = field.Declaration.Variables.Any(v => v.Initializer != null);
-                if (!hasInit) continue;
+                if (!hasInit)
+                {
+                    continue;
+                }
 
                 var frozenType = matchedType == "Dictionary" ? "FrozenDictionary" : "FrozenSet";
                 var lineSpan = field.GetLocation().GetLineSpan();
@@ -243,7 +355,10 @@ public class CodeStyleEngine
 
     private class DangerousLockRewriter : CSharpSyntaxRewriter
     {
-        public bool MadeChanges { get; private set; }
+        public bool MadeChanges
+        {
+            get; private set;
+        }
         public override SyntaxNode? VisitLockStatement(LockStatementSyntax node)
         {
             var expr = node.Expression.ToString();
@@ -260,20 +375,30 @@ public class CodeStyleEngine
         public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
             if (node.Parent is EqualsValueClauseSyntax evc && evc.Parent is VariableDeclaratorSyntax vd && vd.Parent is VariableDeclarationSyntax vds2 && vds2.Type.ToString() == node.Type.ToString())
+            {
                 return SyntaxFactory.ImplicitObjectCreationExpression(node.ArgumentList ?? SyntaxFactory.ArgumentList(), node.Initializer).WithTriviaFrom(node);
+            }
 
             return base.VisitObjectCreationExpression(node);
         }
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
-            if (!_config.IsFeatureEnabled("NullConditionalAssignment")) return base.VisitIfStatement(node);
+            if (!_config.IsFeatureEnabled("NullConditionalAssignment"))
+            {
+                return base.VisitIfStatement(node);
+            }
+
             if (node.Condition is BinaryExpressionSyntax be && be.IsKind(SyntaxKind.EqualsExpression) && be.Right.IsKind(SyntaxKind.NullLiteralExpression))
             {
                 var assignment = node.Statement is ExpressionStatementSyntax es && es.Expression is AssignmentExpressionSyntax asgn ? asgn : null;
                 if (assignment != null && assignment.Left.ToString() == be.Left.ToString())
                 {
                     var right = assignment.Right;
-                    if (right is ObjectCreationExpressionSyntax oce) right = SyntaxFactory.ImplicitObjectCreationExpression(oce.ArgumentList ?? SyntaxFactory.ArgumentList(), oce.Initializer).WithTriviaFrom(oce);
+                    if (right is ObjectCreationExpressionSyntax oce)
+                    {
+                        right = SyntaxFactory.ImplicitObjectCreationExpression(oce.ArgumentList ?? SyntaxFactory.ArgumentList(), oce.Initializer).WithTriviaFrom(oce);
+                    }
+
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, assignment.Left, right)).WithTriviaFrom(node);
                 }
             }
@@ -285,10 +410,14 @@ public class CodeStyleEngine
     {
         public override SyntaxNode? VisitArrayCreationExpression(ArrayCreationExpressionSyntax node)
         {
-            if (node.Initializer == null || node.Initializer.Expressions.Count == 0) return SyntaxFactory.CollectionExpression().WithTriviaFrom(node);
+            if (node.Initializer == null || node.Initializer.Expressions.Count == 0)
+            {
+                return SyntaxFactory.CollectionExpression().WithTriviaFrom(node);
+            }
+
             return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node);
         }
-        
+
         public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
             if (node.Type.ToString().StartsWith("List<") && node.Initializer != null)
@@ -320,7 +449,11 @@ public class CodeStyleEngine
     {
         public override SyntaxNode? VisitAliasQualifiedName(AliasQualifiedNameSyntax node)
         {
-            if (node.Alias.Identifier.Text == "global") return node.Name;
+            if (node.Alias.Identifier.Text == "global")
+            {
+                return node.Name;
+            }
+
             return base.VisitAliasQualifiedName(node);
         }
     }
@@ -378,40 +511,65 @@ public class CodeStyleAnalysisEngine
 
         IEnumerable<Document> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents);
+        }
 
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var prop in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
             {
                 // Must be public
-                if (!prop.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+                if (!prop.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+                {
+                    continue;
+                }
 
                 // Type must be a mutable collection
                 var typeName = prop.Type.ToString().Split('<')[0].Split('.')[^1].TrimEnd('?');
-                if (!MutableCollectionTypes.Contains(typeName)) continue;
+                if (!MutableCollectionTypes.Contains(typeName))
+                {
+                    continue;
+                }
 
                 // Must have a public setter (not init, not private set)
                 var setter = prop.AccessorList?.Accessors
                     .FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
-                if (setter == null) continue;
+                if (setter == null)
+                {
+                    continue;
+                }
 
                 // Skip init-only setters
-                if (setter.Keyword.IsKind(SyntaxKind.InitKeyword)) continue;
+                if (setter.Keyword.IsKind(SyntaxKind.InitKeyword))
+                {
+                    continue;
+                }
 
                 // Skip if setter is private/protected/internal
                 if (setter.Modifiers.Any(m =>
                     m.IsKind(SyntaxKind.PrivateKeyword) ||
                     m.IsKind(SyntaxKind.ProtectedKeyword) ||
-                    m.IsKind(SyntaxKind.InternalKeyword))) continue;
+                    m.IsKind(SyntaxKind.InternalKeyword)))
+                {
+                    continue;
+                }
 
                 var containingType = prop.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
                 var loc = prop.GetLocation().GetLineSpan().StartLinePosition;

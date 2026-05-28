@@ -17,33 +17,55 @@ public class SyntaxUpgradeEngine
 
     public async Task<string> UpgradeToModernGuardsAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ModernGuardClauses")) return string.Empty;
+        if (!_config.IsFeatureEnabled("ModernGuardClauses"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new ModernGuardRewriter();
         var newRoot = rewriter.Visit(root);
 
         // Return no-op message when no guard clause patterns were found to upgrade
         if (!rewriter.ChangesMade)
+        {
             return "// No if-throw guard clause patterns found to upgrade in this file.";
+        }
 
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     public async Task<string> AddBracesAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("IDE0011")) return string.Empty;
+        if (!_config.IsFeatureEnabled("IDE0011"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new BracesRewriter();
         var newRoot = rewriter.Visit(root);
@@ -52,13 +74,23 @@ public class SyntaxUpgradeEngine
 
     public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("PatternMatching")) return string.Empty;
+        if (!_config.IsFeatureEnabled("PatternMatching"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new PatternMatchingRewriter();
         var newRoot = rewriter.Visit(root);
@@ -67,15 +99,26 @@ public class SyntaxUpgradeEngine
 
     public async Task<string> UseNameofExpressionAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("UnboundNameof")) return string.Empty;
+        if (!_config.IsFeatureEnabled("UnboundNameof"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var text = await document.GetTextAsync(ct);
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
-        if (pos < 0) return $"Error: {snippetError}";
+        if (pos < 0)
+        {
+            return $"Error: {snippetError}";
+        }
+
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
             .DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression));
 
@@ -89,17 +132,31 @@ public class SyntaxUpgradeEngine
 
     public async Task<string> ConvertSwitchToExpressionAsync(string filePath, string methodName, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("IfToSwitch")) return string.Empty;
+        if (!_config.IsFeatureEnabled("IfToSwitch"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null) return root?.ToFullString() ?? "";
+        if (method == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var switchStmt = method.DescendantNodes().OfType<SwitchStatementSyntax>().FirstOrDefault();
-        if (switchStmt == null) return root?.ToFullString() ?? "";
+        if (switchStmt == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var arms = switchStmt.Sections.Select(s => {
             var label = s.Labels.FirstOrDefault();
@@ -119,20 +176,34 @@ public class SyntaxUpgradeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
         return root?.ToFullString() ?? "";
     }
 
     public async Task<string> CleanupImplicitSpansAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("ImplicitSpanCleanup")) return string.Empty;
+        if (!_config.IsFeatureEnabled("ImplicitSpanCleanup"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new ImplicitSpanRewriter();
         var newRoot = rewriter.Visit(root);
@@ -141,12 +212,23 @@ public class SyntaxUpgradeEngine
 
     public async Task<string> UseFieldBackedPropertiesAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("FieldBackedProperties")) return string.Empty;
+        if (!_config.IsFeatureEnabled("FieldBackedProperties"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "// File not found in workspace.";
+        if (document == null)
+        {
+            return "// File not found in workspace.";
+        }
+
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         // Find private backing-field + property pairs per class and collapse them to auto-properties.
         // A "pair" is: a private field `_foo` of type T  +  a property `Foo` of type T whose
@@ -170,37 +252,69 @@ public class SyntaxUpgradeEngine
 
             foreach (var prop in classNode.Members.OfType<PropertyDeclarationSyntax>())
             {
-                if (prop.AccessorList == null) continue;
+                if (prop.AccessorList == null)
+                {
+                    continue;
+                }
+
                 var accessors = prop.AccessorList.Accessors;
 
                 // Expect exactly get + set (or get + init), both expression-bodied, no custom body
                 var getAcc = accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
                 var setAcc = accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration) || a.IsKind(SyntaxKind.InitAccessorDeclaration));
 
-                if (getAcc == null || getAcc.ExpressionBody == null) continue;
-                if (accessors.Count == 2 && setAcc == null) continue;
-                if (accessors.Count > 2) continue;
+                if (getAcc == null || getAcc.ExpressionBody == null)
+                {
+                    continue;
+                }
+
+                if (accessors.Count == 2 && setAcc == null)
+                {
+                    continue;
+                }
+
+                if (accessors.Count > 2)
+                {
+                    continue;
+                }
 
                 // get accessor must return the backing field: => _fieldName
                 var getExpr = getAcc.ExpressionBody!.Expression.ToString().Trim();
 
                 // Expect camelCase version of property name with leading underscore
                 var expectedFieldName = "_" + char.ToLowerInvariant(prop.Identifier.Text[0]) + prop.Identifier.Text.Substring(1);
-                if (getExpr != expectedFieldName) continue;
-                if (!backingFields.TryGetValue(expectedFieldName, out var fieldInfo)) continue;
+                if (getExpr != expectedFieldName)
+                {
+                    continue;
+                }
+
+                if (!backingFields.TryGetValue(expectedFieldName, out var fieldInfo))
+                {
+                    continue;
+                }
 
                 // set/init accessor must assign: => _fieldName = value
                 if (setAcc != null)
                 {
-                    if (setAcc.ExpressionBody == null) continue;
+                    if (setAcc.ExpressionBody == null)
+                    {
+                        continue;
+                    }
+
                     var setExpr = setAcc.ExpressionBody.Expression.ToString().Trim();
-                    if (setExpr != $"{expectedFieldName} = value") continue;
+                    if (setExpr != $"{expectedFieldName} = value")
+                    {
+                        continue;
+                    }
                 }
 
                 // Field type must match property type
                 var fieldType = fieldInfo.Field.Declaration.Type.ToString().Trim();
                 var propType = prop.Type.ToString().Trim();
-                if (fieldType != propType) continue;
+                if (fieldType != propType)
+                {
+                    continue;
+                }
 
                 // Build auto-property: `public T Foo { get; set; }` (or `get; init;`)
                 var initOrSet = setAcc?.IsKind(SyntaxKind.InitAccessorDeclaration) == true
@@ -233,7 +347,10 @@ public class SyntaxUpgradeEngine
                 fieldsToRemove.Add(fieldInfo.Field);
             }
 
-            if (propReplacements.Count == 0) continue;
+            if (propReplacements.Count == 0)
+            {
+                continue;
+            }
 
             // Rebuild the class without the removed backing fields, with updated auto-properties
             var newMembers = classNode.Members
@@ -244,7 +361,11 @@ public class SyntaxUpgradeEngine
             replaceMap[classNode] = classNode.WithMembers(SyntaxFactory.List(newMembers));
         }
 
-        if (replaceMap.Count == 0) return root.ToFullString();
+        if (replaceMap.Count == 0)
+        {
+            return root.ToFullString();
+        }
+
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
         return newRoot.NormalizeWhitespace().ToFullString();
     }
@@ -257,14 +378,23 @@ public class SyntaxUpgradeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "// File not found.";
+        if (document == null)
+        {
+            return "// File not found.";
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return "// Could not parse file.";
+        if (root == null)
+        {
+            return "// Could not parse file.";
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return "// Class not found.";
+        if (classNode == null)
+        {
+            return "// Class not found.";
+        }
 
         // Find the constructor that consists entirely of field assignments
         var ctors = classNode.Members.OfType<ConstructorDeclarationSyntax>().ToList();
@@ -272,41 +402,73 @@ public class SyntaxUpgradeEngine
             c.Body.Statements.All(s => s is ExpressionStatementSyntax es && es.Expression is AssignmentExpressionSyntax));
 
         if (ctor == null)
+        {
             return "// Cannot convert: no eligible constructor (must have only assignment statements).";
+        }
 
         if (ctor.Body!.Statements.Any(s =>
         {
-            if (s is not ExpressionStatementSyntax es) return true;
-            if (es.Expression is not AssignmentExpressionSyntax asgn) return true;
+            if (s is not ExpressionStatementSyntax es)
+            {
+                return true;
+            }
+
+            if (es.Expression is not AssignmentExpressionSyntax asgn)
+            {
+                return true;
+            }
             // Right side must be a simple identifier (parameter name)
             return asgn.Right is not IdentifierNameSyntax;
         }))
+        {
             return "// Cannot convert: constructor has non-assignment logic.";
+        }
 
         // Build mapping: paramName -> fieldName (as in the class)
         var paramToField = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var stmt in ctor.Body.Statements)
         {
-            if (stmt is not ExpressionStatementSyntax es) continue;
-            if (es.Expression is not AssignmentExpressionSyntax asgn) continue;
+            if (stmt is not ExpressionStatementSyntax es)
+            {
+                continue;
+            }
+
+            if (es.Expression is not AssignmentExpressionSyntax asgn)
+            {
+                continue;
+            }
+
             var paramName = (asgn.Right as IdentifierNameSyntax)?.Identifier.Text;
-            if (paramName == null) continue;
+            if (paramName == null)
+            {
+                continue;
+            }
 
             string fieldName;
             if (asgn.Left is MemberAccessExpressionSyntax ma && ma.Expression.ToString() == "this")
+            {
                 fieldName = ma.Name.Identifier.Text;
+            }
             else if (asgn.Left is IdentifierNameSyntax fid)
+            {
                 fieldName = fid.Identifier.Text;
+            }
             else
+            {
                 continue;
+            }
 
             // Check this param exists in the ctor
             if (ctor.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
+            {
                 paramToField[paramName] = fieldName;
+            }
         }
 
         if (paramToField.Count == 0)
+        {
             return "// Cannot convert: could not map constructor parameters to fields.";
+        }
 
         // Verify fields exist as private readonly in the class
         var fieldToParam = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -316,12 +478,18 @@ public class SyntaxUpgradeEngine
                 .FirstOrDefault(f =>
                     f.Declaration.Variables.Any(v => v.Identifier.Text == field) &&
                     f.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)));
-            if (fieldDecl == null) continue;
+            if (fieldDecl == null)
+            {
+                continue;
+            }
+
             fieldToParam[field] = param;
         }
 
         if (fieldToParam.Count == 0)
+        {
             return "// Cannot convert: no matching private readonly fields found.";
+        }
 
         // Verify each mapped field is assigned exactly once (in this ctor only)
         // and is not assigned in static initializers
@@ -336,7 +504,9 @@ public class SyntaxUpgradeEngine
                     return lhsName == field;
                 });
             if (assignmentCount > 1)
+            {
                 return $"// Cannot convert: field '{field}' is assigned multiple times.";
+            }
         }
 
         // Build the new primary constructor parameter list
@@ -365,7 +535,9 @@ public class SyntaxUpgradeEngine
         foreach (var fieldDecl in classNode.Members.OfType<FieldDeclarationSyntax>())
         {
             if (fieldDecl.Declaration.Variables.All(v => fieldsToRemove.Contains(v.Identifier.Text)))
+            {
                 membersToRemove.Add(fieldDecl);
+            }
         }
 
         var newMembers = classNode.Members.Where(m => !membersToRemove.Contains(m)).ToList();
@@ -388,16 +560,27 @@ public class SyntaxUpgradeEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "// File not found in workspace.";
+        if (document == null)
+        {
+            return "// File not found in workspace.";
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         if (root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().Any())
+        {
             return "// Already uses file-scoped namespace declaration.";
+        }
 
         var nsDecl = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
-        if (nsDecl == null) return "// No block-form namespace declaration found in this file.";
+        if (nsDecl == null)
+        {
+            return "// No block-form namespace declaration found in this file.";
+        }
 
         // Preserve all members, usings, and extern aliases from the block namespace
         var fileScopedNs = SyntaxFactory.FileScopedNamespaceDeclaration(nsDecl.Name)
@@ -416,14 +599,23 @@ public class SyntaxUpgradeEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null) return root.ToFullString();
+        if (method == null)
+        {
+            return root.ToFullString();
+        }
 
         var throwStmts = method.DescendantNodes().OfType<ThrowStatementSyntax>()
             .Where(t => t.Expression != null)
@@ -433,7 +625,10 @@ public class SyntaxUpgradeEngine
 
         foreach (var throwStmt in throwStmts)
         {
-            if (throwStmt.Expression is not ObjectCreationExpressionSyntax objCreate) continue;
+            if (throwStmt.Expression is not ObjectCreationExpressionSyntax objCreate)
+            {
+                continue;
+            }
 
             var typeName = objCreate.Type.ToString();
             var args = objCreate.ArgumentList?.Arguments ?? default;
@@ -495,7 +690,10 @@ public class SyntaxUpgradeEngine
             }
         }
 
-        if (!replacements.Any()) return root.ToFullString();
+        if (replacements.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
         return newRoot.ToFullString();
@@ -510,7 +708,10 @@ public class SyntaxUpgradeEngine
         {
             var name = node.Identifier.Text;
             if (_map.TryGetValue(name, out var replacement))
+            {
                 return node.WithIdentifier(SyntaxFactory.Identifier(replacement).WithTriviaFrom(node.Identifier));
+            }
+
             return base.VisitIdentifierName(node);
         }
     }
@@ -520,10 +721,21 @@ public class SyntaxUpgradeEngine
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
             var newNode = base.VisitIfStatement(node) as IfStatementSyntax;
-            if (newNode == null) return node;
-            if (newNode.Statement is not BlockSyntax) newNode = newNode.WithStatement(SyntaxFactory.Block(newNode.Statement));
+            if (newNode == null)
+            {
+                return node;
+            }
+
+            if (newNode.Statement is not BlockSyntax)
+            {
+                newNode = newNode.WithStatement(SyntaxFactory.Block(newNode.Statement));
+            }
+
             if (newNode.Else != null && newNode.Else.Statement is not BlockSyntax && newNode.Else.Statement is not IfStatementSyntax)
+            {
                 newNode = newNode.WithElse(newNode.Else.WithStatement(SyntaxFactory.Block(newNode.Else.Statement)));
+            }
+
             return newNode;
         }
     }

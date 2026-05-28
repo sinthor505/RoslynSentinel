@@ -20,13 +20,19 @@ public class IDEStyleEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var thisAccesses = root?.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
             .Where(ma => ma.Expression is ThisExpressionSyntax).ToList();
 
-        if (thisAccesses == null || !thisAccesses.Any()) return root?.ToFullString() ?? "";
+        if (thisAccesses == null || thisAccesses.Count == 0)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name);
         return newRoot.ToFullString();
@@ -39,10 +45,16 @@ public class IDEStyleEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
         return newRoot.NormalizeWhitespace().ToFullString();
@@ -88,7 +100,10 @@ public class IDEStyleEngine
                                 assignments.Add((memberAccess.Name.Identifier.Text, assignment.Right));
                                 j++;
                             }
-                            else break;
+                            else
+                            {
+                                break;
+                            }
                         }
 
                         if (assignments.Count >= 1)
@@ -123,10 +138,16 @@ public class IDEStyleEngine
             }
 
             if (changed)
+            {
                 blocksToReplace[block] = block.WithStatements(SyntaxFactory.List(newStatements));
+            }
         }
 
-        if (blocksToReplace.Count == 0) return root;
+        if (blocksToReplace.Count == 0)
+        {
+            return root;
+        }
+
         return root.ReplaceNodes(blocksToReplace.Keys, (orig, _) => blocksToReplace[orig]);
     }
 
@@ -140,10 +161,16 @@ public class IDEStyleEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var rewriter = new NullPropagationRewriter();
         var newRoot = rewriter.Visit(root);
@@ -155,13 +182,23 @@ public class IDEStyleEngine
         public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
         {
             // Only handle: if (x != null) <single-expr-stmt>  with no else
-            if (node.Else != null) return base.VisitIfStatement(node);
+            if (node.Else != null)
+            {
+                return base.VisitIfStatement(node);
+            }
+
             if (node.Condition is not BinaryExpressionSyntax bin ||
-                !bin.IsKind(SyntaxKind.NotEqualsExpression)) return base.VisitIfStatement(node);
+                !bin.IsKind(SyntaxKind.NotEqualsExpression))
+            {
+                return base.VisitIfStatement(node);
+            }
 
             bool rightIsNull = bin.Right.IsKind(SyntaxKind.NullLiteralExpression);
             bool leftIsNull  = bin.Left.IsKind(SyntaxKind.NullLiteralExpression);
-            if (!rightIsNull && !leftIsNull) return base.VisitIfStatement(node);
+            if (!rightIsNull && !leftIsNull)
+            {
+                return base.VisitIfStatement(node);
+            }
 
             var checkedExpr = rightIsNull ? bin.Left : bin.Right;
             var checkedStr  = checkedExpr.ToString();
@@ -169,9 +206,14 @@ public class IDEStyleEngine
             // Unwrap single-statement block
             StatementSyntax body = node.Statement;
             if (body is BlockSyntax block && block.Statements.Count == 1)
+            {
                 body = block.Statements[0];
+            }
 
-            if (body is not ExpressionStatementSyntax exprStmt) return base.VisitIfStatement(node);
+            if (body is not ExpressionStatementSyntax exprStmt)
+            {
+                return base.VisitIfStatement(node);
+            }
 
             ExpressionSyntax? nullConditional = null;
 
@@ -195,7 +237,10 @@ public class IDEStyleEngine
                     SyntaxFactory.MemberBindingExpression(ma2.Name));
             }
 
-            if (nullConditional == null) return base.VisitIfStatement(node);
+            if (nullConditional == null)
+            {
+                return base.VisitIfStatement(node);
+            }
 
             return SyntaxFactory.ExpressionStatement(nullConditional)
                 .WithLeadingTrivia(node.GetLeadingTrivia())

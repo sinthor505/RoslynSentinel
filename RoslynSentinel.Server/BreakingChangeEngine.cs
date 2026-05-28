@@ -64,15 +64,26 @@ public class BreakingChangeEngine
 
         foreach (var doc in documents)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var docPath = doc.FilePath ?? doc.Name;
 
             foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
-                if (!IsPublicOrProtected(typeDecl.Modifiers)) continue;
+                if (!IsPublicOrProtected(typeDecl.Modifiers))
+                {
+                    continue;
+                }
+
                 var typeName = typeDecl.Identifier.Text;
                 var typeLine = typeDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
@@ -80,14 +91,23 @@ public class BreakingChangeEngine
 
                 // TypeDeclarationSyntax covers class/struct/interface/record — all have Members.
                 // EnumDeclarationSyntax is a BaseTypeDeclarationSyntax but has no named callable members.
-                if (typeDecl is not TypeDeclarationSyntax typeWithMembers) continue;
+                if (typeDecl is not TypeDeclarationSyntax typeWithMembers)
+                {
+                    continue;
+                }
 
                 foreach (var member in typeWithMembers.Members)
                 {
-                    if (!IsPublicOrProtected(GetMemberModifiers(member))) continue;
+                    if (!IsPublicOrProtected(GetMemberModifiers(member)))
+                    {
+                        continue;
+                    }
 
                     var (kind, sig) = GetMemberSignature(member, typeName);
-                    if (sig == null) continue;
+                    if (sig == null)
+                    {
+                        continue;
+                    }
 
                     var memberLine = member.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     results.Add(new PublicApiMember(kind, typeName, sig, docPath, memberLine));
@@ -123,7 +143,9 @@ public class BreakingChangeEngine
             var key = $"{baselineMember.ContainingType}|{baselineMember.Signature}";
 
             if (currentBySignature.ContainsKey(key))
+            {
                 continue; // Unchanged — good
+            }
 
             // Member was removed or renamed. Check if the type itself still exists.
             if (baselineMember.Kind == "Type")

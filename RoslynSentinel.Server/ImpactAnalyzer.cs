@@ -33,95 +33,98 @@ public class ImpactAnalyzer
 
     public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-      try
-      {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-            .Select(solution.GetDocument)
-            .FirstOrDefault();
-
-        if (document == null)
+        try
         {
-            return new ImpactReport("", "", [], 0, 0, Error: $"Document not found: {filePath}");
-        }
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.GetDocumentIdsWithFilePath(filePath)
+                .Select(solution.GetDocument)
+                .FirstOrDefault();
 
-        var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        
-        if (syntaxRoot == null || semanticModel == null)
-        {
-            return new ImpactReport("", "", [], 0, 0, Error: "Could not retrieve syntax root or semantic model.");
-        }
-
-        // Find the symbol at the given position
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
-        // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
-        position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);
-        var token = syntaxRoot.FindToken(position);
-        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
-
-        if (symbol == null)
-        {
-            // Fallback: try finding the node's symbol directly if FindSymbolAtPosition fails
-            var node = token.Parent;
-            while (node != null && symbol == null)
+            if (document == null)
             {
-                symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken) ?? semanticModel.GetSymbolInfo(node, cancellationToken).Symbol;
-                node = node.Parent;
+                return new ImpactReport("", "", [], 0, 0, Error: $"Document not found: {filePath}");
             }
-        }
 
-        if (symbol == null)
-        {
-            return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.");
-        }
+            var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
 
-        _logger.LogInformation("Analyzing impact for symbol: {SymbolName} ({Kind})", symbol.Name, symbol.Kind);
-
-        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
-        var referenceInfos = new List<ReferenceInfo>();
-        var affectedProjects = new HashSet<ProjectId>();
-
-        foreach (var referencedSymbol in references)
-        {
-            foreach (var location in referencedSymbol.Locations)
+            if (syntaxRoot == null || semanticModel == null)
             {
-                var loc = location.Location;
-                var lineSpan = loc.GetLineSpan();
-                
-                var refDocument = solution.GetDocument(location.Document.Id);
-                var text = await refDocument!.GetTextAsync(cancellationToken);
-                var lineText = text.Lines[lineSpan.StartLinePosition.Line].ToString().Trim();
-
-                referenceInfos.Add(new ReferenceInfo(
-                    lineSpan.Path,
-                    lineSpan.StartLinePosition.Line + 1,
-                    lineSpan.StartLinePosition.Character + 1,
-                    lineText
-                ));
-
-                affectedProjects.Add(location.Document.Project.Id);
+                return new ImpactReport("", "", [], 0, 0, Error: "Could not retrieve syntax root or semantic model.");
             }
-        }
 
-        return new ImpactReport(
-            symbol.ToDisplayString(),
-            symbol.Kind.ToString(),
-            referenceInfos,
-            referenceInfos.Count,
-            affectedProjects.Count
-        );
-      }
-      catch (Exception ex)
-      {
-          return new ImpactReport("", "", [], 0, 0, Error: ex.Message);
-      }
+            // Find the symbol at the given position
+            var sourceText = await document.GetTextAsync(cancellationToken);
+            var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
+            position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);
+            var token = syntaxRoot.FindToken(position);
+            var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
+
+            if (symbol == null)
+            {
+                // Fallback: try finding the node's symbol directly if FindSymbolAtPosition fails
+                var node = token.Parent;
+                while (node != null && symbol == null)
+                {
+                    symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken) ?? semanticModel.GetSymbolInfo(node, cancellationToken).Symbol;
+                    node = node.Parent;
+                }
+            }
+
+            if (symbol == null)
+            {
+                return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.");
+            }
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Analyzing impact for symbol: {SymbolName} ({Kind})", symbol.Name, symbol.Kind);
+            }
+
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var referenceInfos = new List<ReferenceInfo>();
+            var affectedProjects = new HashSet<ProjectId>();
+
+            foreach (var referencedSymbol in references)
+            {
+                foreach (var location in referencedSymbol.Locations)
+                {
+                    var loc = location.Location;
+                    var lineSpan = loc.GetLineSpan();
+
+                    var refDocument = solution.GetDocument(location.Document.Id);
+                    var text = await refDocument!.GetTextAsync(cancellationToken);
+                    var lineText = text.Lines[lineSpan.StartLinePosition.Line].ToString().Trim();
+
+                    referenceInfos.Add(new ReferenceInfo(
+                        lineSpan.Path,
+                        lineSpan.StartLinePosition.Line + 1,
+                        lineSpan.StartLinePosition.Character + 1,
+                        lineText
+                    ));
+
+                    affectedProjects.Add(location.Document.Project.Id);
+                }
+            }
+
+            return new ImpactReport(
+                symbol.ToDisplayString(),
+                symbol.Kind.ToString(),
+                referenceInfos,
+                referenceInfos.Count,
+                affectedProjects.Count
+            );
+        }
+        catch (Exception ex)
+        {
+            return new ImpactReport("", "", [], 0, 0, Error: ex.Message);
+        }
     }
 
     public async Task<ImpactReport> FindDerivedTypesAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
     {
-        return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) => 
+        return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) =>
         {
             if (symbol is INamedTypeSymbol namedType)
             {
@@ -134,7 +137,7 @@ public class ImpactAnalyzer
 
     public async Task<ImpactReport> FindImplementationsAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
     {
-        return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) => 
+        return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) =>
         {
             var implementations = await SymbolFinder.FindImplementationsAsync(symbol, sol, cancellationToken: ct);
             return implementations;
@@ -145,11 +148,17 @@ public class ImpactAnalyzer
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception($"Document not found: {filePath}");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"Document not found: {filePath}");
+        }
 
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxRoot == null || semanticModel == null) throw new Exception("Could not retrieve syntax root or semantic model.");
+        if (syntaxRoot == null || semanticModel == null)
+        {
+            throw new InvalidOperationException("Could not retrieve syntax root or semantic model.");
+        }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var startPosition = sourceText.Lines[startLine - 1].Start + (startColumn - 1);
@@ -163,10 +172,12 @@ public class ImpactAnalyzer
         var lastStatement = lastToken.Parent?.AncestorsAndSelf().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.StatementSyntax>().FirstOrDefault();
 
         if (firstStatement == null || lastStatement == null)
-            throw new Exception("Could not resolve statements for data flow analysis.");
+        {
+            throw new InvalidOperationException("Could not resolve statements for data flow analysis.");
+        }
 
         var dataFlow = semanticModel.AnalyzeDataFlow(firstStatement, lastStatement);
-        
+
         var report = new List<string>();
         if (dataFlow.Succeeded)
         {
@@ -192,11 +203,17 @@ public class ImpactAnalyzer
             .Select(solution.GetDocument)
             .FirstOrDefault();
 
-        if (document == null) throw new Exception($"Document not found: {filePath}");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"Document not found: {filePath}");
+        }
 
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (syntaxRoot == null || semanticModel == null) throw new Exception("Could not retrieve syntax root or semantic model.");
+        if (syntaxRoot == null || semanticModel == null)
+        {
+            throw new InvalidOperationException("Could not retrieve syntax root or semantic model.");
+        }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = sourceText.Lines[line - 1].Start + (column - 1);
@@ -213,7 +230,10 @@ public class ImpactAnalyzer
             }
         }
 
-        if (symbol == null) throw new Exception("No symbol found at the specified position.");
+        if (symbol == null)
+        {
+            throw new InvalidOperationException("No symbol found at the specified position.");
+        }
 
         var relatedSymbols = await relationFinder(symbol, solution, cancellationToken);
         var referenceInfos = new List<ReferenceInfo>();
@@ -223,13 +243,19 @@ public class ImpactAnalyzer
         {
             foreach (var location in relSymbol.Locations)
             {
-                if (!location.IsInSource || location.SourceTree == null) continue;
+                if (!location.IsInSource || location.SourceTree == null)
+                {
+                    continue;
+                }
 
                 var loc = location;
                 var lineSpan = loc.GetLineSpan();
-                
+
                 var refDocument = solution.GetDocument(location.SourceTree);
-                if (refDocument == null) continue;
+                if (refDocument == null)
+                {
+                    continue;
+                }
 
                 var text = await refDocument.GetTextAsync(cancellationToken);
                 var lineText = text.Lines[lineSpan.StartLinePosition.Line].ToString().Trim();

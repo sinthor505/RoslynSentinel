@@ -19,7 +19,10 @@ public class ProjectStructureEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var project = document.Project;
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
@@ -27,8 +30,10 @@ public class ProjectStructureEngine
         var projectDir = Path.GetDirectoryName(project.FilePath);
         var fileDir = Path.GetDirectoryName(filePath);
         
-        if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir)) 
+        if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
+        {
             return "";
+        }
 
         var relativePath = fileDir.Substring(projectDir.Length).Trim(Path.DirectorySeparatorChar);
         var expectedNamespace = string.IsNullOrEmpty(relativePath) 
@@ -54,18 +59,27 @@ public class ProjectStructureEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var nsNode = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        if (nsNode == null) return "";
+        if (nsNode == null)
+        {
+            return "";
+        }
 
         var ns = nsNode.Name.ToString();
         var project = document.Project;
         var projectDir = Path.GetDirectoryName(project.FilePath);
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         
-        if (projectDir == null) return "";
+        if (projectDir == null)
+        {
+            return "";
+        }
 
         // Strip the default namespace from the beginning of the file's namespace
         // to get the relative folder path (project-relative, not solution-relative)
@@ -136,7 +150,10 @@ public class ProjectStructureEngine
             foreach (var document in documents)
             {
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 // Skip Roslyn source-generator output — file names are always mismatched and contain generated types
                 bool isGeneratedFile = (document.FilePath ?? document.Name).EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase);
@@ -179,7 +196,10 @@ public class ProjectStructureEngine
                         foreach (var literal in stringLiterals)
                         {
                             var value = literal.Token.ValueText;
-                            if (string.IsNullOrWhiteSpace(value) || value.Contains(' ')) continue;
+                            if (string.IsNullOrWhiteSpace(value) || value.Contains(' '))
+                            {
+                                continue;
+                            }
 
                             var symbols = semanticModel.LookupSymbols(literal.SpanStart, name: value);
                             if (symbols.Any(s => s.Kind is SymbolKind.NamedType or SymbolKind.Method or SymbolKind.Property or SymbolKind.Field))
@@ -204,9 +224,20 @@ public class ProjectStructureEngine
                             var type = oce.Type.ToString();
                             bool isLegacy = false;
                             
-                            if (type == "ArgumentNullException") isLegacy = true;
-                            if (type == "ArgumentOutOfRangeException") isLegacy = true;
-                            if (type == "ObjectDisposedException") isLegacy = true;
+                            if (type == "ArgumentNullException")
+                            {
+                                isLegacy = true;
+                            }
+
+                            if (type == "ArgumentOutOfRangeException")
+                            {
+                                isLegacy = true;
+                            }
+
+                            if (type == "ObjectDisposedException")
+                            {
+                                isLegacy = true;
+                            }
 
                             if (type == "ArgumentException" && ifStmt.Condition is InvocationExpressionSyntax ies)
                             {
@@ -323,9 +354,13 @@ public class ProjectStructureEngine
                         {
                             var line = call.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                             if (isInfra)
+                            {
                                 results.Add($"[TIME_ABSTRACTION:LOW] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). TimeProvider injection is possible but typically low-value — infrastructure classes rarely have date-driven logic that needs to be controlled in tests.");
+                            }
                             else
+                            {
                                 results.Add($"[TIME_ABSTRACTION] Direct DateTime.{call.Name.Identifier.Text} in '{document.Name}' (Line {line}). Consider injecting TimeProvider for better testability.");
+                            }
                         }
                     }
                 }

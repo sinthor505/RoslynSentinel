@@ -109,17 +109,17 @@ public class Person
     
     public string GetNameUppercase()
     {
-        return this.Name.ToUpper();
+        return this.Name.ToUpperInvariant();
     }
 }";
         SetSource(source, "Test.cs");
         
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
-            "Test.cs", "this.Name", "personName", lineBefore: "return this.Name.ToUpper();");
+            "Test.cs", "this.Name", "personName", lineBefore: "return this.Name.ToUpperInvariant();");
         
         Assert.That(result, Does.Contain("personName"), "Variable name must appear");
         Assert.That(result, Does.Contain("var personName"), "Should declare with var");
-        Assert.That(result, Does.Contain("personName.ToUpper()"), "Should use extracted variable in method call");
+        Assert.That(result, Does.Contain("personName.ToUpperInvariant()"), "Should use extracted variable in method call");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

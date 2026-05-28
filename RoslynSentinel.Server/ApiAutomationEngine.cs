@@ -20,15 +20,21 @@ public class ApiAutomationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
-        if (controller == null) return "";
+        if (controller == null)
+        {
+            return "";
+        }
 
         var sb = new System.Text.StringBuilder();
         var clientName = controllerName.Replace("Controller", "") + "Client";
-        
+
         sb.AppendLine("using System.Net.Http.Json;");
         sb.AppendLine();
         sb.AppendLine($"public class {clientName}");
@@ -43,7 +49,7 @@ public class ApiAutomationEngine
         foreach (var method in methods)
         {
             var returnType = ExtractClientReturnType(method.ReturnType.ToString());
-            
+
             sb.AppendLine($"    public async {returnType} {method.Identifier.Text}Async()");
             sb.AppendLine("    {");
             sb.AppendLine($"        // Logic for calling {method.Identifier.Text}...");
@@ -60,23 +66,33 @@ public class ApiAutomationEngine
     {
         // Task<ActionResult<X>> → Task<X>  (handles nested generics like Dictionary<string,int>)
         if (rawReturn.StartsWith("Task<ActionResult<") && rawReturn.EndsWith(">>"))
-            return "Task<" + rawReturn.Substring(18, rawReturn.Length - 20) + ">";
+        {
+            return string.Concat("Task<", rawReturn.AsSpan(18, rawReturn.Length - 20), ">");
+        }
 
         // Task<ActionResult> / Task<IActionResult> → Task
         if (rawReturn is "Task<ActionResult>" or "Task<IActionResult>")
+        {
             return "Task";
+        }
 
         // ActionResult<X> → Task<X>
         if (rawReturn.StartsWith("ActionResult<") && rawReturn.EndsWith(">"))
-            return "Task<" + rawReturn.Substring(13, rawReturn.Length - 14) + ">";
+        {
+            return string.Concat("Task<", rawReturn.AsSpan(13, rawReturn.Length - 14), ">");
+        }
 
         // ActionResult / IActionResult / void → Task
         if (rawReturn is "ActionResult" or "IActionResult" or "void")
+        {
             return "Task";
+        }
 
         // Already Task<X> or Task → keep as-is
         if (rawReturn.StartsWith("Task"))
+        {
             return rawReturn;
+        }
 
         // Wrap synchronous return types
         return $"Task<{rawReturn}>";

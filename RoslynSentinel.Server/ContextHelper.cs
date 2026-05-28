@@ -2,9 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace RoslynSentinel.Server;
 
@@ -25,7 +22,9 @@ public static class ContextHelper
         string? lineBefore = null, string? lineAfter = null)
     {
         if (string.IsNullOrWhiteSpace(contextSnippet))
+        {
             throw new InvalidOperationException("contextSnippet must not be empty.");
+        }
 
         var source = sourceText.ToString();
         var allMatches = new List<int>();
@@ -45,21 +44,29 @@ public static class ContextHelper
             {
                 var lineNorm = System.Text.RegularExpressions.Regex.Replace(lines[i].ToString().Trim(), @"\s+", " ");
                 if (lineNorm.Contains(snippetNorm, StringComparison.OrdinalIgnoreCase))
+                {
                     allMatches.Add(lines[i].Start);
+                }
             }
         }
 
         if (allMatches.Count == 0)
+        {
             throw new InvalidOperationException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
+        }
 
         if (allMatches.Count == 1)
+        {
             return allMatches[0];
+        }
 
         // Multiple matches — try to disambiguate with surrounding lines
         if (lineBefore == null && lineAfter == null)
+        {
             throw new InvalidOperationException(
                 $"contextSnippet is ambiguous ({allMatches.Count} matches): \"{contextSnippet.Trim()}\". " +
                 "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate.");
+        }
 
         var lbTrimmed = lineBefore?.Trim();
         var laTrimmed = lineAfter?.Trim();
@@ -71,15 +78,29 @@ public static class ContextHelper
 
             if (lbTrimmed != null)
             {
-                if (lineIndex == 0) return false;
+                if (lineIndex == 0)
+                {
+                    return false;
+                }
+
                 var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
-                if (!MatchLine(prevLine, lbTrimmed)) return false;
+                if (!MatchLine(prevLine, lbTrimmed))
+                {
+                    return false;
+                }
             }
             if (laTrimmed != null)
             {
-                if (lineIndex >= sourceText.Lines.Count - 1) return false;
+                if (lineIndex >= sourceText.Lines.Count - 1)
+                {
+                    return false;
+                }
+
                 var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
-                if (!MatchLine(nextLine, laTrimmed)) return false;
+                if (!MatchLine(nextLine, laTrimmed))
+                {
+                    return false;
+                }
             }
             return true;
         }).ToList();
@@ -139,7 +160,10 @@ public static class ContextHelper
     /// </summary>
     private static bool MatchLine(string sourceLine, string pattern)
     {
-        if (sourceLine.Contains(pattern, StringComparison.Ordinal)) return true;
+        if (sourceLine.Contains(pattern, StringComparison.Ordinal))
+        {
+            return true;
+        }
         // Normalize JSON escape sequences and retry
         var normalized = pattern
             .Replace("\\\"", "\"")
@@ -160,7 +184,9 @@ public static class ContextHelper
     {
         var startToken = root.FindToken(snippetStart);
         if (startToken.IsKind(SyntaxKind.IdentifierToken))
+        {
             return snippetStart;
+        }
 
         var snippetEnd = snippetStart + snippetLength;
         var ident = root.DescendantTokens()
@@ -195,7 +221,10 @@ public static class ContextHelper
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
         var text = await document.GetTextAsync(ct);
-        if (root == null || model == null) return null;
+        if (root == null || model == null)
+        {
+            return null;
+        }
 
         var pos = FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root.FindNode(new TextSpan(pos, 0));
@@ -211,14 +240,14 @@ public static class ContextHelper
     /// </summary>
     private static readonly HashSet<string> ReservedKeywords = new(StringComparer.Ordinal)
     {
-        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", 
-        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else", 
-        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", 
-        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", 
-        "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override", 
-        "params", "private", "protected", "public", "readonly", "ref", "return", "sbyte", 
-        "sealed", "short", "sizeof", "stackalloc", "static", "string", "struct", "switch", 
-        "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", 
+        "abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked",
+        "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else",
+        "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for",
+        "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is",
+        "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override",
+        "params", "private", "protected", "public", "readonly", "ref", "return", "sbyte",
+        "sealed", "short", "sizeof", "stackalloc", "static", "string", "struct", "switch",
+        "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe",
         "ushort", "using", "virtual", "void", "volatile", "while"
     };
 
@@ -238,7 +267,9 @@ public static class ContextHelper
     public static string GetUniqueVariableName(SyntaxNode scope, string baseName)
     {
         if (string.IsNullOrWhiteSpace(baseName))
+        {
             throw new ArgumentException("baseName must not be empty", nameof(baseName));
+        }
 
         // Convert to camelCase: first letter lowercase, rest as-is after first char
         var camelCaseName = char.ToLowerInvariant(baseName[0]) + baseName.Substring(1);
@@ -248,26 +279,32 @@ public static class ContextHelper
 
         // Add all declared variables in this scope
         var descendants = scope.DescendantNodes();
-        
+
         // Local variables and parameters
         foreach (var varDecl in descendants.OfType<VariableDeclaratorSyntax>())
         {
             if (varDecl.Identifier.Text is string name && !string.IsNullOrWhiteSpace(name))
+            {
                 existingNames.Add(name);
+            }
         }
 
         // Parameters (in method declarations, delegates, etc.)
         foreach (var param in descendants.OfType<ParameterSyntax>())
         {
             if (param.Identifier.Text is string name && !string.IsNullOrWhiteSpace(name))
+            {
                 existingNames.Add(name);
+            }
         }
 
         // Local functions and type parameters
         foreach (var localFunc in descendants.OfType<LocalFunctionStatementSyntax>())
         {
             if (localFunc.Identifier.Text is string name && !string.IsNullOrWhiteSpace(name))
+            {
                 existingNames.Add(name);
+            }
         }
 
         // Check if base name is reserved or already exists
@@ -278,11 +315,13 @@ public static class ContextHelper
             {
                 var candidate = camelCaseName + i;
                 if (!existingNames.Contains(candidate) && !ReservedKeywords.Contains(candidate))
+                {
                     return candidate;
+                }
             }
 
             // Fallback: this should never happen in practice, but provide a safe default
-            return camelCaseName + "_" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            return string.Concat(camelCaseName, "_", Guid.NewGuid().ToString("N").AsSpan(0, 8));
         }
 
         return camelCaseName;
@@ -312,7 +351,9 @@ public static class ContextHelper
     public static string GenerateXmlDocumentation(ISymbol symbol)
     {
         if (symbol == null)
+        {
             throw new ArgumentNullException(nameof(symbol), "Symbol cannot be null");
+        }
 
         var sb = new System.Text.StringBuilder();
 
@@ -354,7 +395,7 @@ public static class ContextHelper
     {
         // Generate summary based on method name and kind
         string summaryText = GenerateMethodSummary(method);
-        
+
         sb.AppendLine("/// <summary>");
         sb.AppendLine($"/// {summaryText}");
         sb.AppendLine("/// </summary>");
@@ -381,7 +422,7 @@ public static class ContextHelper
     private static void GeneratePropertyDocumentation(System.Text.StringBuilder sb, IPropertySymbol property)
     {
         sb.AppendLine("/// <summary>");
-        
+
         if (property.GetMethod != null && property.SetMethod != null)
         {
             sb.AppendLine($"/// Gets or sets the {property.Name} value.");
@@ -398,9 +439,9 @@ public static class ContextHelper
         {
             sb.AppendLine($"/// Gets or sets the {property.Name}.");
         }
-        
+
         sb.AppendLine("/// </summary>");
-        
+
         // Add returns tag describing the return type
         string returnDescription = GetTypeDescription(property.Type);
         sb.AppendLine($"/// <value>{returnDescription}</value>");
@@ -416,16 +457,24 @@ public static class ContextHelper
     private static void GenerateTypeDocumentation(System.Text.StringBuilder sb, ITypeSymbol type)
     {
         sb.AppendLine("/// <summary>");
-        
-        string typeKind = type.TypeKind.ToString().ToLower();
+
+        string typeKind = type.TypeKind.ToString().ToLowerInvariant();
         if (type.TypeKind == TypeKind.Class)
+        {
             typeKind = "class";
+        }
         else if (type.TypeKind == TypeKind.Struct)
+        {
             typeKind = "structure";
+        }
         else if (type.TypeKind == TypeKind.Interface)
+        {
             typeKind = "interface";
+        }
         else if (type.TypeKind == TypeKind.Enum)
+        {
             typeKind = "enumeration";
+        }
 
         sb.AppendLine($"/// {type.Name} {typeKind}.");
         sb.AppendLine("/// </summary>");
@@ -443,7 +492,7 @@ public static class ContextHelper
         // Special handling for constructors
         if (method.MethodKind == MethodKind.Constructor)
         {
-            return $"Initializes a new instance of the {method.ContainingType?.Name} {method.ContainingType?.TypeKind.ToString().ToLower()}.";
+            return $"Initializes a new instance of the {method.ContainingType?.Name} {method.ContainingType?.TypeKind.ToString().ToLowerInvariant()}.";
         }
 
         // Parse method name to generate meaningful description
@@ -501,7 +550,7 @@ public static class ContextHelper
         string paramName = MakeFriendlyName(param.Name);
 
         // Generate description based on parameter name and type
-        if (param.Name.Equals("id", StringComparison.OrdinalIgnoreCase) || 
+        if (param.Name.Equals("id", StringComparison.OrdinalIgnoreCase) ||
             param.Name.Equals("identifier", StringComparison.OrdinalIgnoreCase))
         {
             return "The unique identifier.";
@@ -514,14 +563,14 @@ public static class ContextHelper
 
         if (param.Name.Equals("value", StringComparison.OrdinalIgnoreCase))
         {
-            return $"The {typeName.ToLower()} value.";
+            return $"The {typeName.ToLowerInvariant()} value.";
         }
 
-        if (param.Name.Equals("count", StringComparison.OrdinalIgnoreCase) || 
+        if (param.Name.Equals("count", StringComparison.OrdinalIgnoreCase) ||
             param.Name.Equals("size", StringComparison.OrdinalIgnoreCase) ||
             param.Name.Equals("length", StringComparison.OrdinalIgnoreCase))
         {
-            return $"The {param.Name.ToLower()} of the collection.";
+            return $"The {param.Name.ToLowerInvariant()} of the collection.";
         }
 
         if (param.Name.Equals("index", StringComparison.OrdinalIgnoreCase))
@@ -586,18 +635,30 @@ public static class ContextHelper
         string typeName = type.Name;
 
         if (typeName == "String" || typeName == "string")
+        {
             return "A string value.";
+        }
+
         if (typeName == "Boolean" || typeName == "bool")
+        {
             return "A boolean value.";
+        }
+
         if (typeName == "Int32" || typeName == "int")
+        {
             return "An integer value.";
+        }
 
         return $"A {type.Name} value.";
     }
 
     private static bool IsTaskType(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         var name = type.Name;
         return name == "Task" || name == "Task`1" || (type.ToString()?.StartsWith("System.Threading.Tasks.Task") ?? false);
     }
@@ -605,7 +666,9 @@ public static class ContextHelper
     private static string MakeFriendlyName(string name)
     {
         if (string.IsNullOrEmpty(name))
+        {
             return name;
+        }
 
         // Convert camelCase/PascalCase to friendly name
         var result = new System.Text.StringBuilder();
@@ -613,7 +676,10 @@ public static class ContextHelper
         {
             char c = name[i];
             if (i > 0 && char.IsUpper(c))
+            {
                 result.Append(' ');
+            }
+
             result.Append(char.ToLower(c));
         }
         return result.ToString();

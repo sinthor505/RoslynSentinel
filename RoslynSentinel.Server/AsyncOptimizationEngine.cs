@@ -21,20 +21,30 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new InvalidOperationException("File not found.");
+        if (document == null)
+        {
+            throw new InvalidOperationException("File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) throw new InvalidOperationException("Method not found.");
+        if (methodNode == null)
+        {
+            throw new InvalidOperationException("Method not found.");
+        }
 
         // Safety checks
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
         if (awaitCount > 1)
+        {
             return $"// WARNING: Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.\n{root!.ToFullString()}";
+        }
 
         var hasTryCatch = methodNode.DescendantNodes().OfType<TryStatementSyntax>().Any();
         if (hasTryCatch)
+        {
             return $"// WARNING: Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.\n{root!.ToFullString()}";
+        }
 
         var returnTypeStr = methodNode.ReturnType.ToString();
         TypeSyntax newReturnType;
@@ -81,11 +91,17 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "// Error: File not found in the loaded solution.";
+        if (document == null)
+        {
+            return "// Error: File not found in the loaded solution.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null || methodNode.Body == null) return $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).";
+        if (methodNode == null || methodNode.Body == null)
+        {
+            return $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).";
+        }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
         // We locate consecutive await statements and group independent ones.
@@ -121,7 +137,9 @@ public class AsyncOptimizationEngine
                 }
 
                 if (awaitedExpr == null)
+                {
                     break; // Not an await statement, end of batch
+                }
 
                 // Check if this await depends on any variable declared in the batch so far
                 bool dependent = awaitedExpr.DescendantNodesAndSelf()
@@ -129,10 +147,16 @@ public class AsyncOptimizationEngine
                     .Any(id => declaredInBatch.Contains(id.Identifier.Text));
 
                 if (dependent)
+                {
                     break; // Dependent on previous batch member
+                }
 
                 batch.Add((stmt, varName, awaitedExpr));
-                if (varName != null) declaredInBatch.Add(varName);
+                if (varName != null)
+                {
+                    declaredInBatch.Add(varName);
+                }
+
                 j++;
             }
 
@@ -216,7 +240,9 @@ public class AsyncOptimizationEngine
     private static string DeriveTaskVarName(string? varName, ExpressionSyntax awaitedExpr)
     {
         if (varName != null)
+        {
             return varName + "Task";
+        }
 
         // Try to extract method name from the invocation
         if (awaitedExpr is InvocationExpressionSyntax inv)
@@ -233,7 +259,11 @@ public class AsyncOptimizationEngine
                 var baseName = methodName.EndsWith("Async", StringComparison.Ordinal)
                     ? methodName[..^5]
                     : methodName;
-                if (baseName.Length == 0) baseName = methodName;
+                if (baseName.Length == 0)
+                {
+                    baseName = methodName;
+                }
+
                 var camel = char.ToLowerInvariant(baseName[0]) + baseName[1..];
                 return camel + "Task";
             }
@@ -249,13 +279,19 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new InvalidOperationException("File not found.");
+        if (document == null)
+        {
+            throw new InvalidOperationException("File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         var methodNode = classNode?.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (classNode == null || methodNode == null) throw new InvalidOperationException("Class or method not found.");
+        if (classNode == null || methodNode == null)
+        {
+            throw new InvalidOperationException("Class or method not found.");
+        }
 
         var asyncMethodName = methodName + "Async";
         var returnTypeStr = methodNode.ReturnType.ToString();
@@ -338,12 +374,16 @@ public class AsyncOptimizationEngine
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
         if (document == null)
+        {
             throw new InvalidOperationException(
                 $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
+        {
             throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        }
 
         // Find the class that contains the named method.
         var classNode = root.DescendantNodes()
@@ -356,26 +396,36 @@ public class AsyncOptimizationEngine
                                    .FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (classNode == null || methodNode == null)
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+        }
 
         // ── Precondition checks ──────────────────────────────────────────────
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' is already async — it cannot be converted to a bridge.");
+        }
 
         if (methodName.EndsWith("Async", StringComparison.Ordinal))
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' already ends with 'Async' — it is likely already the async overload.");
+        }
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' is abstract — abstract methods have no body and cannot be bridged.");
+        }
 
         if (IsEventHandlerSignature(methodNode))
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' appears to be an event handler (object sender, XxxEventArgs e). " +
                 "Fixed delegate signatures cannot receive an extra CancellationToken parameter.");
+        }
 
         // Reject ref/out parameters: the bridge call cannot forward them without matching ref/out
         // keywords on the argument, and the async overload signature becomes ambiguous.
@@ -383,19 +433,23 @@ public class AsyncOptimizationEngine
             .FirstOrDefault(p => p.Modifiers.Any(m =>
                 m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword)));
         if (refOrOutParam != null)
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' has a ref/out parameter '{refOrOutParam.Identifier.Text}'. " +
                 "ref/out parameters are not supported by the Asyncify-bridge pattern.");
+        }
 
         var asyncMethodName = methodName + "Async";
         if (classNode.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == asyncMethodName))
+        {
             throw new InvalidOperationException(
                 $"An overload named '{asyncMethodName}' already exists in the class. " +
                 "Remove it first, or use add_cancellation_token_to_method to add CT to the existing overload.");
+        }
 
         // ── Build the async overload ─────────────────────────────────────────
         var returnTypeStr = methodNode.ReturnType.ToString().Trim();
-        var isVoid        = returnTypeStr == "void";
+        var isVoid = returnTypeStr == "void";
         var newReturnType = isVoid ? "Task" : $"Task<{returnTypeStr}>";
 
         // CancellationToken parameter: trailing space in type name becomes whitespace trivia.
@@ -438,7 +492,7 @@ public class AsyncOptimizationEngine
 
         // ── Build the bridge body for the original sync method ───────────────
         // Forward all original parameters as positional arguments.
-        var callArgs    = methodNode.ParameterList.Parameters
+        var callArgs = methodNode.ParameterList.Parameters
                                     .Select(p => SyntaxFactory.Argument(
                                         SyntaxFactory.IdentifierName(p.Identifier.Text)));
         var callArgList = SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(callArgs));
@@ -523,10 +577,16 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new InvalidOperationException("File not found.");
+        if (document == null)
+        {
+            throw new InvalidOperationException("File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new InvalidOperationException("Could not get syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not get syntax root.");
+        }
 
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
             .Where(a => !(a.Expression is InvocationExpressionSyntax inv &&
@@ -534,7 +594,10 @@ public class AsyncOptimizationEngine
                           ma.Name.Identifier.Text == "ConfigureAwait"))
             .ToList();
 
-        if (!awaitExprs.Any()) return root.ToFullString();
+        if (awaitExprs.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         var newRoot = root.ReplaceNodes(awaitExprs, (orig, _) =>
         {
@@ -560,17 +623,26 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new InvalidOperationException("File not found.");
+        if (document == null)
+        {
+            throw new InvalidOperationException("File not found.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new InvalidOperationException("Could not get syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not get syntax root.");
+        }
 
         var configureAwaitInvocations = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
             .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
                           ma.Name.Identifier.Text == "ConfigureAwait")
             .ToList();
 
-        if (!configureAwaitInvocations.Any()) return root.ToFullString();
+        if (configureAwaitInvocations.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         var newRoot = root.ReplaceNodes(configureAwaitInvocations, (orig, _) =>
         {
@@ -589,114 +661,144 @@ public class AsyncOptimizationEngine
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return $"// Error: File '{filePath}' not found.";
-
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) return $"// Error: Method '{methodName}' not found.";
-
-        var returnTypeStr = methodNode.ReturnType.ToString().Trim();
-
-        if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
-            return root.ToFullString();
-
-        string? innerType = null;
-        if (returnTypeStr.StartsWith("Task<List<") && returnTypeStr.EndsWith(">>"))
-            innerType = returnTypeStr.Substring(10, returnTypeStr.Length - 12);
-        else if (returnTypeStr.StartsWith("Task<IEnumerable<") && returnTypeStr.EndsWith(">>"))
-            innerType = returnTypeStr.Substring(17, returnTypeStr.Length - 19);
-        else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
-            innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
-
-        if (innerType == null)
-            return $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>.";
-
-        var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
-        var newMethod = methodNode.WithReturnType(newReturnType.WithTrailingTrivia(SyntaxFactory.Space));
-
-        if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
-            newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-
-        var hasCt = newMethod.ParameterList.Parameters
-            .Any(p => p.Type?.ToString().Contains("CancellationToken") == true);
-        if (!hasCt)
-        {
-            var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("ct"))
-                .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
-                .WithDefault(SyntaxFactory.EqualsValueClause(
-                    SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
-            newMethod = newMethod.AddParameterListParameters(ctParam);
-        }
-
-        if (methodNode.Body != null)
-        {
-            string? resultsVar = null;
-            foreach (var stmt in methodNode.Body.Statements)
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+            if (document == null)
             {
-                if (stmt is LocalDeclarationStatementSyntax ld)
+                return $"// Error: File '{filePath}' not found.";
+            }
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null)
+            {
+                return $"// Error: Failed to get syntax root for '{filePath}'.";
+            }
+
+            var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+            if (methodNode == null)
+            {
+                return $"// Error: Method '{methodName}' not found.";
+            }
+
+            var returnTypeStr = methodNode.ReturnType.ToString().Trim();
+
+            if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
+            {
+                return root.ToFullString();
+            }
+
+            string? innerType = null;
+            if (returnTypeStr.StartsWith("Task<List<") && returnTypeStr.EndsWith(">>"))
+            {
+                innerType = returnTypeStr.Substring(10, returnTypeStr.Length - 12);
+            }
+            else if (returnTypeStr.StartsWith("Task<IEnumerable<") && returnTypeStr.EndsWith(">>"))
+            {
+                innerType = returnTypeStr.Substring(17, returnTypeStr.Length - 19);
+            }
+            else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
+            {
+                innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
+            }
+
+            if (innerType == null)
+            {
+                return $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>.";
+            }
+
+            var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
+            var newMethod = methodNode.WithReturnType(newReturnType.WithTrailingTrivia(SyntaxFactory.Space));
+
+            if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
+            {
+                newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+            }
+
+            var hasCt = newMethod.ParameterList.Parameters
+            .Any(p => p.Type?.ToString().Contains("CancellationToken") == true);
+            if (!hasCt)
+            {
+                var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("ct"))
+                    .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
+                    .WithDefault(SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
+                newMethod = newMethod.AddParameterListParameters(ctParam);
+            }
+
+            if (methodNode.Body != null)
+            {
+                string? resultsVar = null;
+                foreach (var stmt in methodNode.Body.Statements)
                 {
-                    foreach (var v in ld.Declaration.Variables)
+                    if (stmt is LocalDeclarationStatementSyntax ld)
                     {
-                        var initStr = v.Initializer?.Value.ToString() ?? "";
-                        if (initStr.Contains($"List<{innerType}>") || initStr.Contains("new()") ||
-                            initStr.Contains("new List"))
+                        foreach (var v in ld.Declaration.Variables)
                         {
-                            resultsVar = v.Identifier.Text;
+                            var initStr = v.Initializer?.Value.ToString() ?? "";
+                            if (initStr.Contains($"List<{innerType}>") || initStr.Contains("new()") ||
+                                initStr.Contains("new List"))
+                            {
+                                resultsVar = v.Identifier.Text;
+                            }
                         }
                     }
                 }
-            }
 
-            var newStatements = new List<StatementSyntax>();
+                var newStatements = new List<StatementSyntax>();
 
-            if (resultsVar != null)
-            {
-                foreach (var stmt in methodNode.Body.Statements)
+                if (resultsVar != null)
                 {
-                    if (stmt is LocalDeclarationStatementSyntax ld &&
-                        ld.Declaration.Variables.Any(v => v.Identifier.Text == resultsVar))
-                        continue;
+                    foreach (var stmt in methodNode.Body.Statements)
+                    {
+                        if (stmt is LocalDeclarationStatementSyntax ld &&
+                            ld.Declaration.Variables.Any(v => v.Identifier.Text == resultsVar))
+                        {
+                            continue;
+                        }
 
-                    if (stmt is ReturnStatementSyntax ret &&
+                        if (stmt is ReturnStatementSyntax ret &&
                         ret.Expression?.ToString().Contains(resultsVar) == true)
-                        continue;
+                        {
+                            continue;
+                        }
 
-                    if (stmt is ExpressionStatementSyntax exprStmt &&
+                        if (stmt is ExpressionStatementSyntax exprStmt &&
                         exprStmt.Expression is InvocationExpressionSyntax invStmt &&
                         invStmt.Expression is MemberAccessExpressionSyntax maStmt &&
                         maStmt.Expression.ToString() == resultsVar &&
                         maStmt.Name.Identifier.Text == "Add" &&
                         invStmt.ArgumentList.Arguments.Count == 1)
-                    {
-                        newStatements.Add(SyntaxFactory.YieldStatement(
-                            SyntaxKind.YieldReturnStatement,
-                            invStmt.ArgumentList.Arguments[0].Expression));
+                        {
+                            newStatements.Add(SyntaxFactory.YieldStatement(
+                                SyntaxKind.YieldReturnStatement,
+                                invStmt.ArgumentList.Arguments[0].Expression));
+                        }
+                        else
+                        {
+                            newStatements.Add(stmt);
+                        }
                     }
-                    else
+                }
+                else
+                {
+                    foreach (var stmt in methodNode.Body.Statements)
                     {
+                        if (stmt is ReturnStatementSyntax)
+                        {
+                            continue;
+                        }
+
                         newStatements.Add(stmt);
                     }
+                    newStatements.Add(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement));
                 }
-            }
-            else
-            {
-                foreach (var stmt in methodNode.Body.Statements)
-                {
-                    if (stmt is ReturnStatementSyntax) continue;
-                    newStatements.Add(stmt);
-                }
-                newStatements.Add(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement));
+
+                newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
             }
 
-            newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
-        }
-
-        var newRoot = root.ReplaceNode(methodNode, newMethod);
-        return newRoot.NormalizeWhitespace().ToFullString();
+            var newRoot = root.ReplaceNode(methodNode, newMethod);
+            return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
         {
@@ -708,18 +810,30 @@ public class AsyncOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "// Error: File not found in the loaded solution.";
+        if (document == null)
+        {
+            return "// Error: File not found in the loaded solution.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "// Error: Failed to get syntax root.";
+        if (root == null)
+        {
+            return "// Error: Failed to get syntax root.";
+        }
+
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) return $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source.";
+        if (methodNode == null)
+        {
+            return $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source.";
+        }
 
         // Check if method already has a CancellationToken parameter
         if (methodNode.ParameterList.Parameters.Any(p =>
             p.Type?.ToString().Contains("CancellationToken") == true))
+        {
             return root.ToFullString();
+        }
 
         // Build CancellationToken parameter (trailing space is intentional: it becomes
         // the whitespace trivia that separates the type name from the parameter identifier)
@@ -756,7 +870,9 @@ public class AsyncOptimizationEngine
             if (inv.ArgumentList.Arguments.Any(a =>
                 a.Expression.ToString().Contains("cancellationToken") ||
                 (a.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.Contains("cancellationToken"))))
+            {
                 continue;
+            }
 
             bool shouldAdd = false;
 
@@ -765,12 +881,19 @@ public class AsyncOptimizationEngine
                 // Check all overloads for a CT parameter
                 var symbolInfo = semanticModel.GetSymbolInfo(inv, cancellationToken);
                 var candidates = new List<ISymbol>();
-                if (symbolInfo.Symbol != null) candidates.Add(symbolInfo.Symbol);
+                if (symbolInfo.Symbol != null)
+                {
+                    candidates.Add(symbolInfo.Symbol);
+                }
+
                 candidates.AddRange(symbolInfo.CandidateSymbols);
 
                 foreach (var sym in candidates)
                 {
-                    if (sym is not IMethodSymbol methodSym) continue;
+                    if (sym is not IMethodSymbol methodSym)
+                    {
+                        continue;
+                    }
                     // Check if any overload in the containing type accepts CT
                     var containingType = methodSym.ContainingType;
                     if (containingType != null)
@@ -806,7 +929,9 @@ public class AsyncOptimizationEngine
             if (inv.Expression is MemberAccessExpressionSyntax maDelay &&
                 maDelay.Expression.ToString() == "Task" &&
                 maDelay.Name.Identifier.Text == "Delay")
+            {
                 shouldAdd = true;
+            }
 
             if (shouldAdd)
             {
@@ -821,9 +946,13 @@ public class AsyncOptimizationEngine
         {
             var newBody = bodyToRewrite.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
             if (newBody is BlockSyntax block)
+            {
                 newMethodNode = newMethodNode.WithBody(block);
+            }
             else if (newBody is ArrowExpressionClauseSyntax arrow)
+            {
                 newMethodNode = newMethodNode.WithExpressionBody(arrow);
+            }
         }
 
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
@@ -851,18 +980,22 @@ public class AsyncOptimizationEngine
             CancellationToken cancellationToken = default)
     {
         var modified = new List<string>();
-        var skipped  = new List<string>();
+        var skipped = new List<string>();
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
         if (document == null)
+        {
             return ($"// Error: File '{filePath}' not found in the loaded solution.", modified, skipped);
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
+        {
             return ("// Error: Failed to get syntax root.", modified, skipped);
+        }
 
         SemanticModel? semanticModel = null;
         try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
@@ -877,15 +1010,18 @@ public class AsyncOptimizationEngine
 
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            var name       = method.Identifier.Text;
-            bool isAsync   = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+            var name = method.Identifier.Text;
+            bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
             var returnType = method.ReturnType.ToString();
             bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
 
             // Only process async or Task/ValueTask-returning methods.
             // Ineligible sync methods are silently ignored — they are not actionable
             // and would flood SkippedMethods with noise in large files.
-            if (!isAsync && !returnsTask) continue;
+            if (!isAsync && !returnsTask)
+            {
+                continue;
+            }
 
             // Skip abstract methods (no body to rewrite).
             if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) { skipped.Add(name); continue; }
@@ -894,7 +1030,9 @@ public class AsyncOptimizationEngine
             if (method.ParameterList.Parameters.Any(p =>
                     p.Type?.ToString() is string t &&
                     (t == "CancellationToken" || t.EndsWith(".CancellationToken"))))
-            { skipped.Add(name); continue; }
+            {
+                skipped.Add(name); continue;
+            }
 
             // Skip event handlers (object sender, XxxEventArgs e) — fixed delegate signature.
             if (IsEventHandlerSignature(method)) { skipped.Add(name); continue; }
@@ -910,7 +1048,9 @@ public class AsyncOptimizationEngine
         }
 
         if (methodReplacements.Count == 0)
+        {
             return (root.ToFullString(), modified, skipped);
+        }
 
         // Replace all eligible methods in a single Roslyn rewrite pass.
         var newRoot = root.ReplaceNodes(
@@ -930,8 +1070,8 @@ public class AsyncOptimizationEngine
     /// </summary>
     private static MethodDeclarationSyntax BuildMethodWithCancellationToken(
         MethodDeclarationSyntax methodNode,
-        SemanticModel?          semanticModel,
-        CancellationToken       cancellationToken)
+        SemanticModel? semanticModel,
+        CancellationToken cancellationToken)
     {
         // Build CancellationToken parameter — trailing space becomes whitespace trivia between
         // the type name and the parameter identifier.
@@ -942,7 +1082,7 @@ public class AsyncOptimizationEngine
 
         // Insert before any 'params' parameter; otherwise append at end.
         var parameters = methodNode.ParameterList.Parameters.ToList();
-        var paramsIdx  = parameters.FindIndex(p =>
+        var paramsIdx = parameters.FindIndex(p =>
             p.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword)));
         ParameterListSyntax newParamList;
         if (paramsIdx >= 0)
@@ -958,7 +1098,7 @@ public class AsyncOptimizationEngine
 
         // Rewrite callee invocations in the method body to forward the token.
         SyntaxNode bodyToRewrite = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody!;
-        var invocations  = bodyToRewrite.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
+        var invocations = bodyToRewrite.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
         var replacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
 
         foreach (var inv in invocations)
@@ -968,7 +1108,9 @@ public class AsyncOptimizationEngine
                     a.Expression.ToString().Contains("cancellationToken") ||
                     (a.Expression is MemberAccessExpressionSyntax maCheck &&
                      maCheck.Name.Identifier.Text.Contains("cancellationToken"))))
+            {
                 continue;
+            }
 
             bool shouldAdd = false;
 
@@ -976,12 +1118,20 @@ public class AsyncOptimizationEngine
             {
                 var symbolInfo = semanticModel.GetSymbolInfo(inv, cancellationToken);
                 var candidates = new List<ISymbol>();
-                if (symbolInfo.Symbol != null) candidates.Add(symbolInfo.Symbol);
+                if (symbolInfo.Symbol != null)
+                {
+                    candidates.Add(symbolInfo.Symbol);
+                }
+
                 candidates.AddRange(symbolInfo.CandidateSymbols);
 
                 foreach (var sym in candidates)
                 {
-                    if (sym is not IMethodSymbol methodSym) continue;
+                    if (sym is not IMethodSymbol methodSym)
+                    {
+                        continue;
+                    }
+
                     var containingType = methodSym.ContainingType;
                     if (containingType != null)
                     {
@@ -989,11 +1139,15 @@ public class AsyncOptimizationEngine
                             .OfType<IMethodSymbol>();
                         if (overloads.Any(o => o.Parameters.Any(p =>
                                 p.Type.ToDisplayString() == "System.Threading.CancellationToken")))
-                        { shouldAdd = true; break; }
+                        {
+                            shouldAdd = true; break;
+                        }
                     }
                     if (methodSym.Parameters.Any(p =>
                             p.Type.ToDisplayString() == "System.Threading.CancellationToken"))
-                    { shouldAdd = true; break; }
+                    {
+                        shouldAdd = true; break;
+                    }
                 }
             }
             else
@@ -1010,12 +1164,14 @@ public class AsyncOptimizationEngine
             if (inv.Expression is MemberAccessExpressionSyntax maDelay &&
                 maDelay.Expression.ToString() == "Task" &&
                 maDelay.Name.Identifier.Text == "Delay")
+            {
                 shouldAdd = true;
+            }
 
             if (shouldAdd)
             {
-                var ctArg       = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
-                var newArgList  = inv.ArgumentList.AddArguments(ctArg);
+                var ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
+                var newArgList = inv.ArgumentList.AddArguments(ctArg);
                 replacements[inv] = inv.WithArgumentList(newArgList);
             }
         }
@@ -1025,9 +1181,13 @@ public class AsyncOptimizationEngine
         {
             var newBody = bodyToRewrite.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
             if (newBody is BlockSyntax block)
+            {
                 newMethodNode = newMethodNode.WithBody(block);
+            }
             else if (newBody is ArrowExpressionClauseSyntax arrow)
+            {
                 newMethodNode = newMethodNode.WithExpressionBody(arrow);
+            }
         }
         return newMethodNode;
     }
@@ -1041,29 +1201,33 @@ public class AsyncOptimizationEngine
     private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
     {
         var parms = method.ParameterList.Parameters;
-        if (parms.Count != 2) return false;
-        var first  = parms[0].Type?.ToString() ?? "";
+        if (parms.Count != 2)
+        {
+            return false;
+        }
+
+        var first = parms[0].Type?.ToString() ?? "";
         var second = parms[1].Type?.ToString() ?? "";
-        return (first == "object" || first == "object?") &&
-               second.EndsWith("EventArgs") || second.EndsWith("EventArgs?");
+        return ((first == "object" || first == "object?") &&
+               second.EndsWith("EventArgs")) || second.EndsWith("EventArgs?");
     }
 
     // ── MigrationCandidate attribute name constants ─────────────────────────
     private const string MigrationCandidateShortName = "MigrationCandidate";
-    private const string MigrationCandidateFullName  = "MigrationCandidateAttribute";
+    private const string MigrationCandidateFullName = "MigrationCandidateAttribute";
 
     /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
     public record FlagMigrationCandidateEngineResult(
         /// <summary>File path → updated source for every file that must be written to disk.</summary>
         Dictionary<string, string> Changes,
         /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
-        bool    WasAlreadyFlagged,
+        bool WasAlreadyFlagged,
         /// <summary>The pattern string from the previous attribute, or <c>null</c> if the method was not previously flagged.</summary>
         string? PreviousPattern,
         /// <summary><c>true</c> if a new <c>MigrationCandidateAttribute.cs</c> file was generated.</summary>
-        bool    AttributeClassInjected,
+        bool AttributeClassInjected,
         /// <summary>1-based line number of the method declaration.</summary>
-        int     Line
+        int Line
     );
 
     /// <summary>
@@ -1100,14 +1264,14 @@ public class AsyncOptimizationEngine
 /// the method. Remove manually if the method is determined ineligible after review.
 /// </summary>
 /// <remarks>
-/// Known patterns: <c>AsyncBridge</c>, <c>HandlerExtract</c>,
+/// Known patterns: <c>AsyncBridgeCandidate</c>, <c>HandlerExtract</c>,
 /// <c>HandlerToAsync</c>, <c>AsyncCallerUplift</c>.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
 internal sealed class MigrationCandidateAttribute : Attribute
 {
     /// <summary>Initialises a new <see cref=""MigrationCandidateAttribute""/>.</summary>
-    /// <param name=""pattern"">The refactoring pattern (e.g., ""AsyncBridge"").</param>
+    /// <param name=""pattern"">The refactoring pattern (e.g., ""AsyncBridgeCandidate"").</param>
     public MigrationCandidateAttribute(string pattern)
     {
         Pattern = pattern;
@@ -1141,13 +1305,19 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var fileScoped = root.DescendantNodes()
             .OfType<FileScopedNamespaceDeclarationSyntax>()
             .FirstOrDefault();
-        if (fileScoped != null) return fileScoped.Name.ToString();
+        if (fileScoped != null)
+        {
+            return fileScoped.Name.ToString();
+        }
 
         // Block-scoped namespace: namespace Foo { ... }
         var blockScoped = root.DescendantNodes()
             .OfType<NamespaceDeclarationSyntax>()
             .FirstOrDefault();
-        if (blockScoped != null) return blockScoped.Name.ToString();
+        if (blockScoped != null)
+        {
+            return blockScoped.Name.ToString();
+        }
 
         return "Global";
     }
@@ -1166,7 +1336,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <param name="filePath">Absolute or workspace-relative path of the source file.</param>
     /// <param name="methodName">Exact (case-sensitive) name of the method to flag.</param>
     /// <param name="pattern">
-    /// The refactoring pattern: <c>"AsyncBridge"</c>, <c>"HandlerExtract"</c>,
+    /// The refactoring pattern: <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtract"</c>,
     /// <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, or any custom string.
     /// </param>
     /// <param name="score">Optional eligibility score (default 0 = unscored).</param>
@@ -1185,7 +1355,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         string filePath,
         string methodName,
         string pattern,
-        int    score  = 0,
+        int score = 0,
         string? reason = null,
         CancellationToken cancellationToken = default)
     {
@@ -1194,39 +1364,55 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
         if (document == null)
+        {
             throw new InvalidOperationException(
                 $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
+        {
             throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        }
 
         // ── Find the target method ───────────────────────────────────────────
         var methodNode = root.DescendantNodes()
                              .OfType<MethodDeclarationSyntax>()
                              .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null)
+        {
             throw new InvalidOperationException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+        }
 
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
         // ── Detect whether the method is already flagged with this pattern ───
-        bool   wasAlreadyFlagged = false;
-        string? previousPattern  = null;
+        bool wasAlreadyFlagged = false;
+        string? previousPattern = null;
         foreach (var al in methodNode.AttributeLists)
         {
             foreach (var a in al.Attributes)
             {
                 var name = a.Name.ToString();
                 if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                {
                     continue;
+                }
+
                 var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
                 var argPattern = (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-                if (previousPattern == null) previousPattern = argPattern; // record first found
+                if (previousPattern == null)
+                {
+                    previousPattern = argPattern; // record first found
+                }
+
                 if (argPattern == pattern) { wasAlreadyFlagged = true; break; }
             }
-            if (wasAlreadyFlagged) break;
+            if (wasAlreadyFlagged)
+            {
+                break;
+            }
         }
 
         // ── Strip any existing [MigrationCandidate("pattern")] for idempotency ─
@@ -1240,7 +1426,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     {
                         var name = a.Name.ToString();
                         if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                        {
                             return true; // keep — unrelated attribute
+                        }
                         // Remove only if the pattern positional arg matches.
                         var firstArg = a.ArgumentList?.Arguments
                             .FirstOrDefault(arg => arg.NameEquals == null);
@@ -1250,7 +1438,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     }).ToList();
 
                     if (filteredAttrs.Count == al.Attributes.Count)
+                    {
                         return al; // unchanged
+                    }
 
                     return filteredAttrs.Count == 0
                         ? null
@@ -1260,7 +1450,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 .Select(al => al!));
 
         // ── Build the new [MigrationCandidate(...)] attribute ────────────────
-        var today     = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
         var arguments = new System.Collections.Generic.List<AttributeArgumentSyntax>
         {
             // Positional: "pattern"
@@ -1312,8 +1502,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
             .WithAttributeLists(strippedAttributeLists)
             .AddAttributeLists(newAttrList);
 
-        var newRoot    = root.ReplaceNode(methodNode, updatedMethod);
-        var newSource  = newRoot.NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(methodNode, updatedMethod);
+        var newSource = newRoot.NormalizeWhitespace().ToFullString();
 
         var result = new Dictionary<string, string> { { filePath, newSource } };
 
@@ -1330,8 +1520,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         {
             // Detect namespace from the target file so the injected type is visible
             // in the same namespace without a using directive.
-            var ns       = DetectNamespace(root);
-            var attrSrc  = BuildMigrationCandidateAttributeSource(ns);
+            var ns = DetectNamespace(root);
+            var attrSrc = BuildMigrationCandidateAttributeSource(ns);
             // Use the project root (.csproj directory) so SDK-style glob-includes pick up
             // the file automatically without duplicating it into subdirectories.
             var projectDir = System.IO.Path.GetDirectoryName(document.Project.FilePath)
@@ -1345,11 +1535,11 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
 
         return new FlagMigrationCandidateEngineResult(
-            Changes:               result,
-            WasAlreadyFlagged:     wasAlreadyFlagged,
-            PreviousPattern:       previousPattern,
+            Changes: result,
+            WasAlreadyFlagged: wasAlreadyFlagged,
+            PreviousPattern: previousPattern,
             AttributeClassInjected: attributeClassInjected,
-            Line:                  methodLine);
+            Line: methodLine);
     }
 
     /// <summary>
@@ -1376,12 +1566,16 @@ internal sealed class MigrationCandidateAttribute : Attribute
         for (int i = 0; i < items.Count; i++)
         {
             var fp = items[i].FilePath;
-            if (!byFile.TryGetValue(fp, out var bucket)) byFile[fp] = bucket = new List<int>();
+            if (!byFile.TryGetValue(fp, out var bucket))
+            {
+                byFile[fp] = bucket = new List<int>();
+            }
+
             bucket.Add(i);
         }
 
         var resultSlots = new FlagMigrationCandidateEngineResult[items.Count];
-        var errors      = new List<(int Index, string Error)>();
+        var errors = new List<(int Index, string Error)>();
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
@@ -1395,7 +1589,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
             if (document == null)
             {
                 foreach (var i in indices)
+                {
                     errors.Add((i, $"File '{filePath}' not found in the loaded solution."));
+                }
+
                 continue;
             }
 
@@ -1403,7 +1600,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
             if (root == null)
             {
                 foreach (var i in indices)
+                {
                     errors.Add((i, $"Could not get syntax root for '{filePath}'."));
+                }
+
                 continue;
             }
 
@@ -1427,18 +1627,28 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
                 // Detect previous flag.
-                bool   wasAlreadyFlagged = false;
-                string? previousPattern  = null;
+                bool wasAlreadyFlagged = false;
+                string? previousPattern = null;
                 foreach (var al in methodNode.AttributeLists)
+                {
                     foreach (var a in al.Attributes)
                     {
                         var name = a.Name.ToString();
-                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName) continue;
+                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                        {
+                            continue;
+                        }
+
                         var fp2 = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
                         var ap = (fp2?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-                        if (previousPattern == null) previousPattern = ap;
+                        if (previousPattern == null)
+                        {
+                            previousPattern = ap;
+                        }
+
                         if (ap == pattern) { wasAlreadyFlagged = true; break; }
                     }
+                }
 
                 // Strip existing same-pattern attribute.
                 var stripped = SyntaxFactory.List(
@@ -1448,12 +1658,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             var filtered = al.Attributes.Where(a =>
                             {
                                 var n = a.Name.ToString();
-                                if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return true;
-                                var fa  = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                                if (n != MigrationCandidateShortName && n != MigrationCandidateFullName)
+                                {
+                                    return true;
+                                }
+
+                                var fa = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
                                 var ap2 = (fa?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
                                 return ap2 != pattern;
                             }).ToList();
-                            if (filtered.Count == al.Attributes.Count) return al;
+                            if (filtered.Count == al.Attributes.Count)
+                            {
+                                return al;
+                            }
+
                             return filtered.Count == 0 ? null : al.WithAttributes(SyntaxFactory.SeparatedList(filtered));
                         })
                         .Where(al => al != null)
@@ -1461,19 +1679,25 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 // Build new attribute.
                 var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
-                var args  = new List<AttributeArgumentSyntax>
+                var args = new List<AttributeArgumentSyntax>
                 {
                     SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
                         SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(pattern)))
                 };
                 if (score != 0)
+                {
                     args.Add(SyntaxFactory.AttributeArgument(
                         SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")), null,
                         SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(score))));
+                }
+
                 if (!string.IsNullOrWhiteSpace(reason))
+                {
                     args.Add(SyntaxFactory.AttributeArgument(
                         SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Reason")), null,
                         SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(reason))));
+                }
+
                 args.Add(SyntaxFactory.AttributeArgument(
                     SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")), null,
                     SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(today))));
@@ -1489,11 +1713,11 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 root = root.ReplaceNode(methodNode, updatedMethod);
 
                 resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                    Changes:               new Dictionary<string, string>(), // populated below after all methods in file
-                    WasAlreadyFlagged:     wasAlreadyFlagged,
-                    PreviousPattern:       previousPattern,
+                    Changes: new Dictionary<string, string>(), // populated below after all methods in file
+                    WasAlreadyFlagged: wasAlreadyFlagged,
+                    PreviousPattern: previousPattern,
                     AttributeClassInjected: false, // set on first item for this file
-                    Line:                  methodLine);
+                    Line: methodLine);
             }
 
             // Write final combined source once for all methods in this file.
@@ -1507,7 +1731,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                 .Equals($"{MigrationCandidateFullName}.cs", StringComparison.OrdinalIgnoreCase));
             if (!alreadyDefined && !attrClassInjected)
             {
-                var ns      = DetectNamespace(root);
+                var ns = DetectNamespace(root);
                 var attrSrc = BuildMigrationCandidateAttributeSource(ns);
                 // Use project root so SDK-style glob-includes find the file at the right level.
                 var projectDir = System.IO.Path.GetDirectoryName(document.Project.FilePath)
@@ -1526,7 +1750,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     var r = resultSlots[idx];
                     resultSlots[idx] = r with
                     {
-                        Changes               = fileChanges,
+                        Changes = fileChanges,
                         AttributeClassInjected = attrClassInjected && idx == indices[0]
                     };
                 }
@@ -1550,14 +1774,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </param>
     /// <param name="pattern">
     /// When provided, returns only candidates flagged for this exact pattern string
-    /// (e.g. <c>"AsyncBridge"</c>).
+    /// (e.g. <c>"AsyncBridgeCandidate"</c>).
     /// </param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>One <see cref="MigrationCandidateFinding"/> per flagged method per pattern.</returns>
     public async Task<List<MigrationCandidateFinding>> FindMigrationCandidatesAsync(
-        string? filePath     = null,
-        string? projectName  = null,
-        string? pattern      = null,
+        string? filePath = null,
+        string? projectName = null,
+        string? pattern = null,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1566,20 +1790,27 @@ internal sealed class MigrationCandidateAttribute : Attribute
         // Enumerate all documents, applying scope filters.
         var projects = solution.Projects.AsEnumerable();
         if (projectName != null)
+        {
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();
             if (filePath != null)
+            {
                 docs = docs.Where(d => d.FilePath != null &&
                                        d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase));
+            }
 
             foreach (var doc in docs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var root = await doc.GetSyntaxRootAsync(cancellationToken);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
@@ -1589,7 +1820,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         {
                             var name = attr.Name.ToString();
                             if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+                            {
                                 continue;
+                            }
 
                             // Extract positional pattern argument.
                             var firstArg = attr.ArgumentList?.Arguments
@@ -1600,7 +1833,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             // Apply pattern filter.
                             if (pattern != null &&
                                 !attrPattern.Equals(pattern, StringComparison.Ordinal))
+                            {
                                 continue;
+                            }
 
                             // Extract optional named arguments.
                             var namedArgs = attr.ArgumentList?.Arguments
@@ -1613,31 +1848,37 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             if (namedArgs.TryGetValue("Score", out var scoreExpr) &&
                                 scoreExpr is LiteralExpressionSyntax scoreLit &&
                                 scoreLit.Token.Value is int scoreVal)
+                            {
                                 attrScore = scoreVal;
+                            }
 
                             string? attrReason = null;
                             if (namedArgs.TryGetValue("Reason", out var reasonExpr) &&
                                 reasonExpr is LiteralExpressionSyntax reasonLit)
+                            {
                                 attrReason = reasonLit.Token.ValueText;
+                            }
 
                             string? attrDate = null;
                             if (namedArgs.TryGetValue("FlaggedDate", out var dateExpr) &&
                                 dateExpr is LiteralExpressionSyntax dateLit)
+                            {
                                 attrDate = dateLit.Token.ValueText;
+                            }
 
                             // Determine containing class name.
                             var classNode = method.FirstAncestorOrSelf<ClassDeclarationSyntax>();
-                            var lineSpan  = method.GetLocation().GetLineSpan();
+                            var lineSpan = method.GetLocation().GetLineSpan();
 
                             findings.Add(new MigrationCandidateFinding(
-                                FilePath:    doc.FilePath ?? string.Empty,
-                                MethodName:  method.Identifier.Text,
-                                ClassName:   classNode?.Identifier.Text ?? string.Empty,
-                                Pattern:     attrPattern,
-                                Score:       attrScore,
-                                Reason:      attrReason,
+                                FilePath: doc.FilePath ?? string.Empty,
+                                MethodName: method.Identifier.Text,
+                                ClassName: classNode?.Identifier.Text ?? string.Empty,
+                                Pattern: attrPattern,
+                                Score: attrScore,
+                                Reason: attrReason,
                                 FlaggedDate: attrDate,
-                                Line:        lineSpan.StartLinePosition.Line + 1));
+                                Line: lineSpan.StartLinePosition.Line + 1));
                         }
                     }
                 }
@@ -1651,13 +1892,23 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>Internal per-method scoring output used by <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record CandidateScoredItem(
-        string  FilePath,
-        string  MethodName,
-        string  ClassName,
-        int     Line,
-        int     Score,
-        string  Reason
-    );
+        string FilePath,
+        string MethodName,
+        string ClassName,
+        int Line,
+        int Score,
+        string Reason,
+        /// <summary>The migration pattern tag written into <c>[MigrationCandidate]</c> (e.g. "AsyncBridgeCandidate", "AsyncHandlerCandidate").</summary>
+        string Pattern
+    )
+    {
+        /// <summary>
+        /// Score breakdown parsed from <see cref="Reason"/> — one entry per signal with its point
+        /// contribution (e.g. <c>["blocking-calls:40", "service-class:15"]</c>).
+        /// </summary>
+        public IReadOnlyList<string> Breakdown =>
+            Reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+    }
 
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record FlagCandidatesInProjectEngineResult(
@@ -1682,7 +1933,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// required; the agent only needs to call this once per project.
     /// </summary>
     /// <remarks>
-    /// Scoring heuristics for <c>AsyncBridge</c>:
+    /// Scoring heuristics for <c>AsyncBridgeCandidate</c>:
     /// <list type="bullet">
     ///   <item>+40 — body contains blocking calls (<c>.GetAwaiter().GetResult()</c>, <c>.Result</c>, <c>.Wait()</c>)</item>
     ///   <item>+30 — body calls <c>CommonSearch.search</c> or another known sync DB entry point</item>
@@ -1699,19 +1950,24 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// Name of the project to scan (case-insensitive). Scans the whole solution when <c>null</c>.
     /// </param>
     /// <param name="pattern">
-    /// Migration pattern to apply (e.g. <c>"AsyncBridge"</c>). Defaults to <c>"AsyncBridge"</c>.
+    /// Migration pattern to apply (e.g. <c>"AsyncBridgeCandidate"</c>). Defaults to <c>"AsyncBridgeCandidate"</c>.
     /// </param>
-    /// <param name="minScore">Minimum score threshold for a method to be flagged. Defaults to 20.</param>
+    /// <param name="minScore">Minimum score threshold for a method to be flagged. Defaults to 50.</param>
     /// <param name="dryRun">
     /// When <c>true</c>, scores and categorizes methods without writing any files. Use to preview
     /// what would be flagged before committing.
     /// </param>
+    /// <param name="forceRescan">
+    /// When <c>true</c>, ignores existing <c>[MigrationCandidate]</c> attributes and re-evaluates
+    /// every method from scratch. Use after changing scoring rules to get a clean result.
+    /// </param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     public async Task<FlagCandidatesInProjectEngineResult> FlagCandidatesInProjectAsync(
-        string? projectName  = null,
-        string  pattern      = "AsyncBridge",
-        int     minScore     = 20,
-        bool    dryRun       = false,
+        string? projectName = null,
+        string pattern = "AsyncBridgeCandidate",
+        int minScore = 50,
+        bool dryRun = false,
+        bool forceRescan = false,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1723,8 +1979,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
             projects = projects.Where(p =>
                 string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             if (!projects.Any())
+            {
                 throw new InvalidOperationException(
                     $"Project '{projectName}' not found in the loaded solution.");
+            }
         }
 
         // ── Collect documents (no designer files) ────────────────────────────
@@ -1734,10 +1992,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         !d.FilePath.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        var flagged       = new List<CandidateScoredItem>();
-        var skipped       = new List<CandidateScoredItem>();
+        var flagged = new List<CandidateScoredItem>();
+        var skipped = new List<CandidateScoredItem>();
         var alreadyFlagged = new List<CandidateScoredItem>();
-        var fileChanges   = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fileChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         int totalExamined = 0;
         bool attrClassInjected = false;
 
@@ -1746,14 +2004,24 @@ internal sealed class MigrationCandidateAttribute : Attribute
             cancellationToken.ThrowIfCancellationRequested();
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var methods = root.DescendantNodes()
                               .OfType<MethodDeclarationSyntax>()
                               .ToList();
-            if (methods.Count == 0) continue;
+            if (methods.Count == 0)
+            {
+                continue;
+            }
 
             bool fileModified = false;
+
+            // Lazily resolved per-document semantic model used for callee attribute checks.
+            SemanticModel? docSemanticModel = null;
+            bool docSemanticModelFetched = false;
 
             foreach (var method in methods)
             {
@@ -1763,38 +2031,86 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     .OfType<ClassDeclarationSyntax>()
                     .FirstOrDefault();
                 var className = containingClass?.Identifier.Text ?? string.Empty;
-                var lineNo    = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var lineNo = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+
+                // When scanning for AsyncBridgeCandidate, event handlers are automatically categorised as
+                // AsyncHandlerCandidate — their migration path (async void + try/catch wrapping)
+                // is distinct from service-method bridge migration.
+                var effectivePattern = (pattern == "AsyncBridgeCandidate" && IsEventHandlerSignature(method))
+                    ? "AsyncHandlerCandidate"
+                    : pattern;
 
                 // ── Check if already flagged for this exact pattern ──────────
-                bool isAlreadyFlagged = method.AttributeLists
-                    .SelectMany(al => al.Attributes)
-                    .Any(a =>
-                    {
-                        var n = a.Name.ToString();
-                        if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return false;
-                        var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
-                        return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
-                    });
-                if (isAlreadyFlagged)
+                if (!forceRescan)
                 {
-                    alreadyFlagged.Add(new CandidateScoredItem(
-                        document.FilePath!, method.Identifier.Text, className, lineNo, 0, "already-flagged"));
-                    continue;
+                    bool isAlreadyFlagged = method.AttributeLists
+                        .SelectMany(al => al.Attributes)
+                        .Any(a =>
+                        {
+                            var n = a.Name.ToString();
+                            if (n != MigrationCandidateShortName && n != MigrationCandidateFullName)
+                            {
+                                return false;
+                            }
+
+                            var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                            return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == effectivePattern;
+                        });
+                    if (isAlreadyFlagged)
+                    {
+                        alreadyFlagged.Add(new CandidateScoredItem(
+                            document.FilePath!, method.Identifier.Text, className, lineNo, 0, "already-flagged", effectivePattern));
+                        continue;
+                    }
                 }
 
                 // ── Score the method ─────────────────────────────────────────
                 var (score, reason) = ScoreMethodForPattern(method, className, pattern);
-                if (score < 0) continue; // hard disqualifier — don't even record
+                if (score < 0)
+                {
+                    continue; // hard disqualifier — don't even record
+                }
+
+                // ── Semantic bonus: method calls an [Obsolete]-decorated bridge wrapper ──
+                // Applies to ALL callers (service methods, helpers, UI forms, event handlers).
+                // Any caller of an [Obsolete] bridge wrapper has a clear migration obligation:
+                // replace the sync call with its async counterpart. This is the primary CS0618
+                // migration signal — widening it beyond event handlers catches initComboBox(),
+                // initControls(), and other UI helpers that call CommonSearch.search() directly.
+                // Lazily fetch the semantic model once per document (expensive).
+                if (!docSemanticModelFetched)
+                {
+                    docSemanticModelFetched = true;
+                    try { docSemanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false); } catch { }
+                }
+
+                if (docSemanticModel != null)
+                {
+                    bool callsObsolete = method.Body?.DescendantNodes()
+                        .OfType<InvocationExpressionSyntax>()
+                        .Any(inv =>
+                        {
+                            var sym = docSemanticModel.GetSymbolInfo(inv, cancellationToken).Symbol
+                                as IMethodSymbol;
+                            return sym?.GetAttributes()
+                                .Any(a => a.AttributeClass?.Name is "ObsoleteAttribute") == true;
+                        }) == true;
+                    if (callsObsolete)
+                    {
+                        score += 20;
+                        reason += " calls-obsolete-wrapper:20";
+                    }
+                }
 
                 if (score < minScore)
                 {
                     skipped.Add(new CandidateScoredItem(
-                        document.FilePath!, method.Identifier.Text, className, lineNo, score, reason));
+                        document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
                     continue;
                 }
 
                 flagged.Add(new CandidateScoredItem(
-                    document.FilePath!, method.Identifier.Text, className, lineNo, score, reason));
+                    document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
             }
 
             if (!dryRun && flagged.Any(f => f.FilePath == document.FilePath!))
@@ -1817,12 +2133,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             .OfType<MethodDeclarationSyntax>()
                             .FirstOrDefault(m => m.Identifier.Text == item.MethodName);
                     }
-                    if (methodNode == null) continue;
+                    if (methodNode == null)
+                    {
+                        continue;
+                    }
 
                     var args = new List<AttributeArgumentSyntax>
                     {
                         SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
-                            SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(pattern))),
+                            SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(item.Pattern))),
                         SyntaxFactory.AttributeArgument(
                             SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")), null,
                             SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(item.Score))),
@@ -1845,7 +2164,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 }
 
                 if (fileModified)
+                {
                     fileChanges[document.FilePath!] = rewrittenRoot.NormalizeWhitespace().ToFullString();
+                }
             }
         }
 
@@ -1866,7 +2187,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 if (hasAttr)
                 {
                     var dir = System.IO.Path.GetDirectoryName(proj.FilePath);
-                    if (dir != null) projectRootsWithAttr.Add(dir);
+                    if (dir != null)
+                    {
+                        projectRootsWithAttr.Add(dir);
+                    }
                 }
             }
 
@@ -1877,12 +2201,26 @@ internal sealed class MigrationCandidateAttribute : Attribute
             {
                 var doc = documents.FirstOrDefault(d =>
                     string.Equals(d.FilePath, changedFilePath, StringComparison.OrdinalIgnoreCase));
-                if (doc?.Project.FilePath == null) continue;
+                if (doc?.Project.FilePath == null)
+                {
+                    continue;
+                }
 
                 var projRoot = System.IO.Path.GetDirectoryName(doc.Project.FilePath);
-                if (projRoot == null) continue;
-                if (projectRootsWithAttr.Contains(projRoot)) continue;
-                if (!processedProjectRoots.Add(projRoot)) continue; // already queued for this run
+                if (projRoot == null)
+                {
+                    continue;
+                }
+
+                if (projectRootsWithAttr.Contains(projRoot))
+                {
+                    continue;
+                }
+
+                if (!processedProjectRoots.Add(projRoot))
+                {
+                    continue; // already queued for this run
+                }
 
                 var attrPath = System.IO.Path.Combine(projRoot, $"{MigrationCandidateFullName}.cs");
                 fileChanges[attrPath] = BuildMigrationCandidateAttributeSource("");
@@ -1891,10 +2229,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
 
         return new FlagCandidatesInProjectEngineResult(
-            Changes:             fileChanges,
-            Flagged:             flagged,
-            Skipped:             skipped,
-            AlreadyFlagged:      alreadyFlagged,
+            Changes: fileChanges,
+            Flagged: flagged,
+            Skipped: skipped,
+            AlreadyFlagged: alreadyFlagged,
             AttributeClassInjected: attrClassInjected,
             TotalMethodsExamined: totalExamined);
     }
@@ -1905,73 +2243,137 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </summary>
     private static (int Score, string Reason) ScoreMethodForPattern(
         MethodDeclarationSyntax method,
-        string                  className,
-        string                  pattern)
+        string className,
+        string pattern)
     {
         // ── Hard disqualifiers ───────────────────────────────────────────────
-        if (method.Modifiers.Any(SyntaxKind.AbstractKeyword)) return (-1, "");
-        if (method.Modifiers.Any(SyntaxKind.ExternKeyword))   return (-1, "");
-        if (method.Modifiers.Any(SyntaxKind.AsyncKeyword))    return (-1, "");
-        if (method.Identifier.Text.EndsWith("Async", StringComparison.OrdinalIgnoreCase)) return (-1, "");
-        if (method.Body?.Statements.OfType<YieldStatementSyntax>().Any() == true) return (-1, "");
+        if (method.Modifiers.Any(SyntaxKind.AbstractKeyword))
+        {
+            return (-1, "");
+        }
+
+        if (method.Modifiers.Any(SyntaxKind.ExternKeyword))
+        {
+            return (-1, "");
+        }
+
+        if (method.Modifiers.Any(SyntaxKind.AsyncKeyword))
+        {
+            return (-1, "");
+        }
+
+        if (method.Identifier.Text.EndsWith("Async", StringComparison.OrdinalIgnoreCase))
+        {
+            return (-1, "");
+        }
+
+        if (method.Body?.Statements.OfType<YieldStatementSyntax>().Any() == true)
+        {
+            return (-1, "");
+        }
+
         if (method.ParameterList.Parameters.Any(p =>
                 p.Modifiers.Any(SyntaxKind.RefKeyword) ||
-                p.Modifiers.Any(SyntaxKind.OutKeyword))) return (-1, "");
+                p.Modifiers.Any(SyntaxKind.OutKeyword)))
+        {
+            return (-1, "");
+        }
 
-        // Disqualify Asyncify-bridge sync wrappers — these are intentional blocking wrappers
-        // that already have an async counterpart.  Bridge wrappers carry:
-        //   [Obsolete("Asyncify-bridge: call XxxAsync instead.", false)]
-        // Their .GetAwaiter().GetResult() body would otherwise score +40 (blocking-calls),
-        // making them appear as top migration candidates even though they are already done.
-        bool isAsyncifyBridgeWrapper = method.AttributeLists
+        // Disqualify any method already decorated with [Obsolete] or [System.Obsolete].
+        // Deprecated methods fall into two categories:
+        //   1. Asyncify-bridge sync wrappers: [Obsolete("Asyncify-bridge: call XxxAsync instead.")]
+        //      Their body is purely .GetAwaiter().GetResult(), which scores +40 (blocking-calls).
+        //   2. Other deprecated wrappers: [System.Obsolete("Use XxxAsync instead.")]
+        //      Same pattern — body calls async counterpart synchronously.
+        // Both are already migrated. Excluding any [Obsolete] method (regardless of message)
+        // prevents false positives from either convention.
+        bool isObsoleteMethod = method.AttributeLists
             .SelectMany(al => al.Attributes)
             .Any(a =>
             {
                 var n = a.Name.ToString();
-                if (n is not ("Obsolete" or "ObsoleteAttribute" or "System.ObsoleteAttribute"))
-                    return false;
-                var firstArg = a.ArgumentList?.Arguments.FirstOrDefault();
-                return (firstArg?.Expression as LiteralExpressionSyntax)
-                           ?.Token.ValueText.Contains("Asyncify-bridge") == true;
+                return n is "Obsolete" or "ObsoleteAttribute"
+                          or "System.Obsolete" or "System.ObsoleteAttribute";
             });
-        if (isAsyncifyBridgeWrapper) return (-1, "");
+        if (isObsoleteMethod)
+        {
+            return (-1, "");
+        }
 
-        if (pattern != "AsyncBridge") return (0, ""); // only AsyncBridge scoring implemented
+        if (pattern != "AsyncBridgeCandidate")
+        {
+            return (0, ""); // only AsyncBridgeCandidate scoring implemented
+        }
 
-        var body   = method.Body?.ToString() ?? method.ExpressionBody?.ToString() ?? "";
-        int score  = 0;
+        var body = method.Body?.ToString() ?? method.ExpressionBody?.ToString() ?? "";
+        int score = 0;
         var reasons = new System.Text.StringBuilder();
 
-        // Blocking calls
+        // Track key signals for the LINQ-to-SQL disqualifier applied after all signals are scored.
+        bool hasBlockingCalls = false;
+        bool hasCommonSearch = false;
+        bool hasSqlAccess = false;
+
+        // Blocking calls — async leaf exists (.GetAwaiter().GetResult() means async counterpart already written)
         if (body.Contains(".GetAwaiter().GetResult()") ||
             body.Contains(".GetAwaiter()\r\n") ||
             body.Contains(".Wait(") ||
             (body.Contains(".Result") && !body.Contains("// ")))
         {
-            score += 40; reasons.Append("blocking-calls ");
+            score += 40; reasons.Append("blocking-calls:40 "); hasBlockingCalls = true;
         }
 
-        // CommonSearch / raw SQL entry points
-        if (body.Contains("CommonSearch") || body.Contains(".search(") || body.Contains("search("))
-        { score += 30; reasons.Append("calls-CommonSearch "); }
+        // CommonSearch entry point — the project's standard async-ready SQL wrapper.
+        // Deliberately narrow: only match the class name, not generic 'search(' identifiers.
+        if (body.Contains("CommonSearch"))
+        {
+            score += 30; reasons.Append("calls-CommonSearch:30 "); hasCommonSearch = true;
+        }
 
         // SQL / data context access
         if (body.Contains("SqlCommand") || body.Contains("SqlConnection") ||
             body.Contains("getDataContext") || body.Contains("DataContext"))
-        { score += 25; reasons.Append("sql-access "); }
+        {
+            score += 25; reasons.Append("sql-access:25 "); hasSqlAccess = true;
+        }
+
+        // LINQ-to-SQL disqualifier — sql-access fired but there is no async leaf in this codebase
+        // for DataContext/LINQ-to-SQL queries. Without CommonSearch or a known blocking bridge,
+        // this method cannot be migrated today. Skip it to avoid cluttering results.
+        if (hasSqlAccess && !hasCommonSearch && !hasBlockingCalls)
+        {
+            return (-1, ""); // linq-to-sql-only: no async leaf available
+        }
 
         // Service class
         if (className.EndsWith("Service", StringComparison.OrdinalIgnoreCase))
-        { score += 15; reasons.Append("service-class "); }
+        {
+            score += 15; reasons.Append("service-class:15 ");
+        }
 
         // Static method (easier to bridge in isolation)
         if (method.Modifiers.Any(SyntaxKind.StaticKeyword))
-        { score += 5; reasons.Append("static "); }
+        {
+            score += 5; reasons.Append("static:5 ");
+        }
 
         // Virtual/override penalty (interface widening may be required)
         if (method.Modifiers.Any(SyntaxKind.VirtualKeyword) ||
             method.Modifiers.Any(SyntaxKind.OverrideKeyword))
-        { score -= 20; reasons.Append("virtual/override-penalty "); }
+        {
+            score -= 20; reasons.Append("virtual/override-penalty:-20 ");
+        }
+
+        // Event-handler bonus — (object sender, XxxEventArgs e) signatures can be converted
+        // to async void in-place without touching the calling convention or adding CancellationToken.
+        // +40 base: plain handlers land at 40 (below the default 50 threshold) so they are
+        // not flagged on their own. Handlers that also carry sync signals (blocking calls,
+        // SQL access, CommonSearch) or that call an [Obsolete]-decorated bridge wrapper get
+        // additional points and cross the threshold.
+        if (IsEventHandlerSignature(method))
+        {
+            score += 40; reasons.Append("event-handler:40 ");
+        }
 
         return (score, reasons.ToString().TrimEnd());
     }

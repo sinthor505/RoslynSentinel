@@ -20,11 +20,17 @@ public class ImmutabilityEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return root?.ToFullString() ?? "";
+        if (classNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var newMembers = classNode.Members.Select(member =>
         {
@@ -32,13 +38,18 @@ public class ImmutabilityEngine
             {
                 // const fields cannot have readonly — skip them
                 if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)))
+                {
                     return field;
+                }
+
                 if (!field.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+                {
                     return field.AddModifiers(
                         SyntaxFactory.Token(
                             SyntaxFactory.TriviaList(),
                             SyntaxKind.ReadOnlyKeyword,
                             SyntaxFactory.TriviaList(SyntaxFactory.Space)));
+                }
             }
             else if (member is PropertyDeclarationSyntax prop)
             {

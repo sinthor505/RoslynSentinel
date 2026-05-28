@@ -20,14 +20,23 @@ public class DeadCodeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<DeadCodeReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return new List<DeadCodeReport>();
+        if (classNode == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var reports = new List<DeadCodeReport>();
 
@@ -43,7 +52,10 @@ public class DeadCodeEngine
                 PropertyDeclarationSyntax prop => semanticModel.GetDeclaredSymbol(prop, cancellationToken),
                 _ => null
             };
-            if (symbol == null) continue;
+            if (symbol == null)
+            {
+                continue;
+            }
 
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
             if (!references.Any(r => r.Locations.Any()))
@@ -69,11 +81,17 @@ public class DeadCodeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<DeadCodeReport>();
+        if (document == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<DeadCodeReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var reports = new List<DeadCodeReport>();
         var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
@@ -88,7 +106,10 @@ public class DeadCodeEngine
                 foreach (var variable in field.Declaration.Variables)
                 {
                     var symbol = semanticModel.GetDeclaredSymbol(variable, cancellationToken);
-                    if (symbol == null) continue;
+                    if (symbol == null)
+                    {
+                        continue;
+                    }
 
                     var usages = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
                     if (!usages.Any(u => u.Locations.Any()))
@@ -113,27 +134,42 @@ public class DeadCodeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<DeadCodeReport>();
+        if (document == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<DeadCodeReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var reports = new List<DeadCodeReport>();
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>();
 
         foreach (var method in methods)
         {
-            if (method.Body == null) continue;
+            if (method.Body == null)
+            {
+                continue;
+            }
 
             var dataFlow = semanticModel.AnalyzeDataFlow(method.Body);
-            if (dataFlow == null) continue;
+            if (dataFlow == null)
+            {
+                continue;
+            }
 
             var declaredVars = method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>();
             foreach (var variable in declaredVars)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(variable, cancellationToken);
-                if (symbol == null) continue;
+                if (symbol == null)
+                {
+                    continue;
+                }
 
                 if (!dataFlow.ReadInside.Contains(symbol))
                 {
@@ -156,11 +192,17 @@ public class DeadCodeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<DeadCodeReport>();
+        if (document == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<DeadCodeReport>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var reports = new List<DeadCodeReport>();
 
@@ -168,12 +210,18 @@ public class DeadCodeEngine
         {
             var constructors = classNode.Members.OfType<ConstructorDeclarationSyntax>().ToList();
             // Skip single-constructor classes — likely registered in DI, reference count is misleading
-            if (constructors.Count < 2) continue;
+            if (constructors.Count < 2)
+            {
+                continue;
+            }
 
             foreach (var ctor in constructors)
             {
                 var symbol = semanticModel.GetDeclaredSymbol(ctor, cancellationToken);
-                if (symbol == null) continue;
+                if (symbol == null)
+                {
+                    continue;
+                }
 
                 var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
                 if (!references.Any(r => r.Locations.Any()))
@@ -196,15 +244,24 @@ public class DeadCodeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<DeadCodeReport>();
+        if (document == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<DeadCodeReport>();
+        if (root == null)
+        {
+            return new List<DeadCodeReport>();
+        }
 
         var reports = new List<DeadCodeReport>();
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (semanticModel == null) return reports;
+        if (semanticModel == null)
+        {
+            return reports;
+        }
 
         // Build set of unsubscribed event+handler pairs from all -= assignments
         var removeKeys = new HashSet<string>(
@@ -219,7 +276,9 @@ public class DeadCodeEngine
         {
             var leftSymbol = semanticModel.GetSymbolInfo(add.Left, cancellationToken).Symbol;
             if (leftSymbol is not IEventSymbol)
+            {
                 continue;
+            }
 
             var key = $"{add.Left}|{add.Right}";
             if (!removeKeys.Contains(key))

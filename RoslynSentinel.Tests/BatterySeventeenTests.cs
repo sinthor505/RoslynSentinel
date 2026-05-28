@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
@@ -159,7 +159,9 @@ public class Broken
         var issues = await _engine.RunSpecificRuleAsync("Foo.cs", null!);
 
         foreach (var issue in issues)
+        {
             Assert.That(issue.RuleId, Is.Not.Null.And.Not.Empty, "every issue must have a RuleId");
+        }
     }
 }
 

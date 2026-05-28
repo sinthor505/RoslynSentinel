@@ -111,26 +111,42 @@ public class MetricsEngine
         {
             document = project.Documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-            if (document != null) break;
+            if (document != null)
+            {
+                break;
+            }
         }
-        if (document == null) return new List<CohesionAnalysis>();
+        if (document == null)
+        {
+            return new List<CohesionAnalysis>();
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
-        if (semanticModel == null) return new List<CohesionAnalysis>();
+        if (semanticModel == null)
+        {
+            return new List<CohesionAnalysis>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return new List<CohesionAnalysis>();
+        if (root == null)
+        {
+            return new List<CohesionAnalysis>();
+        }
 
         var results = new List<CohesionAnalysis>();
 
         IEnumerable<ClassDeclarationSyntax> classDecls = root.DescendantNodes().OfType<ClassDeclarationSyntax>();
         if (!string.IsNullOrEmpty(className))
+        {
             classDecls = classDecls.Where(c => c.Identifier.Text == className);
+        }
 
         foreach (var classDecl in classDecls)
         {
             if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol typeSymbol)
+            {
                 continue;
+            }
 
             // Collect non-static fields; map backing fields of auto-properties to their property name
             var instanceFields = typeSymbol.GetMembers()
@@ -172,7 +188,9 @@ public class MetricsEngine
                             var si = semanticModel.GetSymbolInfo(id, ct);
                             var sym = si.Symbol ?? si.CandidateSymbols.FirstOrDefault();
                             if (sym is IFieldSymbol fs && fieldDisplayMap.TryGetValue(fs, out var dn))
+                            {
                                 fieldsUsed.Add(dn);
+                            }
                         }
                     }
                 }
@@ -184,10 +202,19 @@ public class MetricsEngine
             int p = 0, q = 0;
             var fieldSets = methodUsages.Select(m => new HashSet<string>(m.FieldsUsed)).ToList();
             for (int i = 0; i < fieldSets.Count; i++)
+            {
                 for (int j = i + 1; j < fieldSets.Count; j++)
                 {
-                    if (fieldSets[i].Overlaps(fieldSets[j])) q++; else p++;
+                    if (fieldSets[i].Overlaps(fieldSets[j]))
+                    {
+                        q++;
+                    }
+                    else
+                    {
+                        p++;
+                    }
                 }
+            }
 
             double lcomScore = (p + q) > 0 ? Math.Round((double)p / (p + q), 4) : 0.0;
 
@@ -204,27 +231,43 @@ public class MetricsEngine
 
             int Find(int x)
             {
-                if (parent[x] != x) parent[x] = Find(parent[x]);
+                if (parent[x] != x)
+                {
+                    parent[x] = Find(parent[x]);
+                }
+
                 return parent[x];
             }
 
             void Union(int x, int y)
             {
                 int px = Find(x), py = Find(y);
-                if (px != py) parent[px] = py;
+                if (px != py)
+                {
+                    parent[px] = py;
+                }
             }
 
             for (int i = 0; i < fieldSets.Count; i++)
+            {
                 for (int j = i + 1; j < fieldSets.Count; j++)
+                {
                     if (fieldSets[i].Overlaps(fieldSets[j]))
+                    {
                         Union(i, j);
+                    }
+                }
+            }
 
             var components = new Dictionary<int, List<int>>();
             for (int i = 0; i < methodUsages.Count; i++)
             {
                 int compRoot = Find(i);
                 if (!components.TryGetValue(compRoot, out var members))
+                {
                     components[compRoot] = members = new List<int>();
+                }
+
                 members.Add(i);
             }
 
@@ -283,7 +326,11 @@ public class MetricsEngine
             var sb = new System.Text.StringBuilder();
             foreach (var ch in name)
             {
-                if (sb.Length > 0 && char.IsUpper(ch)) break;
+                if (sb.Length > 0 && char.IsUpper(ch))
+                {
+                    break;
+                }
+
                 sb.Append(ch);
             }
             return sb.ToString();

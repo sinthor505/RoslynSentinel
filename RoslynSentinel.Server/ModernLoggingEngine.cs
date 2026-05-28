@@ -20,20 +20,29 @@ public class ModernLoggingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException("Class not found.");
+        }
 
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && 
-                          ma.Name.Identifier.Text.StartsWith("Log") && 
+            .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
+                          ma.Name.Identifier.Text.StartsWith("Log") &&
                           (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning"))
             .ToList();
 
-        if (!invocations.Any()) return root!.ToFullString();
+        if (invocations.Count == 0)
+        {
+            return root!.ToFullString();
+        }
 
         int eventId = 1;
         var generatedMethods = new List<MethodDeclarationSyntax>();
@@ -45,11 +54,17 @@ public class ModernLoggingEngine
             {
                 var levelStr = ma.Name.Identifier.Text.Substring(3); // e.g. "Information"
                 var args = inv.ArgumentList.Arguments;
-                if (args.Count == 0) continue;
+                if (args.Count == 0)
+                {
+                    continue;
+                }
 
                 // Simple heuristic: arg0 is message, subsequent args are params.
                 var messageArg = args[0].Expression as LiteralExpressionSyntax;
-                if (messageArg == null || !messageArg.IsKind(SyntaxKind.StringLiteralExpression)) continue;
+                if (messageArg == null || !messageArg.IsKind(SyntaxKind.StringLiteralExpression))
+                {
+                    continue;
+                }
 
                 var methodName = $"Log{levelStr}Event{eventId}";
 
@@ -108,7 +123,7 @@ public class ModernLoggingEngine
         }
 
         newClassNode = newClassNode.AddMembers(generatedMethods.ToArray());
-        
+
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
         return newRoot.NormalizeWhitespace().ToFullString();

@@ -17,13 +17,24 @@ public class CodeHealingEngine
 
     public async Task<string> FixThreadSleepAsync(string filePath, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("EPC33")) return string.Empty;
+        if (!_config.IsFeatureEnabled("EPC33"))
+        {
+            return string.Empty;
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return string.Empty;
+        if (document == null)
+        {
+            return string.Empty;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
+
         var rewriter = new ThreadSleepRewriter();
         return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
     }
@@ -52,10 +63,16 @@ public class CodeHealingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == f || d.FilePath == f);
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync();
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         MethodDeclarationSyntax? method = null;
@@ -68,7 +85,10 @@ public class CodeHealingEngine
             });
         }
         method ??= methods.FirstOrDefault();
-        if (method?.Body == null) return root.NormalizeWhitespace().ToFullString();
+        if (method?.Body == null)
+        {
+            return root.NormalizeWhitespace().ToFullString();
+        }
 
         var retryDecl = SyntaxFactory.LocalDeclarationStatement(
             SyntaxFactory.VariableDeclaration(
@@ -114,11 +134,18 @@ public class CodeHealingEngine
         foreach (var target in targets)
         {
             var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == target.FilePath || d.FilePath == target.FilePath);
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
 
             var root = await document.GetSyntaxRootAsync(ct);
             var text = await document.GetTextAsync(ct);
-            if (target.Line < 1 || target.Line > text.Lines.Count) continue;
+            if (target.Line < 1 || target.Line > text.Lines.Count)
+            {
+                continue;
+            }
+
             var lineSpan = text.Lines[target.Line - 1].Span;
             var node = root?.FindNode(lineSpan).DescendantNodesAndSelf().OfType<ThrowStatementSyntax>().FirstOrDefault();
 

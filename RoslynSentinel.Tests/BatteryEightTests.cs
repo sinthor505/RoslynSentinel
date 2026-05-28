@@ -368,7 +368,7 @@ public class Checker
 {
     public void Check(string s)
     {
-        if (s != null) s.ToUpper();
+        if (s != null) s.ToUpperInvariant();
     }
 }");
         var result = await _engine.UseNullPropagationAsync("Test.cs");

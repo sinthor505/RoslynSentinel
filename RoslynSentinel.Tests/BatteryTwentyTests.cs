@@ -1,9 +1,8 @@
 // Battery #20 — SentinelWorkspaceTools
 // Tests all 26 public methods of SentinelWorkspaceTools in-memory via TestSolutionBuilder.
 
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -206,6 +205,8 @@ public class BatteryTwentyTests
     // --- ValidateStagedChanges ---
 
     [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
     public void ValidateStagedChanges_UnknownChangeId_Throws()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -245,6 +246,8 @@ public class BatteryTwentyTests
     // --- ApplyStagedChanges ---
 
     [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
     public void ApplyStagedChanges_UnknownChangeId_Throws()
     {
         SetSource(SimpleSource, "Test.cs");

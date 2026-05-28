@@ -1,7 +1,5 @@
-using System;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -41,7 +39,7 @@ public class ConvertToAsyncBridgeTests
     // Happy-path: bridge structure
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_TaskReturn_ProducesAsyncOverload()
     {
         SetSource(@"
@@ -67,7 +65,7 @@ public class TripService
             "Async overload should carry the async modifier.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_TaskReturn_OriginalBodyReplacedWithBridgeCall()
     {
         SetSource(@"
@@ -94,7 +92,7 @@ public class TripService
             "Original body expression should appear in the async overload.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_TaskReturn_ObsoleteAttributeAddedToOriginal()
     {
         SetSource(@"
@@ -117,7 +115,7 @@ public class TripService
             "Obsolete message should name the replacement async method.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_TaskReturn_InlineCommentAddedToBridgeBody()
     {
         SetSource(@"
@@ -136,7 +134,7 @@ public class TripService
             "Bridge body should have the standard inline comment for readability.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_VoidMethod_BridgeUsesExpressionStatement()
     {
         SetSource(@"
@@ -161,7 +159,7 @@ public class NotificationService
             "Bridge body should use GetAwaiter() even for void methods.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_MultipleParameters_AllForwardedInBridgeCall()
     {
         SetSource(@"
@@ -181,7 +179,7 @@ public class DriverService
             "All original parameter names should be forwarded in the bridge call.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_ExpressionBodiedMethod_AsyncOverloadGetsBlockBody()
     {
         SetSource(@"
@@ -201,7 +199,7 @@ public class TripService
             "Original body expression should be carried into the async overload.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_StaticMethod_Works()
     {
         SetSource(@"
@@ -222,7 +220,7 @@ public class TripService
             "Bridge body should use GetAwaiter().");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_AsyncMethodInsertedAfterOriginal()
     {
         SetSource(@"
@@ -250,7 +248,7 @@ public class TripService
     // Precondition failures
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_AlreadyAsync_Throws()
     {
         SetSource(@"
@@ -268,7 +266,7 @@ public class Service
             "Should throw when method is already async.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_AlreadyHasAsyncSuffix_Throws()
     {
         SetSource(@"
@@ -287,7 +285,7 @@ public class Service
             "Should throw when method name already ends with 'Async'.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_AbstractMethod_Throws()
     {
         SetSource(@"
@@ -302,7 +300,7 @@ public abstract class BaseService
             "Should throw for abstract methods (no body to copy).");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_EventHandlerSignature_Throws()
     {
         SetSource(@"
@@ -320,7 +318,7 @@ public class Form1
             "Should throw for event handler methods (fixed delegate signature).");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_RefParameter_Throws()
     {
         SetSource(@"
@@ -338,7 +336,7 @@ public class Service
             "Should throw when method has ref parameters.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_OutParameter_Throws()
     {
         SetSource(@"
@@ -356,7 +354,7 @@ public class Service
             "Should throw when method has out parameters.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_AsyncOverloadAlreadyExists_Throws()
     {
         SetSource(@"
@@ -381,7 +379,7 @@ public class TripService
             "Should throw when GetTripsAsync already exists in the class.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_MethodNotFound_Throws()
     {
         SetSource(@"
@@ -395,7 +393,7 @@ public class Service
             "Should throw when the named method does not exist in the file.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void ConvertToAsyncBridge_FileNotFound_Throws()
     {
         SetSource(@"public class Dummy {}", "Dummy.cs");

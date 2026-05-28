@@ -30,7 +30,10 @@ public class ProjectConsistencyEngine
         var issues = new List<ProjectConsistencyIssue>();
 
         var projects = solution.Projects.ToList();
-        if (projects.Count == 0) return issues;
+        if (projects.Count == 0)
+        {
+            return issues;
+        }
 
         issues.AddRange(await CheckTargetFrameworkConsistencyAsync(projects, ct));
         issues.AddRange(CheckNamingConventions(projects));
@@ -49,7 +52,10 @@ public class ProjectConsistencyEngine
         foreach (var project in projects)
         {
             ct.ThrowIfCancellationRequested();
-            if (string.IsNullOrEmpty(project.FilePath) || !File.Exists(project.FilePath)) continue;
+            if (string.IsNullOrEmpty(project.FilePath) || !File.Exists(project.FilePath))
+            {
+                continue;
+            }
 
             try
             {
@@ -67,7 +73,9 @@ public class ProjectConsistencyEngine
                     ?? tfsElement?.Value?.Split(';').FirstOrDefault()?.Trim();
 
                 if (!string.IsNullOrEmpty(framework))
+                {
                     frameworkByProject[project.Name] = (framework, project.FilePath);
+                }
             }
             catch (Exception)
             {
@@ -75,7 +83,10 @@ public class ProjectConsistencyEngine
             }
         }
 
-        if (frameworkByProject.Count < 2) return issues;
+        if (frameworkByProject.Count < 2)
+        {
+            return issues;
+        }
 
         // Find the most common framework as the "standard"
         var frameworks = frameworkByProject.Values
@@ -83,14 +94,20 @@ public class ProjectConsistencyEngine
             .OrderByDescending(g => g.Count())
             .ToList();
 
-        if (frameworks.Count <= 1) return issues;
+        if (frameworks.Count <= 1)
+        {
+            return issues;
+        }
 
         var dominant = frameworks[0].Key;
         var dominantCount = frameworks[0].Count();
 
         foreach (var (projectName, (framework, filePath)) in frameworkByProject)
         {
-            if (framework == dominant) continue;
+            if (framework == dominant)
+            {
+                continue;
+            }
 
             issues.Add(new ProjectConsistencyIssue(
                 "TargetFrameworkMismatch",
@@ -115,13 +132,19 @@ public class ProjectConsistencyEngine
             .OrderByDescending(g => g.Count())
             .ToList();
 
-        if (prefixes.Count == 0 || prefixes[0].Count() < 2) return issues;
+        if (prefixes.Count == 0 || prefixes[0].Count() < 2)
+        {
+            return issues;
+        }
 
         var dominantPrefix = prefixes[0].Key;
         var minPrefixCount = Math.Max(2, projects.Count / 4);
 
         // Only enforce if there's a clear dominant prefix (used by at least 25% of projects)
-        if (prefixes[0].Count() < minPrefixCount) return issues;
+        if (prefixes[0].Count() < minPrefixCount)
+        {
+            return issues;
+        }
 
         foreach (var project in projects)
         {

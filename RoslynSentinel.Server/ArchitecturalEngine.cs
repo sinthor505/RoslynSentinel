@@ -26,21 +26,33 @@ public class ArchitecturalEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not parse syntax root.");
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException("Class not found.");
+        }
 
         // 1. Add using
-        if (!root.Usings.Any(u => u.Name.ToString() == "Microsoft.Extensions.Hosting"))
+        if (!root.Usings.Any(u => u.Name?.ToString() == "Microsoft.Extensions.Hosting"))
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Microsoft.Extensions.Hosting")));
             // Re-find class node after root modification (stale reference otherwise)
             classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-            if (classNode == null) throw new Exception("Class not found after root modification.");
+            if (classNode == null)
+            {
+                throw new InvalidOperationException("Class not found after root modification.");
+            }
         }
 
         // 2. Change base class
@@ -74,7 +86,9 @@ public class ArchitecturalEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
+        {
             projects = projects.Where(p => p.Name == projectName);
+        }
 
         // Pass 1: Collect all named types defined in the solution
         var allSymbols = new Dictionary<string, (INamedTypeSymbol Symbol, string? FilePath)>();
@@ -82,7 +96,10 @@ public class ArchitecturalEngine
         {
             ct.ThrowIfCancellationRequested();
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             foreach (var syntaxTree in compilation.SyntaxTrees)
             {
@@ -90,9 +107,20 @@ public class ArchitecturalEngine
                 var root = await syntaxTree.GetRootAsync(ct);
                 foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
                 {
-                    if (semanticModel.GetDeclaredSymbol(typeDecl, ct) is not INamedTypeSymbol symbol) continue;
-                    if (symbol.IsImplicitlyDeclared) continue;
-                    if (symbol.IsGenericType && !symbol.IsDefinition) continue;
+                    if (semanticModel.GetDeclaredSymbol(typeDecl, ct) is not INamedTypeSymbol symbol)
+                    {
+                        continue;
+                    }
+
+                    if (symbol.IsImplicitlyDeclared)
+                    {
+                        continue;
+                    }
+
+                    if (symbol.IsGenericType && !symbol.IsDefinition)
+                    {
+                        continue;
+                    }
 
                     var typeKey = symbol.ToDisplayString();
                     if (!allSymbols.ContainsKey(typeKey))
@@ -107,7 +135,9 @@ public class ArchitecturalEngine
         // Pass 2: Build dependency graph restricted to solution types
         var graph = new Dictionary<string, HashSet<string>>();
         foreach (var key in allSymbols.Keys)
+        {
             graph[key] = new HashSet<string>();
+        }
 
         foreach (var (key, (symbol, _)) in allSymbols)
         {
@@ -116,7 +146,9 @@ public class ArchitecturalEngine
             {
                 var depKey = dep.ToDisplayString();
                 if (allSymbols.ContainsKey(depKey) && depKey != key)
+                {
                     graph[key].Add(depKey);
+                }
             }
         }
 
@@ -130,22 +162,35 @@ public class ArchitecturalEngine
         foreach (var scc in sccs.Where(s => s.Count > 1))
         {
             var cycle = FindRepresentativeCycle(scc, graph);
-            if (cycle == null || cycle.Count < 3) continue;
+            if (cycle == null || cycle.Count < 3)
+            {
+                continue;
+            }
 
             // Canonicalize: rotate so the lexicographically smallest name is first
             var nodes = cycle.Take(cycle.Count - 1).ToList();
             var minIdx = 0;
             for (var i = 1; i < nodes.Count; i++)
+            {
                 if (string.Compare(nodes[i], nodes[minIdx], StringComparison.Ordinal) < 0)
+                {
                     minIdx = i;
+                }
+            }
 
             var rotated = new List<string>();
             for (var i = 0; i < nodes.Count; i++)
+            {
                 rotated.Add(nodes[(i + minIdx) % nodes.Count]);
+            }
+
             rotated.Add(rotated[0]);
 
             var canonicalKey = string.Join("->", rotated);
-            if (!seen.Add(canonicalKey)) continue;
+            if (!seen.Add(canonicalKey))
+            {
+                continue;
+            }
 
             var filePaths = rotated
                 .Select(t => allSymbols.TryGetValue(t, out var info) ? info.FilePath : null)
@@ -160,29 +205,55 @@ public class ArchitecturalEngine
     private static IEnumerable<INamedTypeSymbol> GetReferencedNamedTypes(INamedTypeSymbol type)
     {
         if (type.BaseType != null && type.BaseType.SpecialType == SpecialType.None)
+        {
             foreach (var t in UnwrapNamedTypes(type.BaseType))
+            {
                 yield return t;
+            }
+        }
 
         foreach (var iface in type.Interfaces)
+        {
             foreach (var t in UnwrapNamedTypes(iface))
+            {
                 yield return t;
+            }
+        }
 
         foreach (var member in type.GetMembers())
         {
             switch (member)
             {
                 case IFieldSymbol field when field.AssociatedSymbol == null:
-                    foreach (var t in UnwrapNamedTypes(field.Type)) yield return t;
+                    foreach (var t in UnwrapNamedTypes(field.Type))
+                    {
+                        yield return t;
+                    }
+
                     break;
                 case IPropertySymbol prop:
-                    foreach (var t in UnwrapNamedTypes(prop.Type)) yield return t;
+                    foreach (var t in UnwrapNamedTypes(prop.Type))
+                    {
+                        yield return t;
+                    }
+
                     break;
                 case IMethodSymbol method when
                     method.MethodKind == MethodKind.Ordinary ||
                     method.MethodKind == MethodKind.Constructor:
-                    foreach (var t in UnwrapNamedTypes(method.ReturnType)) yield return t;
+                    foreach (var t in UnwrapNamedTypes(method.ReturnType))
+                    {
+                        yield return t;
+                    }
+
                     foreach (var param in method.Parameters)
-                        foreach (var t in UnwrapNamedTypes(param.Type)) yield return t;
+                    {
+                        foreach (var t in UnwrapNamedTypes(param.Type))
+                        {
+                            yield return t;
+                        }
+                    }
+
                     break;
             }
         }
@@ -195,12 +266,20 @@ public class ArchitecturalEngine
             case INamedTypeSymbol named:
                 yield return named.OriginalDefinition;
                 foreach (var arg in named.TypeArguments)
+                {
                     foreach (var t in UnwrapNamedTypes(arg))
+                    {
                         yield return t;
+                    }
+                }
+
                 break;
             case IArrayTypeSymbol array:
                 foreach (var t in UnwrapNamedTypes(array.ElementType))
+                {
                     yield return t;
+                }
+
                 break;
         }
     }
@@ -222,14 +301,14 @@ public class ArchitecturalEngine
 
             foreach (var w in graph[v])
             {
-                if (!indices.ContainsKey(w))
+                if (!indices.TryGetValue(w, out int value))
                 {
                     StrongConnect(w);
                     lowLinks[v] = Math.Min(lowLinks[v], lowLinks[w]);
                 }
                 else if (onStack.Contains(w))
                 {
-                    lowLinks[v] = Math.Min(lowLinks[v], indices[w]);
+                    lowLinks[v] = Math.Min(lowLinks[v], value);
                 }
             }
 
@@ -248,8 +327,12 @@ public class ArchitecturalEngine
         }
 
         foreach (var v in graph.Keys)
+        {
             if (!indices.ContainsKey(v))
+            {
                 StrongConnect(v);
+            }
+        }
 
         return sccs;
     }
@@ -265,7 +348,10 @@ public class ArchitecturalEngine
             if (cycle != null && (shortest == null || cycle.Count < shortest.Count))
             {
                 shortest = cycle;
-                if (shortest.Count == 3) break;
+                if (shortest.Count == 3)
+                {
+                    break;
+                }
             }
         }
 
@@ -279,19 +365,35 @@ public class ArchitecturalEngine
 
         bool Dfs(string current)
         {
-            if (!graph.TryGetValue(current, out var neighbors)) return false;
+            if (!graph.TryGetValue(current, out var neighbors))
+            {
+                return false;
+            }
+
             foreach (var next in neighbors)
             {
-                if (!sccSet.Contains(next)) continue;
+                if (!sccSet.Contains(next))
+                {
+                    continue;
+                }
+
                 if (next == start)
                 {
                     path.Add(start);
                     return true;
                 }
-                if (pathSet.Contains(next)) continue;
+                if (pathSet.Contains(next))
+                {
+                    continue;
+                }
+
                 path.Add(next);
                 pathSet.Add(next);
-                if (Dfs(next)) return true;
+                if (Dfs(next))
+                {
+                    return true;
+                }
+
                 path.RemoveAt(path.Count - 1);
                 pathSet.Remove(next);
             }
@@ -337,14 +439,14 @@ public class ArchitecturalEngine
     private static readonly Dictionary<string, HashSet<string>> ForbiddenDependencies = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Controllers"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
-        ["Endpoints"]   = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
-        ["Hubs"]        = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
-        ["Workers"]     = new(StringComparer.OrdinalIgnoreCase) { "Repositories", "Migrations" },
-        ["Services"]    = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
-        ["Managers"]    = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
-        ["Domain"]      = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
-        ["Models"]      = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
-        ["Entities"]    = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Endpoints"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Hubs"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Workers"] = new(StringComparer.OrdinalIgnoreCase) { "Repositories", "Migrations" },
+        ["Services"] = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
+        ["Managers"] = new(StringComparer.OrdinalIgnoreCase) { "Migrations" },
+        ["Domain"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Models"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
+        ["Entities"] = new(StringComparer.OrdinalIgnoreCase) { "Data", "Repositories", "Migrations" },
     };
 
     /// <summary>
@@ -377,9 +479,16 @@ public class ArchitecturalEngine
 
         foreach (var doc in documents)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var docPath = doc.FilePath ?? doc.Name;
 
@@ -387,9 +496,15 @@ public class ArchitecturalEngine
             var ownNamespace = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>()
                 .FirstOrDefault()?.Name.ToString() ?? "";
             var ownLayer = GetLayerSegment(ownNamespace);
-            if (ownLayer == null) continue;
+            if (ownLayer == null)
+            {
+                continue;
+            }
 
-            if (!ForbiddenDependencies.TryGetValue(ownLayer, out var forbidden)) continue;
+            if (!ForbiddenDependencies.TryGetValue(ownLayer, out var forbidden))
+            {
+                continue;
+            }
 
             // Scan all using directives in this file
             var usings = root.DescendantNodes().OfType<UsingDirectiveSyntax>();
@@ -397,8 +512,15 @@ public class ArchitecturalEngine
             {
                 var importedNs = usingDirective.Name?.ToString() ?? "";
                 var importedLayer = GetLayerSegment(importedNs);
-                if (importedLayer == null) continue;
-                if (!forbidden.Contains(importedLayer)) continue;
+                if (importedLayer == null)
+                {
+                    continue;
+                }
+
+                if (!forbidden.Contains(importedLayer))
+                {
+                    continue;
+                }
 
                 var line = usingDirective.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 violations.Add(new LayerViolation(
@@ -417,7 +539,11 @@ public class ArchitecturalEngine
 
     private static string? GetLayerSegment(string namespaceName)
     {
-        if (string.IsNullOrEmpty(namespaceName)) return null;
+        if (string.IsNullOrEmpty(namespaceName))
+        {
+            return null;
+        }
+
         var segments = namespaceName.Split('.');
         return segments.FirstOrDefault(s => LayerRank.ContainsKey(s));
     }

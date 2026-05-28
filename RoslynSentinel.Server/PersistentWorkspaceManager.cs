@@ -1,8 +1,9 @@
+using System.Collections.Concurrent;
+
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
 
 namespace RoslynSentinel.Server;
 
@@ -10,7 +11,6 @@ public class PersistentWorkspaceManager : IDisposable
 {
     private readonly ILogger<PersistentWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
-    private Solution? _currentSolution;
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
     private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
@@ -29,7 +29,6 @@ public class PersistentWorkspaceManager : IDisposable
         List<string> AffectedFiles,
         string Description
     );
-
 
     public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
     {
@@ -66,7 +65,10 @@ public class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {
-            _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
+            }
 
             _workspace?.Dispose();
             // Suppress NuGet vulnerability audit during workspace load — this is a code-analysis
@@ -80,22 +82,31 @@ public class PersistentWorkspaceManager : IDisposable
             _workspaceLoadErrors.Clear();
             _workspace.RegisterWorkspaceFailedHandler((d) =>
             {
-                _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
+                }
                 _workspaceLoadErrors.Add(d.Diagnostic.Message);
             });
 
             try
             {
-                _currentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, cancellationToken);
-                _logger.LogInformation("Solution loaded with {ProjectCount} projects.", _currentSolution.ProjectIds.Count);
+                CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, cancellationToken);
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("Solution loaded with {ProjectCount} projects.", CurrentSolution.ProjectIds.Count);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
+                if (_logger.IsEnabled(LogLevel.Error))
+                {
+                    _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
+                }
                 _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
                 // Even if solution fails to open, try to get current partial solution if any
-                _currentSolution = _workspace.CurrentSolution;
-                if (_currentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
+                CurrentSolution = _workspace.CurrentSolution;
+                if (CurrentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
                 {
                     _workspaceLoadErrors.Add($"Solution '{solutionPath}' opened but no projects were found. This often indicates MSBuild errors. Check server logs for details.");
                 }
@@ -138,9 +149,14 @@ public class PersistentWorkspaceManager : IDisposable
         }
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer03:Fire-and-forget async-void methods or delegates", Justification = "Event handler")]
     private async void OnDebounceTimerElapsed(object? state)
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         bool acquired = false;
         try
         {
@@ -149,9 +165,15 @@ public class PersistentWorkspaceManager : IDisposable
             var changes = _pendingChanges.Keys.ToList();
             _pendingChanges.Clear();
 
-            if (_workspace == null || _currentSolution == null) return;
+            if (_workspace == null || CurrentSolution == null)
+            {
+                return;
+            }
 
-            _logger.LogInformation("Processing {Count} file system changes...", changes.Count);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Processing {Count} file system changes...", changes.Count);
+            }
 
             bool solutionNeedsReload = false;
             var projectsToReload = new HashSet<ProjectId>();
@@ -167,7 +189,7 @@ public class PersistentWorkspaceManager : IDisposable
 
                 if (ext == ".csproj")
                 {
-                    var project = _currentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
+                    var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
                     if (project != null)
                     {
                         projectsToReload.Add(project.Id);
@@ -186,25 +208,28 @@ public class PersistentWorkspaceManager : IDisposable
                 var slnPath = _workspace.CurrentSolution.FilePath;
                 if (!string.IsNullOrEmpty(slnPath))
                 {
-                    _currentSolution = await _workspace.OpenSolutionAsync(slnPath);
+                    CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
                 }
             }
             else if (projectsToReload.Count > 0)
             {
                 foreach (var projectId in projectsToReload)
                 {
-                    var project = _currentSolution.GetProject(projectId);
+                    var project = CurrentSolution.GetProject(projectId);
                     if (project?.FilePath != null)
                     {
-                        _logger.LogInformation("Reloading project: {ProjectName}", project.Name);
+                        if (_logger.IsEnabled(LogLevel.Information))
+                        {
+                            _logger.LogInformation("Reloading project: {ProjectName}", project.Name);
+                        }
                         await _workspace.OpenProjectAsync(project.FilePath);
                     }
                 }
-                _currentSolution = _workspace.CurrentSolution;
+                CurrentSolution = _workspace.CurrentSolution;
             }
             else
             {
-                _currentSolution = _workspace.CurrentSolution;
+                CurrentSolution = _workspace.CurrentSolution;
             }
         }
         catch (ObjectDisposedException)
@@ -213,19 +238,31 @@ public class PersistentWorkspaceManager : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error refreshing workspace.");
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Error refreshing workspace.");
+            }
         }
         finally
         {
-            if (acquired) _solutionLock.Release();
+            if (acquired)
+            {
+                _solutionLock.Release();
+            }
         }
     }
 
-    public Solution? CurrentSolution => _currentSolution;
+    public Solution? CurrentSolution
+    {
+        get; private set;
+    }
 
-    public int ProjectCount => _currentSolution?.ProjectIds.Count ?? 0;
+    public int ProjectCount => CurrentSolution?.ProjectIds.Count ?? 0;
 
-    public string? SolutionPath { get; set; }
+    public string? SolutionPath
+    {
+        get; set;
+    }
 
     public IEnumerable<string> GetDiagnostics()
     {
@@ -239,7 +276,7 @@ public class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync();
         try
         {
-            return _currentSolution ?? throw new InvalidOperationException(
+            return CurrentSolution ?? throw new InvalidOperationException(
                 "No solution is loaded. Call load_solution with a .sln or .csproj path.");
         }
         finally
@@ -253,7 +290,7 @@ public class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public void SetTestSolution(Solution solution)
     {
-        _currentSolution = solution;
+        CurrentSolution = solution;
     }
 
     /// <summary>
@@ -263,7 +300,10 @@ public class PersistentWorkspaceManager : IDisposable
     {
         var id = Guid.NewGuid().ToString("n")[..8];
         _stagedChanges[id] = changes;
-        _logger.LogInformation("Staged change {Id}: {Description} ({Count} files)", id, description, changes.Count);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Staged change {Id}: {Description} ({Count} files)", id, description, changes.Count);
+        }
         return id;
     }
 
@@ -272,7 +312,11 @@ public class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public Dictionary<string, string> GetStagedChanges(string changeId)
     {
-        if (_stagedChanges.TryGetValue(changeId, out var changes)) return changes;
+        if (_stagedChanges.TryGetValue(changeId, out var changes))
+        {
+            return changes;
+        }
+
         throw new KeyNotFoundException($"Staged change ID '{changeId}' not found.");
     }
 
@@ -297,7 +341,10 @@ public class PersistentWorkspaceManager : IDisposable
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             _stagedChanges[changeId] = remaining;
-            _logger.LogInformation("Updated staged change '{Id}' with remaining {Count} failures.", changeId, remaining.Count);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Updated staged change '{Id}' with remaining {Count} failures.", changeId, remaining.Count);
+            }
         }
 
         return result;
@@ -325,7 +372,7 @@ public class PersistentWorkspaceManager : IDisposable
         return new HealthComponents(
             RoslynAvailable: true,
             RoslynVersion: roslynVersion,
-            MsBuildFound: MSBuildLocator.IsRegistered || instances.Any(),
+            MsBuildFound: MSBuildLocator.IsRegistered || instances.Count != 0,
             MsBuildVersion: instances.FirstOrDefault()?.Version.ToString(),
             DotnetSdkAvailable: true, // We know it's available since we are running
             DotnetSdkVersion: Environment.Version.ToString()
@@ -338,26 +385,33 @@ public class PersistentWorkspaceManager : IDisposable
         // the last time the workspace was loaded.
         var sampleStaleFiles = new List<string>();
         int staleCount = 0;
-        if (_currentSolution != null && _lastLoadedAt != DateTime.MinValue)
+        if (CurrentSolution != null && _lastLoadedAt != DateTime.MinValue)
         {
-            foreach (var doc in _currentSolution.Projects.SelectMany(p => p.Documents))
+            foreach (var doc in CurrentSolution.Projects.SelectMany(p => p.Documents))
             {
                 var path = doc.FilePath;
-                if (path == null || !File.Exists(path)) continue;
+                if (path == null || !File.Exists(path))
+                {
+                    continue;
+                }
+
                 if (File.GetLastWriteTimeUtc(path) > _lastLoadedAt)
                 {
                     staleCount++;
-                    if (sampleStaleFiles.Count < 5) sampleStaleFiles.Add(path);
+                    if (sampleStaleFiles.Count < 5)
+                    {
+                        sampleStaleFiles.Add(path);
+                    }
                 }
             }
         }
 
         return new WorkspaceStatus(
-            State: _currentSolution != null ? 2 : 0,
-            SolutionLoaded: _currentSolution != null,
+            State: CurrentSolution != null ? 2 : 0,
+            SolutionLoaded: CurrentSolution != null,
             SolutionPath: SolutionPath,
             ProjectCount: ProjectCount,
-            DocumentCount: _currentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0,
+            DocumentCount: CurrentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0,
             LastLoadedAt: _lastLoadedAt == DateTime.MinValue ? null : _lastLoadedAt,
             StaleDocumentCount: staleCount,
             RequiresReload: staleCount > 0,
@@ -391,11 +445,17 @@ public class PersistentWorkspaceManager : IDisposable
         var failed = new Dictionary<string, string>();
 
         // Clear retry cache for this specific batch
-        foreach (var key in changes.Keys) _failedChangesCache.TryRemove(key, out _);
+        foreach (var key in changes.Keys)
+        {
+            _failedChangesCache.TryRemove(key, out _);
+        }
 
         try
         {
-            if (_currentSolution == null) throw new InvalidOperationException("Solution not loaded.");
+            if (CurrentSolution == null)
+            {
+                throw new InvalidOperationException("Solution not loaded.");
+            }
 
             foreach (var change in changes)
             {
@@ -420,19 +480,31 @@ public class PersistentWorkspaceManager : IDisposable
                         await File.WriteAllTextAsync(filePath, newContent);
                         success = true;
                         succeeded.Add(filePath);
-                        _logger.LogInformation("Wrote changes to {FilePath} (Attempt {Attempt})", filePath, attempt + 1);
+                        if (_logger.IsEnabled(LogLevel.Information))
+                        {
+                            _logger.LogInformation("Wrote changes to {FilePath} (Attempt {Attempt})", filePath, attempt + 1);
+                        }
                         break;
                     }
                     catch (IOException ex)
                     {
                         lastError = ex.Message;
-                        _logger.LogWarning("IO error writing to {FilePath}: {Message}. Retrying... ({Attempt}/{Max})", filePath, ex.Message, attempt + 1, retryCount);
-                        if (attempt < retryCount) await Task.Delay(500);
+                        if (_logger.IsEnabled(LogLevel.Warning))
+                        {
+                            _logger.LogWarning("IO error writing to {FilePath}: {Message}. Retrying... ({Attempt}/{Max})", filePath, ex.Message, attempt + 1, retryCount);
+                        }
+                        if (attempt < retryCount)
+                        {
+                            await Task.Delay(500);
+                        }
                     }
                     catch (Exception ex)
                     {
                         lastError = ex.Message;
-                        _logger.LogError(ex, "Permanent failure writing to {FilePath}", filePath);
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(ex, "Permanent failure writing to {FilePath}", filePath);
+                        }
                         break;
                     }
                 }
@@ -448,7 +520,10 @@ public class PersistentWorkspaceManager : IDisposable
             bool workspaceInSync = false;
             if (succeeded.Count > 0)
             {
-                _logger.LogInformation("Synchronizing workspace with disk changes...");
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("Synchronizing workspace with disk changes...");
+                }
                 try
                 {
                     await RefreshWorkspaceInternalAsync(succeeded);
@@ -457,7 +532,10 @@ public class PersistentWorkspaceManager : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call load_solution to resync.");
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call load_solution to resync.");
+                    }
                 }
             }
 
@@ -472,7 +550,10 @@ public class PersistentWorkspaceManager : IDisposable
 
     private async Task RefreshWorkspaceInternalAsync(List<string> affectedFiles)
     {
-        if (_workspace == null || _currentSolution == null) return;
+        if (_workspace == null || CurrentSolution == null)
+        {
+            return;
+        }
 
         // MSBuildWorkspace can be finicky with refreshing individual projects.
         // The most reliable way to ensure a consistent, fresh view of the solution
@@ -481,13 +562,22 @@ public class PersistentWorkspaceManager : IDisposable
         var slnPath = _workspace.CurrentSolution.FilePath;
         if (!string.IsNullOrEmpty(slnPath))
         {
-            _logger.LogInformation("Reloading solution to synchronize changes: {SlnPath}", slnPath);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Reloading solution to synchronize changes: {SlnPath}", slnPath);
+            }
 
             // We create a new workspace instance to ensure no cached metadata remains
             var newWorkspace = MSBuildWorkspace.Create();
-            newWorkspace.RegisterWorkspaceFailedHandler((d) => _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message));
+            newWorkspace.RegisterWorkspaceFailedHandler((d) =>
+            {
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
+                }
+            });
 
-            _currentSolution = await newWorkspace.OpenSolutionAsync(slnPath);
+            CurrentSolution = await newWorkspace.OpenSolutionAsync(slnPath);
 
             var oldWorkspace = _workspace;
             _workspace = newWorkspace;
@@ -505,7 +595,10 @@ public class PersistentWorkspaceManager : IDisposable
 
         if (specificFiles == null || specificFiles.Count == 0)
         {
-            foreach (var kvp in _failedChangesCache) toRetry[kvp.Key] = kvp.Value;
+            foreach (var kvp in _failedChangesCache)
+            {
+                toRetry[kvp.Key] = kvp.Value;
+            }
         }
         else
         {
@@ -533,5 +626,6 @@ public class PersistentWorkspaceManager : IDisposable
         _watcher?.Dispose();
         _debounceTimer.Dispose();
         _solutionLock.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

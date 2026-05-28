@@ -1,9 +1,10 @@
+using System.Security.Cryptography;
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace RoslynSentinel.Server;
 
@@ -45,7 +46,11 @@ public class AnalysisEngine
             foreach (var doc in docs)
             {
                 var root = await doc.GetSyntaxRootAsync(ct);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
+
                 var model = includeSemantic ? await doc.GetSemanticModelAsync(ct) : null;
                 documentList.Add((doc, root, model));
             }
@@ -55,7 +60,11 @@ public class AnalysisEngine
 
     public async Task<List<LargeTypeReport>> FindLargeTypesAsync(int maxLines = 500, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("LargeTypes")) return new List<LargeTypeReport>();
+        if (!_config.IsFeatureEnabled("LargeTypes"))
+        {
+            return new List<LargeTypeReport>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var reports = new List<LargeTypeReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -77,7 +86,11 @@ public class AnalysisEngine
 
     public async Task<List<LargeMethodReport>> FindLargeMethodsAsync(int maxLines = 50, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("LargeMethods")) return new List<LargeMethodReport>();
+        if (!_config.IsFeatureEnabled("LargeMethods"))
+        {
+            return new List<LargeMethodReport>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var reports = new List<LargeMethodReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -100,7 +113,11 @@ public class AnalysisEngine
 
     public async Task<List<DuplicateMethodGroup>> FindDuplicateMethodsAsync(int minStatements = 5, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("DuplicateMethods")) return new List<DuplicateMethodGroup>();
+        if (!_config.IsFeatureEnabled("DuplicateMethods"))
+        {
+            return new List<DuplicateMethodGroup>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var methodHashes = new Dictionary<string, List<MethodLocation>>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -113,11 +130,14 @@ public class AnalysisEngine
             foreach (var method in methods)
             {
                 var hash = ComputeStructuralHash(method.Body!);
-                if (!methodHashes.ContainsKey(hash))
-                    methodHashes[hash] = new List<MethodLocation>();
+                if (!methodHashes.TryGetValue(hash, out List<MethodLocation>? value))
+                {
+                    value = new List<MethodLocation>();
+                    methodHashes[hash] = value;
+                }
 
                 var typeName = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "Global";
-                methodHashes[hash].Add(new MethodLocation(target.Document.FilePath ?? target.Document.Name, typeName, method.Identifier.Text));
+                value.Add(new MethodLocation(target.Document.FilePath ?? target.Document.Name, typeName, method.Identifier.Text));
             }
         }
 
@@ -128,7 +148,11 @@ public class AnalysisEngine
 
     public async Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidatesAsync(int minPublicMethods = 3, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("UnusedInterfaces")) return new List<InterfaceCandidateReport>();
+        if (!_config.IsFeatureEnabled("UnusedInterfaces"))
+        {
+            return new List<InterfaceCandidateReport>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var candidates = new List<InterfaceCandidateReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -155,7 +179,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectLongParameterListsAsync(int threshold = 5, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("LongParameterLists")) return new List<string>();
+        if (!_config.IsFeatureEnabled("LongParameterLists"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -175,7 +203,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindUninstantiatedTypesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("UninstantiatedTypes")) return new List<string>();
+        if (!_config.IsFeatureEnabled("UninstantiatedTypes"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var instantiatedTypes = new HashSet<string>();
         var declaredTypes = new List<(string Name, string Document)>();
@@ -183,20 +215,29 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
 
             var objectCreations = target.Root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>();
             foreach (var creation in objectCreations)
             {
                 var symbol = target.SemanticModel.GetSymbolInfo(creation, cancellationToken).Symbol?.ContainingType;
-                if (symbol != null) instantiatedTypes.Add(symbol.ToDisplayString());
+                if (symbol != null)
+                {
+                    instantiatedTypes.Add(symbol.ToDisplayString());
+                }
             }
 
             var typeDecls = target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>();
             foreach (var decl in typeDecls)
             {
                 var symbol = target.SemanticModel.GetDeclaredSymbol(decl, cancellationToken);
-                if (symbol != null) declaredTypes.Add((symbol.ToDisplayString(), target.Document.Name));
+                if (symbol != null)
+                {
+                    declaredTypes.Add((symbol.ToDisplayString(), target.Document.Name));
+                }
             }
         }
 
@@ -208,16 +249,25 @@ public class AnalysisEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new List<string>();
+        if (document == null)
+        {
+            return new List<string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (root == null || semanticModel == null) return new List<string>();
+        if (root == null || semanticModel == null)
+        {
+            return new List<string>();
+        }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (method == null) return new List<string>();
+        if (method == null)
+        {
+            return new List<string>();
+        }
 
         var diagnostics = semanticModel.GetDiagnostics(method.Span, cancellationToken);
         return diagnostics
@@ -247,15 +297,25 @@ public class AnalysisEngine
 
     private bool HasCycle(ProjectId current, HashSet<ProjectId> visited, List<ProjectId> path, Dictionary<ProjectId, Project> projects)
     {
-        if (path.Contains(current)) return true;
-        if (visited.Contains(current)) return false;
+        if (path.Contains(current))
+        {
+            return true;
+        }
+
+        if (visited.Contains(current))
+        {
+            return false;
+        }
 
         visited.Add(current);
         path.Add(current);
 
         foreach (var reference in projects[current].ProjectReferences)
         {
-            if (HasCycle(reference.ProjectId, visited, path, projects)) return true;
+            if (HasCycle(reference.ProjectId, visited, path, projects))
+            {
+                return true;
+            }
         }
 
         path.RemoveAt(path.Count - 1);
@@ -266,7 +326,10 @@ public class AnalysisEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return "File not found.";
+        if (document == null)
+        {
+            return "File not found.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -275,7 +338,7 @@ public class AnalysisEngine
         string? className = null;
         string actualMethodName = methodName;
 
-        if (methodName.Contains("."))
+        if (methodName.Contains('.'))
         {
             var parts = methodName.Split('.');
             if (parts.Length == 2)
@@ -297,21 +360,35 @@ public class AnalysisEngine
             {
                 var classNode = m.Parent;
                 while (classNode != null && classNode is not ClassDeclarationSyntax && classNode is not StructDeclarationSyntax)
+                {
                     classNode = classNode.Parent;
+                }
 
                 if (classNode is ClassDeclarationSyntax classDecl)
+                {
                     return classDecl.Identifier.Text == className;
+                }
+
                 if (classNode is StructDeclarationSyntax structDecl)
+                {
                     return structDecl.Identifier.Text == className;
+                }
+
                 return false;
             });
         }
 
         var methodNode = candidateMethods.FirstOrDefault();
-        if (methodNode == null || semanticModel == null) return "Method not found.";
+        if (methodNode == null || semanticModel == null)
+        {
+            return "Method not found.";
+        }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
-        if (methodSymbol == null) return "Symbol not found.";
+        if (methodSymbol == null)
+        {
+            return "Symbol not found.";
+        }
 
         var sb = new StringBuilder();
         await BuildCallTree(methodSymbol, 0, depth, sb, new HashSet<ISymbol>(SymbolEqualityComparer.Default), cancellationToken);
@@ -320,7 +397,10 @@ public class AnalysisEngine
 
     private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken ct)
     {
-        if (currentDepth > maxDepth || !visited.Add(symbol)) return;
+        if (currentDepth > maxDepth || !visited.Add(symbol))
+        {
+            return;
+        }
 
         var indent = new string(' ', currentDepth * 2);
         sb.AppendLine($"{indent}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
@@ -330,10 +410,16 @@ public class AnalysisEngine
         {
             var node = await syntaxRef.GetSyntaxAsync(ct);
             var document = solution.GetDocument(node.SyntaxTree);
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
 
             var model = await document.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
 
             foreach (var inv in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
@@ -352,12 +438,18 @@ public class AnalysisEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) throw new Exception($"File '{filePath}' not found in solution.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File '{filePath}' not found in solution.");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (root == null || classNode == null) throw new Exception($"Class '{className}' not found.");
+        if (root == null || classNode == null)
+        {
+            throw new InvalidOperationException($"Class '{className}' not found.");
+        }
 
         // Gather fields with their types (private instance fields only — skip const, static, backing fields)
         var fieldsWithTypes = classNode.Members.OfType<FieldDeclarationSyntax>()
@@ -374,9 +466,14 @@ public class AnalysisEngine
             .ToList();
 
         if (propertyFields.Count > 0)
+        {
             fieldsWithTypes = propertyFields;
+        }
 
-        if (fieldsWithTypes.Count == 0) throw new Exception($"Class '{className}' has no fields or properties to generate equality from.");
+        if (fieldsWithTypes.Count == 0)
+        {
+            throw new InvalidOperationException($"Class '{className}' has no fields or properties to generate equality from.");
+        }
 
         var fieldNames = fieldsWithTypes.Select(f => f.Name).ToList();
 
@@ -509,16 +606,27 @@ public class AnalysisEngine
     private static string GetElementType(string typeName)
     {
         var t = typeName.Trim().TrimEnd('?');
-        if (t.EndsWith("[]")) return t[..^2];
+        if (t.EndsWith("[]"))
+        {
+            return t[..^2];
+        }
+
         var open = t.IndexOf('<');
         var close = t.LastIndexOf('>');
-        if (open >= 0 && close > open) return t[(open + 1)..close];
+        if (open >= 0 && close > open)
+        {
+            return t[(open + 1)..close];
+        }
+
         return "object";
     }
 
     public async Task<List<string>> DetectMemoryLeaksAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("MemoryLeaks")) return new List<string>();
+        if (!_config.IsFeatureEnabled("MemoryLeaks"))
+        {
+            return new List<string>();
+        }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
@@ -538,7 +646,10 @@ public class AnalysisEngine
                         && ma.Expression is not ThisExpressionSyntax)
                     .ToList();
 
-                if (!subscriptions.Any()) continue;
+                if (subscriptions.Count == 0)
+                {
+                    continue;
+                }
 
                 // Find the unsubscriptions
                 var unsubscribeKeys = new HashSet<string>(
@@ -563,7 +674,10 @@ public class AnalysisEngine
                     // Extra: lambda handler captures 'this' or an outer variable — the publisher
                     // holds a reference to the subscriber even without IDisposable.
                     bool handlerIsLambda = sub.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax;
-                    if (!handlerIsLambda) continue;
+                    if (!handlerIsLambda)
+                    {
+                        continue;
+                    }
 
                     bool capturesThis = sub.Right.DescendantNodesAndSelf().OfType<ThisExpressionSyntax>().Any();
                     // Also flag if the lambda accesses a member through 'this' (implicit or explicit)
@@ -591,19 +705,29 @@ public class AnalysisEngine
                     .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text))
                     .ToHashSet(StringComparer.Ordinal);
 
-                if (disposableFields.Count == 0) continue;
+                if (disposableFields.Count == 0)
+                {
+                    continue;
+                }
 
                 var disposeMethod = classNode.Members
                     .OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault(m => m.Identifier.Text == "Dispose");
 
-                if (disposeMethod?.Body == null) continue;
+                if (disposeMethod?.Body == null)
+                {
+                    continue;
+                }
 
                 var disposedInMethod = disposeMethod.Body.DescendantNodes()
                     .OfType<InvocationExpressionSyntax>()
-                    .Select(inv => {
+                    .Select(inv =>
+                    {
                         if (inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "Dispose")
+                        {
                             return ma.Expression.ToString().TrimStart('_');
+                        }
+
                         return null;
                     })
                     .Where(n => n != null)
@@ -613,7 +737,10 @@ public class AnalysisEngine
                 {
                     var normalizedName = fieldName.TrimStart('_');
                     if (disposedInMethod.Contains(normalizedName) ||
-                        disposedInMethod.Contains(fieldName)) continue;
+                        disposedInMethod.Contains(fieldName))
+                    {
+                        continue;
+                    }
 
                     var fieldDecl = classNode.Members.OfType<FieldDeclarationSyntax>()
                         .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
@@ -636,7 +763,10 @@ public class AnalysisEngine
                         Line: v.GetLocation().GetLineSpan().StartLinePosition.Line + 1)))
                     .ToList();
 
-                if (staticCollectionFields.Count == 0) continue;
+                if (staticCollectionFields.Count == 0)
+                {
+                    continue;
+                }
 
                 // Look for Clear() calls anywhere in the class targeting these fields
                 var clearedFields = classNode.DescendantNodes()
@@ -644,9 +774,13 @@ public class AnalysisEngine
                     .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
                                   (ma.Name.Identifier.Text == "Clear" || ma.Name.Identifier.Text == "Remove" ||
                                    ma.Name.Identifier.Text == "TryRemove" || ma.Name.Identifier.Text == "RemoveAll"))
-                    .Select(inv => {
+                    .Select(inv =>
+                    {
                         if (inv.Expression is MemberAccessExpressionSyntax ma)
+                        {
                             return ma.Expression.ToString().TrimStart('_');
+                        }
+
                         return null;
                     })
                     .Where(n => n != null)
@@ -655,7 +789,10 @@ public class AnalysisEngine
                 foreach (var (fieldName, line) in staticCollectionFields)
                 {
                     if (clearedFields.Contains(fieldName.TrimStart('_')) ||
-                        clearedFields.Contains(fieldName)) continue;
+                        clearedFields.Contains(fieldName))
+                    {
+                        continue;
+                    }
 
                     results.Add(
                         $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
@@ -688,7 +825,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> AnalyzeSemaphoreUsageAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("SemaphoreLeaks")) return new List<string>();
+        if (!_config.IsFeatureEnabled("SemaphoreLeaks"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, true, cancellationToken);
@@ -706,17 +847,26 @@ public class AnalysisEngine
                     wait.Expression is MemberAccessExpressionSyntax waitMa)
                 {
                     var receiverType = target.SemanticModel.GetTypeInfo(waitMa.Expression, cancellationToken).Type;
-                    if (receiverType != null && !SemanticTypeHelper.IsSemaphoreSlim(receiverType)) continue;
+                    if (receiverType != null && !SemanticTypeHelper.IsSemaphoreSlim(receiverType))
+                    {
+                        continue;
+                    }
                 }
 
                 var method = wait.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
                 var containingType = wait.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (method == null) continue;
+                if (method == null)
+                {
+                    continue;
+                }
 
                 // If this method already contains its own Release call, it handles the semaphore correctly.
                 // Use ".Release" (without parens) to catch both Release() and Release(n).
                 bool methodHandlesOwnRelease = method.ToString().Contains(".Release(");
-                if (methodHandlesOwnRelease) continue;
+                if (methodHandlesOwnRelease)
+                {
+                    continue;
+                }
 
                 // Check if ANY other member of the class contains a release call.
                 // Covers methods, constructors, properties, and finalizers — catches helper-method patterns.
@@ -735,7 +885,11 @@ public class AnalysisEngine
                         .Any(inv =>
                         {
                             var calledMethod = target.SemanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
-                            if (calledMethod == null) return false;
+                            if (calledMethod == null)
+                            {
+                                return false;
+                            }
+
                             var syntaxRef = calledMethod.DeclaringSyntaxReferences.FirstOrDefault();
                             return syntaxRef?.GetSyntax(cancellationToken).ToString().Contains(".Release(") == true;
                         });
@@ -811,7 +965,11 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
+
             var internalClasses = target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>()
                 .Where(c => c.Modifiers.Any(m => m.IsKind(SyntaxKind.InternalKeyword)));
 
@@ -834,14 +992,21 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectMismatchedAwaitAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("MismatchedAwait")) return new List<string>();
+        if (!_config.IsFeatureEnabled("MismatchedAwait"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
 
             // Pre-collect all variables in this document that feed Task.WhenAll/WhenAny
             var whenAllVars = new HashSet<string>();
@@ -858,7 +1023,9 @@ public class AnalysisEngine
                     foreach (var arg in whenAllInv.ArgumentList.Arguments)
                     {
                         if (arg.Expression is IdentifierNameSyntax argId)
+                        {
                             whenAllVars.Add(argId.Identifier.Text);
+                        }
                     }
                 }
             }
@@ -869,7 +1036,9 @@ public class AnalysisEngine
             foreach (var awaitExpr in target.Root.DescendantNodes().OfType<AwaitExpressionSyntax>())
             {
                 if (awaitExpr.Expression is IdentifierNameSyntax awaitedId)
+                {
                     awaitedLocalVars.Add(awaitedId.Identifier.Text);
+                }
             }
 
             var invocations = target.Root.DescendantNodes().OfType<InvocationExpressionSyntax>();
@@ -893,32 +1062,52 @@ public class AnalysisEngine
                     invocationName = invocation.Expression.ToString();
                 }
 
-                if (returnType == null || !SemanticTypeHelper.IsTaskOrValueTask(returnType)) continue;
+                if (returnType == null || !SemanticTypeHelper.IsTaskOrValueTask(returnType))
+                {
+                    continue;
+                }
                 // Direct await
-                if (invocation.Parent is AwaitExpressionSyntax) continue;
+                if (invocation.Parent is AwaitExpressionSyntax)
+                {
+                    continue;
+                }
                 // await expr! — null-forgiving wraps the invocation; parent is PostfixUnary, grandparent is Await
                 if (invocation.Parent is PostfixUnaryExpressionSyntax pue &&
                     pue.IsKind(SyntaxKind.SuppressNullableWarningExpression) &&
                     pue.Parent is AwaitExpressionSyntax)
+                {
                     continue;
+                }
 
                 // Skip: assigned to a discard (  _ = SomeAsync()  )
                 if (invocation.Parent is AssignmentExpressionSyntax assign &&
                     assign.Left is IdentifierNameSyntax discardId &&
                     discardId.Identifier.Text == "_")
+                {
                     continue;
+                }
 
                 // Skip: the invocation IS the return expression (expression-bodied or return statement).
                 // e.g.  public Task<T> FooAsync() => Task.FromResult(x);
                 //        return Task.FromResult(x);
                 // These are not fire-and-forget — the Task is propagated to the caller.
-                if (invocation.Parent is ArrowExpressionClauseSyntax) continue;
-                if (invocation.Parent is ReturnStatementSyntax) continue;
+                if (invocation.Parent is ArrowExpressionClauseSyntax)
+                {
+                    continue;
+                }
+
+                if (invocation.Parent is ReturnStatementSyntax)
+                {
+                    continue;
+                }
 
                 // Skip: the invocation IS the entire body of a lambda expression.
                 // Covers Moq setup chains: .Setup(x => x.FooAsync(...)).ReturnsAsync(...)
                 // and similar fluent API patterns where the Task is implicitly returned.
-                if (invocation.Parent is SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax) continue;
+                if (invocation.Parent is SimpleLambdaExpressionSyntax or ParenthesizedLambdaExpressionSyntax)
+                {
+                    continue;
+                }
 
                 // Skip: the invocation is an argument to a new ValueTask<T>(...) constructor.
                 // e.g.  ct => new ValueTask<T>(GetByIdFromDbAsync(id, ct))
@@ -926,13 +1115,17 @@ public class AnalysisEngine
                 if (invocation.Parent is ArgumentSyntax &&
                     invocation.Parent.Parent?.Parent is ObjectCreationExpressionSyntax valueTaskCtor &&
                     valueTaskCtor.Type.ToString().Contains("ValueTask"))
+                {
                     continue;
+                }
 
                 // Skip: assigned to a local variable that is later passed to Task.WhenAll/WhenAny
                 if (invocation.Parent is EqualsValueClauseSyntax evc &&
                     evc.Parent is VariableDeclaratorSyntax vd &&
                     whenAllVars.Contains(vd.Identifier.Text))
+                {
                     continue;
+                }
 
                 // Skip: direct argument to Task.WhenAll / Task.WhenAny / Task.WhenEach
                 // e.g. await Task.WhenAll(RemoveAsync(id), UpdateAsync(id))
@@ -940,20 +1133,26 @@ public class AnalysisEngine
                     directArg.Parent?.Parent is InvocationExpressionSyntax composerInv &&
                     composerInv.Expression is MemberAccessExpressionSyntax composerMa &&
                     composerMa.Name.Identifier.Text is "WhenAll" or "WhenAny" or "WhenEach")
+                {
                     continue;
+                }
 
                 // Skip: Task / ValueTask factory methods — synchronous, no actual async work
                 // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(ct)
                 if (invocation.Expression is MemberAccessExpressionSyntax factoryMa &&
                     (factoryMa.Expression.ToString() is "Task" or "ValueTask") &&
                     factoryMa.Name.Identifier.Text is "FromResult" or "FromException" or "FromCanceled")
+                {
                     continue;
+                }
 
                 // Skip: await using — the await keyword is on the using declaration, not the invocation directly
                 // e.g.  await using var conn = OpenConnectionAsync(ct);
                 var ancestorLocalDecl = invocation.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
                 if (ancestorLocalDecl?.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) == true)
+                {
                     continue;
+                }
 
                 // Skip: the invocation is the receiver in a method chain consumed by the chain itself
                 // e.g. MethodAsync().ContinueWith(...)  — the returned Task feeds the chain
@@ -963,40 +1162,55 @@ public class AnalysisEngine
                     chainedMa.Parent is InvocationExpressionSyntax chainedCall &&
                     chainedMa.Name.Identifier.Text is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask"
                         or "GetAwaiter" or "GetResult")
+                {
                     continue;
+                }
 
                 // Skip: result stored in a local variable that is later awaited in this document
                 // e.g. var t = DoAsync(); ... await t;
                 if (invocation.Parent is EqualsValueClauseSyntax evc2 &&
                     evc2.Parent is VariableDeclaratorSyntax vd2 &&
                     awaitedLocalVars.Contains(vd2.Identifier.Text))
+                {
                     continue;
+                }
 
                 // Skip: result stored in a field or property (deferred consumption).
                 // Covers: this._task = X()  (MemberAccess) and  _task = X()  (Identifier, underscore convention).
                 if (invocation.Parent is AssignmentExpressionSyntax fieldAssign &&
                     (fieldAssign.Left is MemberAccessExpressionSyntax ||
                      (fieldAssign.Left is IdentifierNameSyntax lhsId &&
-                      lhsId.Identifier.Text.StartsWith("_", StringComparison.Ordinal))))
+                      lhsId.Identifier.Text.StartsWith('_'))))
+                {
                     continue;
+                }
 
                 // Skip: invocation is inside a ternary or null-coalescing expression
                 // The Task value is used as a value in the expression, likely returned or stored.
                 if (invocation.Ancestors().OfType<ConditionalExpressionSyntax>().Any())
+                {
                     continue;
+                }
+
                 if (invocation.Parent is BinaryExpressionSyntax coalesceOp &&
                     coalesceOp.IsKind(SyntaxKind.CoalesceExpression))
+                {
                     continue;
+                }
 
                 // Skip: invocation inside an anonymous method expression
                 // e.g. Action fn = delegate { DoWorkAsync(); };
                 if (invocation.Ancestors().OfType<AnonymousMethodExpressionSyntax>().Any())
+                {
                     continue;
+                }
 
                 // Skip: invocation inside an object or collection initializer
                 // e.g. new Foo { BackgroundTask = StartAsync() }
                 if (invocation.Ancestors().OfType<InitializerExpressionSyntax>().Any())
+                {
                     continue;
+                }
 
                 // Skip: argument to collection/task-composition methods that consume tasks
                 // e.g. _tasks.Add(DoWorkAsync())  or  Task.Run(DoWorkAsync)
@@ -1005,7 +1219,9 @@ public class AnalysisEngine
                     taskConsumerInv.Expression is MemberAccessExpressionSyntax taskConsumerMa &&
                     taskConsumerMa.Name.Identifier.Text is "Add" or "TryAdd" or "Append" or "Push" or
                         "Enqueue" or "Run" or "StartNew" or "Schedule" or "Post")
+                {
                     continue;
+                }
 
                 results.Add($"Potential mismatched await in {target.Document.Name} at line {invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1}. Call to '{invocationName}' is not awaited.");
             }
@@ -1030,7 +1246,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> CheckForEmptyCatchBlocksAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("EmptyCatchBlocks")) return new List<string>();
+        if (!_config.IsFeatureEnabled("EmptyCatchBlocks"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -1039,7 +1259,10 @@ public class AnalysisEngine
         {
             // Test teardown patterns (e.g. catch (IOException){} on Directory.Delete) are
             // intentional best-effort cleanup — no value flagging them in test infrastructure.
-            if (IsTestFile(target.Document.FilePath)) continue;
+            if (IsTestFile(target.Document.FilePath))
+            {
+                continue;
+            }
 
             var catchBlocks = target.Root.DescendantNodes().OfType<CatchClauseSyntax>()
                 .Where(c => c.Block.Statements.Count == 0 && !HasJustifyingComment(c.Block));
@@ -1050,7 +1273,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindLargeSwitchStatementsAsync(int threshold = 10, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("LargeSwitchStatements")) return new List<string>();
+        if (!_config.IsFeatureEnabled("LargeSwitchStatements"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
@@ -1068,14 +1295,22 @@ public class AnalysisEngine
 
     public async Task<List<string>> CheckForRedundantCastAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("RedundantCasts")) return new List<string>();
+        if (!_config.IsFeatureEnabled("RedundantCasts"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
+
             var casts = target.Root.DescendantNodes().OfType<CastExpressionSyntax>();
 
             foreach (var cast in casts)
@@ -1094,7 +1329,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> OptimizeResourceDisposalAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("ResourceDisposal")) return new List<string>();
+        if (!_config.IsFeatureEnabled("ResourceDisposal"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
@@ -1102,18 +1341,26 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
+
             var localDeclarations = target.Root.DescendantNodes().OfType<LocalDeclarationStatementSyntax>();
             foreach (var decl in localDeclarations)
             {
                 foreach (var variable in decl.Declaration.Variables)
                 {
-                    if (variable.Initializer == null) continue;
+                    if (variable.Initializer == null)
+                    {
+                        continue;
+                    }
+
                     var typeInfo = target.SemanticModel.GetTypeInfo(variable.Initializer.Value, cancellationToken);
 
                     if (typeInfo.Type != null && typeInfo.Type.AllInterfaces.Any(i => i.Name == "IDisposable") && !disposalExclusions.Contains(typeInfo.Type.Name))
                     {
-                        var isDisposeHandled = decl.Ancestors().Any(a => a is UsingStatementSyntax || a is LocalDeclarationStatementSyntax l && l.UsingKeyword.IsKind(SyntaxKind.UsingKeyword));
+                        var isDisposeHandled = decl.Ancestors().Any(a => a is UsingStatementSyntax || (a is LocalDeclarationStatementSyntax l && l.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)));
                         if (!isDisposeHandled)
                         {
                             results.Add($"[DISPOSAL] Variable '{variable.Identifier.Text}' of type '{typeInfo.Type.Name}' is IDisposable but not within a 'using' in {target.Document.Name}.");
@@ -1127,7 +1374,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectReflectionUsageAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("ReflectionUsage")) return new List<string>();
+        if (!_config.IsFeatureEnabled("ReflectionUsage"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -1149,7 +1400,11 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectInefficientStringComparisonsAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("InefficientStringComparison")) return new List<string>();
+        if (!_config.IsFeatureEnabled("InefficientStringComparison"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -1172,14 +1427,21 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindBoxingAllocationsAsync(string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("BoxingAllocation")) return new List<string>();
+        if (!_config.IsFeatureEnabled("BoxingAllocation"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
 
             // 1. Check Assignments (e.g. object o; o = 1;)
             var assignments = target.Root.DescendantNodes().OfType<AssignmentExpressionSyntax>();
@@ -1198,13 +1460,22 @@ public class AnalysisEngine
             var declarators = target.Root.DescendantNodes().OfType<VariableDeclaratorSyntax>();
             foreach (var declarator in declarators)
             {
-                if (declarator.Initializer == null) continue;
+                if (declarator.Initializer == null)
+                {
+                    continue;
+                }
 
                 var symbol = target.SemanticModel.GetDeclaredSymbol(declarator, cancellationToken);
                 ITypeSymbol? leftType = null;
 
-                if (symbol is ILocalSymbol local) leftType = local.Type;
-                else if (symbol is IFieldSymbol field) leftType = field.Type;
+                if (symbol is ILocalSymbol local)
+                {
+                    leftType = local.Type;
+                }
+                else if (symbol is IFieldSymbol field)
+                {
+                    leftType = field.Type;
+                }
 
                 if (leftType != null)
                 {
@@ -1222,13 +1493,21 @@ public class AnalysisEngine
 
     private bool IsBoxing(ITypeSymbol? left, ITypeSymbol? right)
     {
-        if (left == null || right == null) return false;
+        if (left == null || right == null)
+        {
+            return false;
+        }
+
         return (left.SpecialType == SpecialType.System_Object || left.Name == "ValueType") && right.IsValueType;
     }
 
     public async Task<List<string>> FindPossibleDeadlocksAsync(string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("Deadlocks")) return new List<string>();
+        if (!_config.IsFeatureEnabled("Deadlocks"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
@@ -1249,16 +1528,26 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindUnusedInterfacesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("UnusedInterfaces")) return new List<string>();
+        if (!_config.IsFeatureEnabled("UnusedInterfaces"))
+        {
+            return new List<string>();
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<string>();
         var projects = solution.Projects.AsEnumerable();
-        if (!string.IsNullOrEmpty(projectName)) projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(projectName))
+        {
+            projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var project in projects)
         {
             var compilation = await project.GetCompilationAsync(cancellationToken);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             var interfaces = compilation.GlobalNamespace.GetNamespaceMembers()
                 .SelectMany(n => n.GetTypeMembers()).Where(t => t.TypeKind == TypeKind.Interface
@@ -1267,7 +1556,10 @@ public class AnalysisEngine
             foreach (var @interface in interfaces)
             {
                 var implementations = await SymbolFinder.FindImplementationsAsync(@interface, solution, cancellationToken: cancellationToken);
-                if (!implementations.Any()) results.Add($"Interface '{@interface.Name}' has no implementations.");
+                if (!implementations.Any())
+                {
+                    results.Add($"Interface '{@interface.Name}' has no implementations.");
+                }
             }
         }
         return results;
@@ -1289,23 +1581,42 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
+
             foreach (var classDecl in target.Root.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
                 var className = classDecl.Identifier.Text;
-                if (!deps.ContainsKey(className)) deps[className] = new HashSet<string>(StringComparer.Ordinal);
+                if (!deps.TryGetValue(className, out HashSet<string>? value))
+                {
+                    value = new HashSet<string>(StringComparer.Ordinal);
+                    deps[className] = value;
+                }
 
                 var ctors = classDecl.Members.OfType<ConstructorDeclarationSyntax>();
                 foreach (var ctor in ctors)
                 {
                     foreach (var param in ctor.ParameterList.Parameters)
                     {
-                        if (param.Type == null) continue;
+                        if (param.Type == null)
+                        {
+                            continue;
+                        }
+
                         var typeSymbol = target.SemanticModel.GetTypeInfo(param.Type, cancellationToken).Type;
-                        if (typeSymbol == null || typeSymbol.TypeKind == TypeKind.Error) continue;
+                        if (typeSymbol == null || typeSymbol.TypeKind == TypeKind.Error)
+                        {
+                            continue;
+                        }
                         // Only track types that are declared in this solution (user types)
-                        if (typeSymbol.DeclaringSyntaxReferences.Length == 0) continue;
-                        deps[className].Add(typeSymbol.Name);
+                        if (typeSymbol.DeclaringSyntaxReferences.Length == 0)
+                        {
+                            continue;
+                        }
+
+                        value.Add(typeSymbol.Name);
                     }
                 }
             }
@@ -1342,10 +1653,16 @@ public class AnalysisEngine
             {
                 bool implementsDisposable = classDecl.BaseList?.Types
                     .Any(t => t.ToString().Contains("IDisposable")) ?? false;
-                if (!implementsDisposable) continue;
+                if (!implementsDisposable)
+                {
+                    continue;
+                }
 
                 var finalizer = classDecl.Members.OfType<DestructorDeclarationSyntax>().FirstOrDefault();
-                if (finalizer == null) continue;
+                if (finalizer == null)
+                {
+                    continue;
+                }
 
                 // Check if the finalizer guards with a disposed flag (correct IDisposable pattern).
                 // Use identifier-level checks only — "disposed" as a bare word also appears in
@@ -1403,7 +1720,10 @@ public class AnalysisEngine
                     .Where(x => UnboundedCollectionTypes.Contains(x.TypeName))
                     .ToList();
 
-                if (staticCollectionFields.Count == 0) continue;
+                if (staticCollectionFields.Count == 0)
+                {
+                    continue;
+                }
 
                 var classText = classDecl.ToString();
                 foreach (var field in staticCollectionFields)
@@ -1413,7 +1733,10 @@ public class AnalysisEngine
                         .Any(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
                                     ma.Expression.ToString().Contains(field.Name) &&
                                     ma.Name.Identifier.Text is "Add" or "TryAdd" or "TryGetOrAdd" or "Enqueue" or "Push");
-                    if (!isPopulated) continue;
+                    if (!isPopulated)
+                    {
+                        continue;
+                    }
 
                     // Flag if there's no Clear(), no Count check, and no capacity/max constant
                     bool hasClear = classText.Contains(field.Name + ".Clear()");
@@ -1422,8 +1745,8 @@ public class AnalysisEngine
                                    ma.Name.Identifier.Text == "Count");
                     bool hasMaxConstant = classDecl.Members.OfType<FieldDeclarationSyntax>()
                         .Any(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)) &&
-                                  (f.Declaration.Variables.Any(v => v.Identifier.Text.ToLower().Contains("max") ||
-                                                                     v.Identifier.Text.ToLower().Contains("limit"))));
+                                  (f.Declaration.Variables.Any(v => v.Identifier.Text.Contains("max", StringComparison.OrdinalIgnoreCase) ||
+                                                                     v.Identifier.Text.Contains("limit", StringComparison.OrdinalIgnoreCase))));
 
                     if (!hasClear && !hasCountCheck && !hasMaxConstant)
                     {
@@ -1458,10 +1781,14 @@ public class AnalysisEngine
 
             foreach (var method in target.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (method.Body == null && method.ExpressionBody == null) continue;
+                if (method.Body == null && method.ExpressionBody == null)
+                {
+                    continue;
+                }
+
                 var methodName = method.Identifier.Text;
 
-                IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method) as IMethodSymbol;
+                IMethodSymbol? containingSymbol = model?.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
 
                 // Find self-recursive calls — use semantic model to skip overload chaining
                 SyntaxNode body = (SyntaxNode?)method.Body ?? method.ExpressionBody!;
@@ -1474,26 +1801,38 @@ public class AnalysisEngine
                             MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
                             _ => null
                         };
-                        if (name != methodName) return false;
+                        if (name != methodName)
+                        {
+                            return false;
+                        }
 
                         // When semantic model is available, verify same overload
                         if (containingSymbol != null && model != null)
                         {
-                            var info = model.GetSymbolInfo(inv);
+                            var info = model.GetSymbolInfo(inv, cancellationToken);
                             var calledSymbol = (info.Symbol ?? info.CandidateSymbols.FirstOrDefault()) as IMethodSymbol;
                             if (calledSymbol != null && !SymbolEqualityComparer.Default.Equals(
                                     calledSymbol.OriginalDefinition, containingSymbol.OriginalDefinition))
+                            {
                                 return false;
+                            }
                         }
                         return true;
                     }).ToList();
 
-                if (selfCalls.Count == 0) continue;
+                if (selfCalls.Count == 0)
+                {
+                    continue;
+                }
 
                 // Look for a depth parameter (int depth, int level, int maxDepth, etc.)
                 bool hasDepthParam = method.ParameterList.Parameters
-                    .Any(p => p.Identifier.Text.ToLower() is "depth" or "level" or "maxdepth" or
-                              "currentdepth" or "recursionlevel" or "limit");
+                    .Any(p => p.Identifier.Text.Equals("depth", StringComparison.OrdinalIgnoreCase) ||
+                              p.Identifier.Text.Equals("level", StringComparison.OrdinalIgnoreCase) ||
+                              p.Identifier.Text.Equals("maxdepth", StringComparison.OrdinalIgnoreCase) ||
+                              p.Identifier.Text.Equals("currentdepth", StringComparison.OrdinalIgnoreCase) ||
+                              p.Identifier.Text.Equals("recursionlevel", StringComparison.OrdinalIgnoreCase) ||
+                              p.Identifier.Text.Equals("limit", StringComparison.OrdinalIgnoreCase));
 
                 // Look for an early-return guard (if ... return without self-call)
                 bool hasBaseCase = false;
@@ -1542,14 +1881,19 @@ public class AnalysisEngine
 
         foreach (var target in targets)
         {
-            if (target.SemanticModel == null) continue;
+            if (target.SemanticModel == null)
+            {
+                continue;
+            }
 
             var findings = StackOverflowEngine.DetectMisboundOverloadChains(
                 target.Root, target.SemanticModel, target.Document.FilePath ?? target.Document.Name);
 
             foreach (var f in findings)
+            {
                 results.Add(
                     $"{f.FilePath}:{f.LineNumber} [{f.Kind}] — {f.Description}. Fix: {f.Recommendation}");
+            }
         }
 
         return results;
@@ -1563,7 +1907,11 @@ public class AnalysisEngine
         List<string> results,
         HashSet<string> reportedCycles)
     {
-        if (!deps.ContainsKey(current)) return;
+        if (!deps.TryGetValue(current, out HashSet<string>? value))
+        {
+            return;
+        }
+
         if (path.Contains(current))
         {
             // Found a cycle — normalise the cycle key so A→B→A and B→A→B produce one report
@@ -1571,14 +1919,24 @@ public class AnalysisEngine
             var cycle = path.Skip(cycleStart).Concat(new[] { current }).ToList();
             var key = string.Join("→", cycle.OrderBy(x => x));
             if (reportedCycles.Add(key))
+            {
                 results.Add($"Circular type dependency: {string.Join(" → ", cycle)}");
+            }
+
             return;
         }
-        if (visited.Contains(current)) return;
+        if (visited.Contains(current))
+        {
+            return;
+        }
+
         visited.Add(current);
         path.Add(current);
-        foreach (var dep in deps[current])
+        foreach (var dep in value)
+        {
             DetectTypeCycle(dep, deps, visited, path, results, reportedCycles);
+        }
+
         path.RemoveAt(path.Count - 1);
     }
 
@@ -1599,8 +1957,15 @@ public class AnalysisEngine
         {
             foreach (var method in target.Root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (!method.TypeParameterList?.Parameters.Any() == true) continue;
-                if (method.Body == null && method.ExpressionBody == null) continue;
+                if (!method.TypeParameterList?.Parameters.Any() == true)
+                {
+                    continue;
+                }
+
+                if (method.Body == null && method.ExpressionBody == null)
+                {
+                    continue;
+                }
 
                 foreach (var typeParam in method.TypeParameterList!.Parameters)
                 {
@@ -1635,7 +2000,10 @@ public class AnalysisEngine
                             $"with 'new {tName}()' but is missing 'where {tName} : new()' constraint.");
                     }
 
-                    if (paramNamesOfT.Count == 0) continue; // no parameters typed as T — skip null checks
+                    if (paramNamesOfT.Count == 0)
+                    {
+                        continue; // no parameters typed as T — skip null checks
+                    }
 
                     // Check: a parameter of type T is compared to null, but no 'class' constraint exists.
                     // Value types can never be null, so this comparison is always false for structs.

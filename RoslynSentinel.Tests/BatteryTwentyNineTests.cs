@@ -5,7 +5,7 @@
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
@@ -31,7 +31,9 @@ public class B29_AllEngines_RealSolution_SmokeTests
     public async Task Setup()
     {
         if (!File.Exists(SlnPath))
+        {
             Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
+        }
 
         _config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
@@ -48,17 +50,30 @@ public class B29_AllEngines_RealSolution_SmokeTests
         {
             foreach (var doc in project.Documents)
             {
-                if (doc.FilePath == null) continue;
+                if (doc.FilePath == null)
+                {
+                    continue;
+                }
+
                 var root = await doc.GetSyntaxRootAsync();
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 var cls = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-                if (cls == null) continue;
+                if (cls == null)
+                {
+                    continue;
+                }
 
                 var method = cls.DescendantNodes()
                     .OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault(m => m.Body != null); // block-bodied only for flow analysis
-                if (method == null) continue;
+                if (method == null)
+                {
+                    continue;
+                }
 
                 _realFilePath = doc.FilePath;
                 _realClassName = cls.Identifier.Text;
@@ -641,8 +656,10 @@ public class B29_AllEngines_RealSolution_SmokeTests
         Assert.That(result, Is.Not.Null);
         // Success OR graceful failure — either way, result must carry a message
         if (!result.Success)
+        {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "Failed result must carry a non-empty error message.");
+        }
     }
 
     [Test]

@@ -411,7 +411,7 @@ public class ConvertToSwitchTests
         
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
         // Complex condition should not be converted
-        var hasIfStatement = result.Contains("if") && result.Contains("&&") || result.Contains("||");
+        var hasIfStatement = (result.Contains("if") && result.Contains("&&")) || result.Contains("||");
         Assert.That(hasIfStatement || !result.Contains("switch"), 
             Is.True, 
             "Should preserve complex if conditions (not convert to switch)");

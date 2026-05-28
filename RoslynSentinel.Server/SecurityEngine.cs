@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -27,16 +28,22 @@ public class SecurityEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<SecurityIssueReport>();
+        if (document == null)
+        {
+            return new List<SecurityIssueReport>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<SecurityIssueReport>();
+        if (root == null)
+        {
+            return new List<SecurityIssueReport>();
+        }
 
         var reports = new List<SecurityIssueReport>();
 
         // 1. Hardcoded secrets: identifier name looks like a credential + assigned a non-trivial string literal
         var declarators = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-            .Where(v => SecretNamePatterns.Any(p => v.Identifier.Text.ToLowerInvariant().Contains(p))
+            .Where(v => SecretNamePatterns.Any(p => v.Identifier.Text.Contains(p, StringComparison.InvariantCultureIgnoreCase))
                 && v.Initializer?.Value is LiteralExpressionSyntax lit
                 && lit.IsKind(SyntaxKind.StringLiteralExpression)
                 && lit.Token.ValueText.Length > 3);
@@ -55,32 +62,43 @@ public class SecurityEngine
             .Where(l => l.IsKind(SyntaxKind.StringLiteralExpression)))
         {
             var val = lit.Token.ValueText;
-            if (val.Length < 8) continue;
+            if (val.Length < 8)
+            {
+                continue;
+            }
 
             string? reason = null;
 
             // Connection string fragments with embedded passwords
             if (System.Text.RegularExpressions.Regex.IsMatch(val,
                     @"(?i)(password|pwd)\s*=\s*[^;]{3,}") &&
-                !val.Contains("@", StringComparison.Ordinal))
+                !val.Contains('@', StringComparison.Ordinal))
+            {
                 reason = "connection string with embedded password";
+            }
 
             // JWT token (three base64url segments separated by dots)
             else if (val.StartsWith("eyJ", StringComparison.Ordinal) &&
                      val.Count(c => c == '.') >= 2 && val.Length > 50)
+            {
                 reason = "JWT token";
+            }
 
             // GitHub/OpenAI/Stripe/Anthropic API key formats
             else if (System.Text.RegularExpressions.Regex.IsMatch(val,
                          @"^(sk-live-|sk-test-|sk-ant-|ghp_|gho_|ghs_|glpat-)"))
+            {
                 reason = "API key";
+            }
 
             // Generic high-entropy bearer token (>30 chars, no spaces, mixed case+digits)
             else if (val.Length > 30 && !val.Contains(' ') &&
                      val.Any(char.IsUpper) && val.Any(char.IsLower) && val.Any(char.IsDigit) &&
                      lit.Ancestors().OfType<VariableDeclaratorSyntax>()
-                         .Any(v => SecretNamePatterns.Any(p => v.Identifier.Text.ToLowerInvariant().Contains(p))))
+                         .Any(v => SecretNamePatterns.Any(p => v.Identifier.Text.Contains(p, StringComparison.InvariantCultureIgnoreCase))))
+            {
                 reason = "high-entropy secret value";
+            }
 
             if (reason != null)
             {
@@ -101,7 +119,10 @@ public class SecurityEngine
             {
                 if (trivia.Kind() is not SyntaxKind.SingleLineCommentTrivia
                     and not SyntaxKind.MultiLineCommentTrivia
-                    and not SyntaxKind.SingleLineDocumentationCommentTrivia) continue;
+                    and not SyntaxKind.SingleLineDocumentationCommentTrivia)
+                {
+                    continue;
+                }
 
                 var commentText = trivia.ToString();
                 if (triviaSecretPattern.IsMatch(commentText))
@@ -143,7 +164,7 @@ public class SecurityEngine
                 PropertyDeclarationSyntax p => p.Identifier.Text,
                 _ => string.Empty
             };
-            if (SecretNamePatterns.Any(p => contextName.ToLowerInvariant().Contains(p)))
+            if (SecretNamePatterns.Any(p => contextName.Contains(p, StringComparison.InvariantCultureIgnoreCase)))
             {
                 var loc = r.GetLocation().GetLineSpan().StartLinePosition;
                 reports.Add(new SecurityIssueReport(filePath, loc.Line + 1, loc.Character + 1,
@@ -162,22 +183,35 @@ public class SecurityEngine
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects
                 .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(p => p.Documents).Cast<Document?>();
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var reports = new List<SecurityIssueReport>();
 
         foreach (var document in docs)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var docPath = document.FilePath ?? document.Name;
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var strings = root.DescendantNodes().OfType<LiteralExpressionSyntax>()
                 .Where(l => l.IsKind(SyntaxKind.StringLiteralExpression));
@@ -185,7 +219,7 @@ public class SecurityEngine
             foreach (var str in strings)
             {
                 var text = str.Token.ValueText;
-                if (text.Contains(@":\") || text.Contains(@"/") || text.StartsWith(@"\\"))
+                if (text.Contains(@":\") || text.Contains('/') || text.StartsWith(@"\\"))
                 {
                     var loc = str.GetLocation().GetLineSpan().StartLinePosition;
                     reports.Add(new SecurityIssueReport(docPath, loc.Line + 1, loc.Character + 1,
@@ -203,13 +237,19 @@ public class SecurityEngine
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects
                 .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(p => p.Documents).Cast<Document?>();
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         // Method names that take a SQL string as their first argument
         // Covers ADO.NET, Dapper, EF Core raw SQL, and similar ORMs
@@ -227,11 +267,18 @@ public class SecurityEngine
 
         foreach (var document in docs)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var docPath = document.FilePath ?? document.Name;
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             // Get semantic model to check if interpolation expressions are compile-time constants
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -244,7 +291,9 @@ public class SecurityEngine
                 {
                     if (variable.Initializer?.Value is InterpolatedStringExpressionSyntax interp &&
                         HasNonConstInterpolation(interp, semanticModel, cancellationToken))
+                    {
                         interpolatedLocals.Add(variable.Identifier.Text);
+                    }
                 }
             }
 
@@ -256,7 +305,10 @@ public class SecurityEngine
                     IdentifierNameSyntax id => id.Identifier.Text,
                     _ => null
                 };
-                if (methodName == null || !sqlMethods.Contains(methodName)) continue;
+                if (methodName == null || !sqlMethods.Contains(methodName))
+                {
+                    continue;
+                }
 
                 foreach (var arg in inv.ArgumentList.Arguments)
                 {
@@ -289,20 +341,30 @@ public class SecurityEngine
     {
         foreach (var interp in s.Contents.OfType<InterpolationSyntax>())
         {
-            if (semanticModel == null) return true; // no model — assume dynamic
+            if (semanticModel == null)
+            {
+                return true; // no model — assume dynamic
+            }
+
             var constVal = semanticModel.GetConstantValue(interp.Expression, ct);
-            if (!constVal.HasValue) return true; // not a compile-time constant → suspect
+            if (!constVal.HasValue)
+            {
+                return true; // not a compile-time constant → suspect
+            }
         }
         return false; // all interpolations are constants — safe
     }
 
     private static bool IsDynamicStringConcat(BinaryExpressionSyntax bin)
     {
-        if (!bin.IsKind(SyntaxKind.AddExpression)) return false;
+        if (!bin.IsKind(SyntaxKind.AddExpression))
+        {
+            return false;
+        }
 
         bool HasString(ExpressionSyntax e) =>
-            e is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
-            || e is BinaryExpressionSyntax b && b.IsKind(SyntaxKind.AddExpression) && (HasString(b.Left) || HasString(b.Right));
+            (e is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+            || (e is BinaryExpressionSyntax b && b.IsKind(SyntaxKind.AddExpression) && (HasString(b.Left) || HasString(b.Right)));
 
         bool HasNonLiteral(ExpressionSyntax e) =>
             e is not LiteralExpressionSyntax
@@ -335,10 +397,16 @@ public class SecurityEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return [];
+        if (document == null)
+        {
+            return [];
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return [];
+        if (root == null)
+        {
+            return [];
+        }
 
         var issues = new List<SecurityIssueReport>();
 
@@ -348,7 +416,11 @@ public class SecurityEngine
         // new Regex("pattern")
         foreach (var oc in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
         {
-            if (!oc.Type.ToString().Contains("Regex")) continue;
+            if (!oc.Type.ToString().Contains("Regex"))
+            {
+                continue;
+            }
+
             var firstArg = oc.ArgumentList?.Arguments.FirstOrDefault();
             if (firstArg?.Expression is LiteralExpressionSyntax lit &&
                 lit.IsKind(SyntaxKind.StringLiteralExpression))
@@ -361,9 +433,20 @@ public class SecurityEngine
         // Regex.IsMatch / Match / Matches / Replace / Split
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
-            if (ma.Expression.ToString() != "Regex") continue;
-            if (ma.Name.Identifier.Text is not ("IsMatch" or "Match" or "Matches" or "Replace" or "Split")) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax ma)
+            {
+                continue;
+            }
+
+            if (ma.Expression.ToString() != "Regex")
+            {
+                continue;
+            }
+
+            if (ma.Name.Identifier.Text is not ("IsMatch" or "Match" or "Matches" or "Replace" or "Split"))
+            {
+                continue;
+            }
 
             // Pattern is usually the second argument: Regex.IsMatch(input, pattern)
             var patternArg = inv.ArgumentList.Arguments.ElementAtOrDefault(1);
@@ -382,7 +465,10 @@ public class SecurityEngine
                 bool matched = false;
                 try { matched = signal.IsMatch(pattern); }
                 catch (RegexMatchTimeoutException) { /* treat as safe */ }
-                if (!matched) continue;
+                if (!matched)
+                {
+                    continue;
+                }
 
                 issues.Add(new SecurityIssueReport(filePath, line, col,
                     "ReDoSVulnerablePattern",
@@ -423,9 +509,17 @@ public class SecurityEngine
         foreach (var docId in docIds)
         {
             var doc = solution.GetDocument(docId);
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -439,7 +533,9 @@ public class SecurityEngine
 
                     // Regex.IsMatch(input, pattern) — pattern is arg[1]
                     if (receiver == "Regex" && RegexFactoryMethods.Contains(name))
+                    {
                         patternIndex = 1;
+                    }
                 }
                 else if (invocation.Parent is ObjectCreationExpressionSyntax ctor &&
                          ctor.Type.ToString() is "Regex" or "System.Text.RegularExpressions.Regex")
@@ -448,16 +544,30 @@ public class SecurityEngine
                     patternIndex = 0;
                 }
 
-                if (patternIndex < 0) continue;
+                if (patternIndex < 0)
+                {
+                    continue;
+                }
 
                 // Check new Regex(...) separately since it's an ObjectCreationExpressionSyntax
                 var args = invocation.ArgumentList.Arguments;
-                if (patternIndex >= args.Count) continue;
+                if (patternIndex >= args.Count)
+                {
+                    continue;
+                }
+
                 var patternExpr = args[patternIndex].Expression;
 
                 // Safe: compile-time string literals or string literal concatenation
-                if (patternExpr is LiteralExpressionSyntax) continue;
-                if (IsStringLiteralChain(patternExpr)) continue;
+                if (patternExpr is LiteralExpressionSyntax)
+                {
+                    continue;
+                }
+
+                if (IsStringLiteralChain(patternExpr))
+                {
+                    continue;
+                }
 
                 var loc = invocation.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new SecurityIssueReport(fp, loc.Line + 1, loc.Character + 1,
@@ -470,13 +580,28 @@ public class SecurityEngine
             // Also catch: new Regex(nonLiteralPattern)
             foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             {
-                if (creation.Type.ToString() is not ("Regex" or "System.Text.RegularExpressions.Regex")) continue;
+                if (creation.Type.ToString() is not ("Regex" or "System.Text.RegularExpressions.Regex"))
+                {
+                    continue;
+                }
+
                 var args = creation.ArgumentList?.Arguments;
-                if (args == null || args.Value.Count == 0) continue;
+                if (args == null || args.Value.Count == 0)
+                {
+                    continue;
+                }
+
                 var patternExpr = args.Value[0].Expression;
 
-                if (patternExpr is LiteralExpressionSyntax) continue;
-                if (IsStringLiteralChain(patternExpr)) continue;
+                if (patternExpr is LiteralExpressionSyntax)
+                {
+                    continue;
+                }
+
+                if (IsStringLiteralChain(patternExpr))
+                {
+                    continue;
+                }
 
                 var loc = creation.GetLocation().GetLineSpan().StartLinePosition;
                 issues.Add(new SecurityIssueReport(fp, loc.Line + 1, loc.Character + 1,
@@ -524,18 +649,32 @@ public class SecurityEngine
         foreach (var docId in docIds)
         {
             var doc = solution.GetDocument(docId);
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var creation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             {
-                if (creation.Type.ToString() is not ("Regex" or "System.Text.RegularExpressions.Regex")) continue;
+                if (creation.Type.ToString() is not ("Regex" or "System.Text.RegularExpressions.Regex"))
+                {
+                    continue;
+                }
 
                 // Must have a loop ancestor
                 bool inLoop = creation.Ancestors().Any(a => LoopKinds.Contains(a.Kind()));
-                if (!inLoop) continue;
+                if (!inLoop)
+                {
+                    continue;
+                }
 
                 // Determine if the pattern is a literal (performance-only issue) or a variable (also security)
                 var patternArg = creation.ArgumentList?.Arguments.FirstOrDefault()?.Expression;
@@ -566,16 +705,26 @@ public class SecurityEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return [];
+        if (document == null)
+        {
+            return [];
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return [];
+        if (root == null)
+        {
+            return [];
+        }
 
         var issues = new List<SecurityIssueReport>();
 
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (invocation.Expression is not MemberAccessExpressionSyntax ma) continue;
+            if (invocation.Expression is not MemberAccessExpressionSyntax ma)
+            {
+                continue;
+            }
+
             var receiver = ma.Expression.ToString();
             var methodName = ma.Name.Identifier.Text;
 

@@ -131,6 +131,7 @@ try
     builder.Services.AddSingleton<BreakingChangeEngine>();
     builder.Services.AddSingleton<PathDrivenTestEngine>();
     builder.Services.AddSingleton<StackOverflowEngine>();
+    builder.Services.AddSingleton<AsyncBatchEngine>();
 
     // --- Configure MCP Server Transport ---
     var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
@@ -179,31 +180,46 @@ try
     var warmupStart = System.Diagnostics.Stopwatch.StartNew();
     _ = host.Services.GetRequiredService<PersistentWorkspaceManager>();
     warmupStart.Stop();
-    logger.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+    if (logger.IsEnabled(LogLevel.Information))
+    {
+        logger.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+    }
 
     // --- Auto-Load Solution if Provided ---
     if (!string.IsNullOrEmpty(solutionPath))
     {
         var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
-        logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
+        }
         _ = workspaceManager.LoadSolutionAsync(solutionPath)
             .ContinueWith(
                 t => logger.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
                 TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
-        string.Join(", ", activeModes), modeArg);
+    if (logger.IsEnabled(LogLevel.Information))
+    {
+        logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
+            string.Join(", ", activeModes), modeArg);
+    }
     Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
 
     try
     {
         await host.RunAsync();
-        logger.LogInformation("Host shut down cleanly.");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("Host shut down cleanly.");
+        }
     }
     catch (Exception runEx)
     {
-        logger.LogCritical(runEx, "Host.RunAsync terminated with exception: {Message}", runEx.Message);
+        if (logger.IsEnabled(LogLevel.Critical))
+        {
+            logger.LogCritical(runEx, "Host.RunAsync terminated with exception: {Message}", runEx.Message);
+        }
         Console.Error.WriteLine($"[RoslynSentinel] FATAL: {runEx.Message}");
         throw;
     }

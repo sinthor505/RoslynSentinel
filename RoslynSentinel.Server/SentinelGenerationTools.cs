@@ -38,9 +38,12 @@ public class SentinelGenerationTools
     {
         var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
                 "file not found in workspace or controller class not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -50,9 +53,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"GenerateConstructor failed for '{className}' in '{filePath}': " +
                 "file not found in workspace or class not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -103,9 +109,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(interfaceName, decoratorPrefix, projectName);
         if (result == null)
+        {
             throw new InvalidOperationException(
                 $"Interface '{interfaceName}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. " +
                 "Ensure the interface name matches exactly (including the leading 'I') and is part of the loaded solution.");
+        }
+
         return result;
     }
 
@@ -115,9 +124,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"GenerateDefaultConfigJson failed for project '{projectName}': " +
                 "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -129,9 +141,12 @@ public class SentinelGenerationTools
         {
             var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"GenerateAsyncOverload failed for '{methodName}' in '{filePath}': " +
                     "file not found in workspace or method not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -150,9 +165,12 @@ public class SentinelGenerationTools
         {
             var result = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
             if (string.IsNullOrEmpty(result))
+            {
                 throw new InvalidOperationException(
                     $"AddValidationToPoco failed for '{className}' in '{filePath}': " +
                     "file not found in workspace or class not found. Ensure the solution is loaded.");
+            }
+
             return result;
         }
         catch (InvalidOperationException) { throw; }
@@ -169,9 +187,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ImplementInterfaceSafe failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
                 "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -193,9 +214,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertPropertySafe failed for property '{propertyName}' ({direction}) in '{filePath}': " +
                 "file not found in workspace, property not found, or the specified context snippet did not match. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -213,9 +237,12 @@ public class SentinelGenerationTools
     {
         var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"InterpolateStringSafe failed in '{filePath}': " +
                 "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 }

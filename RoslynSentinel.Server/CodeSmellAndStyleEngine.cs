@@ -22,19 +22,27 @@ public class CodeSmellAndStyleEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<CodeSmell>();
+        if (document == null)
+        {
+            return new List<CodeSmell>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var smells = new List<CodeSmell>();
 
-        if (root == null) return smells;
+        if (root == null)
+        {
+            return smells;
+        }
 
         // 1. Detect EPC33: Thread.Sleep in Async
         var asyncMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword)));
         foreach (var method in asyncMethods)
         {
             if (method.ToString().Contains("Thread.Sleep"))
+            {
                 smells.Add(new CodeSmell("EPC33", "Warning", "Do not use Thread.Sleep in async methods.", method.GetLocation().GetLineSpan().StartLinePosition.Line + 1));
+            }
         }
 
         // 2. Detect IDE0017: Simplify Object Initialization
@@ -60,10 +68,16 @@ public class CodeSmellAndStyleEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var switchStatements = root.DescendantNodes().OfType<SwitchStatementSyntax>().ToList();
         var replaceMap = new Dictionary<SyntaxNode, SyntaxNode>();
@@ -75,7 +89,9 @@ public class CodeSmellAndStyleEngine
                 s.Labels.Count == 1 &&
                 s.Statements.Count == 1 &&
                 s.Statements[0] is ReturnStatementSyntax))
+            {
                 continue;
+            }
 
             var arms = sw.Sections.Select(s =>
             {
@@ -92,7 +108,11 @@ public class CodeSmellAndStyleEngine
             replaceMap[sw] = SyntaxFactory.ReturnStatement(switchExpr);
         }
 
-        if (replaceMap.Count == 0) return root.ToFullString();
+        if (replaceMap.Count == 0)
+        {
+            return root.ToFullString();
+        }
+
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
         return newRoot.NormalizeWhitespace().ToFullString();
     }

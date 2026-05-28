@@ -26,9 +26,16 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword)) && m.ReturnType.ToString() == "void");
@@ -67,9 +74,16 @@ public class AsyncSafetyEngine
         var reports = new List<AsyncSafetyReport>();
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var yieldCalls = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
                 .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma
@@ -100,9 +114,16 @@ public class AsyncSafetyEngine
         var reports = new List<AsyncSafetyReport>();
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var delayCalls = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
                 .Where(inv => inv.Expression is MemberAccessExpressionSyntax ma
@@ -133,9 +154,16 @@ public class AsyncSafetyEngine
         var reports = new List<AsyncSafetyReport>();
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var delayZeroCalls = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
                 .Where(inv =>
@@ -143,14 +171,29 @@ public class AsyncSafetyEngine
                     if (inv.Expression is not MemberAccessExpressionSyntax ma
                         || ma.Expression.ToString() != "Task"
                         || ma.Name.Identifier.Text != "Delay")
+                    {
                         return false;
+                    }
+
                     var args = inv.ArgumentList.Arguments;
-                    if (args.Count == 0) return false;
+                    if (args.Count == 0)
+                    {
+                        return false;
+                    }
+
                     var first = args[0].Expression;
-                    if (first is LiteralExpressionSyntax lit && lit.Token.Text == "0") return true;
+                    if (first is LiteralExpressionSyntax lit && lit.Token.Text == "0")
+                    {
+                        return true;
+                    }
+
                     if (first is MemberAccessExpressionSyntax mts
                         && mts.Expression.ToString() == "TimeSpan"
-                        && mts.Name.Identifier.Text == "Zero") return true;
+                        && mts.Name.Identifier.Text == "Zero")
+                    {
+                        return true;
+                    }
+
                     return false;
                 });
 
@@ -178,9 +221,16 @@ public class AsyncSafetyEngine
         var reports = new List<AsyncSafetyReport>();
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             // Detect methods with 2+ sequential independent awaits that could be parallelized with Task.WhenAll
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -196,7 +246,10 @@ public class AsyncSafetyEngine
                              ld.Declaration.Variables[0].Initializer?.Value is AwaitExpressionSyntax))
                         .ToList();
 
-                    if (awaitStatements.Count < 2) continue;
+                    if (awaitStatements.Count < 2)
+                    {
+                        continue;
+                    }
 
                     // Count independent consecutive pairs
                     int independentPairs = 0;
@@ -210,19 +263,28 @@ public class AsyncSafetyEngine
                         if (first is LocalDeclarationStatementSyntax firstLocal)
                         {
                             foreach (var v in firstLocal.Declaration.Variables)
+                            {
                                 declaredVarNames.Add(v.Identifier.Text);
+                            }
                         }
 
                         // Extract the second await expression
                         ExpressionSyntax? secondAwaitExpression = null;
                         if (second is ExpressionStatementSyntax secondExpr &&
                             secondExpr.Expression is AwaitExpressionSyntax secondAwait1)
+                        {
                             secondAwaitExpression = secondAwait1.Expression;
+                        }
                         else if (second is LocalDeclarationStatementSyntax secondLocal &&
                                  secondLocal.Declaration.Variables[0].Initializer?.Value is AwaitExpressionSyntax secondAwait2)
+                        {
                             secondAwaitExpression = secondAwait2.Expression;
+                        }
 
-                        if (secondAwaitExpression == null) continue;
+                        if (secondAwaitExpression == null)
+                        {
+                            continue;
+                        }
 
                         // Check if the second await depends on any variable declared in the first
                         bool dependent = secondAwaitExpression
@@ -231,7 +293,9 @@ public class AsyncSafetyEngine
                             .Any(id => declaredVarNames.Contains(id.Identifier.Text));
 
                         if (!dependent)
+                        {
                             independentPairs++;
+                        }
                     }
 
                     if (independentPairs >= 1)
@@ -262,9 +326,16 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var awaitExpr in root.DescendantNodes().OfType<AwaitExpressionSyntax>())
             {
@@ -272,14 +343,18 @@ public class AsyncSafetyEngine
                 if (expr is InvocationExpressionSyntax inv &&
                     inv.Expression is MemberAccessExpressionSyntax ma &&
                     ma.Name.Identifier.Text == "ConfigureAwait")
+                {
                     continue;
+                }
 
                 var containingClass = awaitExpr.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
                 if (containingClass != null)
                 {
                     var className = containingClass.Identifier.Text;
                     if (appSuffixes.Any(s => className.EndsWith(s)))
+                    {
                         continue;
+                    }
                 }
 
                 var method = awaitExpr.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
@@ -304,9 +379,16 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var asyncMethods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword)));
@@ -371,13 +453,24 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var ctor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
             {
-                if (ctor.Body == null) continue;
+                if (ctor.Body == null)
+                {
+                    continue;
+                }
+
                 var className = ctor.Identifier.Text;
 
                 if (ctor.Body.DescendantNodes().OfType<AwaitExpressionSyntax>().Any())
@@ -418,9 +511,16 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var awaitExpr in root.DescendantNodes().OfType<AwaitExpressionSyntax>())
             {
@@ -451,14 +551,24 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var lockStmt in root.DescendantNodes().OfType<LockStatementSyntax>())
             {
                 var containingType = lockStmt.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (containingType == null) continue;
+                if (containingType == null)
+                {
+                    continue;
+                }
 
                 var collectionFields = containingType.Members.OfType<FieldDeclarationSyntax>()
                     .Where(f =>
@@ -498,29 +608,56 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             // Pattern 1: double-checked locking without volatile
             foreach (var outerIf in root.DescendantNodes().OfType<IfStatementSyntax>())
             {
-                if (!IsNullCheck(outerIf.Condition, out var checkedName)) continue;
+                if (!IsNullCheck(outerIf.Condition, out var checkedName))
+                {
+                    continue;
+                }
 
                 var lockStmt = outerIf.Statement is BlockSyntax b1
                     ? b1.Statements.OfType<LockStatementSyntax>().FirstOrDefault()
                     : outerIf.Statement as LockStatementSyntax;
-                if (lockStmt == null) continue;
+                if (lockStmt == null)
+                {
+                    continue;
+                }
 
                 var innerIf = lockStmt.Statement is BlockSyntax b2
                     ? b2.Statements.OfType<IfStatementSyntax>().FirstOrDefault()
                     : lockStmt.Statement as IfStatementSyntax;
-                if (innerIf == null) continue;
-                if (!IsNullCheck(innerIf.Condition, out var innerName)) continue;
-                if (checkedName != innerName) continue;
+                if (innerIf == null)
+                {
+                    continue;
+                }
+
+                if (!IsNullCheck(innerIf.Condition, out var innerName))
+                {
+                    continue;
+                }
+
+                if (checkedName != innerName)
+                {
+                    continue;
+                }
 
                 var containingType = outerIf.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (containingType == null) continue;
+                if (containingType == null)
+                {
+                    continue;
+                }
 
                 var isVolatile = containingType.Members.OfType<FieldDeclarationSyntax>()
                     .Where(f => f.Declaration.Variables.Any(v => v.Identifier.Text == checkedName))
@@ -538,10 +675,20 @@ public class AsyncSafetyEngine
             // Pattern 2: unguarded null initialization (if (field == null) field = new T(); without lock)
             foreach (var ifStmt in root.DescendantNodes().OfType<IfStatementSyntax>())
             {
-                if (!IsNullCheck(ifStmt.Condition, out var name)) continue;
-                if (ifStmt.Statement.DescendantNodes().OfType<LockStatementSyntax>().Any()) continue;
+                if (!IsNullCheck(ifStmt.Condition, out var name))
+                {
+                    continue;
+                }
+
+                if (ifStmt.Statement.DescendantNodes().OfType<LockStatementSyntax>().Any())
+                {
+                    continue;
+                }
                 // Not inside a lock
-                if (ifStmt.Ancestors().OfType<LockStatementSyntax>().Any()) continue;
+                if (ifStmt.Ancestors().OfType<LockStatementSyntax>().Any())
+                {
+                    continue;
+                }
 
                 var innerStmts = ifStmt.Statement is BlockSyntax blk
                     ? blk.Statements
@@ -552,10 +699,16 @@ public class AsyncSafetyEngine
                               assign.Left is IdentifierNameSyntax leftId &&
                               leftId.Identifier.Text == name);
 
-                if (!hasAssignment) continue;
+                if (!hasAssignment)
+                {
+                    continue;
+                }
 
                 var containingType = ifStmt.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-                if (containingType == null) continue;
+                if (containingType == null)
+                {
+                    continue;
+                }
 
                 var isField = containingType.Members.OfType<FieldDeclarationSyntax>()
                     .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == name));
@@ -618,9 +771,16 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             SemanticModel? semanticModel = null;
             try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
@@ -630,7 +790,10 @@ public class AsyncSafetyEngine
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 var methodName = method.Identifier.Text;
-                if (method.Body == null && method.ExpressionBody == null) continue;
+                if (method.Body == null && method.ExpressionBody == null)
+                {
+                    continue;
+                }
 
                 // Pattern A: double await on same variable
                 var awaitedIdentifiers = method.DescendantNodes()
@@ -758,7 +921,10 @@ public class AsyncSafetyEngine
                 // Pattern D: .Result on ValueTask
                 foreach (var memberAccess in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
                 {
-                    if (memberAccess.Name.Identifier.Text != "Result") continue;
+                    if (memberAccess.Name.Identifier.Text != "Result")
+                    {
+                        continue;
+                    }
 
                     var isVt = false;
                     if (semanticModel != null)
@@ -797,18 +963,28 @@ public class AsyncSafetyEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.AsyncKeyword))))
             {
-                if (method.Body == null && method.ExpressionBody == null) continue;
+                if (method.Body == null && method.ExpressionBody == null)
+                {
+                    continue;
+                }
 
                 var awaitExprs = method.DescendantNodes().OfType<AwaitExpressionSyntax>().ToList();
 
-                if (!awaitExprs.Any())
+                if (awaitExprs.Count == 0)
                 {
                     var lineSpan = method.GetLocation().GetLineSpan();
                     reports.Add(new AsyncSafetyReport(
@@ -825,11 +1001,17 @@ public class AsyncSafetyEngine
                         inv.Expression is MemberAccessExpressionSyntax ma &&
                         noOpTargets.Contains(ma.Name.Identifier.Text) &&
                         (ma.Expression.ToString() == "Task" || ma.Expression.ToString() == "ValueTask"))
+                    {
                         return true;
+                    }
+
                     if (a.Expression is MemberAccessExpressionSyntax directMa &&
                         directMa.Name.Identifier.Text == "CompletedTask" &&
                         directMa.Expression.ToString() == "Task")
+                    {
                         return true;
+                    }
+
                     return false;
                 });
 
@@ -868,9 +1050,17 @@ public class AsyncSafetyEngine
 
         foreach (var doc in docs)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             // Get semantic model for this doc (optional — fall back to syntax heuristics if unavailable)
@@ -883,7 +1073,10 @@ public class AsyncSafetyEngine
                 bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
                 bool returnsTask = !isAsync && method.ReturnType is GenericNameSyntax gn &&
                     (gn.Identifier.Text == "Task" || gn.Identifier.Text == "ValueTask");
-                if (!isAsync && !returnsTask) continue;
+                if (!isAsync && !returnsTask)
+                {
+                    continue;
+                }
 
                 // Method must have a CancellationToken parameter
                 var ctParam = method.ParameterList.Parameters.FirstOrDefault(p =>
@@ -891,11 +1084,17 @@ public class AsyncSafetyEngine
                     var typeName = p.Type?.ToString() ?? "";
                     return typeName == "CancellationToken" || typeName.EndsWith(".CancellationToken");
                 });
-                if (ctParam == null) continue;
+                if (ctParam == null)
+                {
+                    continue;
+                }
 
                 var ctParamName = ctParam.Identifier.Text;
                 var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                if (body == null) continue;
+                if (body == null)
+                {
+                    continue;
+                }
 
                 foreach (var invocation in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
@@ -907,20 +1106,28 @@ public class AsyncSafetyEngine
                         _ => null
                     };
                     if (calleeName == null || !calleeName.EndsWith("Async", StringComparison.Ordinal))
+                    {
                         continue;
+                    }
 
                     // Must be awaited to be a real async call site
                     bool isAwaited = invocation.Parent is AwaitExpressionSyntax ||
                         (invocation.Parent is MemberAccessExpressionSyntax chainMa &&
                          chainMa.Parent is InvocationExpressionSyntax chainCall &&
                          chainCall.Parent is AwaitExpressionSyntax);
-                    if (!isAwaited) continue;
+                    if (!isAwaited)
+                    {
+                        continue;
+                    }
 
                     // Check whether the CancellationToken param is already forwarded
                     var args = invocation.ArgumentList.Arguments;
                     bool alreadyForwarded = args.Any(a =>
                         a.Expression.ToString().Contains(ctParamName));
-                    if (alreadyForwarded) continue;
+                    if (alreadyForwarded)
+                    {
+                        continue;
+                    }
 
                     // Verify (via semantic model) that a CancellationToken overload exists for the callee.
                     // If no semantic model, use heuristic: assume any *Async method can accept one.
@@ -940,7 +1147,10 @@ public class AsyncSafetyEngine
                             : true; // fallback: flag it
                     }
 
-                    if (!hasCancellableOverload) continue;
+                    if (!hasCancellableOverload)
+                    {
+                        continue;
+                    }
 
                     var lineSpan = invocation.GetLocation().GetLineSpan();
                     reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
@@ -955,10 +1165,16 @@ public class AsyncSafetyEngine
     private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
     {
         var parameters = method.ParameterList.Parameters;
-        if (parameters.Count != 2) return false;
+        if (parameters.Count != 2)
+        {
+            return false;
+        }
 
         var firstType = parameters[0].Type?.ToString().TrimEnd('?') ?? "";
-        if (firstType != "object") return false;
+        if (firstType != "object")
+        {
+            return false;
+        }
 
         var secondType = parameters[1].Type?.ToString() ?? "";
         // Strip nullable suffix and fully-qualified prefix, check tail
@@ -978,21 +1194,34 @@ public class AsyncSafetyEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath!).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             documents = solution.Projects
                 .Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
                 .SelectMany(p => p.Documents).Cast<Document?>();
+        }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var reports = new List<AsyncSafetyReport>();
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             // Semantic model enables precise return-type checking instead of name-suffix heuristics.
             // Graceful fallback: if null (unresolvable project), the Async-suffix heuristic is used.
@@ -1004,13 +1233,19 @@ public class AsyncSafetyEngine
                 if (exprStmt.Expression is InvocationExpressionSyntax inv)
                 {
                     if (exprStmt.Expression is AwaitExpressionSyntax)
+                    {
                         continue;
+                    }
 
                     string? methodName = null;
                     if (inv.Expression is MemberAccessExpressionSyntax ma)
+                    {
                         methodName = ma.Name.Identifier.Text;
+                    }
                     else if (inv.Expression is IdentifierNameSyntax id)
+                    {
                         methodName = id.Identifier.Text;
+                    }
 
                     bool isTaskReturning = IsTaskReturningSemantic(semanticModel, inv, cancellationToken)
                         ?? methodName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true;
@@ -1039,14 +1274,20 @@ public class AsyncSafetyEngine
                     if (assign.Right is InvocationExpressionSyntax discardInv)
                     {
                         if (discardInv.Expression is MemberAccessExpressionSyntax dma)
+                        {
                             methodName = dma.Name.Identifier.Text;
+                        }
                         else if (discardInv.Expression is IdentifierNameSyntax did)
+                        {
                             methodName = did.Identifier.Text;
+                        }
 
                         // Skip: task-chaining methods are the correct error-handling pattern.
                         // _ = DoWorkAsync().ContinueWith(errHandler, OnlyOnFaulted) is intentional.
                         if (methodName is "ContinueWith" or "Unwrap" or "ConfigureAwait" or "AsTask")
+                        {
                             continue;
+                        }
 
                         semanticResult = IsTaskReturningSemantic(semanticModel, discardInv, cancellationToken);
                     }
@@ -1064,9 +1305,13 @@ public class AsyncSafetyEngine
                         var thenName = ExtractDirectMethodName(condExpr.WhenTrue);
                         var elseName = ExtractDirectMethodName(condExpr.WhenFalse);
                         if (thenName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true)
+                        {
                             methodName = thenName;
+                        }
                         else if (elseName?.EndsWith("Async", StringComparison.OrdinalIgnoreCase) == true)
+                        {
                             methodName = elseName;
+                        }
                         // Check type of either branch
                         semanticResult = IsTaskReturningSemantic(semanticModel, condExpr.WhenTrue, cancellationToken)
                             ?? IsTaskReturningSemantic(semanticModel, condExpr.WhenFalse, cancellationToken);
@@ -1093,9 +1338,17 @@ public class AsyncSafetyEngine
     // Returns true/false if the semantic model can resolve the return type; null if unresolvable (caller falls back).
     private static bool? IsTaskReturningSemantic(SemanticModel? model, ExpressionSyntax expr, CancellationToken ct)
     {
-        if (model == null) return null;
+        if (model == null)
+        {
+            return null;
+        }
+
         var type = model.GetTypeInfo(expr, ct).Type;
-        if (type == null) return null; // unresolvable — let caller fall back to heuristic
+        if (type == null)
+        {
+            return null; // unresolvable — let caller fall back to heuristic
+        }
+
         return SemanticTypeHelper.IsTaskOrValueTask(type);
     }
 
@@ -1104,11 +1357,21 @@ public class AsyncSafetyEngine
     {
         if (expr is InvocationExpressionSyntax inv)
         {
-            if (inv.Expression is MemberAccessExpressionSyntax ma) return ma.Name.Identifier.Text;
-            if (inv.Expression is IdentifierNameSyntax id) return id.Identifier.Text;
+            if (inv.Expression is MemberAccessExpressionSyntax ma)
+            {
+                return ma.Name.Identifier.Text;
+            }
+
+            if (inv.Expression is IdentifierNameSyntax id)
+            {
+                return id.Identifier.Text;
+            }
         }
         if (expr is ConditionalAccessExpressionSyntax cae)
+        {
             return ExtractTerminalAsyncMethodName(cae.WhenNotNull);
+        }
+
         return null;
     }
 
@@ -1119,11 +1382,15 @@ public class AsyncSafetyEngine
         // Terminal case: ?.RunAsync() — the WhenNotNull is an invocation via member binding
         if (whenNotNull is InvocationExpressionSyntax termInv &&
             termInv.Expression is MemberBindingExpressionSyntax termMb)
+        {
             return termMb.Name.Identifier.Text;
+        }
 
         // Chained case: ?._svc?.RunAsync() — WhenNotNull is another conditional access
         if (whenNotNull is ConditionalAccessExpressionSyntax innerCae)
+        {
             return ExtractTerminalAsyncMethodName(innerCae.WhenNotNull);
+        }
 
         return null;
     }
@@ -1150,15 +1417,30 @@ public class AsyncSafetyEngine
 
         foreach (var doc in docs)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
-                if (method.Body == null) continue;
+                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+                {
+                    continue;
+                }
+
+                if (method.Body == null)
+                {
+                    continue;
+                }
 
                 var statements = method.Body.Statements;
 
@@ -1190,8 +1472,15 @@ public class AsyncSafetyEngine
 
                     while (next < statements.Count)
                     {
-                        if (!TryGetAwaitedVarDecl(statements[next], out var nextVar, out var nextExpr)) break;
-                        if (nextExpr!.ToString().Contains("WhenAll") || nextExpr.ToString().Contains("WhenAny")) break;
+                        if (!TryGetAwaitedVarDecl(statements[next], out var nextVar, out var nextExpr))
+                        {
+                            break;
+                        }
+
+                        if (nextExpr!.ToString().Contains("WhenAll") || nextExpr.ToString().Contains("WhenAny"))
+                        {
+                            break;
+                        }
 
                         // Check dependency via actual IdentifierNameSyntax nodes, not substring matching.
                         bool nextDependsOnBlock = blockVars.Any(v =>
@@ -1200,7 +1489,10 @@ public class AsyncSafetyEngine
                         bool blockDependsOnNext = blockExprs.Any(e =>
                             e.DescendantNodes().OfType<IdentifierNameSyntax>()
                                 .Any(id => id.Identifier.Text == nextVar));
-                        if (nextDependsOnBlock || blockDependsOnNext) break;
+                        if (nextDependsOnBlock || blockDependsOnNext)
+                        {
+                            break;
+                        }
 
                         blockVars.Add(nextVar!);
                         blockExprs.Add(nextExpr!);
@@ -1233,10 +1525,22 @@ public class AsyncSafetyEngine
     {
         varName = null;
         awaitedExpr = null;
-        if (stmt is not LocalDeclarationStatementSyntax localDecl) return false;
-        if (localDecl.Declaration.Variables.Count != 1) return false;
+        if (stmt is not LocalDeclarationStatementSyntax localDecl)
+        {
+            return false;
+        }
+
+        if (localDecl.Declaration.Variables.Count != 1)
+        {
+            return false;
+        }
+
         var v = localDecl.Declaration.Variables[0];
-        if (v.Initializer?.Value is not AwaitExpressionSyntax awaitExpr) return false;
+        if (v.Initializer?.Value is not AwaitExpressionSyntax awaitExpr)
+        {
+            return false;
+        }
+
         varName = v.Identifier.Text;
         awaitedExpr = awaitExpr.Expression;
         return true;
@@ -1261,16 +1565,35 @@ public class AsyncSafetyEngine
 
         foreach (var doc in docs)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
-                if (method.ReturnType.ToString() != "void") continue;
-                if (method.Body == null) continue;
+                if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+                {
+                    continue;
+                }
+
+                if (method.ReturnType.ToString() != "void")
+                {
+                    continue;
+                }
+
+                if (method.Body == null)
+                {
+                    continue;
+                }
 
                 // The "safe" form wraps the entire body in try/catch:
                 // the body has exactly one statement which is a try statement
@@ -1279,13 +1602,19 @@ public class AsyncSafetyEngine
                     method.Body.Statements[0] is TryStatementSyntax trySt &&
                     trySt.Catches.Count > 0;
 
-                if (hasTopLevelTryCatch) continue;
+                if (hasTopLevelTryCatch)
+                {
+                    continue;
+                }
 
                 // Also pass if the method body itself contains ANY try/catch wrapping all awaits
                 // (conservative: just check for presence of a catch at any level)
                 // This avoids false positives on short methods with inner try/catch.
                 bool hasSomeCatch = method.Body.DescendantNodes().OfType<CatchClauseSyntax>().Any();
-                if (hasSomeCatch) continue;
+                if (hasSomeCatch)
+                {
+                    continue;
+                }
 
                 var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,
@@ -1318,20 +1647,34 @@ public class AsyncSafetyEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (method.Body == null && method.ExpressionBody == null) continue;
+                if (method.Body == null && method.ExpressionBody == null)
+                {
+                    continue;
+                }
 
                 bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
 
                 foreach (var inv in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
                     // Must be a call to DisposeAsync()
-                    if (inv.Expression is not MemberAccessExpressionSyntax ma) continue;
-                    if (ma.Name.Identifier.Text != "DisposeAsync") continue;
+                    if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                    {
+                        continue;
+                    }
+
+                    if (ma.Name.Identifier.Text != "DisposeAsync")
+                    {
+                        continue;
+                    }
 
                     // Flag if the call is not the direct operand of an AwaitExpressionSyntax
                     bool isAwaited = inv.Parent is AwaitExpressionSyntax;
@@ -1341,10 +1684,15 @@ public class AsyncSafetyEngine
                         if (chainMa.Name.Identifier.Text == "ConfigureAwait" &&
                             chainMa.Parent is InvocationExpressionSyntax configureInv &&
                             configureInv.Parent is AwaitExpressionSyntax)
+                        {
                             isAwaited = true;
+                        }
                     }
 
-                    if (isAwaited) continue;
+                    if (isAwaited)
+                    {
+                        continue;
+                    }
 
                     var line = inv.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     var context = isAsync
@@ -1383,9 +1731,17 @@ public class AsyncSafetyEngine
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var model = await doc.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
@@ -1402,11 +1758,17 @@ public class AsyncSafetyEngine
 
                 foreach (var method in classDecl.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
-                    if (method.Body == null) continue;
+                    if (method.Body == null)
+                    {
+                        continue;
+                    }
 
                     foreach (var assignment in method.Body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
                     {
-                        if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)) continue;
+                        if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+                        {
+                            continue;
+                        }
 
                         // LHS must be a field or property member (not a local)
                         string? targetName = assignment.Left switch
@@ -1416,20 +1778,37 @@ public class AsyncSafetyEngine
                                 => memberNames.Contains(ma.Name.Identifier.Text) ? ma.Name.Identifier.Text : null,
                             _ => null
                         };
-                        if (targetName == null) continue;
+                        if (targetName == null)
+                        {
+                            continue;
+                        }
 
                         // RHS must be an invocation — not already awaited
                         ExpressionSyntax rhs = assignment.Right;
-                        if (rhs is AwaitExpressionSyntax) continue; // already properly awaited
-                        if (rhs is not InvocationExpressionSyntax rhsInv) continue;
+                        if (rhs is AwaitExpressionSyntax)
+                        {
+                            continue; // already properly awaited
+                        }
+
+                        if (rhs is not InvocationExpressionSyntax rhsInv)
+                        {
+                            continue;
+                        }
 
                         // Verify RHS returns Task or ValueTask via semantic model
                         var rhsType = model.GetTypeInfo(rhs, ct).Type as INamedTypeSymbol;
-                        if (rhsType == null) continue;
+                        if (rhsType == null)
+                        {
+                            continue;
+                        }
+
                         var rtName = rhsType.OriginalDefinition.ToDisplayString();
                         bool returnsTask = rtName.StartsWith("System.Threading.Tasks.Task") ||
                                            rtName.StartsWith("System.Threading.Tasks.ValueTask");
-                        if (!returnsTask) continue;
+                        if (!returnsTask)
+                        {
+                            continue;
+                        }
 
                         // Check that the field is never awaited anywhere in the class
                         bool everAwaited = classDecl.DescendantNodes().OfType<AwaitExpressionSyntax>()
@@ -1440,7 +1819,10 @@ public class AsyncSafetyEngine
                                         ma2.Expression is IdentifierNameSyntax recv &&
                                         recv.Identifier.Text == targetName &&
                                         ma2.Name.Identifier.Text == "Wait");
-                        if (everAwaited || everWaited) continue;
+                        if (everAwaited || everWaited)
+                        {
+                            continue;
+                        }
 
                         var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                         reports.Add(new AsyncSafetyReport(fp, method.Identifier.Text,

@@ -20,63 +20,76 @@ public class ThreadSafetyEngine
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return $"// Error: File '{filePath}' not found.";
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+            if (document == null)
+            {
+                return $"// Error: File '{filePath}' not found.";
+            }
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || method.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null)
+            {
+                return $"// Error: Failed to get syntax root for '{filePath}'.";
+            }
 
-        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        if (typeNode == null) return $"// Error: Containing type not found for method '{methodName}'.";
+            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+            if (method == null || method.Body == null)
+            {
+                return $"// Error: Method '{methodName}' not found or has no body.";
+            }
 
-        // Check if a field with lockFieldName already exists
-        var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
+            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+            if (typeNode == null)
+            {
+                return $"// Error: Containing type not found for method '{methodName}'.";
+            }
+
+            // Check if a field with lockFieldName already exists
+            var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
             .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == lockFieldName));
 
-        bool addLockField;
-        if (existingLockField != null)
-        {
-            var fieldType = existingLockField.Declaration.Type.ToString().Trim();
-            if (fieldType == "object")
+            bool addLockField;
+            if (existingLockField != null)
             {
-                // Reuse existing object lock field
-                addLockField = false;
+                var fieldType = existingLockField.Declaration.Type.ToString().Trim();
+                if (fieldType == "object")
+                {
+                    // Reuse existing object lock field
+                    addLockField = false;
+                }
+                else
+                {
+                    return $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.";
+                }
             }
             else
             {
-                return $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.";
+                addLockField = true;
             }
-        }
-        else
-        {
-            addLockField = true;
-        }
 
-        var lockField = SyntaxFactory.FieldDeclaration(
-            SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("object"))
-            .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                SyntaxFactory.VariableDeclarator(lockFieldName)
-                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("object")).WithArgumentList(SyntaxFactory.ArgumentList()))))))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+            var lockField = SyntaxFactory.FieldDeclaration(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("object"))
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(lockFieldName)
+                    .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("object")).WithArgumentList(SyntaxFactory.ArgumentList()))))))
+                .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
 
-        var newBody = SyntaxFactory.Block(
-            SyntaxFactory.LockStatement(
-                SyntaxFactory.IdentifierName(lockFieldName),
-                method.Body));
+            var newBody = SyntaxFactory.Block(
+                SyntaxFactory.LockStatement(
+                    SyntaxFactory.IdentifierName(lockFieldName),
+                    method.Body));
 
-        var newMethod = method.WithBody(newBody);
-        var newTypeNode = typeNode.ReplaceNode(method, newMethod);
+            var newMethod = method.WithBody(newBody);
+            var newTypeNode = typeNode.ReplaceNode(method, newMethod);
 
-        if (addLockField)
-        {
-            newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
-        }
+            if (addLockField)
+            {
+                newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
+            }
 
-        var newRoot = root.ReplaceNode(typeNode, newTypeNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+            var newRoot = root.ReplaceNode(typeNode, newTypeNode);
+            return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
         {
@@ -92,124 +105,147 @@ public class ThreadSafetyEngine
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+            if (document == null)
+            {
+                throw new FileNotFoundException($"File not found: {filePath}");
+            }
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new Exception("Failed to get syntax root.");
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            if (root == null)
+            {
+                throw new InvalidOperationException($"Failed to get syntax root for file: {filePath}");
+            }
+
+            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || method.Body == null) throw new Exception("Method or body not found.");
+            if (method == null || method.Body == null)
+            {
+                throw new InvalidOperationException($"Method or body not found: {methodName} in file: {filePath}");
+            }
 
-        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        if (typeNode == null) throw new Exception("Type not found.");
+            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+            if (typeNode == null)
+            {
+                throw new InvalidOperationException($"Type not found for method: {methodName} in file: {filePath}");
+            }
 
-        // Find the lock object being used in this method
-        var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
-        if (!lockStatements.Any()) return root.ToFullString();
+            // Find the lock object being used in this method
+            var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
+            if (lockStatements.Count == 0)
+            {
+                return root.ToFullString();
+            }
 
-        // Get the lock object identifier (e.g., "_lock")
-        var lockExpression = lockStatements.First().Expression.ToString().Trim();
+            // Get the lock object identifier (e.g., "_lock")
+            var lockExpression = lockStatements.First().Expression.ToString().Trim();
 
-        // Find ALL lock statements in the entire type that use the same lock object
-        var allLockStatementsInType = typeNode.DescendantNodes().OfType<LockStatementSyntax>()
-            .Where(ls => ls.Expression.ToString().Trim() == lockExpression)
-            .ToList();
+            // Find ALL lock statements in the entire type that use the same lock object
+            var allLockStatementsInType = typeNode.DescendantNodes().OfType<LockStatementSyntax>()
+                .Where(ls => ls.Expression.ToString().Trim() == lockExpression)
+                .ToList();
 
-        if (!allLockStatementsInType.Any()) return root.ToFullString();
+            if (allLockStatementsInType.Count == 0)
+            {
+                return root.ToFullString();
+            }
 
-        const string semaphoreName = "_semaphore";
-        var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
-            .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
+            const string semaphoreName = "_semaphore";
+            var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
+                .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
 
-        // Build the conversion function for lock statements
-        Func<LockStatementSyntax, SyntaxNode> convertLock = (lockStmt) =>
-        {
-            var bodyStatements = lockStmt.Statement is BlockSyntax blk
-                ? blk.Statements
-                : SyntaxFactory.SingletonList<StatementSyntax>(lockStmt.Statement);
+            // Build the conversion function for lock statements
+            Func<LockStatementSyntax, SyntaxNode> convertLock = (lockStmt) =>
+            {
+                var bodyStatements = lockStmt.Statement is BlockSyntax blk
+                    ? blk.Statements
+                    : SyntaxFactory.SingletonList<StatementSyntax>(lockStmt.Statement);
 
-            var waitAsync = SyntaxFactory.ExpressionStatement(
-                SyntaxFactory.AwaitExpression(
+                var waitAsync = SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.AwaitExpression(
+                        SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.MemberAccessExpression(
+                                SyntaxKind.SimpleMemberAccessExpression,
+                                SyntaxFactory.IdentifierName(semaphoreName),
+                                SyntaxFactory.IdentifierName("WaitAsync")))));
+
+                var release = SyntaxFactory.ExpressionStatement(
                     SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
                             SyntaxFactory.IdentifierName(semaphoreName),
-                            SyntaxFactory.IdentifierName("WaitAsync")))));
+                            SyntaxFactory.IdentifierName("Release"))));
 
-            var release = SyntaxFactory.ExpressionStatement(
-                SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        SyntaxFactory.IdentifierName(semaphoreName),
-                        SyntaxFactory.IdentifierName("Release"))));
+                var tryFinally = SyntaxFactory.TryStatement(
+                    SyntaxFactory.Block(bodyStatements),
+                    new SyntaxList<CatchClauseSyntax>(),
+                    SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
 
-            var tryFinally = SyntaxFactory.TryStatement(
-                SyntaxFactory.Block(bodyStatements),
-                new SyntaxList<CatchClauseSyntax>(),
-                SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
+                return SyntaxFactory.Block(waitAsync, tryFinally);
+            };
 
-            return SyntaxFactory.Block(waitAsync, tryFinally);
-        };
+            // Replace all lock statements in the type
+            var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
 
-        // Replace all lock statements in the type
-        var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
+            // Find method SIGNATURES that contain locks (before replacement, using original typeNode).
+            // Using (name, parameterList) tuples avoids the overload bug where method-name-only matching
+            // would make ALL overloads async even when only one overload actually contained a lock.
+            var methodSignaturesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+                .Select(m => (Name: m.Identifier.Text, Params: m.ParameterList.ToString()))
+                .ToHashSet();
 
-        // Find method SIGNATURES that contain locks (before replacement, using original typeNode).
-        // Using (name, parameterList) tuples avoids the overload bug where method-name-only matching
-        // would make ALL overloads async even when only one overload actually contained a lock.
-        var methodSignaturesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
-            .Select(m => (Name: m.Identifier.Text, Params: m.ParameterList.ToString()))
-            .ToHashSet();
-
-        // Make ONLY the methods that contained locks async (match by name + parameters, not name alone)
-        var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
-        foreach (var meth in methodsInNewType)
-        {
-            if (methodSignaturesWithLocks.Contains((meth.Identifier.Text, meth.ParameterList.ToString())) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
+            // Make ONLY the methods that contained locks async (match by name + parameters, not name alone)
+            var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+            foreach (var meth in methodsInNewType)
             {
-                var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-                var retStr = newMeth.ReturnType.ToString().Trim();
-                if (retStr == "void")
-                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
-                else if (!retStr.StartsWith("Task"))
-                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
-                
-                newTypeNode = newTypeNode.ReplaceNode(meth, newMeth);
+                if (methodSignaturesWithLocks.Contains((meth.Identifier.Text, meth.ParameterList.ToString())) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
+                {
+                    var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+                    var retStr = newMeth.ReturnType.ToString().Trim();
+                    if (retStr == "void")
+                    {
+                        newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
+                    }
+                    else if (!retStr.StartsWith("Task"))
+                    {
+                        newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
+                    }
+
+                    newTypeNode = newTypeNode.ReplaceNode(meth, newMeth);
+                }
             }
-        }
 
-        if (!hasSemaphore)
-        {
-            // If every method that contains this lock is static, the semaphore must also be static
-            // so that the static methods can access it without an instance.
-            bool isStaticContext = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>()
-                    .Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
-                .All(m => m.Modifiers.Any(SyntaxKind.StaticKeyword));
+            if (!hasSemaphore)
+            {
+                // If every method that contains this lock is static, the semaphore must also be static
+                // so that the static methods can access it without an instance.
+                bool isStaticContext = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                    .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>()
+                        .Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+                    .All(m => m.Modifiers.Any(SyntaxKind.StaticKeyword));
 
-            var semaphoreField = SyntaxFactory.FieldDeclaration(
-                SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
-                .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                    SyntaxFactory.VariableDeclarator(semaphoreName)
-                    .WithInitializer(SyntaxFactory.EqualsValueClause(
-                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
-                        .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
-                        {
+                var semaphoreField = SyntaxFactory.FieldDeclaration(
+                    SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(semaphoreName)
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                            .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                            {
                             SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))),
                             SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))
-                        }))))))))
-            .AddModifiers(isStaticContext
-                ? new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) }
-                : new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) });
+                            }))))))))
+                .AddModifiers(isStaticContext
+                    ? new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) }
+                    : new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) });
 
-            newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
-        }
+                newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
+            }
 
-        var newRoot = root.ReplaceNode(typeNode, newTypeNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+            var newRoot = root.ReplaceNode(typeNode, newTypeNode);
+            return newRoot.NormalizeWhitespace().ToFullString();
         }
         catch (Exception ex)
         {
@@ -234,16 +270,26 @@ public class ThreadSafetyEngine
 
         IEnumerable<Document> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents);
+        }
 
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             // Collect field names that are marked volatile
@@ -251,8 +297,12 @@ public class ThreadSafetyEngine
             foreach (var field in root.DescendantNodes().OfType<FieldDeclarationSyntax>())
             {
                 if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.VolatileKeyword)))
+                {
                     foreach (var v in field.Declaration.Variables)
+                    {
                         volatileFields.Add(v.Identifier.Text);
+                    }
+                }
             }
 
             foreach (var ifStmt in root.DescendantNodes().OfType<IfStatementSyntax>())
@@ -264,10 +314,14 @@ public class ThreadSafetyEngine
                 {
                     if (bin.Left is IdentifierNameSyntax lid &&
                         bin.Right is LiteralExpressionSyntax rn && rn.IsKind(SyntaxKind.NullLiteralExpression))
+                    {
                         fieldName = lid.Identifier.Text;
+                    }
                     else if (bin.Right is IdentifierNameSyntax rid &&
                              bin.Left is LiteralExpressionSyntax ln && ln.IsKind(SyntaxKind.NullLiteralExpression))
+                    {
                         fieldName = rid.Identifier.Text;
+                    }
                 }
                 // Also: if (_field is null)
                 else if (ifStmt.Condition is IsPatternExpressionSyntax isPat &&
@@ -279,21 +333,33 @@ public class ThreadSafetyEngine
                     fieldName = isId.Identifier.Text;
                 }
 
-                if (fieldName == null) continue;
+                if (fieldName == null)
+                {
+                    continue;
+                }
 
                 // The then-branch must assign the same field
                 bool thenAssigns = ifStmt.Statement.DescendantNodesAndSelf()
                     .OfType<AssignmentExpressionSyntax>()
                     .Any(a => a.Left is IdentifierNameSyntax ai && ai.Identifier.Text == fieldName &&
                               a.Right is ObjectCreationExpressionSyntax or ImplicitObjectCreationExpressionSyntax);
-                if (!thenAssigns) continue;
+                if (!thenAssigns)
+                {
+                    continue;
+                }
 
                 // Skip if inside a lock statement
                 bool insideLock = ifStmt.Ancestors().OfType<LockStatementSyntax>().Any();
-                if (insideLock) continue;
+                if (insideLock)
+                {
+                    continue;
+                }
 
                 // Skip if field is volatile (volatile reads/writes are atomic for reference types)
-                if (volatileFields.Contains(fieldName)) continue;
+                if (volatileFields.Contains(fieldName))
+                {
+                    continue;
+                }
 
                 // Skip Lazy<T> wrappers
                 var containingClass = ifStmt.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
@@ -302,7 +368,10 @@ public class ThreadSafetyEngine
                     bool isLazyField = containingClass.Members.OfType<FieldDeclarationSyntax>()
                         .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName) &&
                                   f.Declaration.Type.ToString().StartsWith("Lazy"));
-                    if (isLazyField) continue;
+                    if (isLazyField)
+                    {
+                        continue;
+                    }
                 }
 
                 var loc = ifStmt.GetLocation().GetLineSpan().StartLinePosition;
@@ -331,16 +400,26 @@ public class ThreadSafetyEngine
 
         IEnumerable<Document> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents);
+        }
 
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             var loops = root.DescendantNodes()
@@ -353,7 +432,10 @@ public class ThreadSafetyEngine
                     .Any(inv => inv.Expression is MemberAccessExpressionSyntax ma &&
                                 ma.Expression.ToString() == "Interlocked" &&
                                 ma.Name.Identifier.Text == "CompareExchange");
-                if (!hasCas) continue;
+                if (!hasCas)
+                {
+                    continue;
+                }
 
                 // Check for any back-off call.
                 // SpinWait is commonly used as an instance: `var spin = new SpinWait(); spin.SpinOnce();`
@@ -361,7 +443,11 @@ public class ThreadSafetyEngine
                 bool hasBackoff = loop.DescendantNodes().OfType<InvocationExpressionSyntax>()
                     .Any(inv =>
                     {
-                        if (inv.Expression is not MemberAccessExpressionSyntax ma) return false;
+                        if (inv.Expression is not MemberAccessExpressionSyntax ma)
+                        {
+                            return false;
+                        }
+
                         var receiver = ma.Expression.ToString();
                         var name = ma.Name.Identifier.Text;
                         return (receiver is "Thread" && name is "Sleep" or "SpinWait" or "Yield") ||
@@ -404,16 +490,26 @@ public class ThreadSafetyEngine
 
         IEnumerable<Document> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents);
+        }
 
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
@@ -428,27 +524,46 @@ public class ThreadSafetyEngine
                 {
                     // Outer if must check field == null or field is null
                     string? checkedField = ExtractNullCheckedIdentifier(outerIf.Condition);
-                    if (checkedField == null) continue;
+                    if (checkedField == null)
+                    {
+                        continue;
+                    }
 
                     // Outer if body must directly contain a lock statement
                     var lockStmt = outerIf.Statement is BlockSyntax outerBlock
                         ? outerBlock.Statements.OfType<LockStatementSyntax>().FirstOrDefault()
                         : outerIf.Statement as LockStatementSyntax;
-                    if (lockStmt == null) continue;
+                    if (lockStmt == null)
+                    {
+                        continue;
+                    }
 
                     // Lock body must contain an inner if checking the same field
                     var innerIf = lockStmt.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
-                    if (innerIf == null) continue;
-                    if (ExtractNullCheckedIdentifier(innerIf.Condition) != checkedField) continue;
+                    if (innerIf == null)
+                    {
+                        continue;
+                    }
+
+                    if (ExtractNullCheckedIdentifier(innerIf.Condition) != checkedField)
+                    {
+                        continue;
+                    }
 
                     // Inner if body must assign to that field
                     bool assignsField = innerIf.Statement.DescendantNodes()
                         .OfType<AssignmentExpressionSyntax>()
                         .Any(a => a.Left is IdentifierNameSyntax id && id.Identifier.Text == checkedField);
-                    if (!assignsField) continue;
+                    if (!assignsField)
+                    {
+                        continue;
+                    }
 
                     // Only flag if the field is not volatile
-                    if (volatileFields.Contains(checkedField)) continue;
+                    if (volatileFields.Contains(checkedField))
+                    {
+                        continue;
+                    }
 
                     var loc = outerIf.GetLocation().GetLineSpan().StartLinePosition;
                     results.Add(
@@ -489,43 +604,77 @@ public class ThreadSafetyEngine
 
         IEnumerable<Document> docs;
         if (!string.IsNullOrEmpty(filePath))
+        {
             docs = solution.GetDocumentIdsWithFilePath(filePath!).Select(id => solution.GetDocument(id)!).Where(d => d != null);
+        }
         else if (!string.IsNullOrEmpty(projectName))
+        {
             docs = solution.Projects.Where(p => p.Name.Contains(projectName!, StringComparison.OrdinalIgnoreCase)).SelectMany(p => p.Documents);
+        }
         else
+        {
             docs = solution.Projects.SelectMany(p => p.Documents);
+        }
 
         foreach (var doc in docs)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var fp = doc.FilePath ?? doc.Name;
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (method.Body == null) continue;
+                if (method.Body == null)
+                {
+                    continue;
+                }
 
                 // Collect all invocations in order
                 var invocations = method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().ToList();
 
                 for (int i = 0; i < invocations.Count - 1; i++)
                 {
-                    if (invocations[i].Expression is not MemberAccessExpressionSyntax checkMa) continue;
-                    if (!DictionaryCheckMethods.Contains(checkMa.Name.Identifier.Text)) continue;
+                    if (invocations[i].Expression is not MemberAccessExpressionSyntax checkMa)
+                    {
+                        continue;
+                    }
+
+                    if (!DictionaryCheckMethods.Contains(checkMa.Name.Identifier.Text))
+                    {
+                        continue;
+                    }
 
                     var dictName = checkMa.Expression.ToString();
 
                     // Look for a subsequent Add/TryAdd on the same receiver
                     for (int j = i + 1; j < invocations.Count; j++)
                     {
-                        if (invocations[j].Expression is not MemberAccessExpressionSyntax addMa) continue;
-                        if (!DictionaryAddMethods.Contains(addMa.Name.Identifier.Text)) continue;
-                        if (addMa.Expression.ToString() != dictName) continue;
+                        if (invocations[j].Expression is not MemberAccessExpressionSyntax addMa)
+                        {
+                            continue;
+                        }
+
+                        if (!DictionaryAddMethods.Contains(addMa.Name.Identifier.Text))
+                        {
+                            continue;
+                        }
+
+                        if (addMa.Expression.ToString() != dictName)
+                        {
+                            continue;
+                        }
 
                         // Both check and add must NOT be inside a LockStatementSyntax
                         bool checkInLock = invocations[i].Ancestors().OfType<LockStatementSyntax>().Any();
                         bool addInLock = invocations[j].Ancestors().OfType<LockStatementSyntax>().Any();
-                        if (checkInLock && addInLock) continue;
+                        if (checkInLock && addInLock)
+                        {
+                            continue;
+                        }
 
                         var loc = invocations[i].GetLocation().GetLineSpan().StartLinePosition;
                         results.Add(
@@ -548,21 +697,27 @@ public class ThreadSafetyEngine
             bin.IsKind(SyntaxKind.EqualsExpression) &&
             bin.Right is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.NullLiteralExpression) &&
             bin.Left is IdentifierNameSyntax id1)
+        {
             return id1.Identifier.Text;
+        }
 
         // null == field
         if (condition is BinaryExpressionSyntax bin2 &&
             bin2.IsKind(SyntaxKind.EqualsExpression) &&
             bin2.Left is LiteralExpressionSyntax lit2 && lit2.IsKind(SyntaxKind.NullLiteralExpression) &&
             bin2.Right is IdentifierNameSyntax id2)
+        {
             return id2.Identifier.Text;
+        }
 
         // field is null
         if (condition is IsPatternExpressionSyntax isPattern &&
             isPattern.Expression is IdentifierNameSyntax id3 &&
             isPattern.Pattern is ConstantPatternSyntax cp &&
             cp.Expression is LiteralExpressionSyntax lit3 && lit3.IsKind(SyntaxKind.NullLiteralExpression))
+        {
             return id3.Identifier.Text;
+        }
 
         return null;
     }

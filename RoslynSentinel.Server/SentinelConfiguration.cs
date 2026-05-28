@@ -147,7 +147,7 @@ public class SentinelConfiguration
 
     public List<KeyValuePair<string, bool>> GetFeatureStatuses(List<string>? filter = null)
     {
-        var source = filter == null || !filter.Any() 
+        var source = filter == null || filter.Count == 0
             ? _features 
             : _features.Where(f => filter.Contains(f.Key, StringComparer.OrdinalIgnoreCase));
 

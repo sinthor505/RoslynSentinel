@@ -22,27 +22,37 @@ public class CodeFlowEngine
         {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return $"// Error: File '{filePath}' not found.";
+        if (document == null)
+            {
+                return $"// Error: File '{filePath}' not found.";
+            }
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return $"// Error: Failed to get syntax root for '{filePath}'.";
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            {
+                return $"// Error: Failed to get syntax root for '{filePath}'.";
+            }
+
+            var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         
-        if (methodNode == null || methodNode.Body == null) return $"// Error: Method '{methodName}' not found or has no body.";
+        if (methodNode == null || methodNode.Body == null)
+            {
+                return $"// Error: Method '{methodName}' not found or has no body.";
+            }
 
-        // Look for: 
-        // void Method() { 
-        //     if (condition) { 
-        //         /* logic */ 
-        //     } 
-        // }
-        // To convert to:
-        // void Method() {
-        //     if (!condition) return;
-        //     /* logic */
-        // }
+            // Look for: 
+            // void Method() { 
+            //     if (condition) { 
+            //         /* logic */ 
+            //     } 
+            // }
+            // To convert to:
+            // void Method() {
+            //     if (!condition) return;
+            //     /* logic */
+            // }
 
-        if (methodNode.Body.Statements.Count == 1 && methodNode.Body.Statements[0] is IfStatementSyntax ifStmt)
+            if (methodNode.Body.Statements.Count == 1 && methodNode.Body.Statements[0] is IfStatementSyntax ifStmt)
         {
             if (ifStmt.Else == null) // Must not have an else
             {

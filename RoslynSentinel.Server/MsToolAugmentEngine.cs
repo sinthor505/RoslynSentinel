@@ -1,14 +1,10 @@
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace RoslynSentinel.Server;
 
@@ -82,6 +78,7 @@ public record AddUsingsPreview(
 public class MsToolAugmentEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private static readonly char[] anyOf = new[] { '{', '}' };
 
     public MsToolAugmentEngine(PersistentWorkspaceManager workspaceManager)
     {
@@ -104,15 +101,23 @@ public class MsToolAugmentEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null) return MsAugmentResult.Fail($"File not found: {filePath}");
+        if (doc == null)
+        {
+            return MsAugmentResult.Fail($"File not found: {filePath}");
+        }
 
         var root = await doc.GetSyntaxRootAsync(ct);
-        if (root == null) return MsAugmentResult.Fail("Could not parse syntax tree.");
+        if (root == null)
+        {
+            return MsAugmentResult.Fail("Could not parse syntax tree.");
+        }
 
         var field = root.DescendantNodes().OfType<FieldDeclarationSyntax>()
             .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
         if (field == null)
+        {
             return MsAugmentResult.Fail($"Field '{fieldName}' not found in {filePath}.");
+        }
 
         // ── Compute names ──
         string backingName, propertyName;
@@ -130,13 +135,15 @@ public class MsToolAugmentEngine
 
         // Validate: property name must differ from backing field name
         if (backingName == propertyName)
+        {
             return MsAugmentResult.Fail($"Computed names collide ('{backingName}'). Provide an overridePropertyName.");
+        }
 
         bool isReadOnly = field.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword));
-        bool isStatic   = field.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
-        var  fieldType  = field.Declaration.Type;
-        var  varDecl    = field.Declaration.Variables.First(v => v.Identifier.Text == fieldName);
-        var  initializer = varDecl.Initializer;
+        bool isStatic = field.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+        var fieldType = field.Declaration.Type;
+        var varDecl = field.Declaration.Variables.First(v => v.Identifier.Text == fieldName);
+        var initializer = varDecl.Initializer;
 
         // ── Step 1: rename all usages of fieldName → backingName in the tree
         //    (excluding the field declaration itself)
@@ -147,7 +154,7 @@ public class MsToolAugmentEngine
                       && !(id.Parent is VariableDeclaratorSyntax vd && vd.Identifier.Text == fieldName))
             .ToList();
 
-        var renamedRoot = usages.Any()
+        var renamedRoot = usages.Count != 0
             ? trackedRoot.ReplaceNodes(usages,
                 (old, _) => SyntaxFactory.IdentifierName(backingName).WithTriviaFrom(old))
             : trackedRoot;
@@ -157,11 +164,21 @@ public class MsToolAugmentEngine
 
         // New private backing field
         var backingModifiers = new List<SyntaxToken> { SyntaxFactory.Token(SyntaxKind.PrivateKeyword) };
-        if (isStatic)   backingModifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space));
-        if (isReadOnly) backingModifiers.Add(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        if (isStatic)
+        {
+            backingModifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
+
+        if (isReadOnly)
+        {
+            backingModifiers.Add(SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
 
         var newVarDeclarator = SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(backingName));
-        if (initializer != null) newVarDeclarator = newVarDeclarator.WithInitializer(initializer);
+        if (initializer != null)
+        {
+            newVarDeclarator = newVarDeclarator.WithInitializer(initializer);
+        }
 
         var backingField = SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(fieldType.WithTrailingTrivia(SyntaxFactory.Space))
@@ -189,7 +206,10 @@ public class MsToolAugmentEngine
         }
 
         var propModifiers = new List<SyntaxToken> { SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space) };
-        if (isStatic) propModifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        if (isStatic)
+        {
+            propModifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
 
         var property = SyntaxFactory.PropertyDeclaration(fieldType.WithTrailingTrivia(SyntaxFactory.Space), SyntaxFactory.Identifier(propertyName))
             .WithModifiers(SyntaxFactory.TokenList(propModifiers))
@@ -217,12 +237,16 @@ public class MsToolAugmentEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
+        {
             return new SwitchConversionAnalysis(false, 0, [], $"File not found: {filePath}");
+        }
 
         var root = await doc.GetSyntaxRootAsync(ct);
         var text = await doc.GetTextAsync(ct);
         if (root == null)
+        {
             return new SwitchConversionAnalysis(false, 0, [], "Could not parse syntax tree.");
+        }
 
         SwitchStatementSyntax? sw = null;
         try
@@ -237,7 +261,9 @@ public class MsToolAugmentEngine
         }
 
         if (sw == null)
+        {
             return new SwitchConversionAnalysis(false, 0, [], "No switch statement found at contextSnippet location.");
+        }
 
         var caseInfos = new List<SwitchCaseInfo>();
         foreach (var section in sw.Sections)
@@ -255,7 +281,7 @@ public class MsToolAugmentEngine
         }
 
         var multiAssignCases = caseInfos.Where(c => c.HasMultipleAssignments).ToList();
-        bool safe = !multiAssignCases.Any();
+        bool safe = multiAssignCases.Count == 0;
         string? blockingReason = safe ? null
             : $"Cannot safely convert: {multiAssignCases.Count} case(s) assign to multiple variables. " +
               string.Join("; ", multiAssignCases.Select(c => $"'{c.CaseLabel}' assigns [{string.Join(", ", c.AssignedVariables)}]")) +
@@ -279,7 +305,9 @@ public class MsToolAugmentEngine
     {
         var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, ct);
         if (!analysis.IsSafeToConvert)
+        {
             return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.");
+        }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault()!;
@@ -302,9 +330,14 @@ public class MsToolAugmentEngine
             {
                 isReturnSwitch = false;
                 var lhs = assign.Left.ToString();
-                if (targetVariable == null) targetVariable = lhs;
+                if (targetVariable == null)
+                {
+                    targetVariable = lhs;
+                }
                 else if (targetVariable != lhs)
+                {
                     return MsAugmentResult.Fail($"Cases assign to different variables ('{targetVariable}' vs '{lhs}'). Cannot build a single switch expression.");
+                }
             }
             else if (stmts.Count == 1 && stmts[0] is ReturnStatementSyntax)
             {
@@ -314,7 +347,7 @@ public class MsToolAugmentEngine
             {
                 isReturnSwitch = false;
             }
-            else if (!stmts.Any()) { /* empty case — fall-through */ }
+            else if (stmts.Count == 0) { /* empty case — fall-through */ }
             else
             {
                 return MsAugmentResult.Fail(
@@ -335,13 +368,21 @@ public class MsToolAugmentEngine
                 ExpressionSyntax armExpr;
                 if (stmts.Count == 1 && stmts[0] is ExpressionStatementSyntax es
                     && es.Expression is AssignmentExpressionSyntax asgn)
+                {
                     armExpr = asgn.Right;
+                }
                 else if (stmts.Count == 1 && stmts[0] is ReturnStatementSyntax ret && ret.Expression != null)
+                {
                     armExpr = ret.Expression;
+                }
                 else if (stmts.Count == 1 && stmts[0] is ThrowStatementSyntax thr && thr.Expression != null)
+                {
                     armExpr = SyntaxFactory.ThrowExpression(thr.Expression);
+                }
                 else
+                {
                     continue; // empty/fall-through — skip
+                }
 
                 PatternSyntax pattern = label is DefaultSwitchLabelSyntax
                     ? SyntaxFactory.DiscardPattern()
@@ -398,12 +439,18 @@ public class MsToolAugmentEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null) return MsAugmentResult.Fail($"File not found: {filePath}");
+        if (doc == null)
+        {
+            return MsAugmentResult.Fail($"File not found: {filePath}");
+        }
 
         var root = await doc.GetSyntaxRootAsync(ct);
         var text = await doc.GetTextAsync(ct);
         var model = await doc.GetSemanticModelAsync(ct);
-        if (root == null || model == null) return MsAugmentResult.Fail("Could not load document.");
+        if (root == null || model == null)
+        {
+            return MsAugmentResult.Fail("Could not load document.");
+        }
 
         // Find the string.Format invocation
         int pos;
@@ -425,11 +472,15 @@ public class MsToolAugmentEngine
             });
 
         if (invocation == null)
+        {
             return MsAugmentResult.Fail("No string.Format() call found at contextSnippet location.");
+        }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
+        {
             return MsAugmentResult.Fail("string.Format() has no arguments.");
+        }
 
         // ── Resolve the format string ──
         string? formatStr = null;
@@ -444,13 +495,17 @@ public class MsToolAugmentEngine
             // Try to resolve via semantic constant value
             var constValue = model.GetConstantValue(args[0].Expression, ct);
             if (constValue.HasValue && constValue.Value is string sv)
+            {
                 formatStr = sv;
+            }
         }
 
         if (formatStr == null)
+        {
             return MsAugmentResult.Fail(
                 "Could not resolve format string to a compile-time constant. " +
                 "Only string literals and constant fields/properties are supported.");
+        }
 
         // ── Build the interpolated string ──
         var formatArgs = args.Skip(1).Select(a => a.Expression).ToList();
@@ -495,9 +550,13 @@ public class MsToolAugmentEngine
             }
             else
             {
-                int next = formatStr.IndexOfAny(new[] { '{', '}' }, i);
+                int next = formatStr.IndexOfAny(anyOf, i);
                 string chunk = next < 0 ? formatStr.Substring(i) : formatStr.Substring(i, next - i);
-                if (!string.IsNullOrEmpty(chunk)) contents.Add(MakeText(EscapeForInterpolated(chunk)));
+                if (!string.IsNullOrEmpty(chunk))
+                {
+                    contents.Add(MakeText(EscapeForInterpolated(chunk)));
+                }
+
                 i = next < 0 ? formatStr.Length : next;
             }
         }
@@ -528,7 +587,10 @@ public class MsToolAugmentEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null) throw new InvalidOperationException($"File not found: {filePath}");
+        if (doc == null)
+        {
+            throw new InvalidOperationException($"File not found: {filePath}");
+        }
 
         var root = (await doc.GetSyntaxRootAsync(ct) as CompilationUnitSyntax)!;
         var original = root.Usings;
@@ -561,7 +623,9 @@ public class MsToolAugmentEngine
         var updatedContent = newRoot.NormalizeWhitespace().ToFullString();
 
         if (writeToFile)
+        {
             await File.WriteAllTextAsync(filePath, updatedContent, ct);
+        }
 
         return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: writeToFile);
     }
@@ -622,8 +686,10 @@ public class MsToolAugmentEngine
             {
                 var currentSolution = _workspaceManager.CurrentSolution;
                 if (currentSolution != null && currentSolution.GetDocumentIdsWithFilePath(filePath).Any())
+                {
                     await _workspaceManager.ApplyProposedChangesAsync(
                         new Dictionary<string, string> { [filePath] = formatted });
+                }
             }
             catch { /* workspace might not be loaded — safe to ignore */ }
         }
@@ -671,8 +737,10 @@ public class MsToolAugmentEngine
         var forEach = node.AncestorsAndSelf().OfType<ForEachStatementSyntax>().FirstOrDefault();
 
         if (forEach == null)
+        {
             return new ForeachLinqAnalysis(false, "", 0,
                 "No foreach statement found at contextSnippet location.", "Cannot analyze.");
+        }
 
         // Find List.Add() calls in the foreach body to determine the collection variable
         var addCalls = forEach.Statement.DescendantNodesAndSelf()
@@ -681,10 +749,12 @@ public class MsToolAugmentEngine
                           && mae.Name.Identifier.Text == "Add")
             .ToList();
 
-        if (!addCalls.Any())
+        if (addCalls.Count == 0)
+        {
             return new ForeachLinqAnalysis(false, "", 0,
                 "No .Add() calls found in foreach body — not a LINQ Select/ToList() candidate.",
                 "Manual analysis required — this foreach may not be convertible to LINQ.");
+        }
 
         // All Add() calls must target the same collection
         var collectionNames = addCalls
@@ -693,17 +763,21 @@ public class MsToolAugmentEngine
             .ToList();
 
         if (collectionNames.Count > 1)
+        {
             return new ForeachLinqAnalysis(false, collectionNames[0], 0,
                 $"Multiple collections targeted by Add(): {string.Join(", ", collectionNames)}. " +
                 "Cannot determine a single conversion target.",
                 "Manual conversion required.");
+        }
 
         var collectionName = collectionNames[0];
 
         // Find the containing block to inspect statements between declaration and foreach
         if (forEach.Parent is not BlockSyntax containingBlock)
+        {
             return new ForeachLinqAnalysis(true, collectionName, 0, null,
                 "Use standard convert_foreach_linq tool (no containing block to analyze further).");
+        }
 
         var stmtList = containingBlock.Statements.ToList();
         var foreachIndex = stmtList.IndexOf(forEach);
@@ -721,9 +795,11 @@ public class MsToolAugmentEngine
         }
 
         if (declIndex < 0)
+        {
             return new ForeachLinqAnalysis(true, collectionName, 0, null,
                 "Collection is not a local variable in this block. " +
                 "Use standard convert_foreach_linq tool if the preceding code is safe.");
+        }
 
         // Count statements between declaration and foreach that reference the collection
         var statementsBetween = stmtList
@@ -805,9 +881,9 @@ public class MsToolAugmentEngine
                          "Call load_solution to load a .sln or .csproj file."));
         }
 
-        var projectCount   = currentSolution.ProjectIds.Count;
-        var documentCount  = currentSolution.Projects.SelectMany(p => p.Documents).Count();
-        var solutionPath   = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
+        var projectCount = currentSolution.ProjectIds.Count;
+        var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
+        var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
 
         return Task.FromResult(new WorkspaceHealthReport(
             IsOperational: true,
@@ -841,45 +917,53 @@ public class MsToolAugmentEngine
         // Solution must be loaded — this tool requires semantic analysis
         var currentSolution = _workspaceManager.CurrentSolution;
         if (currentSolution == null)
+        {
             return new AddUsingsPreview(
                 SolutionRequired: true,
                 UsingsToAdd: [],
                 Warning: "No solution is loaded. Load a solution first using load_solution. " +
                          "(The standard add_missing_usings tool requires a solution too.)",
                 UpdatedContent: "");
+        }
 
         var doc = currentSolution.GetDocumentIdsWithFilePath(filePath)
             .Select(currentSolution.GetDocument)
             .FirstOrDefault();
 
         if (doc == null)
+        {
             return new AddUsingsPreview(
                 SolutionRequired: false,
                 UsingsToAdd: [],
                 Warning: $"File '{filePath}' is not part of the loaded solution.",
                 UpdatedContent: "");
+        }
 
         var root = await doc.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var model = await doc.GetSemanticModelAsync(ct);
 
         if (root == null || model == null)
+        {
             return new AddUsingsPreview(
                 SolutionRequired: false,
                 UsingsToAdd: [],
                 Warning: "Could not obtain syntax root or semantic model.",
                 UpdatedContent: "");
+        }
 
         // Find CS0246 ("type not found") and CS0103 ("name not found") diagnostics
         var diagnostics = model.GetDiagnostics(cancellationToken: ct)
             .Where(d => d.Id is "CS0246" or "CS0103")
             .ToList();
 
-        if (!diagnostics.Any())
+        if (diagnostics.Count == 0)
+        {
             return new AddUsingsPreview(
                 SolutionRequired: false,
                 UsingsToAdd: [],
                 Warning: null,
                 UpdatedContent: root.ToFullString());
+        }
 
         // Extract unresolved identifier names from diagnostics
         var unresolvedNames = new HashSet<string>(StringComparer.Ordinal);
@@ -891,7 +975,9 @@ public class MsToolAugmentEngine
                 .OfType<SimpleNameSyntax>()
                 .FirstOrDefault();
             if (simpleName != null)
+            {
                 unresolvedNames.Add(simpleName.Identifier.Text);
+            }
         }
 
         // Search all projects in the solution for types matching each unresolved name
@@ -904,7 +990,10 @@ public class MsToolAugmentEngine
             foreach (var proj in currentSolution.Projects)
             {
                 var compilation = await proj.GetCompilationAsync(ct);
-                if (compilation == null) continue;
+                if (compilation == null)
+                {
+                    continue;
+                }
 
                 var types = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, ct);
                 foreach (var type in types)
@@ -916,10 +1005,15 @@ public class MsToolAugmentEngine
                         found = true;
                     }
                 }
-                if (found) break;
+                if (found)
+                {
+                    break;
+                }
             }
             if (!found)
+            {
                 warnings.Add($"Could not locate type '{typeName}' in the solution.");
+            }
         }
 
         // Filter out namespaces already present in the file
@@ -933,14 +1027,16 @@ public class MsToolAugmentEngine
             .OrderBy(ns => ns, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (!newNamespaces.Any())
+        if (newNamespaces.Count == 0)
+        {
             return new AddUsingsPreview(
                 SolutionRequired: false,
                 UsingsToAdd: [],
-                Warning: warnings.Any()
+                Warning: warnings.Count != 0
                     ? string.Join("; ", warnings)
                     : "All required namespaces are already imported.",
                 UpdatedContent: root.ToFullString());
+        }
 
         // Build and insert new using directives without touching the file
         var newUsingNodes = newNamespaces
@@ -953,7 +1049,7 @@ public class MsToolAugmentEngine
         return new AddUsingsPreview(
             SolutionRequired: false,
             UsingsToAdd: newNamespaces,
-            Warning: warnings.Any() ? string.Join("; ", warnings) : null,
+            Warning: warnings.Count != 0 ? string.Join("; ", warnings) : null,
             UpdatedContent: newRoot.ToFullString());
     }
 
@@ -977,7 +1073,9 @@ public class MsToolAugmentEngine
         CancellationToken ct = default)
     {
         if (!SyntaxFacts.IsValidIdentifier(constantName))
+        {
             return MsAugmentResult.Fail($"'{constantName}' is not a valid C# identifier.");
+        }
 
         string source;
         try { source = await File.ReadAllTextAsync(filePath, ct); }
@@ -997,36 +1095,42 @@ public class MsToolAugmentEngine
                    ?? node.DescendantNodes().OfType<LiteralExpressionSyntax>().FirstOrDefault();
 
         if (literal == null)
+        {
             return MsAugmentResult.Fail(
                 "No literal expression found at contextSnippet location. " +
                 "Provide a contextSnippet that directly contains or is adjacent to the literal.");
+        }
 
         if (!literal.IsKind(SyntaxKind.StringLiteralExpression) &&
             !literal.IsKind(SyntaxKind.NumericLiteralExpression) &&
             !literal.IsKind(SyntaxKind.CharacterLiteralExpression) &&
             !literal.IsKind(SyntaxKind.TrueLiteralExpression) &&
             !literal.IsKind(SyntaxKind.FalseLiteralExpression))
+        {
             return MsAugmentResult.Fail(
                 $"Unsupported literal kind: {literal.Kind()}. " +
                 "Only string, numeric, char, and bool literals can be extracted to constants.");
+        }
 
         // Find the containing type — needed to place the constant declaration
         var containingType = literal.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (containingType == null)
+        {
             return MsAugmentResult.Fail("No containing type found — cannot place the constant declaration.");
+        }
 
         // Determine the C# type keyword for the constant
         var typeKeyword = literal.Kind() switch
         {
-            SyntaxKind.StringLiteralExpression    => "string",
-            SyntaxKind.NumericLiteralExpression   => DetermineNumericType(literal.Token),
+            SyntaxKind.StringLiteralExpression => "string",
+            SyntaxKind.NumericLiteralExpression => DetermineNumericType(literal.Token),
             SyntaxKind.CharacterLiteralExpression => "char",
-            _                                     => "bool"  // true/false
+            _ => "bool"  // true/false
         };
 
         // Replace ALL identical literals in the file with the constant name
         var literalValueText = literal.Token.ValueText;
-        var literalKind      = literal.Kind();
+        var literalKind = literal.Kind();
 
         var allMatching = root.DescendantNodes()
             .OfType<LiteralExpressionSyntax>()
@@ -1043,7 +1147,9 @@ public class MsToolAugmentEngine
             .FirstOrDefault(t => t.Identifier.Text == containingType.Identifier.Text);
 
         if (newContainingType == null)
+        {
             return MsAugmentResult.Fail("Could not locate containing type after literal replacement.");
+        }
 
         // Build: private const <type> <name> = <value>;
         var constDecl = SyntaxFactory.FieldDeclaration(
@@ -1069,11 +1175,31 @@ public class MsToolAugmentEngine
     private static string DetermineNumericType(SyntaxToken token)
     {
         var text = token.Text.ToLowerInvariant();
-        if (text.EndsWith('m')) return "decimal";
-        if (text.EndsWith('d')) return "double";
-        if (text.EndsWith('f')) return "float";
-        if (text.EndsWith('l')) return "long";
-        if (text.Contains('.'))  return "double";
+        if (text.EndsWith('m'))
+        {
+            return "decimal";
+        }
+
+        if (text.EndsWith('d'))
+        {
+            return "double";
+        }
+
+        if (text.EndsWith('f'))
+        {
+            return "float";
+        }
+
+        if (text.EndsWith('l'))
+        {
+            return "long";
+        }
+
+        if (text.Contains('.'))
+        {
+            return "double";
+        }
+
         return "int";
     }
 
@@ -1122,12 +1248,16 @@ public class MsToolAugmentEngine
             .FirstOrDefault(t => t.Identifier.Text == typeName);
 
         if (typeDecl == null)
+        {
             return MsAugmentResult.Fail($"Type '{typeName}' not found in {filePath}.");
+        }
 
         if (typeDecl.Members.OfType<MethodDeclarationSyntax>()
             .Any(m => m.Identifier.Text == "ToString" && !m.ParameterList.Parameters.Any()))
+        {
             return MsAugmentResult.Fail(
                 $"'{typeName}' already has a ToString() override. Remove it first.");
+        }
 
         // Collect members to include in the ToString output
         var selectedMembers = new List<string>();
@@ -1154,8 +1284,10 @@ public class MsToolAugmentEngine
         }
 
         if (selectedMembers.Count == 0)
+        {
             return MsAugmentResult.Fail(
                 $"No public properties or fields found on '{typeName}'. Specify members explicitly.");
+        }
 
         // Build the interpolated string: $"TypeName {{ Prop1 = {Prop1}, Prop2 = {Prop2} }}"
         // Using {{ and }} to produce literal braces in C# interpolated strings (no CS8086).
@@ -1168,7 +1300,11 @@ public class MsToolAugmentEngine
 
         for (int i = 0; i < selectedMembers.Count; i++)
         {
-            if (i > 0) contents.Add(MakeText(", "));
+            if (i > 0)
+            {
+                contents.Add(MakeText(", "));
+            }
+
             contents.Add(MakeText($"{selectedMembers[i]} = "));
             contents.Add(SyntaxFactory.Interpolation(
                 SyntaxFactory.IdentifierName(selectedMembers[i])));
@@ -1222,20 +1358,26 @@ public class MsToolAugmentEngine
         CancellationToken ct = default)
     {
         if (!SyntaxFacts.IsValidIdentifier(newMethodName))
+        {
             return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.");
+        }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var doc = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
             .FirstOrDefault();
         if (doc == null)
+        {
             return MsAugmentResult.Fail($"File not found in solution: {filePath}");
+        }
 
         var root = await doc.GetSyntaxRootAsync(ct);
         var model = await doc.GetSemanticModelAsync(ct);
         var sourceText = await doc.GetTextAsync(ct);
         if (root == null || model == null)
+        {
             return MsAugmentResult.Fail("Could not load semantic model.");
+        }
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
@@ -1247,8 +1389,10 @@ public class MsToolAugmentEngine
         // Walk up to the nearest block so we can work with statement-level items
         var block = node.AncestorsAndSelf().OfType<BlockSyntax>().FirstOrDefault();
         if (block == null)
+        {
             return MsAugmentResult.Fail(
                 "Selection must be inside a method body (no enclosing block found).");
+        }
 
         // Find statements that overlap the selection
         var stmtsInSelection = block.Statements
@@ -1260,25 +1404,29 @@ public class MsToolAugmentEngine
             // Fall back to the single statement that contains the selection
             var single = node.AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault();
             if (single != null && block.Statements.Contains(single))
+            {
                 stmtsInSelection.Add(single);
+            }
             else
+            {
                 return MsAugmentResult.Fail(
                     "No statements found at the contextSnippet location. Try a broader snippet.");
+            }
         }
 
         var firstStmt = stmtsInSelection.First();
-        var lastStmt  = stmtsInSelection.Last();
+        var lastStmt = stmtsInSelection.Last();
 
         // Determine the return type of the extracted method
         string returnTypeStr = "void";
-        bool   returnsValue  = false;
+        bool returnsValue = false;
 
         if (lastStmt is ReturnStatementSyntax retStmt && retStmt.Expression != null)
         {
             var typeInfo = model.GetTypeInfo(retStmt.Expression, ct);
             if (typeInfo.Type != null
              && typeInfo.Type.SpecialType != SpecialType.System_Void
-             && typeInfo.Type.TypeKind    != TypeKind.Error)
+             && typeInfo.Type.TypeKind != TypeKind.Error)
             {
                 returnTypeStr = typeInfo.Type.ToDisplayString(
                     SymbolDisplayFormat.MinimallyQualifiedFormat);
@@ -1296,11 +1444,15 @@ public class MsToolAugmentEngine
                 foreach (var sym in df.DataFlowsIn)
                 {
                     if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local)
+                    {
                         parameters.Add((local.Name,
                             local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    }
                     else if (sym.Kind == SymbolKind.Parameter && sym is IParameterSymbol param)
+                    {
                         parameters.Add((param.Name,
                             param.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    }
                 }
             }
         }
@@ -1318,27 +1470,38 @@ public class MsToolAugmentEngine
             .OfType<TypeDeclarationSyntax>()
             .FirstOrDefault();
         if (containingType == null)
+        {
             return MsAugmentResult.Fail(
                 "No containing type found — cannot place extracted method.");
+        }
 
         // Build the extracted method source text
         var sb = new StringBuilder();
         sb.Append("private ");
-        if (isStatic) sb.Append("static ");
+        if (isStatic)
+        {
+            sb.Append("static ");
+        }
+
         sb.Append($"{returnTypeStr} {newMethodName}(");
         sb.Append(string.Join(", ", parameters.Select(p => $"{p.TypeStr} {p.Name}")));
         sb.AppendLine(")");
         sb.AppendLine("{");
         foreach (var stmt in stmtsInSelection)
+        {
             sb.AppendLine($"    {stmt.WithoutLeadingTrivia().ToFullString().TrimEnd()}");
-        sb.Append("}");
+        }
+
+        sb.Append('}');
 
         var newMethodDecl = SyntaxFactory.ParseMemberDeclaration(sb.ToString());
         if (newMethodDecl == null)
+        {
             return MsAugmentResult.Fail("Failed to parse the generated method declaration.");
+        }
 
         // Build the call-site replacement statement
-        var argsStr  = string.Join(", ", parameters.Select(p => p.Name));
+        var argsStr = string.Join(", ", parameters.Select(p => p.Name));
         string callText = returnsValue
             ? $"return {newMethodName}({argsStr});"
             : $"{newMethodName}({argsStr});";
@@ -1348,32 +1511,36 @@ public class MsToolAugmentEngine
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
 
         // Replace the selected statements in the block with the call
-        var stmtList   = block.Statements.ToList();
-        int firstIdx   = stmtList.IndexOf(firstStmt);
+        var stmtList = block.Statements.ToList();
+        int firstIdx = stmtList.IndexOf(firstStmt);
         if (firstIdx < 0)
+        {
             return MsAugmentResult.Fail("Could not locate first statement in block (internal error).");
+        }
 
         var newStmts = new List<StatementSyntax>();
         newStmts.AddRange(stmtList.Take(firstIdx));
         newStmts.Add(callStmt);
         newStmts.AddRange(stmtList.Skip(firstIdx + stmtsInSelection.Count));
 
-        var newBlock  = block.WithStatements(SyntaxFactory.List(newStmts));
-        var newRoot1  = root.ReplaceNode(block, newBlock);
+        var newBlock = block.WithStatements(SyntaxFactory.List(newStmts));
+        var newRoot1 = root.ReplaceNode(block, newBlock);
 
         // Locate the containing type in the modified tree (by name) and add the new method
         var newContainingType = newRoot1.DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == containingType.Identifier.Text);
         if (newContainingType == null)
+        {
             return MsAugmentResult.Fail("Could not re-locate containing type after transformation.");
+        }
 
         var methodWithTrivia = newMethodDecl
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
 
         var updatedType = newContainingType.AddMembers(methodWithTrivia);
-        var finalRoot   = newRoot1.ReplaceNode(newContainingType, updatedType);
+        var finalRoot = newRoot1.ReplaceNode(newContainingType, updatedType);
 
         return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
     }

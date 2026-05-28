@@ -1,7 +1,8 @@
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text;
 
 namespace RoslynSentinel.Server;
 
@@ -28,21 +29,30 @@ public class TestingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not parse syntax root.");
+        }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        
-        if (methodNode == null) throw new Exception($"Method {methodName} not found.");
+
+        if (methodNode == null)
+        {
+            throw new InvalidOperationException($"Method {methodName} not found.");
+        }
 
         var conditionals = new List<string>();
         int complexity = 1;
 
         var descendants = methodNode.DescendantNodes().ToList();
-        
+
         complexity += descendants.OfType<IfStatementSyntax>().Count();
         complexity += descendants.OfType<WhileStatementSyntax>().Count();
         complexity += descendants.OfType<ForStatementSyntax>().Count();
@@ -54,7 +64,7 @@ public class TestingEngine
 
         var ifs = descendants.OfType<IfStatementSyntax>().Select(i => i.Condition.ToString());
         var switches = descendants.OfType<SwitchStatementSyntax>().Select(s => s.Expression.ToString());
-        
+
         conditionals.AddRange(ifs.Select(c => $"If ({c}) is true/false"));
         conditionals.AddRange(switches.Select(s => $"Switch ({s}) covers all cases"));
 
@@ -65,15 +75,24 @@ public class TestingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        
-        if (classNode == null) throw new Exception($"Class {className} not found.");
+
+        if (classNode == null)
+        {
+            throw new InvalidOperationException($"Class {className} not found in file: {filePath}");
+        }
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
@@ -85,30 +104,44 @@ public class TestingEngine
         var frameworkLower = framework.ToLowerInvariant();
         var testAttribute = frameworkLower switch
         {
-            "nunit"   => "[Test]",
-            "mstest"  => "[TestMethod]",
-            _         => "[Fact]"   // default: xunit
+            "nunit" => "[Test]",
+            "mstest" => "[TestMethod]",
+            _ => "[Fact]"   // default: xunit
         };
         var classAttribute = frameworkLower switch
         {
-            "nunit"  => "[TestFixture]",
+            "nunit" => "[TestFixture]",
             "mstest" => "[TestClass]",
-            _        => ""
+            _ => ""
         };
 
         var sb = new StringBuilder();
         sb.AppendLine("using System;");
-        if (frameworkLower == "nunit")   sb.AppendLine("using NUnit.Framework;");
-        if (frameworkLower == "xunit")   sb.AppendLine("using Xunit;");
-        if (frameworkLower == "mstest")  sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
+        if (frameworkLower == "nunit")
+        {
+            sb.AppendLine("using NUnit.Framework;");
+        }
+
+        if (frameworkLower == "xunit")
+        {
+            sb.AppendLine("using Xunit;");
+        }
+
+        if (frameworkLower == "mstest")
+        {
+            sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
+        }
+
         sb.AppendLine($"using {ns};");
         sb.AppendLine();
         sb.AppendLine($"namespace {ns}.Tests");
         sb.AppendLine("{");
-        
+
         if (!string.IsNullOrEmpty(classAttribute))
+        {
             sb.AppendLine($"    {classAttribute}");
-            
+        }
+
         sb.AppendLine($"    public class {testClassName}");
         sb.AppendLine("    {");
 
@@ -128,9 +161,21 @@ public class TestingEngine
             sb.AppendLine("            // Act");
             sb.AppendLine("            ");
             sb.AppendLine("            // Assert");
-            if (frameworkLower == "nunit")  sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
-            if (frameworkLower == "xunit")  sb.AppendLine("            Assert.True(false, \"Test not implemented\");");
-            if (frameworkLower == "mstest") sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
+            if (frameworkLower == "nunit")
+            {
+                sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
+            }
+
+            if (frameworkLower == "xunit")
+            {
+                sb.AppendLine("            Assert.True(false, \"Test not implemented\");");
+            }
+
+            if (frameworkLower == "mstest")
+            {
+                sb.AppendLine("            Assert.Fail(\"Test not implemented\");");
+            }
+
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -148,15 +193,24 @@ public class TestingEngine
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
 
-        if (document == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"File not found: {filePath}");
+        if (document == null)
+        {
+            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", "Could not parse syntax root.");
+        if (root == null)
+        {
+            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", "Could not parse syntax root.");
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
 
-        if (classNode == null) return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}");
+        if (classNode == null)
+        {
+            return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", $"Class '{className}' not found in {filePath}");
+        }
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var testClassName = $"{className}Tests";
@@ -262,10 +316,16 @@ public class TestingEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);

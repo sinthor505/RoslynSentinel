@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -668,8 +669,10 @@ public class BigModel
 
         var allMembers = new[] { "Id", "FirstName", "LastName", "Email", "Age", "IsActive", "CreatedAt" };
         foreach (var member in allMembers)
+        {
             Assert.That(result.UpdatedContent, Does.Contain($"{{{member}}}"),
                 $"Member '{member}' must be included in the generated ToString");
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

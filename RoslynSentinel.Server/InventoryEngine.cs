@@ -44,14 +44,14 @@ public class InventoryEngine
         {
             var existsOnDisk = File.Exists(normalizedPath);
             var projectCount = solution.Projects.Count();
-            throw new Exception(
+            throw new FileNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
                 "The owning project may have failed to load — check workspace load errors.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)
-                   ?? throw new Exception("Syntax root not found.");
+                   ?? throw new InvalidOperationException("Syntax root not found.");
 
         var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().Select(n => n.Name.ToString()).ToList();
         var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text).ToList();
@@ -85,14 +85,14 @@ public class InventoryEngine
         {
             var existsOnDisk = File.Exists(normalizedPath);
             var projectCount = solution.Projects.Count();
-            throw new Exception(
+            throw new FileNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
                 "The owning project may have failed to load — check workspace load errors.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken)
-                   ?? throw new Exception("Syntax root not found.");
+                   ?? throw new InvalidOperationException("Syntax root not found.");
 
         var namespaces = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().Select(n => n.Name.ToString()).ToList();
         var classes = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Select(c => c.Identifier.Text).ToList();

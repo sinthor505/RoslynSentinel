@@ -1,7 +1,5 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -55,7 +53,7 @@ public class FlagMigrationCandidateTests
     // Attribute injection
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_AttributeClassAbsent_InjectsAttributeFile()
     {
         SetSource(@"
@@ -86,7 +84,7 @@ namespace Avaal.Service
             "Injected attribute class should be internal sealed.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_AttributeClassAbsent_NamespaceMatchesTargetFile()
     {
         SetSource(@"
@@ -108,7 +106,7 @@ namespace Avaal.Service
             "Injected attribute class should use the namespace of the target file.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_AttributeClassPresent_DoesNotInjectAgain()
     {
         // Pre-define MigrationCandidateAttribute in the solution.
@@ -150,7 +148,7 @@ namespace Avaal.Service
     // Attribute content
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_AddsPatternToMethod()
     {
         SetSource(@"
@@ -168,7 +166,7 @@ public class Svc
             "Target file should have [MigrationCandidate(\"AsyncBridge\"...)] on the method.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_WithScore_IncludesScoreNamedArg()
     {
         SetSource(@"
@@ -182,7 +180,7 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
             "Score named argument should appear when score != 0.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_WithReason_IncludesReasonNamedArg()
     {
         SetSource(@"
@@ -196,7 +194,7 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
             "Reason named argument should appear when reason is provided.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_ZeroScore_OmitsScoreArg()
     {
         SetSource(@"
@@ -210,7 +208,7 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
             "Score named argument should be omitted when score is 0.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_AlwaysIncludesFlaggedDate()
     {
         SetSource(@"
@@ -227,7 +225,7 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
     // Idempotency
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_SamePatternTwice_OnlyOneAttributeOnMethod()
     {
         // Pre-apply first flag directly so the method already has [MigrationCandidate("AsyncBridge")].
@@ -263,7 +261,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
             "New score should be reflected after re-flagging.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FlagMigrationCandidate_DifferentPattern_BothAttributesPreserved()
     {
         const string preFlagged = @"
@@ -298,7 +296,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
     // Bridge conversion strips the flag
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task ConvertToAsyncBridge_StripesMigrationCandidateAttribute()
     {
         SetSource(@"
@@ -329,7 +327,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
     // FindMigrationCandidates
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FindMigrationCandidates_ReturnsFlaggedMethods()
     {
         SetSources(
@@ -353,16 +351,16 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
 
         Assert.That(findings.Count, Is.EqualTo(1), "Only one method is flagged.");
         var f = findings[0];
-        Assert.That(f.MethodName,  Is.EqualTo("Search"));
-        Assert.That(f.ClassName,   Is.EqualTo("Svc"));
-        Assert.That(f.Pattern,     Is.EqualTo("AsyncBridge"));
-        Assert.That(f.Score,       Is.EqualTo(15));
-        Assert.That(f.Reason,      Is.EqualTo("I/O"));
+        Assert.That(f.MethodName, Is.EqualTo("Search"));
+        Assert.That(f.ClassName, Is.EqualTo("Svc"));
+        Assert.That(f.Pattern, Is.EqualTo("AsyncBridge"));
+        Assert.That(f.Score, Is.EqualTo(15));
+        Assert.That(f.Reason, Is.EqualTo("I/O"));
         Assert.That(f.FlaggedDate, Is.EqualTo("2026-05-27"));
-        Assert.That(f.Line,        Is.GreaterThan(0));
+        Assert.That(f.Line, Is.GreaterThan(0));
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FindMigrationCandidates_PatternFilter_ReturnsOnlyMatchingPattern()
     {
         SetSources(
@@ -381,16 +379,16 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
     public string FlaggedDate { get; set; }
 }"));
 
-        var bridgeFindings   = await _engine.FindMigrationCandidatesAsync(pattern: "AsyncBridge");
-        var handlerFindings  = await _engine.FindMigrationCandidatesAsync(pattern: "HandlerExtract");
-        var allFindings      = await _engine.FindMigrationCandidatesAsync();
+        var bridgeFindings = await _engine.FindMigrationCandidatesAsync(pattern: "AsyncBridge");
+        var handlerFindings = await _engine.FindMigrationCandidatesAsync(pattern: "HandlerExtract");
+        var allFindings = await _engine.FindMigrationCandidatesAsync();
 
-        Assert.That(bridgeFindings.Count,  Is.EqualTo(1), "AsyncBridge filter should return 1.");
+        Assert.That(bridgeFindings.Count, Is.EqualTo(1), "AsyncBridge filter should return 1.");
         Assert.That(handlerFindings.Count, Is.EqualTo(1), "HandlerExtract filter should return 1.");
-        Assert.That(allFindings.Count,     Is.EqualTo(2), "No filter should return both.");
+        Assert.That(allFindings.Count, Is.EqualTo(2), "No filter should return both.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public async Task FindMigrationCandidates_EmptySolution_ReturnsEmptyList()
     {
         SetSource(@"
@@ -405,7 +403,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     // Error cases
     // ══════════════════════════════════════════════════════════════════════════
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void FlagMigrationCandidate_FileNotFound_Throws()
     {
         SetSource(@"public class Svc {}", "Svc.cs");
@@ -415,7 +413,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
             "Should throw when the file is not in the loaded solution.");
     }
 
-    [Test, Timeout(5000)]
+    [Test, CancelAfter(5000)]
     public void FlagMigrationCandidate_MethodNotFound_Throws()
     {
         SetSource(@"public class Svc { public int GetCount() => 0; }", "Svc.cs");

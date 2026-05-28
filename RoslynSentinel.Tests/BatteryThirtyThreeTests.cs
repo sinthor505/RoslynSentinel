@@ -14,10 +14,8 @@
 //   ArgumentSyntax, not the lambda. Fix: also skip when invocation.Parent is ArgumentSyntax
 //   inside an ObjectCreationExpressionSyntax whose type contains "ValueTask".
 
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -326,9 +324,11 @@ public class MultiCacheService
         Assert.That(results, Is.Not.Null);
         var wrappedMethods = new[] { "FetchUserAsync", "FetchProductAsync", "FetchCategoryAsync" };
         foreach (var method in wrappedMethods)
+        {
             Assert.That(
                 results.Any(r => r.Contains(method)),
                 Is.False,
                 $"{method} inside new ValueTask<T>(...) must NOT be flagged as unawaited");
+        }
     }
 }

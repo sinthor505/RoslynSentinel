@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -70,8 +70,14 @@ public class MassiveIntelligenceTests
     {
         SetSource(src, "Test.cs");
         var report = await _inventoryEngine.GetCodeInventoryAsync("Test.cs");
-        if (src.Contains("class")) Assert.That(report.Classes, Contains.Item(expectedType));
-        else Assert.That(report.Interfaces, Contains.Item(expectedType));
+        if (src.Contains("class"))
+        {
+            Assert.That(report.Classes, Contains.Item(expectedType));
+        }
+        else
+        {
+            Assert.That(report.Interfaces, Contains.Item(expectedType));
+        }
     }
 
     [Test]

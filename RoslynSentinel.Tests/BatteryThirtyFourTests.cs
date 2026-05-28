@@ -21,12 +21,8 @@
 #pragma warning disable CS8618
 
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace RoslynSentinel.Tests;
 
@@ -67,21 +63,34 @@ public class RealSolution_EngineSmoke_Battery34Tests
         {
             foreach (var doc in project.Documents)
             {
-                if (doc.FilePath == null) continue;
+                if (doc.FilePath == null)
+                {
+                    continue;
+                }
+
                 var root = await doc.GetSyntaxRootAsync();
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 var cls = root.DescendantNodes()
                     .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()
                     .FirstOrDefault();
-                if (cls == null) continue;
+                if (cls == null)
+                {
+                    continue;
+                }
 
                 var method = root.DescendantNodes()
                     .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>()
                     .FirstOrDefault();
-                if (method == null) continue;
+                if (method == null)
+                {
+                    continue;
+                }
 
-                _realFilePath  = doc.FilePath;
+                _realFilePath = doc.FilePath;
                 _realClassName = cls.Identifier.Text;
                 _realMethodName = method.Identifier.Text;
                 return;

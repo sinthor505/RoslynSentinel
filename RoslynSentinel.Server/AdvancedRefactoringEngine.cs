@@ -17,10 +17,16 @@ public class AdvancedRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         // Find top-level string concat chains — not a child of another string-concat-with-literal
         var topLevelConcats = root.DescendantNodes()
@@ -30,7 +36,10 @@ public class AdvancedRefactoringEngine
                 .Any(a => a.IsKind(SyntaxKind.AddExpression) && ContainsStringLiteral(a)))
             .ToList();
 
-        if (!topLevelConcats.Any()) return root.ToFullString();
+        if (topLevelConcats.Count == 0)
+        {
+            return root.ToFullString();
+        }
 
         var newRoot = root.ReplaceNodes(topLevelConcats, (original, _) =>
         {
@@ -80,10 +89,16 @@ public class AdvancedRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
@@ -92,7 +107,11 @@ public class AdvancedRefactoringEngine
 
         bool IsTaskType(ExpressionSyntax expr)
         {
-            if (semanticModel == null) return false;
+            if (semanticModel == null)
+            {
+                return false;
+            }
+
             var typeInfo = semanticModel.GetTypeInfo(expr, cancellationToken);
             var name = typeInfo.Type?.Name;
             return name is "Task" or "ValueTask";
@@ -102,18 +121,43 @@ public class AdvancedRefactoringEngine
         {
             var m = node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
             if (m != null && methodSpans.Add(m.SpanStart))
+            {
                 methodsToMakeAsync.Add(m);
+            }
         }
 
         // Pattern 1: .GetAwaiter().GetResult()
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (inv.Expression is not MemberAccessExpressionSyntax maGet) continue;
-            if (maGet.Name.Identifier.Text != "GetResult") continue;
-            if (maGet.Expression is not InvocationExpressionSyntax getAwaiterCall) continue;
-            if (getAwaiterCall.Expression is not MemberAccessExpressionSyntax maAwaiter) continue;
-            if (maAwaiter.Name.Identifier.Text != "GetAwaiter") continue;
-            if (!IsTaskType(maAwaiter.Expression)) continue;
+            if (inv.Expression is not MemberAccessExpressionSyntax maGet)
+            {
+                continue;
+            }
+
+            if (maGet.Name.Identifier.Text != "GetResult")
+            {
+                continue;
+            }
+
+            if (maGet.Expression is not InvocationExpressionSyntax getAwaiterCall)
+            {
+                continue;
+            }
+
+            if (getAwaiterCall.Expression is not MemberAccessExpressionSyntax maAwaiter)
+            {
+                continue;
+            }
+
+            if (maAwaiter.Name.Identifier.Text != "GetAwaiter")
+            {
+                continue;
+            }
+
+            if (!IsTaskType(maAwaiter.Expression))
+            {
+                continue;
+            }
 
             replacements[inv] = SyntaxFactory.ParenthesizedExpression(
                 SyntaxFactory.AwaitExpression(
@@ -125,11 +169,30 @@ public class AdvancedRefactoringEngine
         // Pattern 2: .Wait() with no arguments
         foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (replacements.ContainsKey(inv)) continue;
-            if (inv.Expression is not MemberAccessExpressionSyntax maWait) continue;
-            if (maWait.Name.Identifier.Text != "Wait") continue;
-            if (inv.ArgumentList.Arguments.Count != 0) continue;
-            if (!IsTaskType(maWait.Expression)) continue;
+            if (replacements.ContainsKey(inv))
+            {
+                continue;
+            }
+
+            if (inv.Expression is not MemberAccessExpressionSyntax maWait)
+            {
+                continue;
+            }
+
+            if (maWait.Name.Identifier.Text != "Wait")
+            {
+                continue;
+            }
+
+            if (inv.ArgumentList.Arguments.Count != 0)
+            {
+                continue;
+            }
+
+            if (!IsTaskType(maWait.Expression))
+            {
+                continue;
+            }
 
             replacements[inv] = SyntaxFactory.AwaitExpression(
                 SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space),
@@ -140,9 +203,20 @@ public class AdvancedRefactoringEngine
         // Pattern 3: .Result member access
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
-            if (ma.Name.Identifier.Text != "Result") continue;
-            if (replacements.Keys.Any(k => k.Span.Contains(ma.Span))) continue;
-            if (!IsTaskType(ma.Expression)) continue;
+            if (ma.Name.Identifier.Text != "Result")
+            {
+                continue;
+            }
+
+            if (replacements.Keys.Any(k => k.Span.Contains(ma.Span)))
+            {
+                continue;
+            }
+
+            if (!IsTaskType(ma.Expression))
+            {
+                continue;
+            }
 
             replacements[ma] = SyntaxFactory.ParenthesizedExpression(
                 SyntaxFactory.AwaitExpression(
@@ -151,7 +225,10 @@ public class AdvancedRefactoringEngine
             CollectMethod(ma);
         }
 
-        if (!replacements.Any()) return root.NormalizeWhitespace().ToFullString();
+        if (replacements.Count == 0)
+        {
+            return root.NormalizeWhitespace().ToFullString();
+        }
 
         // Track all nodes that will be mutated before any tree modification
         var trackedRoot = root.TrackNodes(replacements.Keys.Concat(methodsToMakeAsync.Cast<SyntaxNode>()));
@@ -168,53 +245,71 @@ public class AdvancedRefactoringEngine
         foreach (var method in methodsToMakeAsync)
         {
             var current = newRoot.GetCurrentNode(method);
-            if (current == null || current.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
+            if (current == null || current.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            {
+                continue;
+            }
 
             var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space);
             var newModifiers = current.Modifiers.Add(asyncToken);
             TypeSyntax newReturn = current.ReturnType;
             if (current.ReturnType is PredefinedTypeSyntax pred && pred.Keyword.IsKind(SyntaxKind.VoidKeyword))
+            {
                 newReturn = SyntaxFactory.IdentifierName("Task").WithTriviaFrom(current.ReturnType);
+            }
             else if (!IsTaskReturnType(current.ReturnType))
+            {
                 newReturn = SyntaxFactory.GenericName(SyntaxFactory.Identifier("Task"))
                     .WithTypeArgumentList(SyntaxFactory.TypeArgumentList(
                         SyntaxFactory.SingletonSeparatedList(current.ReturnType.WithoutTrivia())))
                     .WithTriviaFrom(current.ReturnType);
+            }
 
             methodUpdates[current] = current.WithModifiers(newModifiers).WithReturnType(newReturn);
         }
 
-        if (methodUpdates.Any())
+        if (methodUpdates.Count != 0)
+        {
             newRoot = newRoot.ReplaceNodes(methodUpdates.Keys, (original, _) => methodUpdates[original]);
+        }
 
         return newRoot.NormalizeWhitespace().ToFullString();
     }
 
     private static bool ContainsStringLiteral(ExpressionSyntax expr) =>
-        expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
-        || expr is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.AddExpression)
-           && (ContainsStringLiteral(bin.Left) || ContainsStringLiteral(bin.Right));
+        (expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
+        || (expr is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.AddExpression)
+           && (ContainsStringLiteral(bin.Left) || ContainsStringLiteral(bin.Right)));
 
     private static List<ExpressionSyntax> FlattenConcatTree(ExpressionSyntax expr)
     {
         if (expr is BinaryExpressionSyntax bin && bin.IsKind(SyntaxKind.AddExpression))
+        {
             return FlattenConcatTree(bin.Left).Concat(FlattenConcatTree(bin.Right)).ToList();
+        }
+
         return new List<ExpressionSyntax> { expr };
     }
 
     private static bool IsTaskReturnType(TypeSyntax type) =>
-        type is IdentifierNameSyntax id && id.Identifier.Text is "Task" or "ValueTask"
-        || type is GenericNameSyntax gn && gn.Identifier.Text is "Task" or "ValueTask";
+        (type is IdentifierNameSyntax id && id.Identifier.Text is "Task" or "ValueTask")
+        || (type is GenericNameSyntax gn && gn.Identifier.Text is "Task" or "ValueTask");
 
     public async Task<Dictionary<string, string>> ExtractServiceFromControllerAsync(string filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
-        if (controller == null) throw new Exception("Controller not found.");
+        if (controller == null)
+        {
+            throw new InvalidOperationException("Controller not found.");
+        }
 
         // Extract private methods and complex logic from public endpoints
         var methodsToMove = controller.Members.OfType<MethodDeclarationSyntax>()
@@ -226,19 +321,19 @@ public class AdvancedRefactoringEngine
             .AddMembers(methodsToMove.Select(m => m.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))).ToArray());
 
         var newController = controller.RemoveNodes(methodsToMove, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-        
+
         // In a real scenario, we'd inject the IService into the controller constructor here.
         var updatedRoot = root!.ReplaceNode(controller, newController!);
 
         var ns = controller.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        var serviceRoot = SyntaxFactory.CompilationUnit().WithUsings(root.Usings);
-        
+        var serviceRoot = SyntaxFactory.CompilationUnit().WithUsings(root?.Usings ?? SyntaxFactory.List<UsingDirectiveSyntax>());
+
         if (ns != null)
         {
-             var newNs = ns is FileScopedNamespaceDeclarationSyntax 
-                ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name)
-                : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name);
-             serviceRoot = serviceRoot.AddMembers(newNs.AddMembers(serviceClass));
+            var newNs = ns is FileScopedNamespaceDeclarationSyntax
+               ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name)
+               : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name);
+            serviceRoot = serviceRoot.AddMembers(newNs.AddMembers(serviceClass));
         }
         else
         {

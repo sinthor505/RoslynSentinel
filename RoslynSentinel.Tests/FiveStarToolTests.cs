@@ -1,6 +1,5 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -303,8 +302,10 @@ public class ExtractConstantSafeStrongTests
             // Either way: no throw, no null result, always has an error message when Success=false
             Assert.That(result, Is.Not.Null);
             if (!result.Success)
+            {
                 Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                     "Failure must include an actionable error message");
+            }
         }
         finally { SafeDelete(tempFile); }
     }
@@ -316,7 +317,7 @@ public class ExtractConstantSafeStrongTests
 
     private static void SafeDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+        try { if (File.Exists(path)) { File.Delete(path); } } catch { /* ignore */ }
     }
 
     private static int CountOccurrences(string text, string value)
@@ -638,7 +639,13 @@ public class PreviewAddMissingUsingsLoadedTests
             Assert.That(diskContent, Is.EqualTo(originalContent),
                 "PreviewAddMissingUsings must NEVER modify the file on disk (fixes MS bug where preview is ignored)");
         }
-        finally { if (File.Exists(tempFile)) File.Delete(tempFile); }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Test]
@@ -866,6 +873,6 @@ public class FormatDocumentSafeTests
 
     private static void SafeDelete(string path)
     {
-        try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+        try { if (File.Exists(path)) { File.Delete(path); } } catch { /* ignore */ }
     }
 }

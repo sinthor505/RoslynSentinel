@@ -1,6 +1,6 @@
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
@@ -54,18 +54,18 @@ public class FinalRegressionTests
                 public class DataService { }
                 public class Helper { }
             }";
-        
+
         SetSource(code, "WrongName.cs");
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        
+
         var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-        
+
         // Should use staging (CHANGE_ prefix) instead of direct File.Move
-        Assert.That(result, Does.Contain("CHANGE_"), 
+        Assert.That(result, Does.Contain("CHANGE_"),
             "Should use staging mechanism with CHANGE_ prefix");
-        Assert.That(result, Does.Contain("DataService.cs"), 
+        Assert.That(result, Does.Contain("DataService.cs"),
             "Should identify primary type DataService");
     }
 
@@ -86,14 +86,14 @@ public class FinalRegressionTests
                     var name = GetName();
                 }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        
+
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "GetName");
-        
+
         // Should error because GetName is used in UseHelper
         Assert.That(result, Does.Contain("ERROR") | Does.Contain("usages"),
             "Should error when trying to remove a used member");
@@ -109,14 +109,14 @@ public class FinalRegressionTests
                 
                 public void OtherMethod() { }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        
+
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "UnusedMethod");
-        
+
         // Should succeed and remove the unused method
         Assert.That(result, Does.Not.Contain("UnusedMethod"),
             "Should remove unused member without errors");
@@ -139,15 +139,15 @@ public class FinalRegressionTests
             {
                 public void Process(string name, int age, bool active) { }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        
+
         var engine = new GranularRefactoringEngine(_workspaceManager);
         var result = await engine.IntroduceParameterObjectAsync(filePath, "Process");
-        
+
         Assert.That(result, Is.Not.Null);
         // Should create parameter object and possibly warn about interface
         Assert.That(result, Does.Contain("ProcessParameters") | Does.Contain("WARNING"),
@@ -174,14 +174,14 @@ public class FinalRegressionTests
                     return await Task.FromResult(""data"");
                 }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        
+
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, "GetDataAsync");
-        
+
         Assert.That(result, Does.Contain("ValueTask<string>"),
             "Should convert Task<T> to ValueTask<T>");
         Assert.That(result, Does.Contain("WARNING") | Does.Contain("interface"),
@@ -203,12 +203,12 @@ public class FinalRegressionTests
                     var conn = new System.Collections.Hashtable();
                 }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-        
+
         Assert.That(root, Is.Not.Null, "Should parse document without errors");
         Assert.That(root?.ToFullString(), Does.Contain("DataAccess"),
             "Should contain the class definition");
@@ -226,15 +226,15 @@ public class FinalRegressionTests
                     { ""Pro"", 2 }
                 };
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-        
+
         var dictVar = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>()
             .FirstOrDefault(v => v.Identifier.Text == "TierRank");
-        
+
         Assert.That(dictVar, Is.Not.Null, "Should find static readonly dictionary");
     }
 
@@ -254,16 +254,16 @@ public class FinalRegressionTests
                     await Task.Delay(1000);
                 }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-        
+
         // Look for Task.Run fire-and-forget pattern
         var taskRunCall = root?.DescendantNodes().OfType<InvocationExpressionSyntax>()
             .FirstOrDefault(i => i.ToString().Contains("Task.Run"));
-        
+
         Assert.That(taskRunCall, Is.Not.Null, "Should detect Task.Run fire-and-forget");
     }
 
@@ -275,12 +275,12 @@ public class FinalRegressionTests
             {
                 public void DoWork() { }
             }";
-        
+
         SetSource(code);
-        var doc = _workspaceManager.GetBranchedSolutionAsync().Result
-            .Projects.First().Documents.First();
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
-        
+
         Assert.That(root, Is.Not.Null);
         Assert.That(root?.ToFullString(), Does.Contain("Service"));
     }

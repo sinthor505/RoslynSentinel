@@ -78,7 +78,11 @@ public class SentinelRefactoringTools
         try
         {
             var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(filePaths, classNames, newBaseClassName);
-            if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract superclass '{newBaseClassName}' from {classNames.Length} classes.");
+            if (autoStage)
+            {
+                return _workspaceManager.StageChanges(changes, $"Extract superclass '{newBaseClassName}' from {classNames.Length} classes.");
+            }
+
             return changes;
         }
         catch (Exception ex)
@@ -91,7 +95,11 @@ public class SentinelRefactoringTools
     private static string PreviewFileContent(string content)
     {
         var lines = content.Split('\n');
-        if (lines.Length <= 20) return content;
+        if (lines.Length <= 20)
+        {
+            return content;
+        }
+
         var head = lines.Take(10);
         var tail = lines.TakeLast(10);
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
@@ -117,7 +125,11 @@ public class SentinelRefactoringTools
     public async Task<object> SafeDeleteSymbol(string filePath, string contextSnippet, bool autoStage = true, string? lineBefore = null, string? lineAfter = null) 
     {
         var changes = await _refactoringEngine.SafeDeleteSymbolAsync(filePath, contextSnippet, lineBefore, lineAfter);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Safe delete symbol in '{Path.GetFileName(filePath)}'.");
+        if (autoStage)
+        {
+            return _workspaceManager.StageChanges(changes, $"Safe delete symbol in '{Path.GetFileName(filePath)}'.");
+        }
+
         return changes;
     }
 
@@ -141,7 +153,11 @@ public class SentinelRefactoringTools
     public async Task<object> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true) 
     {
         var changes = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, newParameterOrder);
-        if (autoStage) return _workspaceManager.StageChanges(changes, $"Change signature of method '{methodName}' in '{Path.GetFileName(filePath)}'.");
+        if (autoStage)
+        {
+            return _workspaceManager.StageChanges(changes, $"Change signature of method '{methodName}' in '{Path.GetFileName(filePath)}'.");
+        }
+
         return changes;
     }
 
@@ -192,7 +208,10 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.RenameSymbolAsync(filePath, symbolName, contextSnippet, newName, lineBefore, lineAfter);
         if (result.Error != null)
+        {
             return new { Error = result.Error };
+        }
+
         if (autoStage)
         {
             var id = _workspaceManager.StageChanges(result.PendingChanges, $"Rename '{result.OldName}' to '{result.NewName}'");
@@ -208,7 +227,11 @@ public class SentinelRefactoringTools
         try
         {
             var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, interfaceName);
-            if (autoStage) return _workspaceManager.StageChanges(changes, $"Extract interface '{interfaceName}' from '{className}'.");
+            if (autoStage)
+            {
+                return _workspaceManager.StageChanges(changes, $"Extract interface '{interfaceName}' from '{className}'.");
+            }
+
             return changes;
         }
         catch (Exception ex)
@@ -315,8 +338,16 @@ public class SentinelRefactoringTools
     public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = true)
     {
         var changes = await _refactoringEngine.MoveAllTypesToFilesAsync(filePath);
-        if (!autoStage) return changes;
-        if (changes.Count == 0) return "No secondary types found to move.";
+        if (!autoStage)
+        {
+            return changes;
+        }
+
+        if (changes.Count == 0)
+        {
+            return "No secondary types found to move.";
+        }
+
         var id = _workspaceManager.StageChanges(changes, $"Move all types to files in '{Path.GetFileName(filePath)}'");
         return new
         {
@@ -335,8 +366,16 @@ public class SentinelRefactoringTools
     public async Task<object> MoveAllTypesToFilesInProject(string projectName, bool autoStage = true)
     {
         var changes = await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(projectName);
-        if (!autoStage) return changes;
-        if (changes.Count == 0) return $"No secondary types found in project '{projectName}'.";
+        if (!autoStage)
+        {
+            return changes;
+        }
+
+        if (changes.Count == 0)
+        {
+            return $"No secondary types found in project '{projectName}'.";
+        }
+
         var id = _workspaceManager.StageChanges(changes, $"Move all types to files in project '{projectName}'");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves all secondary types in project '{projectName}' to their own files.");
     }
@@ -346,8 +385,16 @@ public class SentinelRefactoringTools
     public async Task<object> MoveAllTypesToFilesInSolution(bool autoStage = true)
     {
         var changes = await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync();
-        if (!autoStage) return changes;
-        if (changes.Count == 0) return "No secondary types found in solution.";
+        if (!autoStage)
+        {
+            return changes;
+        }
+
+        if (changes.Count == 0)
+        {
+            return "No secondary types found in solution.";
+        }
+
         var id = _workspaceManager.StageChanges(changes, "Move all types to files in solution");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), "Moves all secondary types across the entire solution to their own files.");
     }
@@ -389,7 +436,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddUsingDirective(string filePath, string namespaceName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddUsingDirectiveAsync(filePath, namespaceName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.");
@@ -407,7 +458,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddEnumValue(string filePath, string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.");
@@ -425,7 +480,11 @@ public class SentinelRefactoringTools
     public async Task<object> InsertMemberAfter(string filePath, string containerName, string afterMemberName, string newMemberSource, bool autoStage = true)
     {
         var updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Insert member after '{afterMemberName}' in '{containerName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
@@ -443,7 +502,11 @@ public class SentinelRefactoringTools
     public async Task<object> InsertMemberBefore(string filePath, string containerName, string beforeMemberName, string newMemberSource, bool autoStage = true)
     {
         var updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Insert member before '{beforeMemberName}' in '{containerName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
@@ -461,7 +524,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddAttribute(string filePath, string targetName, string attributeSource, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attributeSource);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add attribute '{attributeSource}' to '{targetName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{attributeSource}' to '{targetName}' in {Path.GetFileName(filePath)}.");
@@ -479,7 +546,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add base type '{baseTypeName}' to '{typeName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{baseTypeName}' to the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
@@ -519,8 +590,16 @@ public class SentinelRefactoringTools
     public async Task<object> PullUpMember(string filePath, string className, string memberName, bool autoStage = true)
     {
         var changes = await _refinementEngine.PullUpMemberAsync(filePath, className, memberName);
-        if (!autoStage) return changes;
-        if (changes.Count == 0) return $"Member '{memberName}' not found or no accessible base class available.";
+        if (!autoStage)
+        {
+            return changes;
+        }
+
+        if (changes.Count == 0)
+        {
+            return $"Member '{memberName}' not found or no accessible base class available.";
+        }
+
         var id = _workspaceManager.StageChanges(changes, $"Pull up '{memberName}' from '{className}' to base class.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Pulls '{memberName}' from '{className}' up to its base class.");
     }
@@ -537,7 +616,11 @@ public class SentinelRefactoringTools
     public async Task<object> RemoveAttribute(string filePath, string targetName, string attributeName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, attributeName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Remove attribute '{attributeName}' from '{targetName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{attributeName}' from '{targetName}' in {Path.GetFileName(filePath)}.");
@@ -555,7 +638,11 @@ public class SentinelRefactoringTools
     public async Task<object> RemoveBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Remove base type '{baseTypeName}' from '{typeName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{baseTypeName}' from the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
@@ -573,7 +660,11 @@ public class SentinelRefactoringTools
     public async Task<object> ChangeAccessibility(string filePath, string targetName, string accessibility, bool autoStage = true)
     {
         var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.");
@@ -591,7 +682,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddModifier(string filePath, string targetName, string modifier, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add '{modifier}' modifier to '{targetName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{modifier}' to '{targetName}' in {Path.GetFileName(filePath)}.");
@@ -609,7 +704,11 @@ public class SentinelRefactoringTools
     public async Task<object> RemoveModifier(string filePath, string targetName, string modifier, bool autoStage = true)
     {
         var updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Remove '{modifier}' modifier from '{targetName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{modifier}' from '{targetName}' in {Path.GetFileName(filePath)}.");
@@ -627,7 +726,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddSummaryComment(string filePath, string targetName, string summaryText, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.");
@@ -645,7 +748,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddProperty(string filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, propertyName, propertyType, accessibility, hasSetter, isInit);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add property '{propertyName}' to '{containerName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{propertyType} {propertyName}' property to '{containerName}' in {Path.GetFileName(filePath)}.");
@@ -663,7 +770,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddField(string filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, fieldName, fieldType, accessibility, isReadonly, isStatic, initializer);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add field '{fieldName}' to '{containerName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{fieldType} {fieldName}' field to '{containerName}' in {Path.GetFileName(filePath)}.");
@@ -681,7 +792,11 @@ public class SentinelRefactoringTools
     public async Task<object> SortMembers(string filePath, string containerName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.SortMembersAsync(filePath, containerName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Sort members of '{containerName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Sorts members of '{containerName}' by convention in {Path.GetFileName(filePath)}.");
@@ -699,7 +814,11 @@ public class SentinelRefactoringTools
     public async Task<object> WrapInTryCatch(string filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, bool autoStage = true)
     {
         var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
@@ -717,7 +836,11 @@ public class SentinelRefactoringTools
     public async Task<object> AddConstructorParameter(string filePath, string className, string paramName, string paramType, string? fieldName = null, bool autoStage = true)
     {
         var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.");
@@ -734,7 +857,11 @@ public class SentinelRefactoringTools
     public async Task<object> WrapInRegion(string filePath, int startLine, int endLine, string regionName, bool autoStage = true)
     {
         var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, regionName);
-        if (!autoStage) return updated;
+        if (!autoStage)
+        {
+            return updated;
+        }
+
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{regionName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{regionName}' in {Path.GetFileName(filePath)}.");
@@ -746,9 +873,12 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"SyncInterfaceToImplementation failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
                 "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -762,9 +892,12 @@ public class SentinelRefactoringTools
     {
         var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"IntroduceParameterObject failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -774,9 +907,12 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"UpdateXmlDocsFromSignature failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -791,9 +927,12 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertExpressionBody failed for '{memberName}' ({direction}) in '{filePath}': " +
                 "file not found in workspace, member not found, or context snippet did not match. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -808,9 +947,12 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ExtractConstant failed for constant '{constantName}' in '{filePath}': " +
                 "file not found in workspace or context snippet did not match any literal. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -856,8 +998,11 @@ public class SentinelRefactoringTools
     {
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertToNullCoalescing failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -877,9 +1022,12 @@ public class SentinelRefactoringTools
     {
         var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': " +
                 "file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -897,8 +1045,11 @@ public class SentinelRefactoringTools
     {
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertToSwitch failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 
@@ -917,8 +1068,11 @@ public class SentinelRefactoringTools
     {
         var result = await _modernizationEngine.ConvertToPatternAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertToPattern failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return result;
     }
 

@@ -1,10 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace RoslynSentinel.Server;
 
@@ -60,7 +56,10 @@ public class ControlFlowEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new PathCoverageReport(methodName, new List<string>());
+        if (document == null)
+        {
+            return new PathCoverageReport(methodName, new List<string>());
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         // Get ALL overloads, not just the first one
@@ -69,17 +68,23 @@ public class ControlFlowEngine
             .ToList() ?? [];
 
         var branches = new List<string>();
-        
+
         // Analyze all overloads
         foreach (var method in methods)
         {
-            if (method == null) continue;
-            
+            if (method == null)
+            {
+                continue;
+            }
+
             var ifs = method.DescendantNodes().OfType<IfStatementSyntax>();
             foreach (var ifNode in ifs)
             {
                 branches.Add($"Condition: {ifNode.Condition} (True Path)");
-                if (ifNode.Else != null) branches.Add($"Condition: {ifNode.Condition} (False Path)");
+                if (ifNode.Else != null)
+                {
+                    branches.Add($"Condition: {ifNode.Condition} (False Path)");
+                }
             }
 
             var switches = method.DescendantNodes().OfType<SwitchStatementSyntax>();
@@ -117,7 +122,9 @@ public class ControlFlowEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
+        {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], $"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var text = await document.GetTextAsync(ct);
@@ -126,7 +133,9 @@ public class ControlFlowEngine
             .ToList() ?? [];
 
         if (methods.Count == 0)
+        {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], $"Method '{methodName}' not found in {filePath}.");
+        }
 
         MethodDeclarationSyntax method;
         if (methods.Count == 1)
@@ -155,30 +164,44 @@ public class ControlFlowEngine
         }
 
         if (method.Body == null)
+        {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [],
                 "Method has no block body (expression-bodied member). Control flow analysis requires a block body.");
+        }
 
         var statements = method.Body.Statements;
         if (statements.Count == 0)
+        {
             return new ControlFlowAnalysisResult(methodName, true, [], [], [], [], null);
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null)
+        {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], "Semantic model unavailable.");
+        }
+
         var analysis = model.AnalyzeControlFlow(statements.First(), statements.Last());
 
         static string NodeText(SyntaxNode node) =>
             node.ToString().Trim().Replace("\r\n", " ").Replace("\n", " ");
 
-        var returns   = analysis.ReturnStatements.Select(n => NodeText(n)).ToList();
-        var throws    = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.ThrowStatement)).Select(n => NodeText(n)).ToList();
-        var breaks    = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.BreakStatement)).Select(n => NodeText(n)).ToList();
-        var continues = analysis.ExitPoints.Where(n => n.IsKind(SyntaxKind.ContinueStatement)).Select(n => NodeText(n)).ToList();
+        var returns = analysis?.ReturnStatements.Select(n => NodeText(n)).ToList();
+        var throws = analysis?.ExitPoints.Where(n => n.IsKind(SyntaxKind.ThrowStatement)).Select(n => NodeText(n)).ToList();
+        var breaks = analysis?.ExitPoints.Where(n => n.IsKind(SyntaxKind.BreakStatement)).Select(n => NodeText(n)).ToList();
+        var continues = analysis?.ExitPoints.Where(n => n.IsKind(SyntaxKind.ContinueStatement)).Select(n => NodeText(n)).ToList();
 
-        return new ControlFlowAnalysisResult(
-            methodName,
-            analysis.EndPointIsReachable,
-            returns, throws, breaks, continues);
+        if (returns == null || throws == null || breaks == null || continues == null)
+        {
+            return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], "Control flow analysis failed.");
+        }
+        else
+        {
+            return new ControlFlowAnalysisResult(
+                methodName,
+                analysis?.EndPointIsReachable ?? false,
+                returns, throws, breaks, continues);
+        }
     }
 
     /// <summary>
@@ -195,7 +218,9 @@ public class ControlFlowEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
+        {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], $"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
@@ -203,7 +228,9 @@ public class ControlFlowEngine
             .ToList() ?? [];
 
         if (methods.Count == 0)
+        {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], $"Method '{methodName}' not found in {filePath}.");
+        }
 
         MethodDeclarationSyntax method;
         if (methods.Count == 1)
@@ -232,26 +259,40 @@ public class ControlFlowEngine
         }
 
         if (method.Body == null)
+        {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [],
                 "Method has no block body (expression-bodied member). Data flow analysis requires a block body.");
+        }
 
         var statements = method.Body.Statements;
         if (statements.Count == 0)
+        {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], null);
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
         if (model == null)
+        {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "Semantic model unavailable.");
+        }
+
         var analysis = model.AnalyzeDataFlow(statements.First(), statements.Last());
 
-        return new DataFlowAnalysisResult(
-            methodName,
-            analysis.DataFlowsIn.Select(s => s.Name).ToList(),
-            analysis.DataFlowsOut.Select(s => s.Name).ToList(),
-            analysis.VariablesDeclared.Select(s => s.Name).ToList(),
-            analysis.AlwaysAssigned.Select(s => s.Name).ToList(),
-            analysis.ReadInside.Select(s => s.Name).ToList(),
-            analysis.WrittenInside.Select(s => s.Name).ToList());
+        if (analysis == null)
+        {
+            return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "Data flow analysis failed.");
+        }
+        else
+        {
+            return new DataFlowAnalysisResult(
+                methodName,
+                analysis.DataFlowsIn.Select(s => s.Name).ToList(),
+                analysis.DataFlowsOut.Select(s => s.Name).ToList(),
+                analysis.VariablesDeclared.Select(s => s.Name).ToList(),
+                analysis.AlwaysAssigned.Select(s => s.Name).ToList(),
+                analysis.ReadInside.Select(s => s.Name).ToList(),
+                analysis.WrittenInside.Select(s => s.Name).ToList());
+        }
     }
 
     // ── Enum Switch Exhaustiveness ─────────────────────────────────────────
@@ -265,7 +306,9 @@ public class ControlFlowEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var proj = solution.Projects.FirstOrDefault(p =>
@@ -273,30 +316,50 @@ public class ControlFlowEngine
             documents = proj?.Documents.Cast<Document?>() ?? [];
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var gaps = new List<EnumSwitchGap>();
 
         foreach (var doc in documents)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var model = await doc.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
+
             var docPath = doc.FilePath ?? doc.Name;
 
             foreach (var switchStmt in root.DescendantNodes().OfType<SwitchStatementSyntax>())
             {
                 // Only interested in switches on enum types
                 var switchType = model.GetTypeInfo(switchStmt.Expression, ct).Type;
-                if (switchType == null || switchType.TypeKind != TypeKind.Enum) continue;
+                if (switchType == null || switchType.TypeKind != TypeKind.Enum)
+                {
+                    continue;
+                }
 
                 // Has a default label → already handles unrecognized values
                 bool hasDefault = switchStmt.Sections
                     .SelectMany(s => s.Labels)
                     .Any(l => l is DefaultSwitchLabelSyntax);
-                if (hasDefault) continue;
+                if (hasDefault)
+                {
+                    continue;
+                }
 
                 // Collect all enum member names handled by the switch
                 var handledNames = new HashSet<string>(StringComparer.Ordinal);
@@ -307,12 +370,17 @@ public class ControlFlowEngine
                         // The case expression might be: MyEnum.Active, or just Active
                         var caseSym = model.GetSymbolInfo(label.Value, ct).Symbol;
                         if (caseSym is IFieldSymbol field && field.ContainingType.Equals(switchType, SymbolEqualityComparer.Default))
+                        {
                             handledNames.Add(field.Name);
+                        }
                         else
                         {
                             // Fallback: last identifier in the expression
                             var id = label.Value.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().LastOrDefault();
-                            if (id != null) handledNames.Add(id.Identifier.Text);
+                            if (id != null)
+                            {
+                                handledNames.Add(id.Identifier.Text);
+                            }
                         }
                     }
                 }
@@ -325,7 +393,10 @@ public class ControlFlowEngine
                     .ToList();
 
                 var missing = allMembers.Where(m => !handledNames.Contains(m)).ToList();
-                if (missing.Count == 0) continue;
+                if (missing.Count == 0)
+                {
+                    continue;
+                }
 
                 var containingMethod = switchStmt.Ancestors().OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault()?.Identifier.Text ?? "<top-level>";
@@ -361,9 +432,16 @@ public class ControlFlowEngine
 
         foreach (var doc in testDocs)
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var testMethod in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
@@ -388,7 +466,10 @@ public class ControlFlowEngine
                                    string.Equals(callee, methodName, StringComparison.OrdinalIgnoreCase);
                         });
 
-                if (!nameMatch && !callMatch) continue;
+                if (!nameMatch && !callMatch)
+                {
+                    continue;
+                }
 
                 // Confirm it has a test attribute ([Fact], [Test], [TestMethod], [Theory])
                 bool hasTestAttr = testMethod.AttributeLists
@@ -399,7 +480,10 @@ public class ControlFlowEngine
                         return name is "Fact" or "Theory" or "Test" or "TestMethod" or "DataTestMethod";
                     });
 
-                if (!hasTestAttr) continue;
+                if (!hasTestAttr)
+                {
+                    continue;
+                }
 
                 var line = testMethod.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 coveringTests.Add(new CoveringTest(doc.FilePath, testMethodName, line));
@@ -415,7 +499,11 @@ public class ControlFlowEngine
 
     private static bool IsTestFile(string? filePath)
     {
-        if (string.IsNullOrEmpty(filePath)) return false;
+        if (string.IsNullOrEmpty(filePath))
+        {
+            return false;
+        }
+
         var name = Path.GetFileNameWithoutExtension(filePath);
         return name.EndsWith("Tests", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith("Test", StringComparison.OrdinalIgnoreCase)

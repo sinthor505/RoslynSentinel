@@ -27,27 +27,45 @@ public class SemanticRefactoringLibrary
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         // Find the variable declaration
         var variable = root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
             .FirstOrDefault(v => v.Identifier.Text == variableName);
 
-        if (variable?.Initializer?.Value == null) return root.ToFullString();
+        if (variable?.Initializer?.Value == null)
+        {
+            return root.ToFullString();
+        }
 
         // Find the containing variable declaration statement
         var declarationStatement = variable.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
-        if (declarationStatement == null) return root.ToFullString();
+        if (declarationStatement == null)
+        {
+            return root.ToFullString();
+        }
 
         // Find the containing method
         var containingMethod = declarationStatement.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-        if (containingMethod?.Body == null) return root.ToFullString();
+        if (containingMethod?.Body == null)
+        {
+            return root.ToFullString();
+        }
 
         // Check if there's only one declarator
-        if (declarationStatement.Declaration.Variables.Count != 1) return root.ToFullString();
+        if (declarationStatement.Declaration.Variables.Count != 1)
+        {
+            return root.ToFullString();
+        }
 
         var value = variable.Initializer.Value;
 
@@ -132,13 +150,19 @@ public class SemanticRefactoringLibrary
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         var propNode = classNode?.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
 
-        if (classNode == null || propNode == null) return root?.ToFullString() ?? "";
+        if (classNode == null || propNode == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
             .AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword))
@@ -167,14 +191,20 @@ public class SemanticRefactoringLibrary
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
         
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
-        if (nodes == null || !nodes.Any()) return "";
+        if (nodes == null || nodes.Count == 0)
+        {
+            return "";
+        }
 
         var firstNode = nodes[0];
         var parentBlock = (BlockSyntax)firstNode.Parent!;

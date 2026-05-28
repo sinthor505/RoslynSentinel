@@ -43,20 +43,35 @@ public class CloneDetectionEngine
         {
             document = project.Documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-            if (document != null) break;
+            if (document != null)
+            {
+                break;
+            }
         }
-        if (document == null) return [];
+        if (document == null)
+        {
+            return [];
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
-        if (semanticModel == null) return [];
+        if (semanticModel == null)
+        {
+            return [];
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return [];
+        if (root == null)
+        {
+            return [];
+        }
 
         var classDecl = root.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classDecl == null) return [];
+        if (classDecl == null)
+        {
+            return [];
+        }
 
         var methods = classDecl.Members.OfType<MethodDeclarationSyntax>().ToList();
         var windows = CollectWindows(methods, filePath, className, minStatements);
@@ -82,7 +97,10 @@ public class CloneDetectionEngine
         foreach (var project in projects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             var candidate = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
@@ -96,7 +114,10 @@ public class CloneDetectionEngine
             }
         }
 
-        if (rootSymbol == null) return [];
+        if (rootSymbol == null)
+        {
+            return [];
+        }
 
         // Build the set of related type names (root + all derived/implementing types)
         var relatedTypeNames = new HashSet<string>(StringComparer.Ordinal);
@@ -104,7 +125,9 @@ public class CloneDetectionEngine
 
         // Walk interfaces and base classes upward
         foreach (var iface in rootSymbol.AllInterfaces)
+        {
             relatedTypeNames.Add(iface.Name);
+        }
 
         var current = rootSymbol.BaseType;
         while (current != null && current.SpecialType == SpecialType.None)
@@ -117,7 +140,10 @@ public class CloneDetectionEngine
         foreach (var project in solution.Projects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             foreach (var tree in compilation.SyntaxTrees)
             {
@@ -127,7 +153,9 @@ public class CloneDetectionEngine
                 foreach (var classDecl in treeRoot.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
                     if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol typeSymbol)
+                    {
                         continue;
+                    }
 
                     // Is this type in the hierarchy?
                     bool related = typeSymbol.AllInterfaces.Any(i => i.Name == rootSymbol.Name)
@@ -135,7 +163,9 @@ public class CloneDetectionEngine
                         || relatedTypeNames.Contains(typeSymbol.Name);
 
                     if (related)
+                    {
                         relatedTypeNames.Add(typeSymbol.Name);
+                    }
                 }
             }
         }
@@ -148,16 +178,25 @@ public class CloneDetectionEngine
             foreach (var document in project.Documents)
             {
                 var root = await document.GetSyntaxRootAsync(ct);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 var semanticModel = await document.GetSemanticModelAsync(ct);
-                if (semanticModel == null) continue;
+                if (semanticModel == null)
+                {
+                    continue;
+                }
 
                 var filePath = document.FilePath ?? document.Name;
 
                 foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
-                    if (!relatedTypeNames.Contains(classDecl.Identifier.Text)) continue;
+                    if (!relatedTypeNames.Contains(classDecl.Identifier.Text))
+                    {
+                        continue;
+                    }
 
                     var methods = classDecl.Members.OfType<MethodDeclarationSyntax>().ToList();
                     var windows = CollectWindows(methods, filePath, classDecl.Identifier.Text, minStatements);
@@ -166,7 +205,10 @@ public class CloneDetectionEngine
             }
         }
 
-        if (allWindows.Count == 0) return [];
+        if (allWindows.Count == 0)
+        {
+            return [];
+        }
 
         // We need a SemanticModel for dataflow — use the root type's compilation for best results
         // For hierarchy mode, dataflow uses the first model that compiled the block
@@ -195,10 +237,16 @@ public class CloneDetectionEngine
         foreach (var method in methods)
         {
             var body = method.Body;
-            if (body == null) continue; // expression-bodied, skip
+            if (body == null)
+            {
+                continue; // expression-bodied, skip
+            }
 
             var stmts = body.Statements.ToArray();
-            if (stmts.Length < minStatements) continue;
+            if (stmts.Length < minStatements)
+            {
+                continue;
+            }
 
             // Sliding window — use set to avoid overlapping windows from same method
             var coveredRanges = new List<(int Start, int End)>();
@@ -209,7 +257,10 @@ public class CloneDetectionEngine
                 {
                     // Skip if overlaps an already-covered range
                     int end = start + windowSize - 1;
-                    if (coveredRanges.Any(r => start <= r.End && end >= r.Start)) continue;
+                    if (coveredRanges.Any(r => start <= r.End && end >= r.Start))
+                    {
+                        continue;
+                    }
 
                     var window = stmts[start..(end + 1)];
                     var hash = ComputeStructuralHash(window);
@@ -229,7 +280,10 @@ public class CloneDetectionEngine
 
         var hashCode = new System.Text.StringBuilder();
         foreach (var k in kinds)
+        {
             hashCode.Append(k).Append(',');
+        }
+
         return hashCode.ToString();
     }
 
@@ -306,7 +360,11 @@ public class CloneDetectionEngine
         var b = type.BaseType;
         while (b != null && b.SpecialType == SpecialType.None)
         {
-            if (SymbolEqualityComparer.Default.Equals(b, target)) return true;
+            if (SymbolEqualityComparer.Default.Equals(b, target))
+            {
+                return true;
+            }
+
             b = b.BaseType;
         }
         return false;

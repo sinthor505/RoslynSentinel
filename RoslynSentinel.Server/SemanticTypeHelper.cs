@@ -14,7 +14,11 @@ internal static class SemanticTypeHelper
     /// </summary>
     internal static bool IsTaskOrValueTask(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         var def = (type as INamedTypeSymbol)?.OriginalDefinition ?? type;
         return def.ContainingNamespace?.ToDisplayString() == "System.Threading.Tasks"
             && def.Name is "Task" or "ValueTask";
@@ -25,7 +29,11 @@ internal static class SemanticTypeHelper
     /// </summary>
     internal static bool IsHttpClient(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         return type.Name == "HttpClient"
             && type.ContainingNamespace?.ToDisplayString() == "System.Net.Http";
     }
@@ -35,7 +43,11 @@ internal static class SemanticTypeHelper
     /// </summary>
     internal static bool IsSemaphoreSlim(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         return type.Name == "SemaphoreSlim"
             && type.ContainingNamespace?.ToDisplayString() == "System.Threading";
     }
@@ -47,7 +59,11 @@ internal static class SemanticTypeHelper
     /// </summary>
     internal static bool IsNonMaterializedSequence(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         var def = (type as INamedTypeSymbol)?.OriginalDefinition ?? type;
 
         // Exclude materialized collection types
@@ -56,12 +72,21 @@ internal static class SemanticTypeHelper
                         "ObservableCollection" or "ConcurrentBag" or "Queue" or "Stack" or
                         "ConcurrentQueue" or "ConcurrentStack" or "SortedList" or "SortedDictionary" or
                         "LinkedList" or "ImmutableArray" or "ImmutableList" or "FrozenSet")
+        {
             return false;
+        }
 
         // IEnumerable<T> or IQueryable<T> directly
         var ns = def.ContainingNamespace?.ToDisplayString();
-        if (ns == "System.Collections.Generic" && def.Name == "IEnumerable") return true;
-        if (ns == "System.Linq" && def.Name == "IQueryable") return true;
+        if (ns == "System.Collections.Generic" && def.Name == "IEnumerable")
+        {
+            return true;
+        }
+
+        if (ns == "System.Linq" && def.Name == "IQueryable")
+        {
+            return true;
+        }
 
         // LINQ operator result types (e.g. WhereSelectArrayIterator, OrderedEnumerable) —
         // they have internal names but implement IEnumerable<T>
@@ -80,7 +105,11 @@ internal static class SemanticTypeHelper
     /// </summary>
     internal static bool IsRegex(ITypeSymbol? type)
     {
-        if (type == null) return false;
+        if (type == null)
+        {
+            return false;
+        }
+
         return type.Name == "Regex"
             && type.ContainingNamespace?.ToDisplayString() == "System.Text.RegularExpressions";
     }

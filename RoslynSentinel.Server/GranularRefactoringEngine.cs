@@ -1,7 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Server;
 
@@ -22,10 +21,16 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         SyntaxNode? newRoot = refactoringId.ToLowerInvariant() switch
         {
@@ -53,7 +58,10 @@ public class GranularRefactoringEngine
                 n.Declaration.Variables.Count == 1 &&
                 n.Declaration.Variables[0].Initializer != null);
 
-        if (target == null) return root;
+        if (target == null)
+        {
+            return root;
+        }
 
         var varType = SyntaxFactory.IdentifierName("var")
             .WithLeadingTrivia(target.Declaration.Type.GetLeadingTrivia())
@@ -78,7 +86,10 @@ public class GranularRefactoringEngine
             .OfType<StatementSyntax>()
             .FirstOrDefault(n => n is IfStatementSyntax || n is WhileStatementSyntax || n is ForStatementSyntax || n is ForEachStatementSyntax);
 
-        if (target == null) return root;
+        if (target == null)
+        {
+            return root;
+        }
 
         SyntaxNode replacement = target switch
         {
@@ -104,7 +115,10 @@ public class GranularRefactoringEngine
             .OfType<StatementSyntax>()
             .FirstOrDefault(n => n is IfStatementSyntax || n is WhileStatementSyntax || n is ForStatementSyntax || n is ForEachStatementSyntax);
 
-        if (target == null) return root;
+        if (target == null)
+        {
+            return root;
+        }
 
         SyntaxNode replacement = target switch
         {
@@ -129,11 +143,17 @@ public class GranularRefactoringEngine
             .OfType<LiteralExpressionSyntax>()
             .FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression) ||
                                  l.IsKind(SyntaxKind.NumericLiteralExpression));
-        if (literal == null) return root;
+        if (literal == null)
+        {
+            return root;
+        }
 
         // Find enclosing class or struct to inject const field
         var enclosingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-        if (enclosingType == null) return root;
+        if (enclosingType == null)
+        {
+            return root;
+        }
 
         var typeName = literal.IsKind(SyntaxKind.StringLiteralExpression) ? "string" : "int";
         const string constName = "ExtractedConstant";
@@ -151,7 +171,10 @@ public class GranularRefactoringEngine
         var newRoot = root.ReplaceNode(literal, SyntaxFactory.IdentifierName(constName));
         var newType = newRoot.DescendantNodes().OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == enclosingType.Identifier.Text);
-        if (newType == null) return newRoot;
+        if (newType == null)
+        {
+            return newRoot;
+        }
 
         var updatedType = newType.WithMembers(newType.Members.Insert(0, constDecl));
         return newRoot.ReplaceNode(newType, updatedType);
@@ -161,7 +184,10 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var field = root?.DescendantNodes().OfType<FieldDeclarationSyntax>()
@@ -180,10 +206,10 @@ public class GranularRefactoringEngine
 
         var value = field.Declaration.Variables[0].Initializer!.Value;
         var usages = root!.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
-        
+
         var trackedRoot = root.TrackNodes(new SyntaxNode[] { field });
         var usagesInTracked = trackedRoot.DescendantNodes().OfType<IdentifierNameSyntax>().Where(i => i.Identifier.Text == fieldName).ToList();
-        
+
         var newRoot = trackedRoot.ReplaceNodes(usagesInTracked, (old, _) => value.WithTriviaFrom(old));
         var newField = newRoot.GetCurrentNode(field);
         if (newField != null)
@@ -197,16 +223,25 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (method == null || semanticModel == null) return root?.ToFullString() ?? "";
+        if (method == null || semanticModel == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var parameter = method.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == parameterName);
-        if (parameter == null) return root!.ToFullString();
+        if (parameter == null)
+        {
+            return root!.ToFullString();
+        }
 
         return root!.ToFullString();
     }
@@ -215,20 +250,29 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (method == null)
+        {
             return $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.\n" + (root?.ToFullString() ?? "");
+        }
 
         if (method.ParameterList.Parameters.Count != 1)
+        {
             return $"// ERROR: Cannot convert '{methodName}' to an indexer — it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).\n" + root!.ToFullString();
+        }
 
         // C# does not support static indexers
         if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+        {
             return $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers.\n" + root!.ToFullString();
+        }
 
         // Build getter body from block body or expression body
         BlockSyntax getterBody;
@@ -267,19 +311,31 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
-        if (expression == null) return root.ToFullString();
+        if (expression == null)
+        {
+            return root.ToFullString();
+        }
 
         var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-        if (containingClass == null) return root.ToFullString();
+        if (containingClass == null)
+        {
+            return root.ToFullString();
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         TypeSyntax fieldType;
@@ -326,10 +382,12 @@ public class GranularRefactoringEngine
     {
         // Check all identifiers in the expression to see if they reference method parameters or local variables
         var identifiers = expression.DescendantNodes().OfType<IdentifierNameSyntax>();
-        
+
         if (semanticModel == null)
+        {
             // If no semantic model, be conservative and assume it's not safe
-            return identifiers.Count() == 0;
+            return !identifiers.Any();
+        }
 
         foreach (var identifier in identifiers)
         {
@@ -337,10 +395,12 @@ public class GranularRefactoringEngine
             {
                 var symbolInfo = semanticModel.GetSymbolInfo(identifier, cancellationToken);
                 var symbol = symbolInfo.Symbol;
-                
+
                 // Check if this identifier refers to a method parameter or local variable
                 if (symbol is IParameterSymbol or ILocalSymbol)
+                {
                     return false;
+                }
             }
             catch
             {
@@ -357,21 +417,37 @@ public class GranularRefactoringEngine
         // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = ContextHelper.TryFindSnippetPosition(sourceText, contextSnippet, out var paramSnippetError, lineBefore, lineAfter);
         if (position < 0)
+        {
             return $"// Error: {paramSnippetError}";
+        }
+
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
-        if (expression == null) return root.ToFullString();
+        if (expression == null)
+        {
+            return root.ToFullString();
+        }
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-        if (containingMethod == null) return root.ToFullString();
+        if (containingMethod == null)
+        {
+            return root.ToFullString();
+        }
+
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         TypeSyntax paramType;
         if (semanticModel != null)
@@ -392,10 +468,18 @@ public class GranularRefactoringEngine
 
         var trackedRoot = root.TrackNodes(new SyntaxNode[] { expression, containingMethod });
         var currentExpression = trackedRoot.GetCurrentNode(expression);
-        if (currentExpression == null) return root.ToFullString();
+        if (currentExpression == null)
+        {
+            return root.ToFullString();
+        }
+
         var newRoot = trackedRoot.ReplaceNode(currentExpression, paramRef);
         var currentMethod = newRoot.GetCurrentNode(containingMethod);
-        if (currentMethod == null) return root.ToFullString();
+        if (currentMethod == null)
+        {
+            return root.ToFullString();
+        }
+
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
         newRoot = newRoot.ReplaceNode(currentMethod, updatedMethod);
 
@@ -406,10 +490,16 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
@@ -424,11 +514,21 @@ public class GranularRefactoringEngine
             // Fallback: walk from the token at the position up to the first expression.
             ?? root.FindToken(position).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
 
-        if (expression == null) return root.ToFullString();
+        if (expression == null)
+        {
+            return root.ToFullString();
+        }
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
-        if (containingStatement == null) return root.ToFullString();
-        if (containingStatement.Parent is not BlockSyntax block) return root.ToFullString();
+        if (containingStatement == null)
+        {
+            return root.ToFullString();
+        }
+
+        if (containingStatement.Parent is not BlockSyntax block)
+        {
+            return root.ToFullString();
+        }
 
         // If the expression IS the entire initializer of an existing local var declaration, the
         // variable is already introduced — extracting it would produce `var x = x;` (a duplicate).
@@ -463,7 +563,11 @@ public class GranularRefactoringEngine
         var currentStatement = newRoot.GetCurrentNode(containingStatement)!;
         var currentBlock = newRoot.GetCurrentNode(block)!;
         var idx = currentBlock.Statements.IndexOf(currentStatement);
-        if (idx < 0) return root.ToFullString();
+        if (idx < 0)
+        {
+            return root.ToFullString();
+        }
+
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
         newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
 
@@ -474,26 +578,39 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return $"// Error: File '{filePath}' not found.";
+        if (document == null)
+        {
+            return $"// Error: File '{filePath}' not found.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return $"// Error: Failed to get syntax root.";
+        if (root == null)
+        {
+            return $"// Error: Failed to get syntax root.";
+        }
 
         // Find the type
         var nestedType = root.DescendantNodes().OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == nestedTypeName);
-        
-        if (nestedType == null) 
+
+        if (nestedType == null)
+        {
             return $"// Error: Type '{nestedTypeName}' not found.";
+        }
 
         // Check if type is actually nested (parent is a type, not namespace/file scope)
         var parentType = nestedType.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (parentType == null)
+        {
             return $"// Error: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope.";
+        }
 
         // Type is nested, move it out
         var newRoot = root.RemoveNode(nestedType, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-        if (newRoot == null) return root.ToFullString();
+        if (newRoot == null)
+        {
+            return root.ToFullString();
+        }
 
         // Find the namespace or file scope and add the type there
         var ns = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
@@ -526,14 +643,17 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
 
         if (classNode != null)
         {
-            var membersToMove = classNode.Members.Where(m => 
+            var membersToMove = classNode.Members.Where(m =>
                 (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) ||
                 (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
 
@@ -555,7 +675,7 @@ public class GranularRefactoringEngine
             // Build new compilation unit with usings and namespace
             CompilationUnitSyntax newCompilationUnit = SyntaxFactory.CompilationUnit();
 
-            if (usings.Any())
+            if (usings.Count != 0)
             {
                 newCompilationUnit = newCompilationUnit.WithUsings(SyntaxFactory.List(usings));
             }
@@ -574,7 +694,7 @@ public class GranularRefactoringEngine
             // Format with proper newlines
             var formattedCode = newCompilationUnit.NormalizeWhitespace().ToFullString();
             // Ensure proper spacing after usings before namespace
-            if (usings.Any() && !string.IsNullOrEmpty(namespaceName))
+            if (usings.Count != 0 && !string.IsNullOrEmpty(namespaceName))
             {
                 formattedCode = formattedCode.Replace(";namespace", ";\n\nnamespace");
             }
@@ -593,14 +713,23 @@ public class GranularRefactoringEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "// File not found.";
+        if (document == null)
+        {
+            return "// File not found.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "// Could not parse file.";
+        if (root == null)
+        {
+            return "// Could not parse file.";
+        }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (methodNode == null) return "// Method not found.";
+        if (methodNode == null)
+        {
+            return "// Method not found.";
+        }
 
         // Check if method implements an interface
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -629,7 +758,9 @@ public class GranularRefactoringEngine
         }
 
         if (groupedParams.Count == 0)
+        {
             return "// No parameters to group.";
+        }
 
         // Generate record name
         var recordName = newTypeName ?? (methodName + "Parameters");
@@ -689,9 +820,9 @@ public class GranularRefactoringEngine
         // If method is on an interface, also update interface definition
         var classNode = methodNode.Parent as ClassDeclarationSyntax;
         var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
-        
+
         SyntaxNode newRoot = root;
-        
+
         if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
         {
             // Update interface method
@@ -753,13 +884,19 @@ public class GranularRefactoringEngine
     private class ParamToPropertyRewriter : CSharpSyntaxRewriter
     {
         private readonly Dictionary<string, string> _map;
-        public ParamToPropertyRewriter(Dictionary<string, string> map) { _map = map; }
+        public ParamToPropertyRewriter(Dictionary<string, string> map)
+        {
+            _map = map;
+        }
 
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
             var name = node.Identifier.Text;
             if (_map.TryGetValue(name, out var replacement))
+            {
                 return SyntaxFactory.ParseExpression(replacement).WithTriviaFrom(node);
+            }
+
             return base.VisitIdentifierName(node);
         }
     }

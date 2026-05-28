@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.MSBuild;
 
 namespace RoslynSentinel.Server;
 
@@ -22,7 +21,10 @@ public class DiagnosticEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -39,7 +41,10 @@ public class DiagnosticEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project == null) throw new Exception("Project not found.");
+        if (project == null)
+        {
+            throw new InvalidOperationException("Project not found.");
+        }
 
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -87,7 +92,10 @@ public class DiagnosticEngine
         foreach (var project in solution.Projects)
         {
             var compilation = await project.GetCompilationAsync(cancellationToken);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             bool isBlazor = IsBlazorProject(project);
             var diagnostics = compilation.GetDiagnostics(cancellationToken)
@@ -108,11 +116,13 @@ public class DiagnosticEngine
             : sorted;
 
         if (sorted.Count > maxDetails)
+        {
             details.Add(new DiagnosticInfo(
                 "SENTINEL-TRUNCATED", "Info",
                 $"Showing {maxDetails} of {sorted.Count} diagnostics (errors first). " +
                 $"Call with maxDetails={sorted.Count} or use get_project_diagnostics for full detail.",
                 "", 0, 0, 0, 0));
+        }
 
         return new DiagnosticSummary(totalErrors, totalWarnings, details);
     }

@@ -822,7 +822,7 @@ public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
         // If the expression body uses ?. on the parameter, it IS null-safe
         const string source = """
             public class Utils {
-                public string? GetUpper(string s) => s?.ToUpper();
+                public string? GetUpper(string s) => s?.ToUpperInvariant();
             }
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Utils.cs", source)]);

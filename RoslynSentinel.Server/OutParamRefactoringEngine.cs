@@ -34,19 +34,28 @@ public class OutParamRefactoringEngine
         {
             document = project.Documents.FirstOrDefault(d =>
                 string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-            if (document != null) break;
+            if (document != null)
+            {
+                break;
+            }
         }
 
         if (document == null)
+        {
             return new OutParamConversionResult(false, $"File not found: {filePath}", null, null, 0, []);
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
         if (semanticModel == null)
+        {
             return new OutParamConversionResult(false, "Could not get semantic model.", null, null, 0, []);
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
+        {
             return new OutParamConversionResult(false, "Could not get syntax root.", null, null, 0, []);
+        }
 
         // Find the target method
         var methodDecl = root.DescendantNodes()
@@ -54,19 +63,25 @@ public class OutParamRefactoringEngine
             .FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (methodDecl == null)
+        {
             return new OutParamConversionResult(false, $"Method '{methodName}' not found in {filePath}.", null, null, 0, []);
+        }
 
         var outParams = methodDecl.ParameterList.Parameters
             .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword)))
             .ToList();
 
         if (outParams.Count < 2)
+        {
             return new OutParamConversionResult(false,
                 $"Method '{methodName}' has fewer than 2 out parameters ({outParams.Count}). No conversion needed.",
                 null, null, 0, []);
+        }
 
         if (semanticModel.GetDeclaredSymbol(methodDecl, ct) is not IMethodSymbol methodSymbol)
+        {
             return new OutParamConversionResult(false, "Could not resolve method symbol.", null, null, 0, []);
+        }
 
         string originalReturn = methodDecl.ReturnType.ToString();
         bool isVoid = originalReturn is "void" or "Task";
@@ -78,14 +93,22 @@ public class OutParamRefactoringEngine
 
         string tupleType;
         if (isVoid)
+        {
             tupleType = $"({string.Join(", ", outElements)})";
+        }
         else
+        {
             tupleType = $"({originalReturn} result, {string.Join(", ", outElements)})";
+        }
 
         if (isAsync && isVoid)
+        {
             tupleType = $"Task<({string.Join(", ", outElements)})>";
+        }
         else if (isAsync && !isVoid)
+        {
             tupleType = $"Task<({originalReturn.Replace("Task<", "").TrimEnd('>')} result, {string.Join(", ", outElements)})>";
+        }
 
         var originalSignature = $"{originalReturn} {methodName}({methodDecl.ParameterList})";
         var outParamNames = outParams.Select(p => p.Identifier.Text).ToList();
@@ -130,10 +153,16 @@ public class OutParamRefactoringEngine
         foreach (var docGroup in callSitesByDocument)
         {
             var callDoc = updatedSolution.GetDocument(docGroup.Key);
-            if (callDoc == null) continue;
+            if (callDoc == null)
+            {
+                continue;
+            }
 
             var callRoot = await callDoc.GetSyntaxRootAsync(ct);
-            if (callRoot == null) continue;
+            if (callRoot == null)
+            {
+                continue;
+            }
 
             var callEditor = await DocumentEditor.CreateAsync(callDoc, ct);
             bool changed = false;
@@ -146,7 +175,10 @@ public class OutParamRefactoringEngine
                 // Walk up to find the invocation expression
                 var invocation = node.Ancestors().OfType<InvocationExpressionSyntax>().FirstOrDefault()
                     ?? (node as InvocationExpressionSyntax);
-                if (invocation == null) continue;
+                if (invocation == null)
+                {
+                    continue;
+                }
 
                 // Collect out argument variable names used at call site
                 var outArgs = invocation.ArgumentList.Arguments
@@ -171,7 +203,10 @@ public class OutParamRefactoringEngine
                 {
                     // Handle "out var x" and "out T x" declaration patterns
                     if (a.Expression is DeclarationExpressionSyntax decl)
+                    {
                         return decl.Designation is SingleVariableDesignationSyntax sv ? sv.Identifier.Text : "_";
+                    }
+
                     return a.Expression.ToString().TrimStart('_').Trim();
                 }).ToList();
 
@@ -248,9 +283,11 @@ public class OutParamRefactoringEngine
         bool applied = workspace.TryApplyChanges(updatedSolution);
 
         if (!applied)
+        {
             return new OutParamConversionResult(false,
                 "TryApplyChanges failed — workspace may be read-only.",
                 originalSignature, tupleType, 0, callSiteWarnings);
+        }
 
         var newSig = $"{tupleType} {methodName}({string.Join(", ", methodDecl.ParameterList.Parameters.Where(p => !p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword))))})";
         return new OutParamConversionResult(

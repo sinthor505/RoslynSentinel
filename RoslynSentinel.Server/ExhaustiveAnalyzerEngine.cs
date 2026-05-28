@@ -23,10 +23,16 @@ public class ExhaustiveAnalyzerEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new List<AnalyzerIssue>();
+        if (document == null)
+        {
+            return new List<AnalyzerIssue>();
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (semanticModel == null) return new List<AnalyzerIssue>();
+        if (semanticModel == null)
+        {
+            return new List<AnalyzerIssue>();
+        }
 
         var rawDiagnostics = semanticModel.GetDiagnostics(null, cancellationToken);
 
@@ -35,7 +41,11 @@ public class ExhaustiveAnalyzerEngine
         var results = new List<AnalyzerIssue>();
         foreach (var d in rawDiagnostics)
         {
-            if (!allRules && !string.Equals(d.Id, ruleId, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!allRules && !string.Equals(d.Id, ruleId, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var line = d.Location.GetLineSpan().StartLinePosition.Line + 1;
             results.Add(new AnalyzerIssue(d.Id, $"[{d.Severity}] {d.GetMessage()}", line));
         }

@@ -20,10 +20,16 @@ public class LogicOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new BooleanSimplifierRewriter();
         var newRoot = rewriter.Visit(root);
@@ -37,19 +43,28 @@ public class LogicOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (method == null || method.Body == null || semanticModel == null) return root?.ToFullString() ?? "";
+        if (method == null || method.Body == null || semanticModel == null)
+        {
+            return root?.ToFullString() ?? "";
+        }
 
         var guards = new List<StatementSyntax>();
         foreach (var parameter in method.ParameterList.Parameters)
         {
             // Skip explicitly nullable reference types (string?, IService?) — null is valid for them
-            if (parameter.Type is NullableTypeSyntax) continue;
+            if (parameter.Type is NullableTypeSyntax)
+            {
+                continue;
+            }
 
             var symbol = semanticModel.GetDeclaredSymbol(parameter, cancellationToken);
             if (symbol != null && symbol.Type.IsReferenceType)
@@ -62,7 +77,7 @@ public class LogicOptimizationEngine
             }
         }
 
-        if (guards.Any())
+        if (guards.Count != 0)
         {
             var newBody = method.Body.WithStatements(method.Body.Statements.InsertRange(0, guards));
             var newRoot = root!.ReplaceNode(method, method.WithBody(newBody));
@@ -81,10 +96,16 @@ public class LogicOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new NullCoalescingRewriter();
         var newRoot = rewriter.Visit(root);
@@ -108,10 +129,16 @@ public class LogicOptimizationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new SwitchConversionRewriter();
         var newRoot = rewriter.Visit(root);
@@ -130,14 +157,22 @@ public class LogicOptimizationEngine
                 if (isTrue)
                 {
                     var expr = node.Right.IsKind(SyntaxKind.TrueLiteralExpression) ? node.Left : node.Right;
-                    if (node.IsKind(SyntaxKind.EqualsExpression)) return expr;
+                    if (node.IsKind(SyntaxKind.EqualsExpression))
+                    {
+                        return expr;
+                    }
+
                     return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr));
                 }
-                
+
                 if (isFalse)
                 {
                     var expr = node.Right.IsKind(SyntaxKind.FalseLiteralExpression) ? node.Left : node.Right;
-                    if (node.IsKind(SyntaxKind.EqualsExpression)) return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr));
+                    if (node.IsKind(SyntaxKind.EqualsExpression))
+                    {
+                        return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr));
+                    }
+
                     return expr;
                 }
             }
@@ -153,8 +188,13 @@ public class LogicOptimizationEngine
             var whenTrue = node.WhenTrue;
             var whenFalse = node.WhenFalse;
 
+            if (condition == null)
+            {
+                return null;
+            }
+
             // Pattern: x != null ? x : defaultValue  =>  x ?? defaultValue
-            if (IsNotNullComparison(condition, out var checkedExpr) && AreExpressionsEquivalent(checkedExpr, whenTrue))
+            if (IsNotNullComparison(condition, out var checkedExpr) && checkedExpr != null && AreExpressionsEquivalent(checkedExpr, whenTrue))
             {
                 return SyntaxFactory.BinaryExpression(
                     SyntaxKind.CoalesceExpression,
@@ -163,7 +203,7 @@ public class LogicOptimizationEngine
             }
 
             // Pattern: x == null ? defaultValue : x  =>  x ?? defaultValue
-            if (IsNullComparison(condition, out var checkedExpr2) && AreExpressionsEquivalent(checkedExpr2, whenFalse))
+            if (IsNullComparison(condition, out var checkedExpr2) && checkedExpr2 != null && AreExpressionsEquivalent(checkedExpr2, whenFalse))
             {
                 return SyntaxFactory.BinaryExpression(
                     SyntaxKind.CoalesceExpression,
@@ -180,7 +220,7 @@ public class LogicOptimizationEngine
             if (node.Else == null && node.Statement is BlockSyntax block && block.Statements.Count == 1)
             {
                 var singleStatement = block.Statements[0];
-                if (IsNullComparison(node.Condition, out var checkedExpr) &&
+                if (IsNullComparison(node.Condition, out var checkedExpr) && checkedExpr != null &&
                     IsAssignmentToVariable(singleStatement, checkedExpr, out var defaultValue))
                 {
                     var assignment = SyntaxFactory.ExpressionStatement(
@@ -194,7 +234,7 @@ public class LogicOptimizationEngine
 
             // Pattern: if (x == null) x = defaultValue; (without braces)
             if (node.Else == null && !(node.Statement is BlockSyntax) &&
-                IsNullComparison(node.Condition, out var checkedExpr3) &&
+                IsNullComparison(node.Condition, out var checkedExpr3) && checkedExpr3 != null &&
                 IsAssignmentToVariable(node.Statement, checkedExpr3, out var defaultValue3))
             {
                 var assignment = SyntaxFactory.ExpressionStatement(
@@ -207,10 +247,10 @@ public class LogicOptimizationEngine
 
             // Pattern: if (x != null) { } else x = defaultValue;  =>  x ??= defaultValue;
             if (node.Else != null && IsEmptyOrNoOp(node.Statement) &&
-                IsNotNullComparison(node.Condition, out var checkedExpr4))
+                IsNotNullComparison(node.Condition, out var checkedExpr4) && checkedExpr4 != null)
             {
                 var elseClause = node.Else;
-                if (elseClause.Statement is IfStatementSyntax elseIf && elseIf.Else == null && 
+                if (elseClause.Statement is IfStatementSyntax elseIf && elseIf.Else == null &&
                     IsAssignmentToVariable(elseIf.Statement, checkedExpr4, out var defaultValue4))
                 {
                     var assignment = SyntaxFactory.ExpressionStatement(
@@ -314,7 +354,11 @@ public class LogicOptimizationEngine
 
         private static bool AreExpressionsEquivalent(ExpressionSyntax expr1, ExpressionSyntax expr2)
         {
-            if (expr1 == null || expr2 == null) return false;
+            if (expr1 == null || expr2 == null)
+            {
+                return false;
+            }
+
             return expr1.IsEquivalentTo(expr2, topLevel: false);
         }
     }
@@ -343,22 +387,38 @@ public class LogicOptimizationEngine
             chainLength = 0;
 
             var chain = CollectIfElseChain(ifStatement);
-            if (chain == null || chain.Count < 3) return false;
+            if (chain == null || chain.Count < 3)
+            {
+                return false;
+            }
 
             var subject = ExtractCommonSubject(chain, out bool isValid);
-            if (!isValid || subject == null) return false;
+            if (!isValid || subject == null)
+            {
+                return false;
+            }
 
             var switchCases = new List<SwitchSectionSyntax>();
 
             for (int i = 0; i < chain.Count - 1; i++)
             {
                 var (condition, body) = chain[i];
-                if (condition == null || !TryExtractCaseValue(condition, subject, out var caseValue)) return false;
+                if (condition == null || !TryExtractCaseValue(condition, subject, out var caseValue))
+                {
+                    return false;
+                }
 
-                if (caseValue == null) return false;
+                if (caseValue == null)
+                {
+                    return false;
+                }
+
                 var caseLabel = SyntaxFactory.CaseSwitchLabel(caseValue);
                 var statements = ExtractStatementsFromBody(body);
-                if (!statements.Any()) return false;
+                if (statements.Count == 0)
+                {
+                    return false;
+                }
 
                 var caseSection = SyntaxFactory.SwitchSection(
                     SyntaxFactory.SingletonList<SwitchLabelSyntax>(caseLabel),
@@ -374,7 +434,7 @@ public class LogicOptimizationEngine
                 // Final else clause (not else if)
                 var defaultLabel = SyntaxFactory.DefaultSwitchLabel();
                 var defaultStatements = ExtractStatementsFromBody(lastBody);
-                if (defaultStatements.Any())
+                if (defaultStatements.Count != 0)
                 {
                     var defaultSection = SyntaxFactory.SwitchSection(
                         SyntaxFactory.SingletonList<SwitchLabelSyntax>(defaultLabel),
@@ -385,12 +445,22 @@ public class LogicOptimizationEngine
             else
             {
                 // Final condition (last else if) - add as a regular case
-                if (!TryExtractCaseValue(lastCondition, subject, out var lastCaseValue)) return false;
-                if (lastCaseValue == null) return false;
+                if (!TryExtractCaseValue(lastCondition, subject, out var lastCaseValue))
+                {
+                    return false;
+                }
+
+                if (lastCaseValue == null)
+                {
+                    return false;
+                }
 
                 var lastCaseLabel = SyntaxFactory.CaseSwitchLabel(lastCaseValue);
                 var lastStatements = ExtractStatementsFromBody(lastBody);
-                if (!lastStatements.Any()) return false;
+                if (lastStatements.Count == 0)
+                {
+                    return false;
+                }
 
                 var lastCaseSection = SyntaxFactory.SwitchSection(
                     SyntaxFactory.SingletonList<SwitchLabelSyntax>(lastCaseLabel),
@@ -399,7 +469,10 @@ public class LogicOptimizationEngine
                 switchCases.Add(lastCaseSection);
             }
 
-            if (!switchCases.Any()) return false;
+            if (switchCases.Count == 0)
+            {
+                return false;
+            }
 
             switchStatement = SyntaxFactory.SwitchStatement(subject)
                 .WithSections(SyntaxFactory.List(switchCases));
@@ -446,10 +519,16 @@ public class LogicOptimizationEngine
             for (int i = 0; i < chain.Count - 1; i++)
             {
                 var condition = chain[i].condition;
-                if (condition == null) continue;
+                if (condition == null)
+                {
+                    continue;
+                }
 
                 var conditionSubject = ExtractSubjectFromCondition(condition);
-                if (conditionSubject == null) return null;
+                if (conditionSubject == null)
+                {
+                    return null;
+                }
 
                 if (subject == null)
                 {
@@ -507,7 +586,9 @@ public class LogicOptimizationEngine
             caseValue = null;
 
             if (condition is not BinaryExpressionSyntax binary || !binary.IsKind(SyntaxKind.EqualsExpression))
+            {
                 return false;
+            }
 
             if (AreExpressionsEquivalent(binary.Left, subject) && IsLiteralOrConstant(binary.Right))
             {
@@ -538,7 +619,7 @@ public class LogicOptimizationEngine
             }
 
             // Add break statement if the last statement is not a return or throw
-            if (statements.Any())
+            if (statements.Count != 0)
             {
                 var lastStmt = statements[statements.Count - 1];
                 if (!(lastStmt is ReturnStatementSyntax) && !(lastStmt is ThrowStatementSyntax))
@@ -552,7 +633,11 @@ public class LogicOptimizationEngine
 
         private static bool AreExpressionsEquivalent(ExpressionSyntax expr1, ExpressionSyntax expr2)
         {
-            if (expr1 == null || expr2 == null) return false;
+            if (expr1 == null || expr2 == null)
+            {
+                return false;
+            }
+
             return expr1.IsEquivalentTo(expr2, topLevel: false);
         }
     }

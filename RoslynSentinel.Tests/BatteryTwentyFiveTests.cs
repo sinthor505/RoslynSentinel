@@ -1085,7 +1085,7 @@ public class Worker1 : IWorker { public void Work() {} public string Report() =>
     {
         var source = @"
 public static class StringExtensions {
-    public static string Shout(this string s) => s.ToUpper() + ""!"";
+    public static string Shout(this string s) => s.ToUpperInvariant() + ""!"";
 }
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);

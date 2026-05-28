@@ -83,7 +83,10 @@ public class HealthOrchestrationEngine
         {
             var projectTasks = pagedProjects.Select(async project =>
             {
-                if (cts.IsCancellationRequested) return;
+                if (cts.IsCancellationRequested)
+                {
+                    return;
+                }
 
                 var projectCategoryCounts = new ConcurrentDictionary<string, int>();
                 var engineTasks = new List<Task>();
@@ -93,7 +96,10 @@ public class HealthOrchestrationEngine
                 {
                     engineTasks.Add(Task.Run(async () => {
                         var smells = await _projectStructureEngine.FindStructuralSmellsAsync(projectName: project.Name, filePath: filePath, cancellationToken: cts.Token);
-                        foreach (var smell in smells) IncrementCount(projectCategoryCounts, ExtractCategory(smell));
+                        foreach (var smell in smells)
+                        {
+                            IncrementCount(projectCategoryCounts, ExtractCategory(smell));
+                        }
                     }, cts.Token));
                 }
 
@@ -172,7 +178,11 @@ public class HealthOrchestrationEngine
             grandTotalIssues += summary.TotalIssues;
             foreach (var cat in summary.IssuesByCategory)
             {
-                if (!totalCategoryCounts.ContainsKey(cat.Category)) totalCategoryCounts[cat.Category] = 0;
+                if (!totalCategoryCounts.ContainsKey(cat.Category))
+                {
+                    totalCategoryCounts[cat.Category] = 0;
+                }
+
                 totalCategoryCounts[cat.Category] += cat.Count;
             }
         }
@@ -196,14 +206,21 @@ public class HealthOrchestrationEngine
         if (smell.StartsWith("["))
         {
             var endBracket = smell.IndexOf(']');
-            if (endBracket > 0) return smell.Substring(1, endBracket - 1);
+            if (endBracket > 0)
+            {
+                return smell.Substring(1, endBracket - 1);
+            }
         }
         return "Unknown";
     }
 
     private void IncrementCount(ConcurrentDictionary<string, int> counts, string category, int amount = 1)
     {
-        if (amount == 0) return;
+        if (amount == 0)
+        {
+            return;
+        }
+
         counts.AddOrUpdate(category, amount, (key, old) => old + amount);
     }
 }

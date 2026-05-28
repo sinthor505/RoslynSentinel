@@ -1118,7 +1118,7 @@ using System.Collections.Generic;
 using System.Linq;
 public class C {
     public void M(List<string> items) {
-        var result = items.Select(x => x.Trim()).Select(x => x.ToUpper()).ToList();
+        var result = items.Select(x => x.Trim()).Select(x => x.ToUpperInvariant()).ToList();
     }
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");
@@ -1134,7 +1134,7 @@ using System.Collections.Generic;
 using System.Linq;
 public class C {
     public void M(List<string> items) {
-        var result = items.Select(x => x.ToUpper()).ToList();
+        var result = items.Select(x => x.ToUpperInvariant()).ToList();
     }
 }");
         var issues = await _engine.AnalyzePerformanceAsync("Test.cs");

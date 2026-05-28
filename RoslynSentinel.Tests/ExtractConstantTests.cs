@@ -1,6 +1,5 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -72,7 +71,7 @@ public class Config
 
         Assert.That(result, Does.Contain("private const string DefaultApiKey = \"MySecret\""),
             "Should declare private const string at class level");
-        Assert.That(result, Does.Contain("DefaultApiKey"), 
+        Assert.That(result, Does.Contain("DefaultApiKey"),
             "Should reference constant by name in the code");
     }
 
@@ -147,7 +146,7 @@ public class Settings
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "true", "IsDebugMode", "private", "return");
 
-        Assert.That(result, Does.Contain("private const bool IsDebugMode = true") | 
+        Assert.That(result, Does.Contain("private const bool IsDebugMode = true") |
                              Does.Contain("private const bool IsDebugMode = True"),
             "Should declare private const bool");
         Assert.That(result, Does.Contain("IsDebugMode"),
@@ -350,7 +349,7 @@ public class Service
 
         Assert.That(constLine, Is.GreaterThanOrEqualTo(0), "Const should be declared");
         Assert.That(methodLine, Is.GreaterThanOrEqualTo(0), "Method should exist");
-        Assert.That(constLine, Is.LessThan(methodLine), 
+        Assert.That(constLine, Is.LessThan(methodLine),
             "Constant should be at class level (before methods)");
     }
 }
@@ -360,7 +359,11 @@ internal static class StringExtensions
 {
     public static int CountOccurrences(this string text, string pattern)
     {
-        if (string.IsNullOrEmpty(pattern)) return 0;
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return 0;
+        }
+
         int count = 0;
         int index = 0;
         while ((index = text.IndexOf(pattern, index)) != -1)

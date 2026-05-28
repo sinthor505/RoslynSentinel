@@ -1,8 +1,9 @@
+using System.Text.Json.Serialization;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
-using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Server;
 
@@ -126,9 +127,16 @@ public class AntiPatternEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = document.FilePath ?? document.Name;
 
@@ -139,46 +147,74 @@ public class AntiPatternEngine
             }
 
             if (activePatterns.Contains("AsyncVoidMethod"))
+            {
                 findings.AddRange(DetectAsyncVoidMethod(root, path));
+            }
 
             if (activePatterns.Contains("StringConcatInLoop"))
+            {
                 findings.AddRange(DetectStringConcatInLoop(root, path));
+            }
 
             if (activePatterns.Contains("CatchExceptionSwallow"))
+            {
                 findings.AddRange(DetectCatchExceptionSwallow(root, path));
+            }
 
             if (activePatterns.Contains("DisposedObjectUsage"))
+            {
                 findings.AddRange(DetectDisposedObjectUsage(root, path));
+            }
 
             if (activePatterns.Contains("MissingCancellationToken"))
+            {
                 findings.AddRange(DetectMissingCancellationToken(root, path));
+            }
 
             if (activePatterns.Contains("MagicNumber"))
+            {
                 findings.AddRange(DetectMagicNumbers(root, path));
+            }
 
             if (activePatterns.Contains("FireAndForgetTask"))
+            {
                 findings.AddRange(DetectFireAndForgetTask(root, path));
+            }
 
             if (activePatterns.Contains("MissingDispose"))
+            {
                 findings.AddRange(DetectMissingDispose(root, path));
+            }
 
             if (activePatterns.Contains("DisposedAfterUsing"))
+            {
                 findings.AddRange(DetectDisposedAfterUsing(root, path));
+            }
 
             if (activePatterns.Contains("SyncCallInAsyncContext"))
+            {
                 findings.AddRange(DetectSyncCallInAsyncContext(root, path));
+            }
 
             if (activePatterns.Contains("TaskRunBlocking"))
+            {
                 findings.AddRange(DetectTaskRunBlocking(root, path));
+            }
 
             if (activePatterns.Contains("NamedHandlerLeak") || activePatterns.Contains("NamedHandlerThisCapture"))
+            {
                 findings.AddRange(DetectNamedHandlerLeaks(root, path, activePatterns));
+            }
 
             if (activePatterns.Contains("ThrowInFinally"))
+            {
                 findings.AddRange(DetectThrowInFinally(root, path));
+            }
 
             if (activePatterns.Contains("StaticEventSubscription"))
+            {
                 findings.AddRange(DetectStaticEventSubscription(root, path));
+            }
         }
 
         return findings;
@@ -192,16 +228,23 @@ public class AntiPatternEngine
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
             var name = ma.Name.Identifier.Text;
-            if (name != "Result" && name != "Wait") continue;
+            if (name != "Result" && name != "Wait")
+            {
+                continue;
+            }
 
             // Skip if parent is an invocation whose callee has 'Result' as a method — e.g. IActionResult
             if (name == "Result" && ma.Parent is InvocationExpressionSyntax)
+            {
                 continue;
+            }
 
             // Skip if .Result is on the left side of an assignment (property setter, not Task.Result read)
             // e.g. context.Result = new UnauthorizedResult()
             if (name == "Result" && ma.Parent is AssignmentExpressionSyntax assign && assign.Left == ma)
+            {
                 continue;
+            }
 
             // Use semantic model to verify the expression is a Task/ValueTask type.
             // Applies to both "Result" and "Wait" to prevent false positives on enum values
@@ -214,7 +257,10 @@ public class AntiPatternEngine
                     var fullName = exprType.OriginalDefinition.ToDisplayString();
                     var isTask = fullName.StartsWith("System.Threading.Tasks.Task") ||
                                  fullName.StartsWith("System.Threading.Tasks.ValueTask");
-                    if (!isTask) continue;
+                    if (!isTask)
+                    {
+                        continue;
+                    }
                 }
             }
 
@@ -229,11 +275,30 @@ public class AntiPatternEngine
         // .GetAwaiter().GetResult() chain
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            if (invocation.Expression is not MemberAccessExpressionSyntax outer) continue;
-            if (outer.Name.Identifier.Text != "GetResult") continue;
-            if (outer.Expression is not InvocationExpressionSyntax getAwaiterCall) continue;
-            if (getAwaiterCall.Expression is not MemberAccessExpressionSyntax inner) continue;
-            if (inner.Name.Identifier.Text != "GetAwaiter") continue;
+            if (invocation.Expression is not MemberAccessExpressionSyntax outer)
+            {
+                continue;
+            }
+
+            if (outer.Name.Identifier.Text != "GetResult")
+            {
+                continue;
+            }
+
+            if (outer.Expression is not InvocationExpressionSyntax getAwaiterCall)
+            {
+                continue;
+            }
+
+            if (getAwaiterCall.Expression is not MemberAccessExpressionSyntax inner)
+            {
+                continue;
+            }
+
+            if (inner.Name.Identifier.Text != "GetAwaiter")
+            {
+                continue;
+            }
 
             var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(invocation.ToString());
@@ -249,9 +314,20 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
-            if (method.ReturnType.ToString() != "void") continue;
-            if (IsEventHandlerSignature(method)) continue;
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            {
+                continue;
+            }
+
+            if (method.ReturnType.ToString() != "void")
+            {
+                continue;
+            }
+
+            if (IsEventHandlerSignature(method))
+            {
+                continue;
+            }
 
             var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(method.Identifier.Text + method.ParameterList.ToString());
@@ -264,7 +340,11 @@ public class AntiPatternEngine
     private static bool IsEventHandlerSignature(MethodDeclarationSyntax method)
     {
         var parameters = method.ParameterList.Parameters;
-        if (parameters.Count != 2) return false;
+        if (parameters.Count != 2)
+        {
+            return false;
+        }
+
         var firstType = parameters[0].Type?.ToString() ?? "";
         var secondType = parameters[1].Type?.ToString() ?? "";
         // Standard pattern: (object sender, XxxEventArgs e)
@@ -287,16 +367,26 @@ public class AntiPatternEngine
         // Pattern A: str += value  (compound assignment)
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression)) continue;
-            if (!IsInsideLoop(assignment)) continue;
+            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression))
+            {
+                continue;
+            }
+
+            if (!IsInsideLoop(assignment))
+            {
+                continue;
+            }
 
             var lhsText = assignment.Left.ToString();
             var rhs = assignment.Right;
-            bool rhsIsString = rhs is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
+            bool rhsIsString = (rhs is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression))
                                || rhs is InterpolatedStringExpressionSyntax;
             bool lhsLooksLikeString = LooksLikeStringVar(lhsText);
 
-            if (!rhsIsString && !lhsLooksLikeString) continue;
+            if (!rhsIsString && !lhsLooksLikeString)
+            {
+                continue;
+            }
 
             var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(assignment.ToString());
@@ -308,20 +398,41 @@ public class AntiPatternEngine
         // Pattern B: str = str + value  (simple assignment with self-referencing addition)
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)) continue;
-            if (assignment.Right is not BinaryExpressionSyntax binary) continue;
-            if (!binary.IsKind(SyntaxKind.AddExpression)) continue;
-            if (!IsInsideLoop(assignment)) continue;
+            if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+            {
+                continue;
+            }
+
+            if (assignment.Right is not BinaryExpressionSyntax binary)
+            {
+                continue;
+            }
+
+            if (!binary.IsKind(SyntaxKind.AddExpression))
+            {
+                continue;
+            }
+
+            if (!IsInsideLoop(assignment))
+            {
+                continue;
+            }
 
             // Must be self-addition: lhs = lhs + rhs (not arbitrary a + b)
             var lhsText = assignment.Left.ToString();
-            if (binary.Left.ToString() != lhsText) continue;
+            if (binary.Left.ToString() != lhsText)
+            {
+                continue;
+            }
 
-            bool rhsIsString = binary.Right is LiteralExpressionSyntax lit2 && lit2.IsKind(SyntaxKind.StringLiteralExpression)
+            bool rhsIsString = (binary.Right is LiteralExpressionSyntax lit2 && lit2.IsKind(SyntaxKind.StringLiteralExpression))
                                || binary.Right is InterpolatedStringExpressionSyntax;
             bool lhsLooksLikeString = LooksLikeStringVar(lhsText);
 
-            if (!rhsIsString && !lhsLooksLikeString) continue;
+            if (!rhsIsString && !lhsLooksLikeString)
+            {
+                continue;
+            }
 
             var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(assignment.ToString());
@@ -356,14 +467,22 @@ public class AntiPatternEngine
             {
                 var typeName = catchClause.Declaration.Type.ToString();
                 if (typeName != "Exception" && !typeName.EndsWith(".Exception"))
+                {
                     continue;
+                }
             }
 
-            if (catchClause.Block.Statements.Count > 0) continue;
+            if (catchClause.Block.Statements.Count > 0)
+            {
+                continue;
+            }
 
             // A comment inside the block (/* best-effort */, // intentional, etc.)
             // indicates the developer has explicitly acknowledged the swallow — skip.
-            if (CatchBlockHasJustifyingComment(catchClause)) continue;
+            if (CatchBlockHasJustifyingComment(catchClause))
+            {
+                continue;
+            }
 
             var line = catchClause.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(catchClause.ToString());
@@ -379,7 +498,10 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (method.Body == null) continue;
+            if (method.Body == null)
+            {
+                continue;
+            }
 
             var disposedVars = new HashSet<string>();
 
@@ -390,9 +512,16 @@ public class AntiPatternEngine
                 {
                     foreach (var ma in statement.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
                     {
-                        if (ma.Name.Identifier.Text == "Dispose") continue;
+                        if (ma.Name.Identifier.Text == "Dispose")
+                        {
+                            continue;
+                        }
+
                         var varExpr = ma.Expression.ToString();
-                        if (!disposedVars.Contains(varExpr)) continue;
+                        if (!disposedVars.Contains(varExpr))
+                        {
+                            continue;
+                        }
 
                         var line = ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                         yield return new AntiPatternFinding("DisposedObjectUsage",
@@ -420,11 +549,21 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            {
+                continue;
+            }
+
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            {
+                continue;
+            }
 
             var returnType = method.ReturnType.ToString();
-            if (!returnType.StartsWith("Task") && !returnType.StartsWith("ValueTask")) continue;
+            if (!returnType.StartsWith("Task") && !returnType.StartsWith("ValueTask"))
+            {
+                continue;
+            }
 
             var parameters = method.ParameterList.Parameters;
             // Zero-parameter public async methods should still accept CancellationToken
@@ -434,7 +573,10 @@ public class AntiPatternEngine
                 p.Type?.ToString() is string t &&
                 (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
 
-            if (hasCt) continue;
+            if (hasCt)
+            {
+                continue;
+            }
 
             var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(method.Identifier.Text + method.ParameterList.ToString());
@@ -452,7 +594,10 @@ public class AntiPatternEngine
     {
         foreach (var literal in root.DescendantNodes().OfType<LiteralExpressionSyntax>())
         {
-            if (!literal.IsKind(SyntaxKind.NumericLiteralExpression)) continue;
+            if (!literal.IsKind(SyntaxKind.NumericLiteralExpression))
+            {
+                continue;
+            }
 
             // Exclude field declarations, enum members, attribute arguments, switch labels
             if (literal.Ancestors().Any(a =>
@@ -460,14 +605,18 @@ public class AntiPatternEngine
                     a is EnumMemberDeclarationSyntax ||
                     a is AttributeArgumentSyntax ||
                     a is CaseSwitchLabelSyntax))
+            {
                 continue;
+            }
 
             // Must be inside a method/constructor/local function body
             if (!literal.Ancestors().Any(a =>
                     a is MethodDeclarationSyntax ||
                     a is ConstructorDeclarationSyntax ||
                     a is LocalFunctionStatementSyntax))
+            {
                 continue;
+            }
 
             // Skip if the containing local variable declaration name suggests it is intentionally named
             var localDecl = literal.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
@@ -477,14 +626,19 @@ public class AntiPatternEngine
                 if (varName.Contains("timeout") || varName.Contains("max") || varName.Contains("min") ||
                     varName.Contains("limit") || varName.Contains("capacity") || varName.Contains("size") ||
                     varName.Contains("delay") || varName.Contains("interval") || varName.Contains("threshold"))
+                {
                     continue;
+                }
             }
 
             double numValue;
             try { numValue = Convert.ToDouble(literal.Token.Value); }
             catch { continue; }
 
-            if (ExemptNumbers.Contains(numValue)) continue;
+            if (ExemptNumbers.Contains(numValue))
+            {
+                continue;
+            }
 
             var line = literal.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(literal.Parent?.ToString() ?? literal.ToString());
@@ -514,26 +668,55 @@ public class AntiPatternEngine
 
                 bool isTaskRun = (receiver == "Task" && methodName == "Run") ||
                                  (receiver == "Task.Factory" && methodName == "StartNew");
-                if (!isTaskRun) continue;
+                if (!isTaskRun)
+                {
+                    continue;
+                }
             }
-            else continue;
+            else
+            {
+                continue;
+            }
 
             // Skip if directly awaited
-            if (invocation.Parent is AwaitExpressionSyntax) continue;
+            if (invocation.Parent is AwaitExpressionSyntax)
+            {
+                continue;
+            }
 
             // Skip if assigned to any variable, field, or discard
-            if (invocation.Parent is AssignmentExpressionSyntax) continue;
-            if (invocation.Parent is EqualsValueClauseSyntax) continue;
+            if (invocation.Parent is AssignmentExpressionSyntax)
+            {
+                continue;
+            }
+
+            if (invocation.Parent is EqualsValueClauseSyntax)
+            {
+                continue;
+            }
 
             // Skip if returned
-            if (invocation.Parent is ReturnStatementSyntax) continue;
-            if (invocation.Parent is ArrowExpressionClauseSyntax) continue;
+            if (invocation.Parent is ReturnStatementSyntax)
+            {
+                continue;
+            }
+
+            if (invocation.Parent is ArrowExpressionClauseSyntax)
+            {
+                continue;
+            }
 
             // Skip if passed as argument (e.g. Task.WhenAll(Task.Run(...)))
-            if (invocation.Parent is ArgumentSyntax) continue;
+            if (invocation.Parent is ArgumentSyntax)
+            {
+                continue;
+            }
 
             // Skip if chained (.ContinueWith, .ConfigureAwait, etc.)
-            if (invocation.Parent is MemberAccessExpressionSyntax) continue;
+            if (invocation.Parent is MemberAccessExpressionSyntax)
+            {
+                continue;
+            }
 
             var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(invocation.ToString());
@@ -570,17 +753,26 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (method.Body == null) continue;
+            if (method.Body == null)
+            {
+                continue;
+            }
 
             foreach (var localDecl in method.Body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
             {
                 // Skip declarations that use the 'using' keyword (using var x = ...)
-                if (localDecl.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)) continue;
+                if (localDecl.UsingKeyword.IsKind(SyntaxKind.UsingKeyword))
+                {
+                    continue;
+                }
 
                 foreach (var variable in localDecl.Declaration.Variables)
                 {
                     var init = variable.Initializer?.Value;
-                    if (init == null) continue;
+                    if (init == null)
+                    {
+                        continue;
+                    }
 
                     bool isKnownDisposable = init switch
                     {
@@ -593,13 +785,19 @@ public class AntiPatternEngine
                         _ => false
                     };
 
-                    if (!isKnownDisposable) continue;
+                    if (!isKnownDisposable)
+                    {
+                        continue;
+                    }
 
                     // Check if this variable is contained in a using-statement block
                     bool inUsing = localDecl.Ancestors().Any(a =>
                         a is UsingStatementSyntax ||
                         (a is LocalDeclarationStatementSyntax lds && lds.UsingKeyword.IsKind(SyntaxKind.UsingKeyword)));
-                    if (inUsing) continue;
+                    if (inUsing)
+                    {
+                        continue;
+                    }
 
                     // Check if enclosed in a try/finally that calls Dispose
                     bool inTryFinally = localDecl.Ancestors().OfType<TryStatementSyntax>()
@@ -608,7 +806,10 @@ public class AntiPatternEngine
                             .Any(inv => inv.Expression is MemberAccessExpressionSyntax dma &&
                                         dma.Name.Identifier.Text == "Dispose" &&
                                         dma.Expression.ToString() == variable.Identifier.Text) == true);
-                    if (inTryFinally) continue;
+                    if (inTryFinally)
+                    {
+                        continue;
+                    }
 
                     var line = localDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     var typeName = init switch
@@ -636,30 +837,49 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (method.Body == null) continue;
+            if (method.Body == null)
+            {
+                continue;
+            }
 
             foreach (var usingStmt in method.Body.DescendantNodes().OfType<UsingStatementSyntax>())
             {
                 // Only flag the expression form: using (s = expr) { } where s is not declared here
-                if (usingStmt.Expression is not AssignmentExpressionSyntax assign) continue;
-                if (assign.Left is not IdentifierNameSyntax varId) continue;
+                if (usingStmt.Expression is not AssignmentExpressionSyntax assign)
+                {
+                    continue;
+                }
+
+                if (assign.Left is not IdentifierNameSyntax varId)
+                {
+                    continue;
+                }
 
                 var varName = varId.Identifier.Text;
 
                 // Find statements that come AFTER this using in the same parent block
                 var containingBlock = usingStmt.Parent as BlockSyntax;
-                if (containingBlock == null) continue;
+                if (containingBlock == null)
+                {
+                    continue;
+                }
 
                 var statements = containingBlock.Statements;
                 var usingIndex = statements.IndexOf(usingStmt);
-                if (usingIndex < 0) continue;
+                if (usingIndex < 0)
+                {
+                    continue;
+                }
 
                 var accessedAfter = statements
                     .Skip(usingIndex + 1)
                     .SelectMany(s => s.DescendantNodes().OfType<IdentifierNameSyntax>())
                     .Any(id => id.Identifier.Text == varName);
 
-                if (!accessedAfter) continue;
+                if (!accessedAfter)
+                {
+                    continue;
+                }
 
                 var line = usingStmt.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 yield return new AntiPatternFinding(
@@ -700,18 +920,31 @@ public class AntiPatternEngine
     {
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword))) continue;
-            if (method.Body == null && method.ExpressionBody == null) continue;
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            {
+                continue;
+            }
+
+            if (method.Body == null && method.ExpressionBody == null)
+            {
+                continue;
+            }
 
             foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (invocation.Expression is not MemberAccessExpressionSyntax ma) continue;
+                if (invocation.Expression is not MemberAccessExpressionSyntax ma)
+                {
+                    continue;
+                }
 
                 var receiverText = ma.Expression.ToString();
                 var methodText = ma.Name.Identifier.Text;
                 var fullKey = $"{receiverText}.{methodText}";
 
-                if (!SyncToAsyncSuggestions.TryGetValue(fullKey, out var suggestion)) continue;
+                if (!SyncToAsyncSuggestions.TryGetValue(fullKey, out var suggestion))
+                {
+                    continue;
+                }
 
                 var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 yield return new AntiPatternFinding(
@@ -732,7 +965,10 @@ public class AntiPatternEngine
         foreach (var ma in root.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
         {
             var memberName = ma.Name.Identifier.Text;
-            if (memberName != "Result" && memberName != "Wait") continue;
+            if (memberName != "Result" && memberName != "Wait")
+            {
+                continue;
+            }
 
             // Walk up: skip .Wait() that is itself called (it would be MemberAccess.Parent = Invocation)
             // We want the receiver of .Result or .Wait() to be Task.Run(...)
@@ -749,7 +985,10 @@ public class AntiPatternEngine
             }
 
             // Variable: var t = Task.Run(...); t.Result  — harder to track, skip for now
-            if (!isTaskRun) continue;
+            if (!isTaskRun)
+            {
+                continue;
+            }
 
             var line = ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
             var snippet = Truncate(ma.ToString());
@@ -780,7 +1019,10 @@ public class AntiPatternEngine
                             a.Right is MemberAccessExpressionSyntax or IdentifierNameSyntax)
                 .ToList();
 
-            if (subscriptions.Count == 0) continue;
+            if (subscriptions.Count == 0)
+            {
+                continue;
+            }
 
             // Collect unsubscriptions
             var unsubKeys = new HashSet<string>(
@@ -793,7 +1035,10 @@ public class AntiPatternEngine
                 // Is the event on an external object (not 'this')? Skip 'this.Event += ...' (subscribing to own events is fine)
                 bool externalPublisher = sub.Left is MemberAccessExpressionSyntax lma &&
                     lma.Expression is not ThisExpressionSyntax;
-                if (!externalPublisher) continue;
+                if (!externalPublisher)
+                {
+                    continue;
+                }
 
                 bool hasUnsubscribe = unsubKeys.Contains($"{sub.Left}|{sub.Right}");
 
@@ -845,7 +1090,9 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p =>
@@ -853,15 +1100,24 @@ public class AntiPatternEngine
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var findings = new List<AntiPatternFinding>();
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = document.FilePath ?? document.Name;
 
@@ -869,22 +1125,41 @@ public class AntiPatternEngine
                 .OfType<TypeDeclarationSyntax>()
                 .Where(t => t is ClassDeclarationSyntax or RecordDeclarationSyntax))
             {
-                if (!classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+                if (!classDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+                {
+                    continue;
+                }
 
                 var className = classDecl.Identifier.Text;
-                if (DtoSuffixes.Any(s => className.EndsWith(s, StringComparison.OrdinalIgnoreCase))) continue;
+                if (DtoSuffixes.Any(s => className.EndsWith(s, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
 
                 foreach (var prop in classDecl.Members.OfType<PropertyDeclarationSyntax>())
                 {
-                    if (!prop.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
-                    if (prop.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))) continue;
+                    if (!prop.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+                    {
+                        continue;
+                    }
+
+                    if (prop.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+                    {
+                        continue;
+                    }
 
                     var setAccessor = prop.AccessorList?.Accessors
                         .FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
-                    if (setAccessor == null) continue;
+                    if (setAccessor == null)
+                    {
+                        continue;
+                    }
                     // A private or protected setter is NOT a public API surface
                     if (setAccessor.Modifiers.Any(m =>
-                            m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword))) continue;
+                            m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword)))
+                    {
+                        continue;
+                    }
 
                     var line = prop.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     findings.Add(new AntiPatternFinding(
@@ -913,7 +1188,9 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p =>
@@ -921,15 +1198,24 @@ public class AntiPatternEngine
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var findings = new List<AntiPatternFinding>();
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = document.FilePath ?? document.Name;
 
@@ -949,8 +1235,15 @@ public class AntiPatternEngine
     {
         foreach (var field in classDecl.Members.OfType<FieldDeclarationSyntax>())
         {
-            if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword))) continue;
-            if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))) continue;
+            if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.ConstKeyword)))
+            {
+                continue;
+            }
+
+            if (field.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+            {
+                continue;
+            }
 
             bool isPrivateOrImplicit =
                 field.Modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)) ||
@@ -959,13 +1252,23 @@ public class AntiPatternEngine
                     m.IsKind(SyntaxKind.ProtectedKeyword) ||
                     m.IsKind(SyntaxKind.InternalKeyword)));
 
-            if (!isPrivateOrImplicit) continue;
+            if (!isPrivateOrImplicit)
+            {
+                continue;
+            }
 
             foreach (var variable in field.Declaration.Variables)
             {
                 var name = variable.Identifier.Text;
-                if (name.Contains('<') || name.Contains('>')) continue; // compiler-generated
-                if (name == "_") continue; // discard
+                if (name.Contains('<') || name.Contains('>'))
+                {
+                    continue; // compiler-generated
+                }
+
+                if (name == "_")
+                {
+                    continue; // discard
+                }
 
                 // Expected: _camelCase (starts with _ followed by a lowercase letter)
                 if (!System.Text.RegularExpressions.Regex.IsMatch(name, @"^_[a-z]"))
@@ -990,7 +1293,10 @@ public class AntiPatternEngine
         foreach (var method in classDecl.Members.OfType<MethodDeclarationSyntax>())
         {
             var name = method.Identifier.Text;
-            if (string.IsNullOrEmpty(name)) continue;
+            if (string.IsNullOrEmpty(name))
+            {
+                continue;
+            }
 
             bool isNonPrivate = method.Modifiers.Any(m =>
                 m.IsKind(SyntaxKind.PublicKeyword) ||
@@ -1020,8 +1326,15 @@ public class AntiPatternEngine
             foreach (var param in method.ParameterList.Parameters)
             {
                 var name = param.Identifier.Text;
-                if (string.IsNullOrEmpty(name) || name == "_") continue;
-                if (param.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword))) continue;
+                if (string.IsNullOrEmpty(name) || name == "_")
+                {
+                    continue;
+                }
+
+                if (param.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword)))
+                {
+                    continue;
+                }
 
                 if (char.IsUpper(name[0]))
                 {
@@ -1059,7 +1372,9 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p =>
@@ -1067,44 +1382,71 @@ public class AntiPatternEngine
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var occurrences = new Dictionary<string, List<MagicValueLocation>>(StringComparer.Ordinal);
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var docPath = document.FilePath ?? document.Name;
 
             // Skip test files
             if (docPath.Contains("Test", StringComparison.OrdinalIgnoreCase) ||
                 docPath.Contains("Spec", StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var literal in root.DescendantNodes().OfType<LiteralExpressionSyntax>())
             {
-                if (!literal.IsKind(SyntaxKind.StringLiteralExpression)) continue;
+                if (!literal.IsKind(SyntaxKind.StringLiteralExpression))
+                {
+                    continue;
+                }
 
                 var value = literal.Token.ValueText;
-                if (string.IsNullOrWhiteSpace(value) || value.Length < 3) continue;
+                if (string.IsNullOrWhiteSpace(value) || value.Length < 3)
+                {
+                    continue;
+                }
 
                 // Skip SQL parameter tokens like @UserId, @Email (ADO.NET parameterized queries)
                 if (value.Length > 1 && value[0] == '@' && value.Skip(1).All(c => char.IsLetterOrDigit(c) || c == '_'))
+                {
                     continue;
+                }
 
                 // Skip inside nameof()
                 if (literal.Ancestors().OfType<InvocationExpressionSyntax>()
                     .Any(inv => inv.Expression is IdentifierNameSyntax id && id.Identifier.Text == "nameof"))
+                {
                     continue;
+                }
 
                 // Skip inside attribute constructor args
-                if (literal.Ancestors().Any(a => a is AttributeArgumentSyntax)) continue;
+                if (literal.Ancestors().Any(a => a is AttributeArgumentSyntax))
+                {
+                    continue;
+                }
 
                 // Skip inside using directives
-                if (literal.Ancestors().Any(a => a is UsingDirectiveSyntax)) continue;
+                if (literal.Ancestors().Any(a => a is UsingDirectiveSyntax))
+                {
+                    continue;
+                }
 
                 var line = literal.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 var snippet = Truncate(literal.Parent?.ToString() ?? literal.ToString());
@@ -1133,7 +1475,7 @@ public class AntiPatternEngine
     {
         var segments = System.Text.RegularExpressions.Regex.Split(value, @"[^a-zA-Z0-9]+")
             .Where(s => !string.IsNullOrEmpty(s))
-            .Select(s => char.ToUpper(s[0]) + (s.Length > 1 ? s.Substring(1).ToLower() : ""));
+            .Select(s => char.ToUpperInvariant(s[0]) + (s.Length > 1 ? s.Substring(1).ToLowerInvariant() : ""));
         var result = string.Concat(segments);
         return string.IsNullOrEmpty(result) ? "MagicString" : result;
     }
@@ -1149,7 +1491,9 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p =>
@@ -1157,46 +1501,73 @@ public class AntiPatternEngine
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects
                 .Where(p => !p.Name.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
                          && !p.Name.EndsWith(".Benchmarks", StringComparison.OrdinalIgnoreCase))
                 .SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var findings = new List<MissingCancellationTokenFinding>();
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var docPath = document.FilePath ?? document.Name;
 
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var model = await document.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
                 var returnType = method.ReturnType.ToString();
                 bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
-                if (!isAsync && !returnsTask) continue;
+                if (!isAsync && !returnsTask)
+                {
+                    continue;
+                }
 
                 // Skip abstract methods (no body)
-                if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) continue;
+                if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
+                {
+                    continue;
+                }
 
                 // Skip if already has CancellationToken
                 bool hasCt = method.ParameterList.Parameters.Any(p =>
                     p.Type?.ToString() is string t &&
                     (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
-                if (hasCt) continue;
+                if (hasCt)
+                {
+                    continue;
+                }
 
                 // Skip event handlers — their delegate signature is fixed (object sender, XxxEventArgs e)
                 // and cannot be extended with a CancellationToken parameter.
-                if (IsEventHandlerSignature(method)) continue;
+                if (IsEventHandlerSignature(method))
+                {
+                    continue;
+                }
 
                 var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                if (body == null) continue;
+                if (body == null)
+                {
+                    continue;
+                }
 
                 var calleesAcceptingToken = new List<string>();
                 var seenCallees = new HashSet<string>();
@@ -1206,16 +1577,27 @@ public class AntiPatternEngine
                     var si = model.GetSymbolInfo(invocation, ct);
                     var callee = si.Symbol as IMethodSymbol
                         ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
-                    if (callee == null) continue;
+                    if (callee == null)
+                    {
+                        continue;
+                    }
 
                     bool acceptsCt = callee.Parameters.Any(p => p.Type.Name == "CancellationToken");
-                    if (!acceptsCt) continue;
+                    if (!acceptsCt)
+                    {
+                        continue;
+                    }
 
                     if (seenCallees.Add(callee.Name))
+                    {
                         calleesAcceptingToken.Add(callee.Name);
+                    }
                 }
 
-                if (calleesAcceptingToken.Count == 0) continue;
+                if (calleesAcceptingToken.Count == 0)
+                {
+                    continue;
+                }
 
                 var containingType = model.GetDeclaredSymbol(method, ct)?.ContainingType?.Name ?? "";
                 var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
@@ -1245,9 +1627,16 @@ public class AntiPatternEngine
 
         foreach (var document in documents)
         {
-            if (document == null) continue;
+            if (document == null)
+            {
+                continue;
+            }
+
             var root = await document.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = document.FilePath ?? document.Name;
 
@@ -1268,7 +1657,9 @@ public class AntiPatternEngine
                     {
                         var inferred = InferExpectedExceptions(parentTry.Block);
                         if (inferred.Count > 0)
+                        {
                             suggestion = $" Based on the try block, consider catching: {string.Join(", ", inferred)}, then Exception as a final catch-all.";
+                        }
                     }
                     findings.Add(new ExceptionHandlingFinding(
                         "CatchAll",
@@ -1349,8 +1740,15 @@ public class AntiPatternEngine
             // 5. throw new Exception("message") — too broad; suggest specific exception type
             foreach (var throwStmt in root.DescendantNodes().OfType<ThrowStatementSyntax>())
             {
-                if (throwStmt.Expression is not ObjectCreationExpressionSyntax oc) continue;
-                if (oc.Type.ToString() is not ("Exception" or "System.Exception")) continue;
+                if (throwStmt.Expression is not ObjectCreationExpressionSyntax oc)
+                {
+                    continue;
+                }
+
+                if (oc.Type.ToString() is not ("Exception" or "System.Exception"))
+                {
+                    continue;
+                }
 
                 var msgArg = oc.ArgumentList?.Arguments.FirstOrDefault()?.Expression as LiteralExpressionSyntax;
                 var suggested = InferSpecificExceptionType(msgArg?.Token.ValueText);
@@ -1366,9 +1764,20 @@ public class AntiPatternEngine
             // 6. Explicit .Dispose() call not protected by try/catch or 'using'
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                if (inv.Expression is not MemberAccessExpressionSyntax dma) continue;
-                if (dma.Name.Identifier.Text != "Dispose") continue;
-                if (inv.ArgumentList.Arguments.Count != 0) continue;
+                if (inv.Expression is not MemberAccessExpressionSyntax dma)
+                {
+                    continue;
+                }
+
+                if (dma.Name.Identifier.Text != "Dispose")
+                {
+                    continue;
+                }
+
+                if (inv.ArgumentList.Arguments.Count != 0)
+                {
+                    continue;
+                }
 
                 var isProtected = false;
                 foreach (var anc in inv.Ancestors())
@@ -1392,7 +1801,10 @@ public class AntiPatternEngine
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                 .Where(m => m.Identifier.Text == "Dispose" && m.ParameterList.Parameters.Count == 0))
             {
-                if (method.Body == null) continue;
+                if (method.Body == null)
+                {
+                    continue;
+                }
 
                 var unprotected = method.Body.DescendantNodes()
                     .OfType<InvocationExpressionSyntax>()
@@ -1420,8 +1832,15 @@ public class AntiPatternEngine
     {
         foreach (var ancestor in node.Ancestors())
         {
-            if (ancestor == container) break;
-            if (ancestor is TryStatementSyntax) return true;
+            if (ancestor == container)
+            {
+                break;
+            }
+
+            if (ancestor is TryStatementSyntax)
+            {
+                return true;
+            }
         }
         return false;
     }
@@ -1457,7 +1876,10 @@ public class AntiPatternEngine
                 AddIfAbsent(suggestions, "InvalidOperationException");
             }
             if (expr.Contains("JsonSerializer") || expr.Contains("JsonConvert") || expr.Contains("Deserialize"))
+            {
                 AddIfAbsent(suggestions, "JsonException");
+            }
+
             if (expr.Contains("Convert.To"))
             {
                 AddIfAbsent(suggestions, "FormatException");
@@ -1466,52 +1888,102 @@ public class AntiPatternEngine
         }
 
         if (tryBlock.DescendantNodes().OfType<CastExpressionSyntax>().Any())
+        {
             AddIfAbsent(suggestions, "InvalidCastException");
+        }
+
         if (tryBlock.DescendantNodes().OfType<ElementAccessExpressionSyntax>().Any())
+        {
             AddIfAbsent(suggestions, "IndexOutOfRangeException");
+        }
+
         if (tryBlock.DescendantNodes().OfType<BinaryExpressionSyntax>()
             .Any(b => b.IsKind(SyntaxKind.DivideExpression)))
+        {
             AddIfAbsent(suggestions, "DivideByZeroException");
+        }
 
         return suggestions;
     }
 
     private static string? InferSpecificExceptionType(string? message)
     {
-        if (message == null) return null;
+        if (message == null)
+        {
+            return null;
+        }
+
         var lower = message.ToLowerInvariant();
 
         if (lower.Contains("null") || lower.Contains("cannot be null") || lower.Contains("required"))
+        {
             return "ArgumentNullException";
+        }
+
         if (lower.Contains("not supported"))
+        {
             return "NotSupportedException";
+        }
+
         if (lower.Contains("not implemented"))
+        {
             return "NotImplementedException";
+        }
+
         if (lower.Contains("out of range") || lower.Contains("bounds"))
+        {
             return "ArgumentOutOfRangeException";
+        }
+
         if (lower.Contains("invalid operation") || lower.Contains("invalid state") || lower.Contains("already"))
+        {
             return "InvalidOperationException";
+        }
+
         if (lower.Contains("timeout") || lower.Contains("timed out"))
+        {
             return "TimeoutException";
+        }
+
         if (lower.Contains("format") || lower.Contains("invalid format") || lower.Contains("parse"))
+        {
             return "FormatException";
+        }
+
         if (lower.Contains("overflow"))
+        {
             return "OverflowException";
+        }
+
         if (lower.Contains("argument") || lower.Contains("parameter") || lower.Contains("invalid"))
+        {
             return "ArgumentException";
+        }
+
         if (lower.Contains("not found") || lower.Contains("does not exist") || lower.Contains("missing key"))
+        {
             return "KeyNotFoundException";
+        }
+
         if (lower.Contains("access denied") || lower.Contains("unauthorized") || lower.Contains("permission"))
+        {
             return "UnauthorizedAccessException";
+        }
+
         if (lower.Contains("disposed"))
+        {
             return "ObjectDisposedException";
+        }
 
         return null;
     }
 
     private static void AddIfAbsent(List<string> list, string item)
     {
-        if (!list.Contains(item)) list.Add(item);
+        if (!list.Contains(item))
+        {
+            list.Add(item);
+        }
     }
 
     public async Task<List<AntiPatternFinding>> FindLongParameterListAsync(
@@ -1521,35 +1993,52 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<AntiPatternFinding>();
         var diSuffixes = new[] { "Service", "Repository", "Options", "Factory" };
 
         foreach (var doc in documents)
         {
-            if (doc == null || doc.FilePath == null) continue;
+            if (doc == null || doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
             {
                 var parameters = method.ParameterList.Parameters;
-                if (parameters.Count < minParameters) continue;
+                if (parameters.Count < minParameters)
+                {
+                    continue;
+                }
 
                 // For constructors: if ALL params end in DI suffixes, skip
                 if (method is ConstructorDeclarationSyntax)
                 {
                     bool allDi = parameters.All(p =>
                         p.Type != null && diSuffixes.Any(s => p.Type.ToString().EndsWith(s)));
-                    if (allDi) continue;
+                    if (allDi)
+                    {
+                        continue;
+                    }
                 }
 
                 string memberName = method switch
@@ -1580,23 +2069,34 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var primitiveTypes = new HashSet<string> { "string", "int", "long", "Guid", "bool", "String", "Int32", "Int64", "Boolean" };
         var results = new List<AntiPatternFinding>();
 
         foreach (var doc in documents)
         {
-            if (doc == null || doc.FilePath == null) continue;
+            if (doc == null || doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
             {
@@ -1640,14 +2140,18 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<AntiPatternFinding>();
 
@@ -1669,13 +2173,23 @@ public class AntiPatternEngine
 
         foreach (var doc in documents)
         {
-            if (doc == null || doc.FilePath == null) continue;
+            if (doc == null || doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                if (IsEventHandler(method)) continue;
+                if (IsEventHandler(method))
+                {
+                    continue;
+                }
 
                 var name = method.Identifier.Text;
                 bool isAsync = IsAsync(method);
@@ -1716,12 +2230,18 @@ public class AntiPatternEngine
     {
         foreach (var tryStmt in root.DescendantNodes().OfType<TryStatementSyntax>())
         {
-            if (tryStmt.Finally == null) continue;
+            if (tryStmt.Finally == null)
+            {
+                continue;
+            }
 
             foreach (var throwStmt in tryStmt.Finally.Block.DescendantNodes().OfType<ThrowStatementSyntax>())
             {
                 // Bare `throw;` re-throws current exception — that is fine
-                if (throwStmt.Expression == null) continue;
+                if (throwStmt.Expression == null)
+                {
+                    continue;
+                }
 
                 var loc = throwStmt.GetLocation().GetLineSpan().StartLinePosition;
                 yield return new AntiPatternFinding(
@@ -1750,21 +2270,36 @@ public class AntiPatternEngine
 
         foreach (var assignment in root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression)) continue;
+            if (!assignment.IsKind(SyntaxKind.AddAssignmentExpression))
+            {
+                continue;
+            }
 
             // LHS must be a qualified member access: ReceiverName.EventName
-            if (assignment.Left is not MemberAccessExpressionSyntax lhsMa) continue;
+            if (assignment.Left is not MemberAccessExpressionSyntax lhsMa)
+            {
+                continue;
+            }
 
             // Heuristic: receiver starts with uppercase letter — likely a class name (static access)
             var receiverText = lhsMa.Expression.ToString();
-            if (string.IsNullOrEmpty(receiverText) || !char.IsUpper(receiverText[0])) continue;
+            if (string.IsNullOrEmpty(receiverText) || !char.IsUpper(receiverText[0]))
+            {
+                continue;
+            }
 
             // RHS must be a simple method reference (not a lambda)
             var rhsText = assignment.Right.ToString();
-            if (assignment.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax) continue;
+            if (assignment.Right is LambdaExpressionSyntax or AnonymousMethodExpressionSyntax)
+            {
+                continue;
+            }
 
             // Flag only if there's no paired unsubscribe
-            if (unsubscribeTargets.Contains(rhsText)) continue;
+            if (unsubscribeTargets.Contains(rhsText))
+            {
+                continue;
+            }
 
             var loc = assignment.GetLocation().GetLineSpan().StartLinePosition;
             yield return new AntiPatternFinding(
@@ -1786,24 +2321,39 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<OutParamMethodFinding>();
 
         foreach (var doc in documents)
         {
-            if (doc?.FilePath == null) continue;
+            if (doc?.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var model = await doc.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
@@ -1811,7 +2361,10 @@ public class AntiPatternEngine
                     .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword)))
                     .ToList();
 
-                if (outParams.Count < 2) continue;
+                if (outParams.Count < 2)
+                {
+                    continue;
+                }
 
                 var containingType = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "<unknown>";
                 var outParamNames = outParams.Select(p => p.Identifier.Text).ToList();
@@ -1821,9 +2374,13 @@ public class AntiPatternEngine
                 var currentReturn = method.ReturnType.ToString();
                 string suggestedReturn;
                 if (currentReturn == "void")
+                {
                     suggestedReturn = $"({string.Join(", ", tupleElements)})";
+                }
                 else
+                {
                     suggestedReturn = $"({currentReturn} result, {string.Join(", ", tupleElements)})";
+                }
 
                 var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 results.Add(new OutParamMethodFinding(
@@ -1850,29 +2407,47 @@ public class AntiPatternEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<AntiPatternFinding>();
 
         foreach (var doc in documents)
         {
-            if (doc?.FilePath == null) continue;
+            if (doc?.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var model = await doc.GetSemanticModelAsync(ct);
-            if (model == null) continue;
+            if (model == null)
+            {
+                continue;
+            }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
                 var body = (SyntaxNode?)method.Body ?? method.ExpressionBody;
-                if (body == null) continue;
+                if (body == null)
+                {
+                    continue;
+                }
 
                 // Map parameter name → parameter symbol for fast lookup
                 var paramSymbols = new Dictionary<string, (IParameterSymbol Symbol, bool IsValueType)>();
@@ -1883,23 +2458,38 @@ public class AntiPatternEngine
                         m.IsKind(SyntaxKind.RefKeyword) ||
                         m.IsKind(SyntaxKind.OutKeyword) ||
                         m.IsKind(SyntaxKind.InKeyword)))
+                    {
                         continue;
+                    }
 
-                    if (model.GetDeclaredSymbol(p, ct) is not IParameterSymbol sym) continue;
+                    if (model.GetDeclaredSymbol(p, ct) is not IParameterSymbol sym)
+                    {
+                        continue;
+                    }
+
                     paramSymbols[p.Identifier.Text] = (sym, sym.Type.IsValueType);
                 }
 
-                if (paramSymbols.Count == 0) continue;
+                if (paramSymbols.Count == 0)
+                {
+                    continue;
+                }
 
                 // Find which parameters are mentioned in return statements
                 var returnedSymbols = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var ret in body.DescendantNodes().OfType<ReturnStatementSyntax>())
                 {
-                    if (ret.Expression == null) continue;
+                    if (ret.Expression == null)
+                    {
+                        continue;
+                    }
+
                     foreach (var id in ret.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
                     {
                         if (paramSymbols.ContainsKey(id.Identifier.Text))
+                        {
                             returnedSymbols.Add(id.Identifier.Text);
+                        }
                     }
                 }
 
@@ -1907,13 +2497,23 @@ public class AntiPatternEngine
                 foreach (var assignment in body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
                 {
                     // LHS must be a bare identifier, not a member-access
-                    if (assignment.Left is not IdentifierNameSyntax lhsId) continue;
+                    if (assignment.Left is not IdentifierNameSyntax lhsId)
+                    {
+                        continue;
+                    }
+
                     var paramName = lhsId.Identifier.Text;
-                    if (!paramSymbols.TryGetValue(paramName, out var entry)) continue;
+                    if (!paramSymbols.TryGetValue(paramName, out var entry))
+                    {
+                        continue;
+                    }
 
                     // Verify via semantic model that it resolves to the parameter, not a local with the same name
                     var resolvedSym = model.GetSymbolInfo(lhsId, ct).Symbol;
-                    if (!SymbolEqualityComparer.Default.Equals(resolvedSym, entry.Symbol)) continue;
+                    if (!SymbolEqualityComparer.Default.Equals(resolvedSym, entry.Symbol))
+                    {
+                        continue;
+                    }
 
                     var line = assignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                     bool isReturned = returnedSymbols.Contains(paramName);
@@ -1979,10 +2579,15 @@ public class AntiPatternEngine
         foreach (var project in solution.Projects)
         {
             if (projectName != null && !project.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             foreach (var syntaxTree in compilation.SyntaxTrees)
             {
@@ -1995,11 +2600,17 @@ public class AntiPatternEngine
                 foreach (var methodDecl in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
                     var methodSymbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken);
-                    if (methodSymbol == null) continue;
+                    if (methodSymbol == null)
+                    {
+                        continue;
+                    }
 
                     var obsoleteAttr = methodSymbol.GetAttributes()
                         .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute" or "Obsolete");
-                    if (obsoleteAttr == null) continue;
+                    if (obsoleteAttr == null)
+                    {
+                        continue;
+                    }
 
                     // Extract the message text from the attribute constructor.
                     var obsoleteMessage = obsoleteAttr.ConstructorArguments.Length > 0
@@ -2009,7 +2620,9 @@ public class AntiPatternEngine
                     // Filter by message pattern if provided.
                     if (messagePattern != null &&
                         !obsoleteMessage.Contains(messagePattern, StringComparison.OrdinalIgnoreCase))
+                    {
                         continue;
+                    }
 
                     // Use SymbolFinder to find all references to this symbol across the solution.
                     var references = await SymbolFinder.FindReferencesAsync(
@@ -2021,26 +2634,39 @@ public class AntiPatternEngine
                         {
                             cancellationToken.ThrowIfCancellationRequested();
 
-                            if (!location.Location.IsInSource) continue;
+                            if (!location.Location.IsInSource)
+                            {
+                                continue;
+                            }
 
                             var refDoc = solution.GetDocument(location.Document.Id);
-                            if (refDoc == null) continue;
+                            if (refDoc == null)
+                            {
+                                continue;
+                            }
 
                             var refFilePath = refDoc.FilePath ?? string.Empty;
 
                             // Filter by filePath if provided.
                             if (filePath != null &&
                                 !refFilePath.Equals(filePath, StringComparison.OrdinalIgnoreCase))
+                            {
                                 continue;
+                            }
 
                             // Skip the declaration itself.
                             if (refFilePath == (syntaxTree.FilePath ?? string.Empty) &&
                                 location.Location.SourceSpan == methodDecl.Identifier.Span)
+                            {
                                 continue;
+                            }
 
                             var refRoot = await location.Document.GetSyntaxRootAsync(cancellationToken)
                                 .ConfigureAwait(false);
-                            if (refRoot == null) continue;
+                            if (refRoot == null)
+                            {
+                                continue;
+                            }
 
                             var refNode = refRoot.FindNode(location.Location.SourceSpan);
                             var refLine = location.Location.GetLineSpan().StartLinePosition.Line + 1;
@@ -2100,31 +2726,36 @@ public class AntiPatternEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
-        int totalAsync        = 0;
-        int withCt            = 0;
+        int totalAsync = 0;
+        int withCt = 0;
         int asyncVoidHandlers = 0;
-        int bridgeWrappers    = 0;
+        int bridgeWrappers = 0;
 
         IEnumerable<Project> projects = solution.Projects;
         if (projectName != null)
+        {
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var project in projects)
         {
             var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
 
             foreach (var syntaxTree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var root         = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
+                var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
                 var semanticModel = compilation.GetSemanticModel(syntaxTree);
 
                 foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
-                    bool isAsync     = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
-                    var  returnType  = method.ReturnType.ToString();
+                    bool isAsync = method.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword));
+                    var returnType = method.ReturnType.ToString();
                     bool returnsTask = returnType.StartsWith("Task") || returnType.StartsWith("ValueTask");
 
                     // Count async void methods (event handlers — informational only).
@@ -2135,8 +2766,15 @@ public class AntiPatternEngine
                         continue; // async void methods are not counted in the async-Task bucket
                     }
 
-                    if (!isAsync && !returnsTask) continue;
-                    if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword))) continue;
+                    if (!isAsync && !returnsTask)
+                    {
+                        continue;
+                    }
+
+                    if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
+                    {
+                        continue;
+                    }
 
                     totalAsync++;
 
@@ -2144,7 +2782,10 @@ public class AntiPatternEngine
                     bool hasCt = method.ParameterList.Parameters.Any(p =>
                         p.Type?.ToString() is string t &&
                         (t == "CancellationToken" || t.EndsWith(".CancellationToken")));
-                    if (hasCt) withCt++;
+                    if (hasCt)
+                    {
+                        withCt++;
+                    }
 
                     // Count Asyncify-bridge wrapper methods via [Obsolete] attribute.
                     var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
@@ -2158,7 +2799,9 @@ public class AntiPatternEngine
                                 ? obsoleteAttr.ConstructorArguments[0].Value?.ToString() ?? string.Empty
                                 : string.Empty;
                             if (msg.Contains("Asyncify-bridge", StringComparison.OrdinalIgnoreCase))
+                            {
                                 bridgeWrappers++;
+                            }
                         }
                     }
                 }
@@ -2166,7 +2809,7 @@ public class AntiPatternEngine
         }
 
         int withoutCt = totalAsync - withCt;
-        double pct    = totalAsync > 0 ? Math.Round((double)withCt / totalAsync * 100.0, 1) : 0.0;
+        double pct = totalAsync > 0 ? Math.Round((double)withCt / totalAsync * 100.0, 1) : 0.0;
 
         // Count pending bridge-wrapper call sites by reusing FindObsoleteCallersAsync
         // (scoped to Asyncify-bridge message, optionally scoped to project).
@@ -2177,13 +2820,13 @@ public class AntiPatternEngine
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new AsyncMigrationProgressReport(
-            TotalAsyncMethods:        totalAsync,
-            WithCancellationToken:    withCt,
+            TotalAsyncMethods: totalAsync,
+            WithCancellationToken: withCt,
             WithoutCancellationToken: withoutCt,
-            CancellationTokenPct:     pct,
-            BridgeWrappers:           bridgeWrappers,
-            PendingObsoleteCallers:   pendingCallers.Count,
-            AsyncVoidEventHandlers:   asyncVoidHandlers
+            CancellationTokenPct: pct,
+            BridgeWrappers: bridgeWrappers,
+            PendingObsoleteCallers: pendingCallers.Count,
+            AsyncVoidEventHandlers: asyncVoidHandlers
         );
     }
 }

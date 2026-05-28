@@ -18,10 +18,16 @@ public class DocumentationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception($"File not found in solution: {normalizedPath}");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found in solution: {normalizedPath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword))
@@ -35,7 +41,7 @@ public class DocumentationEngine
             sb.AppendLine("/// <summary>");
             sb.AppendLine($"/// TODO: Add description for {newMethod.Identifier.Text}.");
             sb.AppendLine("/// </summary>");
-            
+
             foreach (var param in newMethod.ParameterList.Parameters)
             {
                 sb.AppendLine($"/// <param name=\"{param.Identifier.Text}\">TODO: Describe {param.Identifier.Text}.</param>");
@@ -57,22 +63,31 @@ public class DocumentationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) return root.ToFullString();
+        if (classNode == null)
+        {
+            return root.ToFullString();
+        }
 
-        if (!root.Usings.Any(u => u.Name.ToString() == "System.ComponentModel"))
+        if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel"))
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.ComponentModel")));
             classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         }
 
         var properties = classNode!.Members.OfType<PropertyDeclarationSyntax>().ToList();
-        var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) => 
+        var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) =>
         {
             var attr = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(
                 SyntaxFactory.Attribute(SyntaxFactory.ParseName("Description"))

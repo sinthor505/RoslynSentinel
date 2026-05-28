@@ -1,7 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Editing;
 
 namespace RoslynSentinel.Server;
 
@@ -38,13 +37,19 @@ public class DependencyInjectionEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
 
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException($"Class not found: {className}");
+        }
 
         var reports = new List<DependencyReport>();
         var constructor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
@@ -53,15 +58,22 @@ public class DependencyInjectionEngine
         {
             foreach (var parameter in constructor.ParameterList.Parameters)
             {
-                var typeInfo = semanticModel!.GetTypeInfo(parameter.Type!);
+                var typeInfo = semanticModel!.GetTypeInfo(parameter.Type!, cancellationToken);
                 var typeSymbol = typeInfo.Type;
 
                 if (typeSymbol != null)
                 {
                     // Logic: Interfaces are usually Scoped/Singleton, DALs are Scoped, etc.
                     string lifetime = "Scoped";
-                    if (typeSymbol.Name.Contains("Client") || typeSymbol.Name.Contains("Factory")) lifetime = "Singleton";
-                    if (typeSymbol.Name.Contains("Context")) lifetime = "Scoped";
+                    if (typeSymbol.Name.Contains("Client") || typeSymbol.Name.Contains("Factory"))
+                    {
+                        lifetime = "Singleton";
+                    }
+
+                    if (typeSymbol.Name.Contains("Context"))
+                    {
+                        lifetime = "Scoped";
+                    }
 
                     reports.Add(new DependencyReport(typeSymbol.ToDisplayString(), "Detected in Constructor", lifetime));
                 }
@@ -94,13 +106,22 @@ public class DependencyInjectionEngine
             .SelectMany(p => p.Documents);
 
         if (filePath != null)
+        {
             documents = documents.Where(d => string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+        }
 
         foreach (var doc in documents)
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
@@ -111,18 +132,23 @@ public class DependencyInjectionEngine
                     _ => null
                 };
 
-                if (methodName == null || !_lifetimeMethods.Contains(methodName)) continue;
+                if (methodName == null || !_lifetimeMethods.Contains(methodName))
+                {
+                    continue;
+                }
 
                 var lifetime = methodName switch
                 {
                     "AddSingleton" or "TryAddSingleton" => "Singleton",
-                    "AddScoped"    or "TryAddScoped"    => "Scoped",
+                    "AddScoped" or "TryAddScoped" => "Scoped",
                     "AddTransient" or "TryAddTransient" or "TryAddEnumerable" => "Transient",
                     _ => "Unknown"
                 };
 
                 if (lifetimeFilter != null && !lifetime.Equals(lifetimeFilter, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 string serviceType = "Unknown";
                 string? implType = null;
@@ -139,21 +165,31 @@ public class DependencyInjectionEngine
                 {
                     serviceType = typeArgs.Arguments[0].ToString();
                     if (typeArgs.Arguments.Count >= 2)
+                    {
                         implType = typeArgs.Arguments[1].ToString();
+                    }
                 }
                 else
                 {
                     // Non-generic form: AddSingleton(typeof(IFoo), typeof(Foo))
                     var args = invocation.ArgumentList.Arguments;
                     if (args.Count >= 1 && args[0].Expression is TypeOfExpressionSyntax t0)
+                    {
                         serviceType = t0.Type.ToString();
+                    }
+
                     if (args.Count >= 2 && args[1].Expression is TypeOfExpressionSyntax t1)
+                    {
                         implType = t1.Type.ToString();
+                    }
                 }
 
-                var lineSpan = root.SyntaxTree.GetLineSpan(invocation.Span);
+                var lineSpan = root.SyntaxTree.GetLineSpan(invocation.Span, ct);
                 var callSite = invocation.ToString();
-                if (callSite.Length > 200) callSite = callSite[..200] + "...";
+                if (callSite.Length > 200)
+                {
+                    callSite = callSite[..200] + "...";
+                }
 
                 results.Add(new DiRegistration(
                     lifetime,
@@ -170,28 +206,41 @@ public class DependencyInjectionEngine
             foreach (var objCreation in root.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             {
                 var typeName = objCreation.Type.ToString().Split('.').Last();
-                if (!typeName.Equals("ServiceDescriptor", StringComparison.Ordinal)) continue;
+                if (!typeName.Equals("ServiceDescriptor", StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
                 var args = objCreation.ArgumentList?.Arguments;
-                if (args == null || args.Value.Count < 3) continue;
+                if (args == null || args.Value.Count < 3)
+                {
+                    continue;
+                }
 
                 string svc = "Unknown", impl = "Unknown", svcLifetime = "Unknown";
 
                 if (args.Value[0].Expression is TypeOfExpressionSyntax t0)
+                {
                     svc = t0.Type.ToString();
+                }
 
                 if (args.Value[1].Expression is TypeOfExpressionSyntax t1)
+                {
                     impl = t1.Type.ToString();
+                }
 
                 var lifetimeArg = args.Value[2].Expression.ToString();
                 svcLifetime = lifetimeArg.Contains("Singleton") ? "Singleton"
-                           : lifetimeArg.Contains("Scoped")    ? "Scoped"
+                           : lifetimeArg.Contains("Scoped") ? "Scoped"
                            : lifetimeArg.Contains("Transient") ? "Transient"
                            : "Unknown";
 
-                var lineSpan2 = root.SyntaxTree.GetLineSpan(objCreation.Span);
+                var lineSpan2 = root.SyntaxTree.GetLineSpan(objCreation.Span, ct);
                 var callSite2 = objCreation.ToString();
-                if (callSite2.Length > 200) callSite2 = callSite2[..200] + "...";
+                if (callSite2.Length > 200)
+                {
+                    callSite2 = callSite2[..200] + "...";
+                }
 
                 results.Add(new DiRegistration(svcLifetime, svc, impl == "Unknown" ? null : impl,
                     doc.FilePath, lineSpan2.StartLinePosition.Line + 1, callSite2));
@@ -208,14 +257,20 @@ public class DependencyInjectionEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException($"Class '{className}' not found in file: {filePath}");
+        }
 
         var fieldName = $"_{char.ToLower(dependencyName[0])}{dependencyName.Substring(1)}";
-        
+
         // 1. Create the field
         var fieldDecl = SyntaxFactory.FieldDeclaration(
             SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(dependencyType))
@@ -322,13 +377,24 @@ public class DependencyInjectionEngine
 
         // Collection wrappers (IEnumerable<IFoo>, IReadOnlyList<T>, etc.) are always
         // resolved natively — flagging them as "missing" is always a false positive.
-        if (_nativeCollectionInterfaces.Contains(simpleName)) return false;
+        if (_nativeCollectionInterfaces.Contains(simpleName))
+        {
+            return false;
+        }
 
         if (simpleName.Length >= 2 && simpleName[0] == 'I' && char.IsUpper(simpleName[1]))
+        {
             return true;
+        }
+
         foreach (var suffix in _serviceNameSuffixes)
+        {
             if (simpleName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 
@@ -336,8 +402,13 @@ public class DependencyInjectionEngine
     {
         var simpleName = typeName.Split('<')[0].Split('.').Last();
         foreach (var framework in _frameworkProvidedTypes)
+        {
             if (simpleName.StartsWith(framework, StringComparison.OrdinalIgnoreCase))
+            {
                 return true;
+            }
+        }
+
         return false;
     }
 
@@ -367,16 +438,24 @@ public class DependencyInjectionEngine
 
         foreach (var doc in documents)
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
 
             // Skip test files
             if (doc.FilePath.Contains(".Tests.") ||
                 doc.FilePath.Contains("Tests\\") ||
                 doc.FilePath.Contains("Tests/"))
+            {
                 continue;
+            }
 
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var ctor in root.DescendantNodes().OfType<ConstructorDeclarationSyntax>())
             {
@@ -385,14 +464,28 @@ public class DependencyInjectionEngine
 
                 foreach (var param in ctor.ParameterList.Parameters)
                 {
-                    if (param.Type == null) continue;
+                    if (param.Type == null)
+                    {
+                        continue;
+                    }
 
                     var typeName = param.Type.ToString();
                     var simpleName = typeName.Split('<')[0].Split('.').Last();
 
-                    if (!LooksLikeInjectedService(typeName)) continue;
-                    if (IsFrameworkProvided(typeName)) continue;
-                    if (registeredTypes.Contains(simpleName)) continue;
+                    if (!LooksLikeInjectedService(typeName))
+                    {
+                        continue;
+                    }
+
+                    if (IsFrameworkProvided(typeName))
+                    {
+                        continue;
+                    }
+
+                    if (registeredTypes.Contains(simpleName))
+                    {
+                        continue;
+                    }
 
                     var lineSpan = param.GetLocation().GetLineSpan();
                     results.Add(new UnregisteredServiceFinding(
@@ -437,8 +530,15 @@ public class DependencyInjectionEngine
         {
             var svc = SimpleName(reg.ServiceType);
             var impl = reg.ImplementationType != null ? SimpleName(reg.ImplementationType) : null;
-            if (!string.IsNullOrEmpty(svc)) lifetimeMap.TryAdd(svc, reg.Lifetime);
-            if (!string.IsNullOrEmpty(impl)) lifetimeMap.TryAdd(impl, reg.Lifetime);
+            if (!string.IsNullOrEmpty(svc))
+            {
+                lifetimeMap.TryAdd(svc, reg.Lifetime);
+            }
+
+            if (!string.IsNullOrEmpty(impl))
+            {
+                lifetimeMap.TryAdd(impl, reg.Lifetime);
+            }
         }
 
         // Also scan for lambda factory registrations:
@@ -450,9 +550,16 @@ public class DependencyInjectionEngine
 
         foreach (var doc in docs)
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var inv in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
@@ -461,16 +568,22 @@ public class DependencyInjectionEngine
                     MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
                     _ => null
                 };
-                if (methodName == null || !_lifetimeMethods.Contains(methodName)) continue;
+                if (methodName == null || !_lifetimeMethods.Contains(methodName))
+                {
+                    continue;
+                }
 
                 string lifetime = methodName switch
                 {
                     "AddSingleton" or "TryAddSingleton" => "Singleton",
-                    "AddScoped"    or "TryAddScoped"    => "Scoped",
+                    "AddScoped" or "TryAddScoped" => "Scoped",
                     "AddTransient" or "TryAddTransient" or "TryAddEnumerable" => "Transient",
                     _ => null!
                 };
-                if (lifetime == null) continue;
+                if (lifetime == null)
+                {
+                    continue;
+                }
 
                 // Look for lambda argument: sp => new Foo(...)  OR  (sp) => new Foo(...)
                 ObjectCreationExpressionSyntax? lambdaOc = null;
@@ -482,9 +595,15 @@ public class DependencyInjectionEngine
                         ParenthesizedLambdaExpressionSyntax paren => paren.Body as ObjectCreationExpressionSyntax,
                         _ => null
                     };
-                    if (lambdaOc != null) break;
+                    if (lambdaOc != null)
+                    {
+                        break;
+                    }
                 }
-                if (lambdaOc == null) continue;
+                if (lambdaOc == null)
+                {
+                    continue;
+                }
 
                 var implTypeName = lambdaOc.Type.ToString().Split('<')[0].Split('.').Last();
                 lifetimeMap.TryAdd(implTypeName, lifetime);
@@ -496,25 +615,50 @@ public class DependencyInjectionEngine
 
         foreach (var doc in docs)
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root2 = await doc.GetSyntaxRootAsync(ct);
-            if (root2 == null) continue;
+            if (root2 == null)
+            {
+                continue;
+            }
 
             foreach (var classDecl in root2.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
                 var className = classDecl.Identifier.Text;
-                if (!lifetimeMap.TryGetValue(className, out var consumerLifetime)) continue;
-                if (consumerLifetime != "Singleton") continue; // Only Singletons can trap shorter-lived deps
+                if (!lifetimeMap.TryGetValue(className, out var consumerLifetime))
+                {
+                    continue;
+                }
+
+                if (consumerLifetime != "Singleton")
+                {
+                    continue; // Only Singletons can trap shorter-lived deps
+                }
 
                 var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
-                if (ctor == null) continue;
+                if (ctor == null)
+                {
+                    continue;
+                }
 
                 foreach (var param in ctor.ParameterList.Parameters)
                 {
-                    if (param.Type == null) continue;
+                    if (param.Type == null)
+                    {
+                        continue;
+                    }
+
                     var depSimpleName = SimpleName(param.Type.ToString());
 
-                    if (!lifetimeMap.TryGetValue(depSimpleName, out var depLifetime)) continue;
+                    if (!lifetimeMap.TryGetValue(depSimpleName, out var depLifetime))
+                    {
+                        continue;
+                    }
+
                     if (depLifetime is "Scoped" or "Transient")
                     {
                         var line = param.GetLocation().GetLineSpan().StartLinePosition.Line + 1;

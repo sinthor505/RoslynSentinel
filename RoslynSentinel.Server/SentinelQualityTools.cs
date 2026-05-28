@@ -94,7 +94,7 @@ public record AsyncMigrationProgressReport(
 /// <param name="ClassName">The class that declares the method.</param>
 /// <param name="Pattern">
 /// The refactoring pattern the method is earmarked for:
-/// <c>"AsyncBridge"</c>, <c>"HandlerExtract"</c>, <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, etc.
+/// <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtract"</c>, <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, etc.
 /// </param>
 /// <param name="Score">Eligibility score from the scout tool (0 = unscored).</param>
 /// <param name="Reason">Human-readable rationale for the flag, or <c>null</c> if none was supplied.</param>
@@ -113,7 +113,7 @@ public record MigrationCandidateFinding(
 {
     /// <summary>
     /// Human-readable one-liner combining the most useful fields.
-    /// Example: <c>"AsyncBridge (score=70): Calls search/isExistedInDB — updateSettlement"</c>.
+    /// Example: <c>"AsyncBridgeCandidate (score=70): Calls search/isExistedInDB — updateSettlement"</c>.
     /// </summary>
     public string Summary =>
         $"{Pattern} (score={Score})" +
@@ -127,7 +127,7 @@ public record MigrationCandidateFinding(
 /// </summary>
 /// <param name="FilePath">Absolute path of the file that was modified.</param>
 /// <param name="MethodName">Name of the method that received the <c>[MigrationCandidate]</c> attribute.</param>
-/// <param name="Pattern">Migration pattern string that was applied (e.g. <c>"AsyncBridge"</c>).</param>
+/// <param name="Pattern">Migration pattern string that was applied (e.g. <c>"AsyncBridgeCandidate"</c>).</param>
 /// <param name="Line">1-based source line of the method declaration after rewriting.</param>
 /// <param name="WasAlreadyFlagged">
 /// <c>true</c> if the method already carried a <c>[MigrationCandidate]</c> attribute with this exact
@@ -165,6 +165,7 @@ public class SentinelQualityTools
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
+    private readonly AsyncBatchEngine _asyncBatchEngine;
     private readonly ThreadSafetyEngine _threadSafetyEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
@@ -188,6 +189,7 @@ public class SentinelQualityTools
         CodeStyleAnalysisEngine codeStyleAnalysisEngine,
         PathDrivenTestEngine pathDrivenTestEngine,
         StackOverflowEngine stackOverflowEngine,
+        AsyncBatchEngine asyncBatchEngine,
         PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelQualityTools> logger)
     {
@@ -205,6 +207,7 @@ public class SentinelQualityTools
         _codeStyleAnalysisEngine = codeStyleAnalysisEngine;
         _pathDrivenTestEngine = pathDrivenTestEngine;
         _stackOverflowEngine = stackOverflowEngine;
+        _asyncBatchEngine = asyncBatchEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
@@ -255,9 +258,12 @@ public class SentinelQualityTools
     {
         var result = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"AddGuardClauses failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -292,9 +298,12 @@ public class SentinelQualityTools
     {
         var result = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"AddBenchmarkStub failed for '{className}.{methodName}' in '{filePath}': " +
                 "file not found in workspace, class not found, or method not found. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -517,9 +526,12 @@ public class SentinelQualityTools
     {
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"AddConfigureAwaitFalse failed for '{filePath}': " +
                 "file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -529,9 +541,12 @@ public class SentinelQualityTools
     {
         var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"RemoveConfigureAwaitFalse failed for '{filePath}': " +
                 "file not found in workspace. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -541,9 +556,12 @@ public class SentinelQualityTools
     {
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertLockToSemaphoreSlim failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace, method not found, or no lock statements found in method. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -553,9 +571,12 @@ public class SentinelQualityTools
     {
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"ConvertToAsyncEnumerable failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace, method not found, or method does not return Task<List<T>> or similar. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -577,11 +598,16 @@ public class SentinelQualityTools
     {
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(filePath, methodName);
         if (string.IsNullOrEmpty(result) || result.StartsWith("// Error:"))
+        {
             throw new InvalidOperationException(
                 $"AddCancellationTokenToMethod failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         if (!autoStage)
+        {
             return new CancellationTokenResult(null, new SourceTransformResult(result, false, false, filePath));
+        }
         // Stage the change and return the change ID for apply_staged_changes / get_staged_changes.
         var changeId = _workspaceManager.StageChanges(
             new Dictionary<string, string> { { filePath, result } },
@@ -643,7 +669,9 @@ public class SentinelQualityTools
         }
 
         if (!autoStage)
+        {
             return new CancellationTokenResult(null, new SourceTransformResult(result, false, false, filePath));
+        }
 
         var changeId = _workspaceManager.StageChanges(
             new Dictionary<string, string> { { filePath, result } },
@@ -661,7 +689,7 @@ public class SentinelQualityTools
         step needed. If MigrationCandidateAttribute.cs does not yet exist in the project it is
         also generated in the same directory.
 
-        Known patterns: AsyncBridge, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+        Known patterns: AsyncBridgeCandidate, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
         Re-flagging a method with the same pattern is idempotent: the existing attribute is
         replaced with the updated score/reason/date.
 
@@ -721,7 +749,7 @@ public class SentinelQualityTools
     /// <summary>One item in a <c>flag_migration_candidates_batch</c> request.</summary>
     /// <param name="FilePath">Absolute path to the source file containing the target method.</param>
     /// <param name="MethodName">Exact name of the method to flag (case-sensitive).</param>
-    /// <param name="Pattern">Migration pattern string (e.g. <c>"AsyncBridge"</c>).</param>
+    /// <param name="Pattern">Migration pattern string (e.g. <c>"AsyncBridgeCandidate"</c>).</param>
     /// <param name="Score">Optional numeric score from the Scout analysis.</param>
     /// <param name="Reason">Optional human-readable rationale.</param>
     public record FlagMigrationCandidatesBatchItem(
@@ -791,9 +819,20 @@ public class SentinelQualityTools
         for (int i = 0; i < results.Count; i++)
         {
             var r = results[i];
-            if (r.Line == -1) continue; // error case
-            foreach (var kv in r.Changes) allChanges[kv.Key] = kv.Value;
-            if (r.AttributeClassInjected) attrClassInjected = true;
+            if (r.Line == -1)
+            {
+                continue; // error case
+            }
+
+            foreach (var kv in r.Changes)
+            {
+                allChanges[kv.Key] = kv.Value;
+            }
+
+            if (r.AttributeClassInjected)
+            {
+                attrClassInjected = true;
+            }
 
             var item = items[i];
             succeeded.Add(new FlagMigrationCandidatesBatchOutcome(
@@ -808,7 +847,9 @@ public class SentinelQualityTools
         }
 
         if (allChanges.Count > 0)
+        {
             await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+        }
 
         return new FlagMigrationCandidatesBatchResult(
             Succeeded:             succeeded,
@@ -832,7 +873,9 @@ public class SentinelQualityTools
         string ClassName,
         int    Line,
         int    Score,
-        string Reason
+        string Reason,
+        /// <summary>The migration pattern written into <c>[MigrationCandidate]</c> (e.g. "AsyncBridgeCandidate", "AsyncHandlerCandidate").</summary>
+        string Pattern
     );
 
     /// <summary>Return type for <c>flag_migration_candidates_in_project</c>.</summary>
@@ -859,21 +902,30 @@ public class SentinelQualityTools
         files or methods required.
 
         projectName: name of the project to scan (case-insensitive). Omit to scan the whole solution.
-        pattern:     migration pattern to apply. Default "AsyncBridge".
-                     Known patterns: AsyncBridge, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
-        minScore:    minimum score a method must reach to be flagged. Default 20.
+        pattern:     migration pattern to apply. Default "AsyncBridgeCandidate".
+                     Known patterns: AsyncBridgeCandidate, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+        minScore:    minimum score a method must reach to be flagged. Default 50.
         dryRun:      when true, scores methods and returns what WOULD be flagged without writing any
                      files. Use to preview before committing.
+        forceRescan: when true, ignores existing [MigrationCandidate] attributes and re-evaluates
+                     every method from scratch. Use after changing scoring rules for a clean result.
 
-        Scoring heuristics (AsyncBridge):
+        Scoring heuristics (AsyncBridgeCandidate):
           +40 — body contains blocking calls (.GetAwaiter().GetResult(), .Result, .Wait())
-          +30 — body calls CommonSearch.search or similar sync DB entry point
+          +30 — body calls CommonSearch (the project's async-ready SQL wrapper)
           +25 — body uses SqlCommand / SqlConnection / getDataContext / DataContext
           +15 — class name ends with Service
-          +10 — method is static (easier to bridge in isolation)
+          +5  — method is static (easier to bridge in isolation)
           -20 — method is virtual or override (interface widening may be required)
           disqualified — abstract, extern, already async, name ends with Async,
-                         has yield return, has ref/out parameters
+                         has yield return, has ref/out parameters, carries [Obsolete],
+                         has sql-access only with no async leaf (linq-to-sql-only)
+        Event handlers (object sender, XxxEventArgs e) are automatically tagged as
+        AsyncHandlerCandidate instead of AsyncBridgeCandidate, with a +20 semantic bonus when
+        the handler calls an [Obsolete]-decorated bridge wrapper.
+        The +20 calls-obsolete-wrapper bonus applies to ALL methods (not just handlers) that
+        call any [Obsolete]-decorated method — catching helpers like initComboBox() that call
+        the deprecated sync CommonSearch.search() and need to migrate to searchAsync().
 
         Returns FlagCandidatesInProjectResult:
           Flagged        — methods written (or that would be written when dryRun=true)
@@ -883,15 +935,16 @@ public class SentinelQualityTools
         """)]
     public async Task<FlagCandidatesInProjectResult> FlagMigrationCandidatesInProject(
         string? projectName = null,
-        string  pattern     = "AsyncBridge",
-        int     minScore    = 20,
-        bool    dryRun      = false)
+        string  pattern     = "AsyncBridgeCandidate",
+        int     minScore    = 50,
+        bool    dryRun      = false,
+        bool    forceRescan = false)
     {
         AsyncOptimizationEngine.FlagCandidatesInProjectEngineResult engineResult;
         try
         {
             engineResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
-                projectName, pattern, minScore, dryRun);
+                projectName, pattern, minScore, dryRun, forceRescan);
         }
         catch (InvalidOperationException)
         {
@@ -908,10 +961,12 @@ public class SentinelQualityTools
         }
 
         if (!dryRun && engineResult.Changes.Count > 0)
+        {
             await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+        }
 
         static FlagCandidatesInProjectItem ToItem(AsyncOptimizationEngine.CandidateScoredItem s)
-            => new(s.FilePath, s.MethodName, s.ClassName, s.Line, s.Score, s.Reason);
+            => new(s.FilePath, s.MethodName, s.ClassName, s.Line, s.Score, s.Reason, s.Pattern);
 
         return new FlagCandidatesInProjectResult(
             Flagged:               engineResult.Flagged.Select(ToItem).ToList(),
@@ -929,7 +984,7 @@ public class SentinelQualityTools
 
         filePath:    restrict to a single file (full or partial path suffix).
         projectName: restrict to a single project (case-insensitive name).
-        pattern:     restrict to one pattern — "AsyncBridge", "HandlerExtract",
+        pattern:     restrict to one pattern — "AsyncBridgeCandidate", "HandlerExtract",
                      "HandlerToAsync", "AsyncCallerUplift", etc. Omit to return all patterns.
 
         Uses syntax-level analysis — no compilation needed — so results are accurate even
@@ -951,9 +1006,12 @@ public class SentinelQualityTools
     {
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName);
         if (string.IsNullOrEmpty(result))
+        {
             throw new InvalidOperationException(
                 $"MakeMethodThreadSafe failed for '{methodName}' in '{filePath}': " +
                 "file not found in workspace or method not found. Ensure the solution is loaded.");
+        }
+
         return new SourceTransformResult(result, false, false, filePath);
     }
 
@@ -1009,11 +1067,17 @@ public class SentinelQualityTools
     {
         DiagnosticSummary summary;
         if (filePath != null)
+        {
             summary = await _diagnosticEngine.GetFileDiagnosticsAsync(filePath);
+        }
         else if (projectName != null)
+        {
             summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(projectName);
+        }
         else
+        {
             summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
+        }
 
         var relevant = summary.Details
             .Where(d => d.Severity is "Error" or "Warning")
@@ -1358,4 +1422,71 @@ public class SentinelQualityTools
         string? projectName = null,
         CancellationToken cancellationToken = default)
         => await _antiPatternEngine.GetAsyncMigrationProgressAsync(projectName, cancellationToken);
+
+    [McpServerTool]
+    [Description("""
+        Converts a batch of methods flagged with [MigrationCandidate("AsyncBridgeCandidate")] to
+        the Asyncify-bridge pattern in a single call, using in-memory Roslyn compilation for
+        validation (no MSBuild round-trips). For each candidate:
+          1. Calls convert_to_async_bridge to produce the transformed source.
+          2. Validates the source with in-memory compilation.
+          3. On success: writes the file to disk and refreshes the workspace.
+          4. On error: flags the method [MigrationCandidate("NeedsManualReview")] and continues.
+
+        Parameters:
+          projectName     — restrict candidate scan to one project (null = entire solution).
+          maxBridges      — max methods to process this call (default 10).
+          scoreThreshold  — only candidates with score ≤ this are eligible (default 60).
+                            flag_migration_candidates_in_project uses minScore 50, so no
+                            candidate is flagged below 50. 60 captures the simplest batch first.
+          dryRun          — when true, reports what would happen without writing files.
+
+        Returns BridgeBatchResult with:
+          Applied             — methods successfully bridged and written to disk.
+          Skipped             — methods that failed (each flagged NeedsManualReview).
+          RemainingCandidates — count of eligible [MigrationCandidate] methods still pending.
+          StopReason          — "batch_complete" | "budget_exhausted" | "no_candidates" | "dry_run".
+        """)]
+    public async Task<BridgeBatchResult> RunBridgeBatch(
+        string? projectName    = null,
+        int     maxBridges     = 10,
+        int     scoreThreshold = 60,
+        bool    dryRun         = false,
+        CancellationToken cancellationToken = default)
+        => await _asyncBatchEngine.RunBridgeBatchAsync(
+               projectName, maxBridges, scoreThreshold, dryRun, cancellationToken);
+
+    [McpServerTool]
+    [Description("""
+        Uplifts callers of an Asyncify-bridge sync wrapper to use the async overload directly.
+        Uses in-memory Roslyn compilation for validation — no MSBuild required.
+        For each caller of the named bridged method:
+          1. Bridges the caller (convert_to_async_bridge) to create callerAsync(CancellationToken).
+          2. Rewrites the callerAsync body: bridgedMethod(args) → await bridgedMethodAsync(args, ct).
+          3. Validates in-memory.
+          4. On success: writes the file to disk.
+          5. On error: flags the caller [MigrationCandidate("NeedsManualReview")] and continues.
+
+        Parameters:
+          bridgedMethodName — name of the already-bridged sync method (e.g. "search").
+                              The async counterpart is assumed to be bridgedMethodName + "Async".
+          projectName       — restrict caller scan to one project (null = entire solution).
+          maxCallers        — max caller methods to process this call (default 10).
+          dryRun            — when true, reports what would happen without writing files.
+
+        Returns UpliftBatchResult with:
+          Uplifted         — callers successfully uplifted and written to disk.
+          Skipped          — callers that failed (each flagged NeedsManualReview where possible).
+          RemainingCallers — count of callers still pending after this batch.
+          StopReason       — "batch_complete" | "budget_exhausted" | "no_callers" | "dry_run".
+        """)]
+    public async Task<UpliftBatchResult> RunUpliftBatch(
+        string  bridgedMethodName,
+        string? projectName  = null,
+        int     maxCallers   = 10,
+        bool    dryRun       = false,
+        CancellationToken cancellationToken = default)
+        => await _asyncBatchEngine.RunUpliftBatchAsync(
+               bridgedMethodName, projectName, maxCallers, dryRun, cancellationToken);
 }
+

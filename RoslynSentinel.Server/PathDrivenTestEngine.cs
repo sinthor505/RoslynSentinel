@@ -1,7 +1,8 @@
+using System.Text;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Text;
 
 namespace RoslynSentinel.Server;
 
@@ -58,21 +59,27 @@ public class PathDrivenTestEngine
             .FirstOrDefault();
 
         if (document == null)
+        {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
                 $"// Error: File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
+        {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
                 "// Error: Could not parse syntax root.");
+        }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName)
             .ToList();
 
         if (methods.Count == 0)
+        {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],
                 $"// Error: Method '{methodName}' not found in {filePath}.");
+        }
 
         var method = methods.Count == 1
             ? methods[0]
@@ -154,60 +161,84 @@ public class PathDrivenTestEngine
             switch (node)
             {
                 case IfStatementSyntax ifStmt:
-                {
-                    var cond = ifStmt.Condition.ToString();
-                    if (seenConditions.Add(cond))
-                        points.Add(new DecisionPoint("If", cond, ifStmt.Else != null, []));
-                    break;
-                }
-                case SwitchStatementSyntax sw:
-                {
-                    var cond = sw.Expression.ToString();
-                    if (seenConditions.Add("switch:" + cond))
                     {
-                        var labels = sw.Sections
-                            .SelectMany(s => s.Labels)
-                            .Select(l => l.ToString().TrimEnd(':').Trim())
-                            .Where(l => l != "default")
-                            .ToList();
-                        points.Add(new DecisionPoint("Switch", cond, false, labels));
+                        var cond = ifStmt.Condition.ToString();
+                        if (seenConditions.Add(cond))
+                        {
+                            points.Add(new DecisionPoint("If", cond, ifStmt.Else != null, []));
+                        }
+
+                        break;
                     }
-                    break;
-                }
+                case SwitchStatementSyntax sw:
+                    {
+                        var cond = sw.Expression.ToString();
+                        if (seenConditions.Add("switch:" + cond))
+                        {
+                            var labels = sw.Sections
+                                .SelectMany(s => s.Labels)
+                                .Select(l => l.ToString().TrimEnd(':').Trim())
+                                .Where(l => l != "default")
+                                .ToList();
+                            points.Add(new DecisionPoint("Switch", cond, false, labels));
+                        }
+                        break;
+                    }
                 case ForEachStatementSyntax fe:
-                {
-                    var cond = fe.Expression.ToString();
-                    if (seenConditions.Add("foreach:" + cond))
-                        points.Add(new DecisionPoint("ForEach", cond, false, []));
-                    break;
-                }
+                    {
+                        var cond = fe.Expression.ToString();
+                        if (seenConditions.Add("foreach:" + cond))
+                        {
+                            points.Add(new DecisionPoint("ForEach", cond, false, []));
+                        }
+
+                        break;
+                    }
                 case ForStatementSyntax forStmt:
-                {
-                    if (!LoopTouchesVariablesOfInterest(forStmt, paramNames, returnIdentifiers))
+                    {
+                        if (!LoopTouchesVariablesOfInterest(forStmt, paramNames, returnIdentifiers))
+                        {
+                            break;
+                        }
+
+                        var cond = forStmt.Condition?.ToString() ?? "counter";
+                        if (seenConditions.Add("for:" + cond))
+                        {
+                            points.Add(new DecisionPoint("For", cond, false, []));
+                        }
+
                         break;
-                    var cond = forStmt.Condition?.ToString() ?? "counter";
-                    if (seenConditions.Add("for:" + cond))
-                        points.Add(new DecisionPoint("For", cond, false, []));
-                    break;
-                }
+                    }
                 case WhileStatementSyntax whileStmt:
-                {
-                    if (!LoopTouchesVariablesOfInterest(whileStmt, paramNames, returnIdentifiers))
+                    {
+                        if (!LoopTouchesVariablesOfInterest(whileStmt, paramNames, returnIdentifiers))
+                        {
+                            break;
+                        }
+
+                        var cond = whileStmt.Condition.ToString();
+                        if (seenConditions.Add("while:" + cond))
+                        {
+                            points.Add(new DecisionPoint("While", cond, false, []));
+                        }
+
                         break;
-                    var cond = whileStmt.Condition.ToString();
-                    if (seenConditions.Add("while:" + cond))
-                        points.Add(new DecisionPoint("While", cond, false, []));
-                    break;
-                }
+                    }
                 case DoStatementSyntax doStmt:
-                {
-                    if (!LoopTouchesVariablesOfInterest(doStmt, paramNames, returnIdentifiers))
+                    {
+                        if (!LoopTouchesVariablesOfInterest(doStmt, paramNames, returnIdentifiers))
+                        {
+                            break;
+                        }
+
+                        var cond = doStmt.Condition.ToString();
+                        if (seenConditions.Add("do:" + cond))
+                        {
+                            points.Add(new DecisionPoint("DoWhile", cond, false, []));
+                        }
+
                         break;
-                    var cond = doStmt.Condition.ToString();
-                    if (seenConditions.Add("do:" + cond))
-                        points.Add(new DecisionPoint("DoWhile", cond, false, []));
-                    break;
-                }
+                    }
             }
         }
 
@@ -236,14 +267,16 @@ public class PathDrivenTestEngine
         // Incoming: loop condition references a method parameter
         var conditionText = loop switch
         {
-            ForStatementSyntax f   => f.Condition?.ToString() ?? "",
+            ForStatementSyntax f => f.Condition?.ToString() ?? "",
             WhileStatementSyntax w => w.Condition.ToString(),
-            DoStatementSyntax d    => d.Condition.ToString(),
-            _                      => ""
+            DoStatementSyntax d => d.Condition.ToString(),
+            _ => ""
         };
 
         if (paramNames.Any(p => conditionText.Contains(p, StringComparison.Ordinal)))
+        {
             return true;
+        }
 
         // For 'for' loops also check the initializer, then stop — no outgoing check.
         // A for loop with a constant bound (no param ref) is deterministic: the iteration
@@ -259,8 +292,8 @@ public class PathDrivenTestEngine
         var loopBody = loop switch
         {
             WhileStatementSyntax w => w.Statement,
-            DoStatementSyntax d    => d.Statement,
-            _                      => null
+            DoStatementSyntax d => d.Statement,
+            _ => null
         };
 
         if (loopBody != null && returnIdentifiers.Count > 0)
@@ -272,7 +305,9 @@ public class PathDrivenTestEngine
                 .Select(id => id.Identifier.Text);
 
             if (writtenInLoop.Any(v => returnIdentifiers.Contains(v)))
+            {
                 return true;
+            }
         }
 
         return false;
@@ -312,8 +347,10 @@ public class PathDrivenTestEngine
                 foreach (var call in calls)
                 {
                     if (call.Expression is MemberAccessExpressionSyntax ma2)
+                    {
                         arrange.AppendLine(
                             $"            // TODO: {mockField}.Setup(m => m.{ma2.Name.Identifier.Text}(...)).ReturnsAsync(...);");
+                    }
                 }
             }
         }
@@ -356,163 +393,163 @@ public class PathDrivenTestEngine
         switch (dp.Kind)
         {
             case "If":
-            {
-                var (trueParam, trueVal) = InferConstraint(dp.Condition, true, methodParams);
-                if (trueParam != null)
                 {
-                    cases.Add(new PathDrivenTestCase(
-                        $"{methodName}_{SanitizeName(dp.Condition)}_IsTrue_{offset + cases.Count + 1}",
-                        $"Condition '{shortCond}' evaluates to true",
-                        [new PathInputConstraint(trueParam, "satisfies true branch", trueVal)],
-                        "Takes the if-body branch",
-                        $"            // TODO: Arrange so '{shortCond}' is true" +
-                        (trueVal != null && !trueVal.StartsWith("//")
-                            ? $"\n            // Suggested: {trueParam} = {trueVal}" : ""),
-                        $"            {await_}_sut.{methodName}({paramList});",
-                        $"            // TODO: Assert behavior when '{shortCond}' is true"));
-                }
-
-                if (dp.HasElse)
-                {
-                    var (falseParam, falseVal) = InferConstraint(dp.Condition, false, methodParams);
-                    if (falseParam != null)
+                    var (trueParam, trueVal) = InferConstraint(dp.Condition, true, methodParams);
+                    if (trueParam != null)
                     {
                         cases.Add(new PathDrivenTestCase(
-                            $"{methodName}_{SanitizeName(dp.Condition)}_IsFalse_{offset + cases.Count + 1}",
-                            $"Condition '{shortCond}' evaluates to false — takes else branch",
-                            [new PathInputConstraint(falseParam, "satisfies false/else branch", falseVal)],
-                            "Takes the else branch",
-                            $"            // TODO: Arrange so '{shortCond}' is false" +
-                            (falseVal != null && !falseVal.StartsWith("//")
-                                ? $"\n            // Suggested: {falseParam} = {falseVal}" : ""),
+                            $"{methodName}_{SanitizeName(dp.Condition)}_IsTrue_{offset + cases.Count + 1}",
+                            $"Condition '{shortCond}' evaluates to true",
+                            [new PathInputConstraint(trueParam, "satisfies true branch", trueVal)],
+                            "Takes the if-body branch",
+                            $"            // TODO: Arrange so '{shortCond}' is true" +
+                            (trueVal != null && !trueVal.StartsWith("//")
+                                ? $"\n            // Suggested: {trueParam} = {trueVal}" : ""),
                             $"            {await_}_sut.{methodName}({paramList});",
-                            $"            // TODO: Assert behavior when '{shortCond}' is false"));
+                            $"            // TODO: Assert behavior when '{shortCond}' is true"));
                     }
+
+                    if (dp.HasElse)
+                    {
+                        var (falseParam, falseVal) = InferConstraint(dp.Condition, false, methodParams);
+                        if (falseParam != null)
+                        {
+                            cases.Add(new PathDrivenTestCase(
+                                $"{methodName}_{SanitizeName(dp.Condition)}_IsFalse_{offset + cases.Count + 1}",
+                                $"Condition '{shortCond}' evaluates to false — takes else branch",
+                                [new PathInputConstraint(falseParam, "satisfies false/else branch", falseVal)],
+                                "Takes the else branch",
+                                $"            // TODO: Arrange so '{shortCond}' is false" +
+                                (falseVal != null && !falseVal.StartsWith("//")
+                                    ? $"\n            // Suggested: {falseParam} = {falseVal}" : ""),
+                                $"            {await_}_sut.{methodName}({paramList});",
+                                $"            // TODO: Assert behavior when '{shortCond}' is false"));
+                        }
+                    }
+                    break;
                 }
-                break;
-            }
 
             case "Switch":
-            {
-                foreach (var label in dp.Cases.Take(5))
                 {
-                    cases.Add(new PathDrivenTestCase(
-                        $"{methodName}_{SanitizeName(dp.Condition)}_{SanitizeName(label)}_{offset + cases.Count + 1}",
-                        $"Switch on '{dp.Condition}' — case {label}",
-                        [new PathInputConstraint(dp.Condition, $"equals {label}", label)],
-                        $"Executes case {label} branch",
-                        $"            // TODO: Arrange so '{dp.Condition}' equals {label}",
-                        $"            {await_}_sut.{methodName}({paramList});",
-                        $"            // TODO: Assert behavior for case {label}"));
+                    foreach (var label in dp.Cases.Take(5))
+                    {
+                        cases.Add(new PathDrivenTestCase(
+                            $"{methodName}_{SanitizeName(dp.Condition)}_{SanitizeName(label)}_{offset + cases.Count + 1}",
+                            $"Switch on '{dp.Condition}' — case {label}",
+                            [new PathInputConstraint(dp.Condition, $"equals {label}", label)],
+                            $"Executes case {label} branch",
+                            $"            // TODO: Arrange so '{dp.Condition}' equals {label}",
+                            $"            {await_}_sut.{methodName}({paramList});",
+                            $"            // TODO: Assert behavior for case {label}"));
+                    }
+                    break;
                 }
-                break;
-            }
 
             case "ForEach":
-            {
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_EmptyCollection_{offset + cases.Count + 1}",
-                    $"ForEach over '{dp.Condition}' — empty collection, loop body never executes",
-                    [new PathInputConstraint(dp.Condition, "empty collection", "[]")],
-                    "Loop body is skipped entirely",
-                    $"            // TODO: Arrange so '{dp.Condition}' is empty",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert behavior when collection is empty (e.g. no side-effects)"));
+                {
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_EmptyCollection_{offset + cases.Count + 1}",
+                        $"ForEach over '{dp.Condition}' — empty collection, loop body never executes",
+                        [new PathInputConstraint(dp.Condition, "empty collection", "[]")],
+                        "Loop body is skipped entirely",
+                        $"            // TODO: Arrange so '{dp.Condition}' is empty",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert behavior when collection is empty (e.g. no side-effects)"));
 
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_WithItems_{offset + cases.Count + 1}",
-                    $"ForEach over '{dp.Condition}' — collection has items, loop body executes",
-                    [new PathInputConstraint(dp.Condition, "collection with at least one item", "[item]")],
-                    "Loop body executes at least once",
-                    $"            // TODO: Arrange so '{dp.Condition}' has at least one item",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert loop body effect (e.g. item processed)"));
-                break;
-            }
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_WithItems_{offset + cases.Count + 1}",
+                        $"ForEach over '{dp.Condition}' — collection has items, loop body executes",
+                        [new PathInputConstraint(dp.Condition, "collection with at least one item", "[item]")],
+                        "Loop body executes at least once",
+                        $"            // TODO: Arrange so '{dp.Condition}' has at least one item",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert loop body effect (e.g. item processed)"));
+                    break;
+                }
 
             case "For":
-            {
-                // Zero iterations: condition false on entry (boundary at 0)
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_ZeroIterations_{offset + cases.Count + 1}",
-                    $"For loop '{shortCond}' — condition false on entry, body never executes",
-                    [new PathInputConstraint(dp.Condition, "loop bound = 0 so condition is false immediately", "0")],
-                    "Loop body never runs; result is the initial/default value",
-                    $"            // TODO: Arrange so '{shortCond}' is false on first evaluation\n" +
-                    $"            // e.g. set the upper-bound variable to 0",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert the result equals the identity/default (e.g. 0, empty, null)"));
+                {
+                    // Zero iterations: condition false on entry (boundary at 0)
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_ZeroIterations_{offset + cases.Count + 1}",
+                        $"For loop '{shortCond}' — condition false on entry, body never executes",
+                        [new PathInputConstraint(dp.Condition, "loop bound = 0 so condition is false immediately", "0")],
+                        "Loop body never runs; result is the initial/default value",
+                        $"            // TODO: Arrange so '{shortCond}' is false on first evaluation\n" +
+                        $"            // e.g. set the upper-bound variable to 0",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert the result equals the identity/default (e.g. 0, empty, null)"));
 
-                // One iteration: boundary test — condition true exactly once
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_OneIteration_{offset + cases.Count + 1}",
-                    $"For loop '{shortCond}' — condition true exactly once (single-element boundary)",
-                    [new PathInputConstraint(dp.Condition, "loop bound = 1 so body executes once", "1")],
-                    "Loop body runs exactly once; good for single-element boundary validation",
-                    $"            // TODO: Arrange so '{shortCond}' allows exactly one iteration\n" +
-                    $"            // e.g. set the upper-bound variable to 1",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result for single-element input"));
+                    // One iteration: boundary test — condition true exactly once
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_OneIteration_{offset + cases.Count + 1}",
+                        $"For loop '{shortCond}' — condition true exactly once (single-element boundary)",
+                        [new PathInputConstraint(dp.Condition, "loop bound = 1 so body executes once", "1")],
+                        "Loop body runs exactly once; good for single-element boundary validation",
+                        $"            // TODO: Arrange so '{shortCond}' allows exactly one iteration\n" +
+                        $"            // e.g. set the upper-bound variable to 1",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result for single-element input"));
 
-                // Multiple iterations: representative working case
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_MultipleIterations_{offset + cases.Count + 1}",
-                    $"For loop '{shortCond}' — multiple iterations (N > 1)",
-                    [new PathInputConstraint(dp.Condition, "loop bound > 1", "3 or more")],
-                    "Loop body runs N times; result accumulates across all iterations",
-                    $"            // TODO: Arrange so '{shortCond}' allows multiple iterations",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result reflects all N iterations (e.g. sum, transformed list)"));
-                break;
-            }
+                    // Multiple iterations: representative working case
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_MultipleIterations_{offset + cases.Count + 1}",
+                        $"For loop '{shortCond}' — multiple iterations (N > 1)",
+                        [new PathInputConstraint(dp.Condition, "loop bound > 1", "3 or more")],
+                        "Loop body runs N times; result accumulates across all iterations",
+                        $"            // TODO: Arrange so '{shortCond}' allows multiple iterations",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result reflects all N iterations (e.g. sum, transformed list)"));
+                    break;
+                }
 
             case "While":
-            {
-                // Never enters: condition false before first check
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_NeverEnters_{offset + cases.Count + 1}",
-                    $"While loop '{shortCond}' — condition false before first check, body never executes",
-                    [new PathInputConstraint(dp.Condition, "condition false immediately", "make condition evaluate to false")],
-                    "Loop is entirely skipped; result is the pre-loop value",
-                    $"            // TODO: Arrange so '{shortCond}' is false on first evaluation",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result equals initial/pre-loop value"));
+                {
+                    // Never enters: condition false before first check
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_NeverEnters_{offset + cases.Count + 1}",
+                        $"While loop '{shortCond}' — condition false before first check, body never executes",
+                        [new PathInputConstraint(dp.Condition, "condition false immediately", "make condition evaluate to false")],
+                        "Loop is entirely skipped; result is the pre-loop value",
+                        $"            // TODO: Arrange so '{shortCond}' is false on first evaluation",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result equals initial/pre-loop value"));
 
-                // Terminates after some iterations: condition eventually becomes false
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_Terminates_{offset + cases.Count + 1}",
-                    $"While loop '{shortCond}' — executes then terminates when condition becomes false",
-                    [new PathInputConstraint(dp.Condition, "condition true initially, false after N iterations", "finite input")],
-                    "Loop executes at least once and exits normally",
-                    $"            // TODO: Arrange so '{shortCond}' is true initially and becomes false after processing",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result reflects all processed iterations"));
-                break;
-            }
+                    // Terminates after some iterations: condition eventually becomes false
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_Terminates_{offset + cases.Count + 1}",
+                        $"While loop '{shortCond}' — executes then terminates when condition becomes false",
+                        [new PathInputConstraint(dp.Condition, "condition true initially, false after N iterations", "finite input")],
+                        "Loop executes at least once and exits normally",
+                        $"            // TODO: Arrange so '{shortCond}' is true initially and becomes false after processing",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result reflects all processed iterations"));
+                    break;
+                }
 
             case "DoWhile":
-            {
-                // Single pass: condition false immediately after first iteration
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_SinglePass_{offset + cases.Count + 1}",
-                    $"Do-while loop '{shortCond}' — body executes once, condition false on first check",
-                    [new PathInputConstraint(dp.Condition, "condition false after first pass", "make post-body condition false")],
-                    "Body runs exactly once (do-while always executes at least once)",
-                    $"            // TODO: Arrange so '{shortCond}' evaluates to false after the first iteration",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result reflects exactly one iteration"));
+                {
+                    // Single pass: condition false immediately after first iteration
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_SinglePass_{offset + cases.Count + 1}",
+                        $"Do-while loop '{shortCond}' — body executes once, condition false on first check",
+                        [new PathInputConstraint(dp.Condition, "condition false after first pass", "make post-body condition false")],
+                        "Body runs exactly once (do-while always executes at least once)",
+                        $"            // TODO: Arrange so '{shortCond}' evaluates to false after the first iteration",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result reflects exactly one iteration"));
 
-                // Multiple passes: condition stays true for several iterations
-                cases.Add(new PathDrivenTestCase(
-                    $"{methodName}_{SanitizeName(dp.Condition)}_MultiplePasses_{offset + cases.Count + 1}",
-                    $"Do-while loop '{shortCond}' — body executes multiple times before condition becomes false",
-                    [new PathInputConstraint(dp.Condition, "condition true for N passes", "N > 1")],
-                    "Body runs N times; result accumulates across all passes",
-                    $"            // TODO: Arrange so '{shortCond}' stays true for multiple passes before exiting",
-                    $"            {await_}_sut.{methodName}({paramList});",
-                    $"            // TODO: Assert result reflects all N passes"));
-                break;
-            }
+                    // Multiple passes: condition stays true for several iterations
+                    cases.Add(new PathDrivenTestCase(
+                        $"{methodName}_{SanitizeName(dp.Condition)}_MultiplePasses_{offset + cases.Count + 1}",
+                        $"Do-while loop '{shortCond}' — body executes multiple times before condition becomes false",
+                        [new PathInputConstraint(dp.Condition, "condition true for N passes", "N > 1")],
+                        "Body runs N times; result accumulates across all passes",
+                        $"            // TODO: Arrange so '{shortCond}' stays true for multiple passes before exiting",
+                        $"            {await_}_sut.{methodName}({paramList});",
+                        $"            // TODO: Assert result reflects all N passes"));
+                    break;
+                }
         }
 
         return cases;
@@ -542,7 +579,7 @@ public class PathDrivenTestEngine
             return trueBranch ? (varName, "\"\"") : (varName, "\"validValue\"");
         }
         if (condition.Contains(".Count == 0") || condition.Contains(".Count() == 0")
-            || condition.Contains("!") && condition.Contains(".Any()"))
+            || (condition.Contains('!') && condition.Contains(".Any()")))
         {
             var varName = condition.TrimStart('!')
                 [..condition.TrimStart('!').IndexOf('.', StringComparison.Ordinal)].Trim();
@@ -601,7 +638,7 @@ public class PathDrivenTestEngine
         bool needsAsync)
     {
         var fw = framework.ToLowerInvariant();
-        var testAttr  = fw switch { "nunit" => "[Test]", "mstest" => "[TestMethod]", _ => "[Fact]" };
+        var testAttr = fw switch { "nunit" => "[Test]", "mstest" => "[TestMethod]", _ => "[Fact]" };
         var classAttr = fw switch { "nunit" => "[TestFixture]", "mstest" => "[TestClass]", _ => "" };
         var setupAttr = fw switch { "nunit" => "[SetUp]", "mstest" => "[TestInitialize]", _ => "" };
         var setupName = fw switch { "nunit" => "SetUp", "mstest" => "Initialize", _ => $"{className}_{methodName}_PathTests" };
@@ -610,14 +647,30 @@ public class PathDrivenTestEngine
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Threading.Tasks;");
         sb.AppendLine("using Moq;");
-        if (fw == "nunit")  sb.AppendLine("using NUnit.Framework;");
-        if (fw == "xunit")  sb.AppendLine("using Xunit;");
-        if (fw == "mstest") sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
+        if (fw == "nunit")
+        {
+            sb.AppendLine("using NUnit.Framework;");
+        }
+
+        if (fw == "xunit")
+        {
+            sb.AppendLine("using Xunit;");
+        }
+
+        if (fw == "mstest")
+        {
+            sb.AppendLine("using Microsoft.VisualStudio.TestTools.UnitTesting;");
+        }
+
         sb.AppendLine($"using {ns};");
         sb.AppendLine();
         sb.AppendLine($"namespace {ns}.Tests");
         sb.AppendLine("{");
-        if (!string.IsNullOrEmpty(classAttr)) sb.AppendLine($"    {classAttr}");
+        if (!string.IsNullOrEmpty(classAttr))
+        {
+            sb.AppendLine($"    {classAttr}");
+        }
+
         sb.AppendLine($"    public class {className}_{methodName}_PathTests");
         sb.AppendLine("    {");
 
@@ -629,7 +682,11 @@ public class PathDrivenTestEngine
         sb.AppendLine($"        private {className} _sut = null!;");
         sb.AppendLine();
 
-        if (!string.IsNullOrEmpty(setupAttr)) sb.AppendLine($"        {setupAttr}");
+        if (!string.IsNullOrEmpty(setupAttr))
+        {
+            sb.AppendLine($"        {setupAttr}");
+        }
+
         sb.AppendLine(fw == "xunit"
             ? $"        public {className}_{methodName}_PathTests()"
             : $"        public void {setupName}()");
@@ -650,7 +707,10 @@ public class PathDrivenTestEngine
             sb.AppendLine($"        // Scenario: {tc.ScenarioDescription}");
             sb.AppendLine($"        // Expected: {tc.ExpectedOutcome}");
             if (tc.Notes != null)
+            {
                 sb.AppendLine($"        // Note: {tc.Notes}");
+            }
+
             sb.AppendLine($"        {testAttr}");
             sb.AppendLine(needsAsync
                 ? $"        public async Task {tc.TestMethodName}()"
@@ -658,7 +718,10 @@ public class PathDrivenTestEngine
             sb.AppendLine("        {");
             sb.AppendLine("            // Arrange");
             if (!string.IsNullOrWhiteSpace(tc.ArrangeCode))
+            {
                 sb.AppendLine(tc.ArrangeCode);
+            }
+
             sb.AppendLine();
             sb.AppendLine("            // Act");
             sb.AppendLine(tc.ActCode);
@@ -679,14 +742,14 @@ public class PathDrivenTestEngine
     private static string InferHappyValue(string typeName, string paramName) =>
         typeName.TrimEnd('?') switch
         {
-            "string"                         => $"\"{paramName}Value\"",
-            "int" or "long" or "short"       => "1",
+            "string" => $"\"{paramName}Value\"",
+            "int" or "long" or "short" => "1",
             "double" or "float" or "decimal" => "1.0",
-            "bool"                           => "true",
-            "Guid"                           => "Guid.NewGuid()",
-            "DateTime"                       => "DateTime.UtcNow",
-            "DateTimeOffset"                 => "DateTimeOffset.UtcNow",
-            "CancellationToken"              => "CancellationToken.None",
+            "bool" => "true",
+            "Guid" => "Guid.NewGuid()",
+            "DateTime" => "DateTime.UtcNow",
+            "DateTimeOffset" => "DateTimeOffset.UtcNow",
+            "CancellationToken" => "CancellationToken.None",
             var t when t.StartsWith("List<") => $"new {t}()",
             var t when t.StartsWith("IEnumerable<") ||
                        t.StartsWith("IReadOnlyList<") =>
@@ -697,7 +760,7 @@ public class PathDrivenTestEngine
     private static string ExtractGenericArg(string typeName)
     {
         var start = typeName.IndexOf('<') + 1;
-        var end   = typeName.LastIndexOf('>');
+        var end = typeName.LastIndexOf('>');
         return start > 0 && end > start ? typeName[start..end] : "object";
     }
 

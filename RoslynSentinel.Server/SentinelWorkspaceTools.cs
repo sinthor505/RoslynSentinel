@@ -1,6 +1,7 @@
-using System.Collections.Generic;
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -73,7 +74,11 @@ public class SentinelWorkspaceTools
         {
             var solution = await _workspaceManager.GetBranchedSolutionAsync();
             var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-            if (project == null) throw new InvalidOperationException($"Project '{projectName}' not found.");
+            if (project == null)
+            {
+                throw new InvalidOperationException($"Project '{projectName}' not found.");
+            }
+
             return project.Documents.Select(d => d.FilePath ?? d.Name).ToList();
         }
         catch (InvalidOperationException) { throw; }
@@ -203,7 +208,11 @@ public class SentinelWorkspaceTools
             var solution = await _workspaceManager.GetBranchedSolutionAsync();
             var document = solution.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-            if (document == null) throw new InvalidOperationException("File not found.");
+            if (document == null)
+            {
+                throw new InvalidOperationException("File not found.");
+            }
+
             var oldText = await document.GetTextAsync();
             var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
             // Use document.FilePath (absolute) as the key so ApplyProposedChangesAsync writes to

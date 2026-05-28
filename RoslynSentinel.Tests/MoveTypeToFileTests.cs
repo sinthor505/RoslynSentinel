@@ -1,7 +1,9 @@
 #pragma warning disable CS8618
-using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 using System.Text;
+
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
 
@@ -33,11 +35,11 @@ public class MoveTypeToFileTests
         }
         catch (Exception ex) when (ex.Data.Contains("Logs"))
         {
-            var logs = (List<string>)ex.Data["Logs"];
+            var logs = ex.Data["Logs"] as List<string>;
             var logMessage = new StringBuilder();
             logMessage.AppendLine($"Test failed with message: {ex.Message}");
             logMessage.AppendLine("--- Server-Side Logs ---");
-            logs.ForEach(l => logMessage.AppendLine(l));
+            logs?.ForEach(l => logMessage.AppendLine(l));
             logMessage.AppendLine("--------------------------");
             Assert.Fail(logMessage.ToString());
         }

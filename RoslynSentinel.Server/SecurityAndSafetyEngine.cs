@@ -33,10 +33,16 @@ public class SecurityAndSafetyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<SafetyIssue>();
+        if (root == null)
+        {
+            return new List<SafetyIssue>();
+        }
 
         // Use semantic model to determine source types for accurate exclusion of safe numeric casts
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -56,7 +62,10 @@ public class SecurityAndSafetyEngine
                 var sourceType = semanticModel.GetTypeInfo(cast.Expression, cancellationToken).Type;
                 bool sourceIsNumeric = sourceType is { IsValueType: true } &&
                     (NumericClrNames.Contains(sourceType.Name) || NumericKeywords.Contains(sourceType.Name));
-                if (sourceIsNumeric) continue; // e.g., (int)myDouble — safe narrowing/widening
+                if (sourceIsNumeric)
+                {
+                    continue; // e.g., (int)myDouble — safe narrowing/widening
+                }
             }
 
             var loc = cast.GetLocation().GetLineSpan().StartLinePosition;
@@ -71,10 +80,16 @@ public class SecurityAndSafetyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return new List<SafetyIssue>();
+        if (root == null)
+        {
+            return new List<SafetyIssue>();
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var issues = new List<SafetyIssue>();
@@ -89,30 +104,51 @@ public class SecurityAndSafetyEngine
         foreach (var method in candidates)
         {
             // Only public entry points need guards; private callers are trusted by convention
-            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+            if (!method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            {
+                continue;
+            }
 
             // Abstract/extern/partial methods have no body to analyse
             var body = method.Body;
             var exprBody = method.ExpressionBody?.Expression;
-            if (body == null && exprBody == null) continue;
+            if (body == null && exprBody == null)
+            {
+                continue;
+            }
 
             foreach (var param in method.ParameterList.Parameters)
             {
-                if (param.Type == null) continue;
+                if (param.Type == null)
+                {
+                    continue;
+                }
 
                 // Skip params arrays — they are never null (just empty)
-                if (param.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword))) continue;
+                if (param.Modifiers.Any(m => m.IsKind(SyntaxKind.ParamsKeyword)))
+                {
+                    continue;
+                }
 
                 // Skip explicitly nullable types (string?, IDisposable?) — nullable-by-contract
-                if (param.Type is NullableTypeSyntax) continue;
+                if (param.Type is NullableTypeSyntax)
+                {
+                    continue;
+                }
 
                 // Use the semantic model to confirm the type is a reference type
                 var typeSymbol = semanticModel?.GetTypeInfo(param.Type, cancellationToken).Type;
-                if (typeSymbol == null || !typeSymbol.IsReferenceType) continue;
+                if (typeSymbol == null || !typeSymbol.IsReferenceType)
+                {
+                    continue;
+                }
 
                 // Skip parameters that have a null default value (optional nullable parameters)
                 if (param.Default?.Value is LiteralExpressionSyntax defLit &&
-                    defLit.IsKind(SyntaxKind.NullLiteralExpression)) continue;
+                    defLit.IsKind(SyntaxKind.NullLiteralExpression))
+                {
+                    continue;
+                }
 
                 var paramName = param.Identifier.Text;
 
@@ -123,10 +159,16 @@ public class SecurityAndSafetyEngine
                 bool isUsed = bodyNode.DescendantNodes()
                     .OfType<IdentifierNameSyntax>()
                     .Any(id => id.Identifier.Text == paramName && !IsNameofExpression(id));
-                if (!isUsed) continue;
+                if (!isUsed)
+                {
+                    continue;
+                }
 
                 // Check for any form of null guard in the method body (block body only)
-                if (body != null && HasNullGuard(body, paramName)) continue;
+                if (body != null && HasNullGuard(body, paramName))
+                {
+                    continue;
+                }
 
                 // For expression-bodied methods: null-conditional access on the parameter is a guard
                 if (exprBody != null)
@@ -134,7 +176,10 @@ public class SecurityAndSafetyEngine
                     bool hasNullConditional = exprBody.DescendantNodesAndSelf()
                         .OfType<ConditionalAccessExpressionSyntax>()
                         .Any(ca => ca.Expression is IdentifierNameSyntax id && id.Identifier.Text == paramName);
-                    if (hasNullConditional) continue;
+                    if (hasNullConditional)
+                    {
+                        continue;
+                    }
                 }
 
                 var loc = param.GetLocation().GetLineSpan().StartLinePosition;
@@ -163,21 +208,38 @@ public class SecurityAndSafetyEngine
         // Pattern 1: if-statement with null equality / is-null pattern
         foreach (var ifStmt in body.DescendantNodes().OfType<IfStatementSyntax>())
         {
-            if (ConditionMentionsNullCheckOf(ifStmt.Condition, paramName)) return true;
+            if (ConditionMentionsNullCheckOf(ifStmt.Condition, paramName))
+            {
+                return true;
+            }
         }
 
         // Pattern 2: param ?? expr  (null-coalescing — param is checked for null and replaced)
         foreach (var coalesce in body.DescendantNodes().OfType<BinaryExpressionSyntax>())
         {
-            if (!coalesce.IsKind(SyntaxKind.CoalesceExpression)) continue;
-            if (coalesce.Left is IdentifierNameSyntax id && id.Identifier.Text == paramName) return true;
+            if (!coalesce.IsKind(SyntaxKind.CoalesceExpression))
+            {
+                continue;
+            }
+
+            if (coalesce.Left is IdentifierNameSyntax id && id.Identifier.Text == paramName)
+            {
+                return true;
+            }
         }
 
         // Pattern 3: param ??= expr
         foreach (var coalesceAssign in body.DescendantNodes().OfType<AssignmentExpressionSyntax>())
         {
-            if (!coalesceAssign.IsKind(SyntaxKind.CoalesceAssignmentExpression)) continue;
-            if (coalesceAssign.Left is IdentifierNameSyntax id && id.Identifier.Text == paramName) return true;
+            if (!coalesceAssign.IsKind(SyntaxKind.CoalesceAssignmentExpression))
+            {
+                continue;
+            }
+
+            if (coalesceAssign.Left is IdentifierNameSyntax id && id.Identifier.Text == paramName)
+            {
+                return true;
+            }
         }
 
         // Pattern 4: ArgumentNullException.ThrowIfNull / ThrowIfNullOrEmpty / ThrowIfNullOrWhiteSpace
@@ -196,7 +258,9 @@ public class SecurityAndSafetyEngine
                 if (args.Count > 0 &&
                     args[0].Expression is IdentifierNameSyntax argId &&
                     argId.Identifier.Text == paramName)
+                {
                     return true;
+                }
             }
         }
 
@@ -213,14 +277,19 @@ public class SecurityAndSafetyEngine
             bool rightIsParam = bin.Right is IdentifierNameSyntax r && r.Identifier.Text == paramName;
             bool leftIsNull = bin.Left is LiteralExpressionSyntax ll && ll.IsKind(SyntaxKind.NullLiteralExpression);
             bool rightIsNull = bin.Right is LiteralExpressionSyntax rl && rl.IsKind(SyntaxKind.NullLiteralExpression);
-            if ((leftIsParam && rightIsNull) || (rightIsParam && leftIsNull)) return true;
+            if ((leftIsParam && rightIsNull) || (rightIsParam && leftIsNull))
+            {
+                return true;
+            }
         }
 
         // Pattern matching: param is null / param is not null
         if (condition is IsPatternExpressionSyntax isPat &&
             isPat.Expression is IdentifierNameSyntax isId &&
             isId.Identifier.Text == paramName)
+        {
             return true;
+        }
 
         return false;
     }
@@ -247,37 +316,61 @@ public class SecurityAndSafetyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return [];
+        if (document == null)
+        {
+            return [];
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return [];
+        if (root == null)
+        {
+            return [];
+        }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
-        if (semanticModel == null) return [];
+        if (semanticModel == null)
+        {
+            return [];
+        }
 
         var issues = new List<SafetyIssue>();
 
         foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
-            if (method.Body == null && method.ExpressionBody == null) continue;
+            if (method.Body == null && method.ExpressionBody == null)
+            {
+                continue;
+            }
 
             // Collect all intermediate member-access expressions that are themselves accessed further
             // Pattern: X.Y.Z → flag X.Y if it could be null and isn't ?.-guarded
             foreach (var outerMa in method.DescendantNodes().OfType<MemberAccessExpressionSyntax>())
             {
                 // We want cases where outerMa.Expression is itself a MemberAccessExpressionSyntax
-                if (outerMa.Expression is not MemberAccessExpressionSyntax innerMa) continue;
+                if (outerMa.Expression is not MemberAccessExpressionSyntax innerMa)
+                {
+                    continue;
+                }
 
                 // If the inner access uses null-conditional, it's already guarded
                 if (outerMa.IsKind(SyntaxKind.SimpleMemberAccessExpression) &&
-                    outerMa.Parent is ConditionalAccessExpressionSyntax) continue;
+                    outerMa.Parent is ConditionalAccessExpressionSyntax)
+                {
+                    continue;
+                }
 
                 // Check if inner expression is already a conditional access (x?.y.z is fine for x?.y)
-                if (innerMa.Parent is ConditionalAccessExpressionSyntax) continue;
+                if (innerMa.Parent is ConditionalAccessExpressionSyntax)
+                {
+                    continue;
+                }
 
                 // Use semantic model to verify the inner type is a nullable reference type
                 var innerType = semanticModel.GetTypeInfo(innerMa, ct).Type;
-                if (innerType == null || !innerType.IsReferenceType) continue;
+                if (innerType == null || !innerType.IsReferenceType)
+                {
+                    continue;
+                }
 
                 // Check that there's no null guard for this expression in the method
                 var innerExprText = innerMa.ToString();
@@ -313,12 +406,18 @@ public class SecurityAndSafetyEngine
         {
             bool leftMatch = bin.Left.ToString() == exprText;
             bool rightMatch = bin.Right.ToString() == exprText;
-            bool hasNull = bin.Left is LiteralExpressionSyntax ll && ll.IsKind(SyntaxKind.NullLiteralExpression)
-                        || bin.Right is LiteralExpressionSyntax rl && rl.IsKind(SyntaxKind.NullLiteralExpression);
-            if ((leftMatch || rightMatch) && hasNull) return true;
+            bool hasNull = (bin.Left is LiteralExpressionSyntax ll && ll.IsKind(SyntaxKind.NullLiteralExpression))
+                        || (bin.Right is LiteralExpressionSyntax rl && rl.IsKind(SyntaxKind.NullLiteralExpression));
+            if ((leftMatch || rightMatch) && hasNull)
+            {
+                return true;
+            }
         }
         if (condition is IsPatternExpressionSyntax isPat && isPat.Expression.ToString() == exprText)
+        {
             return true;
+        }
+
         return false;
     }
 
@@ -334,10 +433,16 @@ public class SecurityAndSafetyEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return [];
+        if (document == null)
+        {
+            return [];
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return [];
+        if (root == null)
+        {
+            return [];
+        }
 
         var issues = new List<SafetyIssue>();
 
@@ -345,7 +450,10 @@ public class SecurityAndSafetyEngine
         {
             if (!binExpr.IsKind(SyntaxKind.AddExpression) &&
                 !binExpr.IsKind(SyntaxKind.SubtractExpression) &&
-                !binExpr.IsKind(SyntaxKind.MultiplyExpression)) continue;
+                !binExpr.IsKind(SyntaxKind.MultiplyExpression))
+            {
+                continue;
+            }
 
             bool involvesMaxMin = binExpr.DescendantNodesAndSelf()
                 .OfType<MemberAccessExpressionSyntax>()
@@ -353,12 +461,18 @@ public class SecurityAndSafetyEngine
                            ma.Expression.ToString() is "int" or "long" or "uint" or "ulong" or
                                                        "short" or "byte" or "Int32" or "Int64");
 
-            if (!involvesMaxMin) continue;
+            if (!involvesMaxMin)
+            {
+                continue;
+            }
 
             // If wrapped in checked { } — intentionally throws on overflow
             bool isChecked = binExpr.Ancestors().OfType<CheckedStatementSyntax>().Any() ||
                              binExpr.Ancestors().OfType<CheckedExpressionSyntax>().Any();
-            if (isChecked) continue;
+            if (isChecked)
+            {
+                continue;
+            }
 
             var loc = binExpr.GetLocation().GetLineSpan().StartLinePosition;
             issues.Add(new SafetyIssue(filePath, loc.Line + 1, loc.Character + 1,

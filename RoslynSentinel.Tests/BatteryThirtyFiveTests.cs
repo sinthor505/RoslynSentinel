@@ -1,10 +1,8 @@
 // Battery #35 — New features: extract_class internal caller rewriting, upgrade_to_file_scoped_namespace,
 // trace_variable_lifetime, get_type_hierarchy, find_cancellation_token_not_forwarded.
 
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -253,7 +251,9 @@ public class Looper
         // Declaration of x is inside foreach — IsInLoop should be true
         var decl = report.Accesses.FirstOrDefault(a => a.AccessKind == "Declaration");
         if (decl != null)
+        {
             Assert.That(decl.IsInLoop, Is.True, "Variable declared inside foreach should have IsInLoop=true");
+        }
     }
 
     [Test]
@@ -402,7 +402,7 @@ public class SyncService
 {
     public string GetSync(string s, CancellationToken ct)
     {
-        return s.ToUpper(); // sync, no async callees
+        return s.ToUpperInvariant(); // sync, no async callees
     }
 }";
         SetSource(src, "Sync.cs");

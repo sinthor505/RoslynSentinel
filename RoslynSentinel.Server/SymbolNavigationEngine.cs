@@ -156,7 +156,9 @@ public class SymbolNavigationEngine
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
+        {
             return ErrorHoverInfo($"File not found: '{filePath}'");
+        }
 
         // Primary: use GetDeclaredSymbol/GetSymbolInfo (declaration-based — more reliable for class/method/property lookups)
         ISymbol? symbol = null;
@@ -189,19 +191,25 @@ public class SymbolNavigationEngine
 
             var model = await document.GetSemanticModelAsync(ct);
             if (model == null)
+            {
                 return ErrorHoverInfo("Could not obtain semantic model for file.");
+            }
 
             // SymbolFinder needs the cursor on an identifier token
             var root = await document.GetSyntaxRootAsync(ct);
             if (root != null)
+            {
                 pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
+            }
 
             symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, ct);
         }
 
         if (symbol == null)
+        {
             return ErrorHoverInfo($"No symbol found at snippet '{contextSnippet}'. " +
                 "Try a snippet that includes the identifier directly (e.g. the method name or property name).");
+        }
 
         var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
         int? symLine = null;
@@ -222,8 +230,10 @@ public class SymbolNavigationEngine
                     @"<summary>\s*(.*?)\s*</summary>",
                     System.Text.RegularExpressions.RegexOptions.Singleline);
                 if (match.Success)
+                {
                     docSummary = System.Text.RegularExpressions.Regex.Replace(
                         match.Groups[1].Value.Trim(), @"\s+", " ");
+                }
             }
         }
         catch { }
@@ -232,28 +242,92 @@ public class SymbolNavigationEngine
         switch (symbol)
         {
             case IMethodSymbol ms:
-                if (ms.IsStatic) modifiers.Add("static");
-                if (ms.IsAsync) modifiers.Add("async");
-                if (ms.IsVirtual) modifiers.Add("virtual");
-                if (ms.IsOverride) modifiers.Add("override");
-                if (ms.IsAbstract) modifiers.Add("abstract");
-                if (ms.IsSealed) modifiers.Add("sealed");
+                if (ms.IsStatic)
+                {
+                    modifiers.Add("static");
+                }
+
+                if (ms.IsAsync)
+                {
+                    modifiers.Add("async");
+                }
+
+                if (ms.IsVirtual)
+                {
+                    modifiers.Add("virtual");
+                }
+
+                if (ms.IsOverride)
+                {
+                    modifiers.Add("override");
+                }
+
+                if (ms.IsAbstract)
+                {
+                    modifiers.Add("abstract");
+                }
+
+                if (ms.IsSealed)
+                {
+                    modifiers.Add("sealed");
+                }
+
                 break;
             case INamedTypeSymbol ts:
-                if (ts.IsStatic) modifiers.Add("static");
-                if (ts.IsAbstract) modifiers.Add("abstract");
-                if (ts.IsSealed) modifiers.Add("sealed");
+                if (ts.IsStatic)
+                {
+                    modifiers.Add("static");
+                }
+
+                if (ts.IsAbstract)
+                {
+                    modifiers.Add("abstract");
+                }
+
+                if (ts.IsSealed)
+                {
+                    modifiers.Add("sealed");
+                }
+
                 break;
             case IPropertySymbol ps:
-                if (ps.IsStatic) modifiers.Add("static");
-                if (ps.IsReadOnly) modifiers.Add("readonly");
-                if (ps.IsVirtual) modifiers.Add("virtual");
-                if (ps.IsOverride) modifiers.Add("override");
+                if (ps.IsStatic)
+                {
+                    modifiers.Add("static");
+                }
+
+                if (ps.IsReadOnly)
+                {
+                    modifiers.Add("readonly");
+                }
+
+                if (ps.IsVirtual)
+                {
+                    modifiers.Add("virtual");
+                }
+
+                if (ps.IsOverride)
+                {
+                    modifiers.Add("override");
+                }
+
                 break;
             case IFieldSymbol fs:
-                if (fs.IsStatic) modifiers.Add("static");
-                if (fs.IsReadOnly) modifiers.Add("readonly");
-                if (fs.IsConst) modifiers.Add("const");
+                if (fs.IsStatic)
+                {
+                    modifiers.Add("static");
+                }
+
+                if (fs.IsReadOnly)
+                {
+                    modifiers.Add("readonly");
+                }
+
+                if (fs.IsConst)
+                {
+                    modifiers.Add("const");
+                }
+
                 break;
         }
 
@@ -311,15 +385,25 @@ public class SymbolNavigationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             targetSymbol = compilation
                 .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
-            if (targetSymbol != null) break;
+            if (targetSymbol != null)
+            {
+                break;
+            }
         }
 
-        if (targetSymbol == null) return new List<ImplementationInfo>();
+        if (targetSymbol == null)
+        {
+            return new List<ImplementationInfo>();
+        }
 
         var results = new List<ImplementationInfo>();
 
@@ -345,7 +429,11 @@ public class SymbolNavigationEngine
             var derived = await SymbolFinder.FindDerivedClassesAsync(targetSymbol, solution, null, ct);
             foreach (var d in derived)
             {
-                if (results.Any(r => r.TypeName == d.ToDisplayString())) continue;
+                if (results.Any(r => r.TypeName == d.ToDisplayString()))
+                {
+                    continue;
+                }
+
                 var loc = d.Locations.FirstOrDefault(l => l.IsInSource);
                 results.Add(new ImplementationInfo(
                     TypeName: d.ToDisplayString(),
@@ -372,15 +460,25 @@ public class SymbolNavigationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             typeSymbol = compilation
                 .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
-            if (typeSymbol != null) break;
+            if (typeSymbol != null)
+            {
+                break;
+            }
         }
 
-        if (typeSymbol == null) return new List<TypeMemberDetail>();
+        if (typeSymbol == null)
+        {
+            return new List<TypeMemberDetail>();
+        }
 
         var results = new List<TypeMemberDetail>();
         var seen = new HashSet<string>();
@@ -400,10 +498,16 @@ public class SymbolNavigationEngine
         {
             foreach (var member in type.GetMembers().Where(m => !m.IsImplicitlyDeclared))
             {
-                if (!isTarget && member.DeclaredAccessibility == Accessibility.Private) continue;
+                if (!isTarget && member.DeclaredAccessibility == Accessibility.Private)
+                {
+                    continue;
+                }
 
                 var sig = member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                if (!seen.Add(member.Name + sig)) continue;
+                if (!seen.Add(member.Name + sig))
+                {
+                    continue;
+                }
 
                 var loc = member.Locations.FirstOrDefault(l => l.IsInSource);
                 var isOverride = member switch
@@ -446,15 +550,25 @@ public class SymbolNavigationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             interfaceSymbol = compilation
                 .GetSymbolsWithName(interfaceName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
-            if (interfaceSymbol != null) break;
+            if (interfaceSymbol != null)
+            {
+                break;
+            }
         }
 
-        if (interfaceSymbol == null) return new List<InterfaceImplementorCoverage>();
+        if (interfaceSymbol == null)
+        {
+            return new List<InterfaceImplementorCoverage>();
+        }
 
         var interfaceMembers = interfaceSymbol.GetMembers()
             .Where(m => !m.IsImplicitlyDeclared)
@@ -501,12 +615,19 @@ public class SymbolNavigationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             var typeSymbol = compilation
                 .GetSymbolsWithName(targetTypeName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
-            if (typeSymbol == null) continue;
+            if (typeSymbol == null)
+            {
+                continue;
+            }
 
             var bt = typeSymbol.BaseType;
             while (bt != null && bt.SpecialType != SpecialType.System_Object)
@@ -531,7 +652,10 @@ public class SymbolNavigationEngine
             foreach (var document in project.Documents)
             {
                 var root = await document.GetSyntaxRootAsync(ct);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 // Syntax-level pre-filter: only look at static classes
                 var staticClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -550,19 +674,30 @@ public class SymbolNavigationEngine
                         var receiverTypeSyntax = method.ParameterList.Parameters[0].Type?.ToString() ?? "";
                         var receiverSimpleName = receiverTypeSyntax.Split('.').Last().Split('<').First();
                         if (!targetTypeNames.Contains(receiverSimpleName) && !targetTypeNames.Contains(receiverTypeSyntax))
+                        {
                             continue;
+                        }
 
                         hasExtMethods = true;
                         break;
                     }
-                    if (hasExtMethods) break;
+                    if (hasExtMethods)
+                    {
+                        break;
+                    }
                 }
 
-                if (!hasExtMethods) continue;
+                if (!hasExtMethods)
+                {
+                    continue;
+                }
 
                 // Load semantic model only for documents that have matching extension methods
                 var model = await document.GetSemanticModelAsync(ct);
-                if (model == null) continue;
+                if (model == null)
+                {
+                    continue;
+                }
 
                 foreach (var classDecl in staticClasses)
                 {
@@ -572,14 +707,23 @@ public class SymbolNavigationEngine
                             && m.ParameterList.Parameters[0].Modifiers.Any(mod => mod.IsKind(SyntaxKind.ThisKeyword))))
                     {
                         var methodSymbol = model.GetDeclaredSymbol(method, ct) as IMethodSymbol;
-                        if (methodSymbol == null || !methodSymbol.IsExtensionMethod) continue;
+                        if (methodSymbol == null || !methodSymbol.IsExtensionMethod)
+                        {
+                            continue;
+                        }
 
                         var receiverType = methodSymbol.Parameters[0].Type;
                         if (!targetTypeNames.Contains(receiverType.Name) &&
-                            !targetTypeNames.Contains(receiverType.ToDisplayString())) continue;
+                            !targetTypeNames.Contains(receiverType.ToDisplayString()))
+                        {
+                            continue;
+                        }
 
                         var sig = methodSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                        if (!seen.Add(sig)) continue;
+                        if (!seen.Add(sig))
+                        {
+                            continue;
+                        }
 
                         var loc = methodSymbol.Locations.FirstOrDefault(l => l.IsInSource);
                         results.Add(new ExtensionMethodInfo(
@@ -605,10 +749,16 @@ public class SymbolNavigationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new List<ReadonlyFieldCandidate>();
+        if (document == null)
+        {
+            return new List<ReadonlyFieldCandidate>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
-        if (root == null) return new List<ReadonlyFieldCandidate>();
+        if (root == null)
+        {
+            return new List<ReadonlyFieldCandidate>();
+        }
 
         var results = new List<ReadonlyFieldCandidate>();
 
@@ -666,23 +816,38 @@ public class SymbolNavigationEngine
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return null;
+        if (document == null)
+        {
+            return null;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return null;
+        if (root == null)
+        {
+            return null;
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
-        if (model == null) return null;
+        if (model == null)
+        {
+            return null;
+        }
 
         // Prefer class method over interface method when both exist in the same file
         var methodDecls = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
         var methodDecl = methodDecls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
             ?? methodDecls.FirstOrDefault();
-        if (methodDecl == null) return null;
+        if (methodDecl == null)
+        {
+            return null;
+        }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
-        if (methodSymbol == null) return null;
+        if (methodSymbol == null)
+        {
+            return null;
+        }
 
         var visited = new HashSet<string>();
         return await BuildCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, ct);
@@ -711,10 +876,16 @@ public class SymbolNavigationEngine
         var fullKey = method.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
             + "@" + (filePath ?? string.Empty) + ":" + (line?.ToString() ?? "?");
 
-        if (depth >= maxDepth || !visited.Add(fullKey)) return node;
+        if (depth >= maxDepth || !visited.Add(fullKey))
+        {
+            return node;
+        }
 
         var syntaxRef = method.DeclaringSyntaxReferences.FirstOrDefault();
-        if (syntaxRef == null) return node;
+        if (syntaxRef == null)
+        {
+            return node;
+        }
 
         var syntax = await syntaxRef.GetSyntaxAsync(ct);
         SyntaxNode? body = syntax switch
@@ -723,7 +894,10 @@ public class SymbolNavigationEngine
             LocalFunctionStatementSyntax lfs => (SyntaxNode?)lfs.Body ?? lfs.ExpressionBody,
             _ => null
         };
-        if (body == null) return node;
+        if (body == null)
+        {
+            return node;
+        }
 
         Document? methodDoc = null;
         if (filePath != null)
@@ -731,10 +905,16 @@ public class SymbolNavigationEngine
             methodDoc = solution.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => d.FilePath == filePath);
         }
-        if (methodDoc == null) return node;
+        if (methodDoc == null)
+        {
+            return node;
+        }
 
         var model = await methodDoc.GetSemanticModelAsync(ct);
-        if (model == null) return node;
+        if (model == null)
+        {
+            return node;
+        }
 
         var seenCallees = new HashSet<string>();
         foreach (var invocation in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -742,11 +922,21 @@ public class SymbolNavigationEngine
             var si = model.GetSymbolInfo(invocation, ct);
             var callee = si.Symbol as IMethodSymbol
                 ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
-            if (callee == null) continue;
-            if (!callee.Locations.Any(l => l.IsInSource)) continue;
+            if (callee == null)
+            {
+                continue;
+            }
+
+            if (!callee.Locations.Any(l => l.IsInSource))
+            {
+                continue;
+            }
 
             var calleeKey = callee.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-            if (!seenCallees.Add(calleeKey)) continue; // deduplicate at this level
+            if (!seenCallees.Add(calleeKey))
+            {
+                continue; // deduplicate at this level
+            }
 
             var calleeNode = await BuildCallGraphNodeAsync(callee, solution, depth + 1, maxDepth, visited, ct);
             node.Callees.Add(calleeNode);
@@ -765,23 +955,38 @@ public class SymbolNavigationEngine
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return null;
+        if (document == null)
+        {
+            return null;
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) return null;
+        if (root == null)
+        {
+            return null;
+        }
 
         var model = await document.GetSemanticModelAsync(ct);
-        if (model == null) return null;
+        if (model == null)
+        {
+            return null;
+        }
 
         // Prefer class method over interface method when both exist in the same file
         var methodDecls2 = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName).ToList();
         var methodDecl = methodDecls2.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
             ?? methodDecls2.FirstOrDefault();
-        if (methodDecl == null) return null;
+        if (methodDecl == null)
+        {
+            return null;
+        }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
-        if (methodSymbol == null) return null;
+        if (methodSymbol == null)
+        {
+            return null;
+        }
 
         var visited = new HashSet<string>();
         return await BuildReverseCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, ct);
@@ -810,7 +1015,10 @@ public class SymbolNavigationEngine
         var fullKey = method.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
             + "@" + (filePath ?? string.Empty) + ":" + (line?.ToString() ?? "?");
 
-        if (depth >= maxDepth || !visited.Add(fullKey)) return node;
+        if (depth >= maxDepth || !visited.Add(fullKey))
+        {
+            return node;
+        }
 
         // Search direct references to this method AND any corresponding interface method declarations.
         // This ensures callers that use the interface type (e.g. IService.Method()) are included.
@@ -840,25 +1048,47 @@ public class SymbolNavigationEngine
         {
             foreach (var location in referencedSymbol.Locations)
             {
-                if (!location.Location.IsInSource) continue;
+                if (!location.Location.IsInSource)
+                {
+                    continue;
+                }
 
                 var refTree = location.Location.SourceTree;
-                if (refTree == null) continue;
+                if (refTree == null)
+                {
+                    continue;
+                }
 
                 var refDoc = solution.Projects.SelectMany(p => p.Documents)
                     .FirstOrDefault(d => d.FilePath == refTree.FilePath);
-                if (refDoc == null) continue;
+                if (refDoc == null)
+                {
+                    continue;
+                }
 
                 var refModel = await refDoc.GetSemanticModelAsync(ct);
-                if (refModel == null) continue;
+                if (refModel == null)
+                {
+                    continue;
+                }
 
                 var pos = location.Location.SourceSpan.Start;
                 var callerSymbol = refModel.GetEnclosingSymbol(pos, ct) as IMethodSymbol;
-                if (callerSymbol == null) continue;
-                if (!callerSymbol.Locations.Any(l => l.IsInSource)) continue;
+                if (callerSymbol == null)
+                {
+                    continue;
+                }
+
+                if (!callerSymbol.Locations.Any(l => l.IsInSource))
+                {
+                    continue;
+                }
 
                 var callerKey = callerSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
-                if (!seenCallers.Add(callerKey)) continue;
+                if (!seenCallers.Add(callerKey))
+                {
+                    continue;
+                }
 
                 var callerNode = await BuildReverseCallGraphNodeAsync(callerSymbol, solution, depth + 1, maxDepth, visited, ct);
                 node.Callers.Add(callerNode);
@@ -885,11 +1115,17 @@ public class SymbolNavigationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new List<CallerInfo>();
+        if (document == null)
+        {
+            return new List<CallerInfo>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
-        if (root == null || model == null) return new List<CallerInfo>();
+        if (root == null || model == null)
+        {
+            return new List<CallerInfo>();
+        }
 
         ISymbol? symbol = null;
         if (contextSnippet != null)
@@ -911,10 +1147,15 @@ public class SymbolNavigationEngine
             var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
                 ?? decls.FirstOrDefault();
             if (decl != null)
+            {
                 symbol = model.GetDeclaredSymbol(decl, ct);
+            }
         }
 
-        if (symbol == null) return new List<CallerInfo>();
+        if (symbol == null)
+        {
+            return new List<CallerInfo>();
+        }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
         var results = new List<CallerInfo>();
@@ -924,26 +1165,45 @@ public class SymbolNavigationEngine
         {
             foreach (var location in refGroup.Locations)
             {
-                if (!location.Location.IsInSource) continue;
+                if (!location.Location.IsInSource)
+                {
+                    continue;
+                }
+
                 var refTree = location.Location.SourceTree;
-                if (refTree == null) continue;
+                if (refTree == null)
+                {
+                    continue;
+                }
 
                 var refDoc = solution.Projects.SelectMany(p => p.Documents)
                     .FirstOrDefault(d => d.FilePath == refTree.FilePath);
-                if (refDoc == null) continue;
+                if (refDoc == null)
+                {
+                    continue;
+                }
 
                 var refModel = await refDoc.GetSemanticModelAsync(ct);
-                if (refModel == null) continue;
+                if (refModel == null)
+                {
+                    continue;
+                }
 
                 var pos = location.Location.SourceSpan.Start;
                 var enclosing = refModel.GetEnclosingSymbol(pos, ct);
-                if (enclosing == null) continue;
+                if (enclosing == null)
+                {
+                    continue;
+                }
 
                 var lineSpan = location.Location.GetLineSpan();
                 var line = lineSpan.StartLinePosition.Line + 1;
 
                 var key = $"{refTree.FilePath}:{line}";
-                if (!seen.Add(key)) continue;
+                if (!seen.Add(key))
+                {
+                    continue;
+                }
 
                 var sourceText = await refDoc.GetTextAsync(ct);
                 var lineText = line <= sourceText.Lines.Count
@@ -980,11 +1240,17 @@ public class SymbolNavigationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null) return new List<ImplementationInfo>();
+        if (document == null)
+        {
+            return new List<ImplementationInfo>();
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var model = await document.GetSemanticModelAsync(ct);
-        if (root == null || model == null) return new List<ImplementationInfo>();
+        if (root == null || model == null)
+        {
+            return new List<ImplementationInfo>();
+        }
 
         ISymbol? symbol = null;
         if (contextSnippet != null)
@@ -1001,7 +1267,9 @@ public class SymbolNavigationEngine
                     _ => false
                 });
             if (decl != null)
+            {
                 symbol = model.GetDeclaredSymbol(decl, ct);
+            }
         }
 
         if (symbol == null)
@@ -1010,16 +1278,26 @@ public class SymbolNavigationEngine
             foreach (var project in solution.Projects)
             {
                 var compilation = await project.GetCompilationAsync(ct);
-                if (compilation == null) continue;
+                if (compilation == null)
+                {
+                    continue;
+                }
+
                 symbol = compilation
                     .GetSymbolsWithName(symbolName, SymbolFilter.Type, ct)
                     .OfType<INamedTypeSymbol>()
                     .FirstOrDefault();
-                if (symbol != null) break;
+                if (symbol != null)
+                {
+                    break;
+                }
             }
         }
 
-        if (symbol == null) return new List<ImplementationInfo>();
+        if (symbol == null)
+        {
+            return new List<ImplementationInfo>();
+        }
 
         var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, ct);
         var results = new List<ImplementationInfo>();
@@ -1052,16 +1330,22 @@ public class SymbolNavigationEngine
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
+        {
             return new VariableLifetimeReport { Error = $"File not found: '{filePath}'" };
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var semanticModel = await document.GetSemanticModelAsync(ct);
         if (root == null || semanticModel == null)
+        {
             return new VariableLifetimeReport { Error = "Could not obtain syntax tree or semantic model." };
+        }
 
         var text = await document.GetTextAsync(ct);
         if (lineNumber < 1 || lineNumber > text.Lines.Count)
+        {
             return new VariableLifetimeReport { Error = $"Line {lineNumber} is out of range." };
+        }
 
         // Find declaration node at/near the requested line
         var targetLineSpan = text.Lines[lineNumber - 1].Span;
@@ -1108,7 +1392,9 @@ public class SymbolNavigationEngine
         }
 
         if (symbol == null)
+        {
             return new VariableLifetimeReport { Error = $"Variable '{variableName}' not found near line {lineNumber}." };
+        }
 
         var declLoc = declNode?.GetLocation();
         var declLine = declLoc?.GetLineSpan().StartLinePosition.Line + 1 ?? lineNumber;
@@ -1170,7 +1456,11 @@ public class SymbolNavigationEngine
         {
             foreach (var loc in refGroup.Locations)
             {
-                if (!loc.Location.IsInSource) continue;
+                if (!loc.Location.IsInSource)
+                {
+                    continue;
+                }
+
                 var lineSpan = loc.Location.GetLineSpan();
                 var refLine = lineSpan.StartLinePosition.Line + 1;
                 var refCol = lineSpan.StartLinePosition.Character + 1;
@@ -1179,10 +1469,16 @@ public class SymbolNavigationEngine
                 // Determine access kind from surrounding AST
                 var refDoc = solution.Projects.SelectMany(p => p.Documents)
                     .FirstOrDefault(d => d.FilePath == refFilePath);
-                if (refDoc == null) continue;
+                if (refDoc == null)
+                {
+                    continue;
+                }
 
                 var refRoot = await refDoc.GetSyntaxRootAsync(ct);
-                if (refRoot == null) continue;
+                if (refRoot == null)
+                {
+                    continue;
+                }
 
                 var tokenNode = refRoot.FindToken(loc.Location.SourceSpan.Start).Parent;
                 string accessKind = DetermineAccessKind(tokenNode, variableName);
@@ -1221,41 +1517,66 @@ public class SymbolNavigationEngine
 
     private static string DetermineAccessKind(SyntaxNode? node, string varName)
     {
-        if (node == null) return "Read";
+        if (node == null)
+        {
+            return "Read";
+        }
 
         // ref/out argument
         var argList = node.Ancestors().OfType<ArgumentSyntax>().FirstOrDefault();
         if (argList != null)
         {
-            if (argList.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)) return "Ref";
-            if (argList.RefKindKeyword.IsKind(SyntaxKind.OutKeyword)) return "Out";
+            if (argList.RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
+            {
+                return "Ref";
+            }
+
+            if (argList.RefKindKeyword.IsKind(SyntaxKind.OutKeyword))
+            {
+                return "Out";
+            }
         }
 
         // return statement
-        if (node.Ancestors().OfType<ReturnStatementSyntax>().Any()) return "Return";
+        if (node.Ancestors().OfType<ReturnStatementSyntax>().Any())
+        {
+            return "Return";
+        }
 
         // assignment — LHS?
         var assignment = node.Ancestors().OfType<AssignmentExpressionSyntax>().FirstOrDefault();
         if (assignment != null)
         {
             var lhsText = assignment.Left.ToString();
-            if (lhsText == varName || lhsText.EndsWith("." + varName)) return "Write";
+            if (lhsText == varName || lhsText.EndsWith("." + varName))
+            {
+                return "Write";
+            }
         }
 
         // local variable declaration initializer
         var declarator = node.Ancestors().OfType<VariableDeclaratorSyntax>().FirstOrDefault();
-        if (declarator?.Identifier.Text == varName) return "Declaration";
+        if (declarator?.Identifier.Text == varName)
+        {
+            return "Declaration";
+        }
 
         // lambda/anonymous method capture
         if (node.Ancestors().Any(a => a is LambdaExpressionSyntax or AnonymousFunctionExpressionSyntax))
+        {
             return "Capture";
+        }
 
         return "Read";
     }
 
     private static string BuildContextStack(SyntaxNode? node)
     {
-        if (node == null) return "";
+        if (node == null)
+        {
+            return "";
+        }
+
         var parts = new List<string>();
         foreach (var ancestor in node.Ancestors())
         {
@@ -1311,16 +1632,25 @@ public class SymbolNavigationEngine
         foreach (var project in searchProjects)
         {
             var compilation = await project.GetCompilationAsync(ct);
-            if (compilation == null) continue;
+            if (compilation == null)
+            {
+                continue;
+            }
+
             typeSymbol = compilation
                 .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
-            if (typeSymbol != null) break;
+            if (typeSymbol != null)
+            {
+                break;
+            }
         }
 
         if (typeSymbol == null)
+        {
             return new TypeHierarchyReport { Error = $"Type '{typeName}' not found in solution." };
+        }
 
         // Base class chain (excluding System.Object)
         var baseChain = new List<string>();

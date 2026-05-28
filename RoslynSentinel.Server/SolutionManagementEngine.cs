@@ -1,6 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.MSBuild;
-using System.IO;
 
 namespace RoslynSentinel.Server;
 
@@ -21,7 +19,10 @@ public class SolutionManagementEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
         var slnDir = Path.GetDirectoryName(slnPath);
-        if (slnDir == null) throw new Exception("Solution path not found.");
+        if (slnDir == null)
+        {
+            throw new InvalidOperationException("Solution path not found.");
+        }
 
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);
@@ -52,7 +53,10 @@ public class SolutionManagementEngine
         // 2. Identify files to move
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName);
-        if (sourceProject == null) throw new Exception("Source project not found.");
+        if (sourceProject == null)
+        {
+            throw new InvalidOperationException("Source project not found.");
+        }
 
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 

@@ -23,10 +23,16 @@ public class ModernizationUpgradeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return "";
+        if (root == null)
+        {
+            return "";
+        }
 
         SyntaxNode scope = root;
         if (!string.IsNullOrWhiteSpace(methodName))
@@ -34,7 +40,11 @@ public class ModernizationUpgradeEngine
             var method = root.DescendantNodes()
                 .OfType<MethodDeclarationSyntax>()
                 .FirstOrDefault(m => m.Identifier.Text == methodName);
-            if (method == null) return root.ToFullString();
+            if (method == null)
+            {
+                return root.ToFullString();
+            }
+
             scope = method;
         }
 
@@ -85,10 +95,16 @@ public class ModernizationUpgradeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new PatternMatchingRewriter();
         var newRoot = rewriter.Visit(root);
@@ -107,10 +123,16 @@ public class ModernizationUpgradeEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null) return string.Empty;
+        if (root == null)
+        {
+            return string.Empty;
+        }
 
         var rewriter = new ThrowExpressionRewriter();
         var newRoot = rewriter.Visit(root);
@@ -128,32 +150,68 @@ public class ModernizationUpgradeEngine
             for (int i = 0; i < statements.Count - 1; i++)
             {
                 // Look for: var x = someExpr;  followed by  if (x == null) throw ...;
-                if (statements[i] is not LocalDeclarationStatementSyntax localDecl) continue;
-                if (localDecl.Declaration.Variables.Count != 1) continue;
+                if (statements[i] is not LocalDeclarationStatementSyntax localDecl)
+                {
+                    continue;
+                }
+
+                if (localDecl.Declaration.Variables.Count != 1)
+                {
+                    continue;
+                }
 
                 var variable = localDecl.Declaration.Variables[0];
                 var varName = variable.Identifier.Text;
                 var initValue = variable.Initializer?.Value;
-                if (initValue == null) continue;
+                if (initValue == null)
+                {
+                    continue;
+                }
 
-                if (statements[i + 1] is not IfStatementSyntax ifStmt) continue;
-                if (ifStmt.Else != null) continue;
-                if (ifStmt.Condition is not BinaryExpressionSyntax condBin) continue;
-                if (!condBin.IsKind(SyntaxKind.EqualsExpression)) continue;
+                if (statements[i + 1] is not IfStatementSyntax ifStmt)
+                {
+                    continue;
+                }
+
+                if (ifStmt.Else != null)
+                {
+                    continue;
+                }
+
+                if (ifStmt.Condition is not BinaryExpressionSyntax condBin)
+                {
+                    continue;
+                }
+
+                if (!condBin.IsKind(SyntaxKind.EqualsExpression))
+                {
+                    continue;
+                }
 
                 bool rightIsNull = condBin.Right.IsKind(SyntaxKind.NullLiteralExpression);
                 bool leftIsNull  = condBin.Left.IsKind(SyntaxKind.NullLiteralExpression);
-                if (!rightIsNull && !leftIsNull) continue;
+                if (!rightIsNull && !leftIsNull)
+                {
+                    continue;
+                }
 
                 var condVar = rightIsNull ? condBin.Left.ToString() : condBin.Right.ToString();
-                if (condVar != varName) continue;
+                if (condVar != varName)
+                {
+                    continue;
+                }
 
                 // Get throw statement from if body
                 ThrowStatementSyntax? throwStmt = ifStmt.Statement as ThrowStatementSyntax;
                 if (throwStmt == null && ifStmt.Statement is BlockSyntax blk && blk.Statements.Count == 1)
+                {
                     throwStmt = blk.Statements[0] as ThrowStatementSyntax;
+                }
 
-                if (throwStmt?.Expression == null) continue;
+                if (throwStmt?.Expression == null)
+                {
+                    continue;
+                }
 
                 // Build: var x = initValue ?? throw new ...;
                 var throwExpr = SyntaxFactory.ThrowExpression(
@@ -175,7 +233,10 @@ public class ModernizationUpgradeEngine
                 replacements[i] = (skipNext: true, newStmt: newDecl);
             }
 
-            if (replacements.Count == 0) return base.VisitBlock(node);
+            if (replacements.Count == 0)
+            {
+                return base.VisitBlock(node);
+            }
 
             var newStatements = new List<StatementSyntax>();
             bool skipThisLine = false;

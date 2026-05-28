@@ -22,7 +22,10 @@ public class StructuralRefinementEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         
@@ -31,7 +34,10 @@ public class StructuralRefinementEngine
             .Where(t => t.Parent is not BaseTypeDeclarationSyntax) // Not nested
             .FirstOrDefault();
         
-        if (primaryType == null) return "No type declaration found.";
+        if (primaryType == null)
+        {
+            return "No type declaration found.";
+        }
 
         var expectedName = primaryType.Identifier.Text + ".cs";
         var currentName = Path.GetFileName(filePath);
@@ -55,7 +61,10 @@ public class StructuralRefinementEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "File not found.";
+        if (document == null)
+        {
+            return "File not found.";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -65,7 +74,10 @@ public class StructuralRefinementEngine
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0));
         
         var symbol = semanticModel?.GetDeclaredSymbol(node!, cancellationToken) ?? semanticModel?.GetSymbolInfo(node!, cancellationToken).Symbol;
-        if (symbol == null) return "Symbol not found.";
+        if (symbol == null)
+        {
+            return "Symbol not found.";
+        }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         if (references.Any(r => r.Locations.Any()))

@@ -68,22 +68,37 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = doc.FilePath;
 
             foreach (var throwStmt in root.DescendantNodes().OfType<ThrowStatementSyntax>())
             {
                 // Skip bare re-throws (expression is null)
-                if (throwStmt.Expression == null) continue;
+                if (throwStmt.Expression == null)
+                {
+                    continue;
+                }
 
                 var info = BuildThrowSiteInfo(throwStmt, throwStmt.Expression, path);
-                if (info == null) continue;
+                if (info == null)
+                {
+                    continue;
+                }
 
                 if (exceptionType != null && !info.ExceptionType.Contains(exceptionType, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 results.Add(info);
             }
@@ -91,10 +106,15 @@ public class DiscoveryEngine
             foreach (var throwExpr in root.DescendantNodes().OfType<ThrowExpressionSyntax>())
             {
                 var info = BuildThrowSiteInfo(throwExpr, throwExpr.Expression, path);
-                if (info == null) continue;
+                if (info == null)
+                {
+                    continue;
+                }
 
                 if (exceptionType != null && !info.ExceptionType.Contains(exceptionType, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 results.Add(info);
             }
@@ -120,7 +140,10 @@ public class DiscoveryEngine
 
     private static ThrowSiteInfo? BuildThrowSiteInfo(SyntaxNode throwNode, ExpressionSyntax? expression, string path)
     {
-        if (expression == null) return null;
+        if (expression == null)
+        {
+            return null;
+        }
 
         string exType = "Exception";
         string? messageLiteral = null;
@@ -143,9 +166,13 @@ public class DiscoveryEngine
                     foreach (var content in interp.Contents)
                     {
                         if (content is InterpolatedStringTextSyntax text)
+                        {
                             sb.Append(text.TextToken.ValueText);
+                        }
                         else
+                        {
                             break;
+                        }
                     }
                     messageLiteral = sb.Length > 0 ? sb.ToString() : null;
                 }
@@ -186,9 +213,16 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             var path = doc.FilePath;
 
@@ -199,7 +233,9 @@ public class DiscoveryEngine
 
                 if (!simpleName.Contains(typeName, StringComparison.OrdinalIgnoreCase) &&
                     !createdTypeName.Contains(typeName, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 var lineSpan = objCreation.GetLocation().GetLineSpan();
                 results.Add(new ObjectCreationSite(
@@ -214,12 +250,17 @@ public class DiscoveryEngine
             foreach (var implicitCreation in root.DescendantNodes().OfType<ImplicitObjectCreationExpressionSyntax>())
             {
                 var inferredType = InferImplicitCreationType(implicitCreation);
-                if (inferredType == null) continue;
+                if (inferredType == null)
+                {
+                    continue;
+                }
 
                 var simpleName = inferredType.Split('.').Last().Split('<')[0];
                 if (!simpleName.Contains(typeName, StringComparison.OrdinalIgnoreCase) &&
                     !inferredType.Contains(typeName, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 var lineSpan = implicitCreation.GetLocation().GetLineSpan();
                 results.Add(new ObjectCreationSite(
@@ -267,16 +308,25 @@ public class DiscoveryEngine
 
         var project = solution.Projects.FirstOrDefault(p =>
             string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
-        if (project == null) return results;
+        if (project == null)
+        {
+            return results;
+        }
 
         foreach (var doc in project.Documents)
         {
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var typeDecl in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
             {
-                if (!typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))) continue;
+                if (!typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+                {
+                    continue;
+                }
 
                 var typeName = typeDecl.Identifier.Text;
                 var isAbstract = typeDecl.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword));
@@ -313,7 +363,10 @@ public class DiscoveryEngine
 
                     var isPublic = modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword));
                     var isProtected = modifiers.Any(m => m.IsKind(SyntaxKind.ProtectedKeyword));
-                    if (!isPublic && !isProtected) continue;
+                    if (!isPublic && !isProtected)
+                    {
+                        continue;
+                    }
 
                     var isVirtual = modifiers.Any(m => m.IsKind(SyntaxKind.VirtualKeyword));
                     var isMemberAbstract = modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword));
@@ -378,11 +431,19 @@ public class DiscoveryEngine
         foreach (var ancestor in node.Ancestors())
         {
             if (ancestor is MethodDeclarationSyntax method)
+            {
                 return method.Identifier.Text;
+            }
+
             if (ancestor is ConstructorDeclarationSyntax ctor)
+            {
                 return ctor.Identifier.Text;
+            }
+
             if (ancestor is PropertyDeclarationSyntax prop)
+            {
                 return prop.Identifier.Text;
+            }
         }
         return "<unknown>";
     }
@@ -392,13 +453,19 @@ public class DiscoveryEngine
         var trivia = node.GetLeadingTrivia()
             .FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
 
-        if (trivia == default) return null;
+        if (trivia == default)
+        {
+            return null;
+        }
 
         var xmlDoc = trivia.ToString();
         var startIdx = xmlDoc.IndexOf("<summary>", StringComparison.Ordinal);
         var endIdx = xmlDoc.IndexOf("</summary>", StringComparison.Ordinal);
 
-        if (startIdx < 0 || endIdx < 0) return null;
+        if (startIdx < 0 || endIdx < 0)
+        {
+            return null;
+        }
 
         startIdx += "<summary>".Length;
         var raw = xmlDoc.Substring(startIdx, endIdx - startIdx);
@@ -419,12 +486,16 @@ public class DiscoveryEngine
         {
             var typeSyntax = varDecl.Type;
             if (typeSyntax is not IdentifierNameSyntax { Identifier.Text: "var" })
+            {
                 return typeSyntax.ToString();
+            }
         }
 
         // x = new(...) — check AssignmentExpression left side
         if (node.Parent is AssignmentExpressionSyntax assignment)
+        {
             return assignment.Left.ToString();
+        }
 
         return null;
     }
@@ -434,15 +505,24 @@ public class DiscoveryEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
-        if (root == null) throw new Exception("Could not get syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not get syntax root.");
+        }
 
         var container = root.DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
             .FirstOrDefault(t => t.Identifier.Text == containerName);
-        if (container == null) throw new Exception($"Type '{containerName}' not found.");
+        if (container == null)
+        {
+            throw new InvalidOperationException($"Type '{containerName}' not found.");
+        }
 
         // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) → nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
@@ -467,11 +547,11 @@ public class DiscoveryEngine
             "event" => 4,
             "method" => 5,
             "nestedtype" => 6,
-            _ => throw new Exception($"Unknown memberKind '{memberKind}'. Use: field, constructor, destructor, property, event, method, nestedtype")
+            _ => throw new InvalidOperationException($"Unknown memberKind '{memberKind}'. Use: field, constructor, destructor, property, event, method, nestedtype")
         };
 
         var members = container.Members.ToList();
-        if (!members.Any())
+        if (members.Count == 0)
         {
             // Empty type: insert after the opening brace
             var openBrace = container.OpenBraceToken;
@@ -481,7 +561,7 @@ public class DiscoveryEngine
 
         // Find last member of same kind
         var sameKindMembers = members.Where(m => MemberOrder(m) == requestedOrder).ToList();
-        if (sameKindMembers.Any())
+        if (sameKindMembers.Count != 0)
         {
             var last = sameKindMembers.Last();
             var lineSpan = last.GetLocation().GetLineSpan();
@@ -505,7 +585,12 @@ public class DiscoveryEngine
     private static readonly string[] TodoKeywords = ["BUG", "FIXME", "HACK", "TODO", "REVIEW", "NOTE"];
     private static readonly Dictionary<string, int> TodoSeverity = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["BUG"] = 0, ["FIXME"] = 1, ["HACK"] = 2, ["TODO"] = 3, ["REVIEW"] = 4, ["NOTE"] = 5
+        ["BUG"] = 0,
+        ["FIXME"] = 1,
+        ["HACK"] = 2,
+        ["TODO"] = 3,
+        ["REVIEW"] = 4,
+        ["NOTE"] = 5
     };
 
     private static bool ContainsKeywordWithWordBoundary(string text, string keyword)
@@ -524,9 +609,16 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null) continue;
+            if (doc.FilePath == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
 
             foreach (var token in root.DescendantTokens(descendIntoTrivia: true))
             {
@@ -541,7 +633,10 @@ public class DiscoveryEngine
                         commentText = trivia.ToFullString();
                     }
 
-                    if (commentText == null) continue;
+                    if (commentText == null)
+                    {
+                        continue;
+                    }
 
                     var lineSpan = trivia.GetLocation().GetLineSpan();
                     var lineNum = lineSpan.StartLinePosition.Line + 1;
@@ -570,13 +665,18 @@ public class DiscoveryEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var sourceText = await document.GetTextAsync(ct);
         int position;
         if (contextSnippet != null)
+        {
             position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+        }
         else
         {
             // Find first occurrence of symbolName
@@ -584,12 +684,18 @@ public class DiscoveryEngine
         }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
-        if (semanticModel == null) throw new Exception("Could not get semantic model.");
+        if (semanticModel == null)
+        {
+            throw new InvalidOperationException("Could not get semantic model.");
+        }
 
-        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0))).Symbol
-                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)));
+        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), ct).Symbol
+                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), ct);
 
-        if (symbol == null) throw new Exception($"Symbol '{symbolName}' not found at the provided location.");
+        if (symbol == null)
+        {
+            throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
+        }
 
         var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
         var locations = references.SelectMany(r => r.Locations).ToList();
@@ -636,7 +742,9 @@ public class DiscoveryEngine
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
+        {
             documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
+        }
         else if (!string.IsNullOrEmpty(projectName))
         {
             var proj = solution.Projects.FirstOrDefault(p =>
@@ -644,15 +752,25 @@ public class DiscoveryEngine
             documents = proj?.Documents.Cast<Document?>() ?? [];
         }
         else
+        {
             documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+        }
 
         var results = new List<AttributeUsageSite>();
 
         foreach (var doc in documents)
         {
-            if (doc == null) continue;
+            if (doc == null)
+            {
+                continue;
+            }
+
             var root = await doc.GetSyntaxRootAsync(ct);
-            if (root == null) continue;
+            if (root == null)
+            {
+                continue;
+            }
+
             var docPath = doc.FilePath ?? doc.Name;
 
             foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
@@ -662,7 +780,9 @@ public class DiscoveryEngine
                     var attrText = attr.Name.ToString().Split('.').Last();
                     if (!string.Equals(attrText, bare, StringComparison.OrdinalIgnoreCase) &&
                         !string.Equals(attrText, full, StringComparison.OrdinalIgnoreCase))
+                    {
                         continue;
+                    }
 
                     // What is the attribute applied to?
                     var parent = attrList.Parent;

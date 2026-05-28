@@ -18,7 +18,10 @@ public class AdvancedStructuralEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
@@ -43,7 +46,10 @@ public class AdvancedStructuralEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return "";
+        if (document == null)
+        {
+            return "";
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
@@ -74,11 +80,17 @@ public class AdvancedStructuralEngine
         var changes = new Dictionary<string, string>();
         var firstFile = filePaths[0];
         var document = solution.GetDocumentIdsWithFilePath(firstFile).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return changes;
+        if (document == null)
+        {
+            return changes;
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == classNames[0]);
-        if (classNode == null) return changes;
+        if (classNode == null)
+        {
+            return changes;
+        }
 
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>()
             .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))).ToList();
@@ -89,13 +101,13 @@ public class AdvancedStructuralEngine
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         var baseUnit = SyntaxFactory.CompilationUnit().WithUsings(((CompilationUnitSyntax)root!).Usings);
-        
+
         if (ns != null)
         {
-             var newNs = ns is FileScopedNamespaceDeclarationSyntax 
-                ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name)
-                : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name);
-             baseUnit = baseUnit.AddMembers(newNs.AddMembers(baseClassNode));
+            var newNs = ns is FileScopedNamespaceDeclarationSyntax
+               ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name)
+               : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name);
+            baseUnit = baseUnit.AddMembers(newNs.AddMembers(baseClassNode));
         }
         else
         {
@@ -110,22 +122,43 @@ public class AdvancedStructuralEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) return new Dictionary<string, string>();
+        if (document == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
 
-        if (classNode == null) return new Dictionary<string, string>();
+        if (classNode == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var membersToMove = classNode.Members.Where(m =>
         {
-            if (m is MethodDeclarationSyntax meth) return memberNames.Contains(meth.Identifier.Text);
-            if (m is PropertyDeclarationSyntax prop) return memberNames.Contains(prop.Identifier.Text);
-            if (m is FieldDeclarationSyntax field) return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
+            if (m is MethodDeclarationSyntax meth)
+            {
+                return memberNames.Contains(meth.Identifier.Text);
+            }
+
+            if (m is PropertyDeclarationSyntax prop)
+            {
+                return memberNames.Contains(prop.Identifier.Text);
+            }
+
+            if (m is FieldDeclarationSyntax field)
+            {
+                return field.Declaration.Variables.Any(v => memberNames.Contains(v.Identifier.Text));
+            }
+
             return false;
         }).ToList();
 
-        if (membersToMove.Count == 0) return new Dictionary<string, string>();
+        if (membersToMove.Count == 0)
+        {
+            return new Dictionary<string, string>();
+        }
 
         // Capture member symbols BEFORE modifying the syntax tree so SymbolFinder can locate references
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -217,7 +250,11 @@ public class AdvancedStructuralEngine
         var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { filePath, newFilePath };
         foreach (var symbol in memberSymbols)
         {
-            if (symbol == null) continue;
+            if (symbol == null)
+            {
+                continue;
+            }
+
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
             var byDocument = references.SelectMany(r => r.Locations)
                 .Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath))
@@ -227,15 +264,26 @@ public class AdvancedStructuralEngine
             foreach (var (docId, locations) in byDocument)
             {
                 var doc = solution.GetDocument(docId);
-                if (doc?.FilePath == null) continue;
+                if (doc?.FilePath == null)
+                {
+                    continue;
+                }
 
                 // Use already-updated root if this file has been modified in a previous symbol's iteration
                 SyntaxNode? docRoot;
                 if (result.TryGetValue(doc.FilePath, out var alreadyModified))
-                    docRoot = CSharpSyntaxTree.ParseText(alreadyModified).GetRoot();
+                {
+                    docRoot = CSharpSyntaxTree.ParseText(alreadyModified, cancellationToken: cancellationToken).GetRoot(cancellationToken);
+                }
                 else
+                {
                     docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-                if (docRoot == null) continue;
+                }
+
+                if (docRoot == null)
+                {
+                    continue;
+                }
 
                 var spans = locations.Select(l => l.Location.SourceSpan).ToHashSet();
 
@@ -252,7 +300,10 @@ public class AdvancedStructuralEngine
                     .Distinct()
                     .ToList();
 
-                if (memberAccesses.Count == 0) continue;
+                if (memberAccesses.Count == 0)
+                {
+                    continue;
+                }
 
                 var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) =>
                 {
@@ -287,26 +338,33 @@ public class AdvancedStructuralEngine
         var sourceDoc = solution.GetDocumentIdsWithFilePath(sourceFilePath)
             .Select(solution.GetDocument).FirstOrDefault();
         if (sourceDoc == null)
+        {
             return new Dictionary<string, string>
             {
                 { "__error__", $"Source file '{Path.GetFileName(sourceFilePath)}' not found in solution." }
             };
+        }
 
         var sourceRoot = await sourceDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        if (sourceRoot == null) return new Dictionary<string, string>();
+        if (sourceRoot == null)
+        {
+            return new Dictionary<string, string>();
+        }
 
         var sourceClass = sourceRoot.DescendantNodes()
             .OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (sourceClass == null)
+        {
             return new Dictionary<string, string>
             {
                 { "__error__", $"Class '{className}' not found in '{Path.GetFileName(sourceFilePath)}'." }
             };
+        }
 
         // Capture class symbol BEFORE modification so SymbolFinder can resolve all references
         var semanticModel = await sourceDoc.GetSemanticModelAsync(cancellationToken);
-        var classSymbol = semanticModel?.GetDeclaredSymbol(sourceClass) as INamedTypeSymbol;
+        var classSymbol = semanticModel?.GetDeclaredSymbol(sourceClass, cancellationToken) as INamedTypeSymbol;
 
         var membersToInline = sourceClass.Members;
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -319,10 +377,12 @@ public class AdvancedStructuralEngine
                 .OfType<ClassDeclarationSyntax>()
                 .FirstOrDefault(c => c.Identifier.Text != className);
             if (targetClass == null)
+            {
                 return new Dictionary<string, string>
                 {
                     { "__error__", $"No target class found in '{Path.GetFileName(sourceFilePath)}' to inline '{className}' into." }
                 };
+            }
 
             targetClassName = targetClass.Identifier.Text;
 
@@ -340,28 +400,34 @@ public class AdvancedStructuralEngine
 
             // Update type references in all other files
             if (classSymbol != null)
+            {
                 await UpdateTypeReferencesAsync(solution, classSymbol, className, targetClassName,
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { sourceFilePath }, result, cancellationToken);
+            }
         }
         else
         {
             var targetDoc = solution.GetDocumentIdsWithFilePath(targetFilePath)
                 .Select(solution.GetDocument).FirstOrDefault();
             if (targetDoc == null)
+            {
                 return new Dictionary<string, string>
                 {
                     { "__error__", $"Target file '{Path.GetFileName(targetFilePath)}' not found in solution." }
                 };
+            }
 
             var targetRoot = await targetDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
             var targetClass = targetRoot?.DescendantNodes()
                 .OfType<ClassDeclarationSyntax>()
                 .FirstOrDefault();
             if (targetClass == null)
+            {
                 return new Dictionary<string, string>
                 {
                     { "__error__", $"No class found in target file '{Path.GetFileName(targetFilePath)}'." }
                 };
+            }
 
             targetClassName = targetClass.Identifier.Text;
 
@@ -374,8 +440,10 @@ public class AdvancedStructuralEngine
 
             // Update type references in all other files
             if (classSymbol != null)
+            {
                 await UpdateTypeReferencesAsync(solution, classSymbol, className, targetClassName,
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { sourceFilePath, targetFilePath }, result, cancellationToken);
+            }
         }
 
         return result;
@@ -399,10 +467,16 @@ public class AdvancedStructuralEngine
         foreach (var (docId, locations) in byDocument)
         {
             var doc = solution.GetDocument(docId);
-            if (doc?.FilePath == null) continue;
+            if (doc?.FilePath == null)
+            {
+                continue;
+            }
 
             var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-            if (docRoot == null) continue;
+            if (docRoot == null)
+            {
+                continue;
+            }
 
             var spans = locations.Select(l => l.Location.SourceSpan).ToHashSet();
 
@@ -410,14 +484,23 @@ public class AdvancedStructuralEngine
                 .Where(n => spans.Contains(n.Span))
                 .ToList();
 
-            if (nodesToRename.Count == 0) continue;
+            if (nodesToRename.Count == 0)
+            {
+                continue;
+            }
 
             var updatedRoot = docRoot.ReplaceNodes(nodesToRename, (original, _) =>
             {
                 if (original is IdentifierNameSyntax id && id.Identifier.Text == oldName)
+                {
                     return SyntaxFactory.IdentifierName(newName).WithTriviaFrom(id);
+                }
+
                 if (original is GenericNameSyntax gen && gen.Identifier.Text == oldName)
+                {
                     return gen.WithIdentifier(SyntaxFactory.Identifier(newName));
+                }
+
                 return original;
             });
 

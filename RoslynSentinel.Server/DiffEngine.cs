@@ -1,13 +1,15 @@
+using System.Text;
+using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using System.Text.RegularExpressions;
-using System.Text;
 
 namespace RoslynSentinel.Server;
 
 public class DiffEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private static readonly string[] separatorArray = new[] { "\r\n", "\r", "\n" };
 
     public DiffEngine(PersistentWorkspaceManager workspaceManager)
     {
@@ -21,8 +23,8 @@ public class DiffEngine
     public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
     {
         var lines = sourceText.Lines.Select(l => l.ToString()).ToList();
-        var diffLines = unifiedDiff.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        
+        var diffLines = unifiedDiff.Split(separatorArray, StringSplitOptions.None);
+
         int offset = 0; // Track how much the file has grown/shrunk
         var hunkHeaderRegex = new Regex(@"^@@\s+\-(\d+),?(\d*)\s+\+(\d+),?(\d*)\s+@@");
 
@@ -41,7 +43,10 @@ public class DiffEngine
                 while (i < diffLines.Length && !hunkHeaderRegex.IsMatch(diffLines[i]))
                 {
                     var diffLine = diffLines[i];
-                    if (string.IsNullOrEmpty(diffLine) && i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i+1])) break;
+                    if (string.IsNullOrEmpty(diffLine) && i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]))
+                    {
+                        break;
+                    }
 
                     if (diffLine.StartsWith("+"))
                     {
@@ -51,7 +56,10 @@ public class DiffEngine
                     }
                     else if (diffLine.StartsWith("-"))
                     {
-                        if (currentLine >= lines.Count) throw new Exception($"Diff application failed: Line {currentLine + 1} out of bounds.");
+                        if (currentLine >= lines.Count)
+                        {
+                            throw new InvalidOperationException($"Diff application failed: Line {currentLine + 1} out of bounds.");
+                        }
                         // Optional: Validate context here if we wanted to be strict
                         lines.RemoveAt(currentLine);
                         offset--;
@@ -59,7 +67,11 @@ public class DiffEngine
                     else if (diffLine.StartsWith(" "))
                     {
                         // Context line - validate it matches
-                        if (currentLine >= lines.Count) throw new Exception($"Diff application failed: Context line {currentLine + 1} out of bounds.");
+                        if (currentLine >= lines.Count)
+                        {
+                            throw new InvalidOperationException($"Diff application failed: Context line {currentLine + 1} out of bounds.");
+                        }
+
                         var expected = diffLine.Substring(1).Trim();
                         var actual = lines[currentLine].Trim();
                         if (expected != actual)
@@ -85,9 +97,9 @@ public class DiffEngine
     /// </summary>
     public string CreateDiff(string oldText, string newText)
     {
-        var oldLines = oldText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        var newLines = newText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        
+        var oldLines = oldText.Split(separatorArray, StringSplitOptions.None);
+        var newLines = newText.Split(separatorArray, StringSplitOptions.None);
+
         var sb = new StringBuilder();
         sb.AppendLine("--- Original");
         sb.AppendLine("+++ Modified");
@@ -108,7 +120,7 @@ public class DiffEngine
             {
                 // Lines differ - find the next match to determine if it's an insertion or deletion
                 sb.AppendLine($"@@ -{oldIdx + 1} +{newIdx + 1} @@");
-                
+
                 // For simplicity in this tool, we show the removal then the addition
                 if (oldIdx < oldLines.Length)
                 {

@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
@@ -62,7 +63,7 @@ public class Service {
         // Assert
         Assert.That(changes.Count, Is.EqualTo(2), "Should produce 2 changes: the update and the new file.");
         Assert.That(changes["Service.cs"], Contains.Substring("throw new DatabaseException"));
-        
+
         var newFile = changes.Keys.First(k => k.Contains("DatabaseException.cs"));
         Assert.That(changes[newFile], Contains.Substring("public class DatabaseException : Exception"));
         Assert.That(changes[newFile], Contains.Substring("namespace App;"));
@@ -73,8 +74,8 @@ public class Service {
     {
         // Arrange
         SetSource("public class Target { public void DeadMethod() {} }", "Target.cs", "Proj");
-        
-        var projectId = _workspaceManager.CurrentSolution.ProjectIds.First();
+
+        var projectId = _workspaceManager.CurrentSolution?.ProjectIds.First() ?? throw new InvalidOperationException("No project found.");
         var callerDocId = DocumentId.CreateNewId(projectId);
         var solution = _workspaceManager.CurrentSolution.AddDocument(callerDocId, "Caller.cs", "public class Caller { void M() { var name = \"DeadMethod\"; } }");
         _workspaceManager.SetTestSolution(solution);
@@ -83,9 +84,9 @@ public class Service {
         var sourceText = "public class Target { public void DeadMethod() {} }";
         var col = sourceText.IndexOf("DeadMethod") + 1; // 1-based column
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => 
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _refactoringEngine.SafeDeleteSymbolAsync("Target.cs", "public void DeadMethod()"));
-        
+
         Assert.That(ex.Message, Does.Contain("Potential Reflection Risk"));
         Assert.That(ex.Message, Does.Contain("Caller.cs"));
     }
@@ -158,14 +159,14 @@ public class C {
     <PackageReference Include=""Newtonsoft.Json"" Version=""13.0.1"" />
   </ItemGroup>
 </Project>";
-        
+
         var tempCsproj = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MyProj.csproj");
-        File.WriteAllText(tempCsproj, csproj);
+        await File.WriteAllTextAsync(tempCsproj, csproj);
 
         var projectId = ProjectId.CreateNewId();
         var solution = new AdhocWorkspace().CurrentSolution
             .AddProject(ProjectInfo.Create(projectId, VersionStamp.Default, "MyProj", "MyProj", LanguageNames.CSharp, filePath: tempCsproj));
-        
+
         _workspaceManager.SetTestSolution(solution);
 
         // Act
@@ -173,7 +174,7 @@ public class C {
 
         // Assert
         Assert.That(report.PackageReferences, Contains.Item("Newtonsoft.Json"));
-        
+
         // Cleanup
         File.Delete(tempCsproj);
     }

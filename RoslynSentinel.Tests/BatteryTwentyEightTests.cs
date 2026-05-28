@@ -12,9 +12,8 @@
 
 #pragma warning disable CS8618
 
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
@@ -45,7 +44,7 @@ public class B02extra_Immutability_ReadonlySpacing
         const string source = """
             public class Config {
                 private int _timeout = 30;
-                public int GetTimeout() => _timeout;
+                public int GetCancelAfter() => _timeout;
                 public Config() { _timeout = 30; }
             }
             """;
@@ -259,10 +258,10 @@ public class B16extra_SecuritySafety_NullConditionalGuards
     [Test]
     public async Task DetectMissingNullChecks_ExprBody_ChainedNullConditional_NotFlagged()
     {
-        // s?.Trim()?.ToUpper() — chained ?. starting on the param → still null-safe
+        // s?.Trim()?.ToUpperInvariant() — chained ?. starting on the param → still null-safe
         const string source = """
             public class Fmt {
-                public string? Format(string s) => s?.Trim()?.ToUpper();
+                public string? Format(string s) => s?.Trim()?.ToUpperInvariant();
             }
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Fmt.cs", source)]);
@@ -271,7 +270,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
         var issues = await _engine.DetectMissingNullChecksAsync("Fmt.cs");
 
         Assert.That(issues.Any(i => i.Type == "MissingNullCheck" && i.Description.Contains("'s'")), Is.False,
-            "Chained null-conditional s?.Trim()?.ToUpper() is null-safe; must not be flagged.");
+            "Chained null-conditional s?.Trim()?.ToUpperInvariant() is null-safe; must not be flagged.");
     }
 
     [Test]
@@ -280,7 +279,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
         // One param uses ?., the other doesn't — only the unsafe one is flagged
         const string source = """
             public class Merger {
-                public string? Merge(string a, string b) => a?.ToUpper() + b.ToLower();
+                public string? Merge(string a, string b) => a?.ToUpperInvariant() + b.ToLowerInvariant();
             }
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Merger.cs", source)]);
@@ -465,7 +464,9 @@ public class RealSolution_SmokeTests_Battery28
     public async Task Setup()
     {
         if (!File.Exists(SlnPath))
+        {
             Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
+        }
 
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
@@ -476,7 +477,11 @@ public class RealSolution_SmokeTests_Battery28
         {
             foreach (var doc in project.Documents)
             {
-                if (doc.FilePath == null) continue;
+                if (doc.FilePath == null)
+                {
+                    continue;
+                }
+
                 var root = await doc.GetSyntaxRootAsync();
                 var cls = root?.DescendantNodes()
                     .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>()

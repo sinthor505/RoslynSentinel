@@ -1,5 +1,7 @@
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -54,7 +56,10 @@ public class SentinelAugmentTools
         string fieldName,
         string? overridePropertyName = null)
     {
-        _logger.LogInformation("EncapsulateFieldSafe: {Field} in {File}", fieldName, filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("EncapsulateFieldSafe: {Field} in {File}", fieldName, filePath);
+        }
         return await _engine.EncapsulateFieldSafeAsync(filePath, fieldName, overridePropertyName);
     }
 
@@ -92,7 +97,10 @@ public class SentinelAugmentTools
         string? lineBefore = null,
         string? lineAfter = null)
     {
-        _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
+        }
         return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
@@ -141,7 +149,10 @@ public class SentinelAugmentTools
         string? lineBefore = null,
         string? lineAfter = null)
     {
-        _logger.LogInformation("ConvertSwitchToPatternSafe in {File}", filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("ConvertSwitchToPatternSafe in {File}", filePath);
+        }
         return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
@@ -183,7 +194,10 @@ public class SentinelAugmentTools
         string? lineBefore = null,
         string? lineAfter = null)
     {
-        _logger.LogInformation("ConvertStringFormatToInterpolatedSmart in {File}", filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("ConvertStringFormatToInterpolatedSmart in {File}", filePath);
+        }
         return await _engine.ConvertStringFormatToInterpolatedSmartAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
@@ -212,7 +226,10 @@ public class SentinelAugmentTools
         """)]
     public async Task<UsingsCleanupResult> SortAndDeduplicateUsings(string filePath, bool writeToFile = true)
     {
-        _logger.LogInformation("SortAndDeduplicateUsings: {File} (write={Write})", filePath, writeToFile);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("SortAndDeduplicateUsings: {File} (write={Write})", filePath, writeToFile);
+        }
         return await _engine.SortAndDeduplicateUsingsAsync(filePath, writeToFile);
     }
 
@@ -239,7 +256,10 @@ public class SentinelAugmentTools
         """)]
     public async Task<MsAugmentResult> FormatDocumentSafe(string filePath, bool preview = true)
     {
-        _logger.LogInformation("FormatDocumentSafe: {File} preview={Preview}", filePath, preview);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("FormatDocumentSafe: {File} preview={Preview}", filePath, preview);
+        }
         return await _engine.FormatDocumentSafeAsync(filePath, preview);
     }
 
@@ -270,7 +290,10 @@ public class SentinelAugmentTools
         string filePath, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
-        _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
+        }
         return await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
@@ -297,7 +320,10 @@ public class SentinelAugmentTools
         """)]
     public async Task<WorkspaceHealthReport> GetWorkspaceHealth()
     {
-        _logger.LogInformation("GetWorkspaceHealth called");
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("GetWorkspaceHealth called");
+        }
         return await _engine.GetWorkspaceHealthAsync();
     }
 
@@ -325,7 +351,10 @@ public class SentinelAugmentTools
         """)]
     public async Task<AddUsingsPreview> PreviewAddMissingUsings(string filePath)
     {
-        _logger.LogInformation("PreviewAddMissingUsings: {File}", filePath);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("PreviewAddMissingUsings: {File}", filePath);
+        }
         return await _engine.PreviewAddMissingUsingsAsync(filePath);
     }
 
@@ -361,7 +390,10 @@ public class SentinelAugmentTools
         string filePath, string contextSnippet, string constantName,
         string? lineBefore = null, string? lineAfter = null)
     {
-        _logger.LogInformation("ExtractConstantSafe: {File} constant={Name}", filePath, constantName);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("ExtractConstantSafe: {File} constant={Name}", filePath, constantName);
+        }
         return await _engine.ExtractConstantSafeAsync(filePath, contextSnippet, constantName, lineBefore, lineAfter);
     }
 
@@ -387,7 +419,10 @@ public class SentinelAugmentTools
     public async Task<MsAugmentResult> GenerateToStringSafe(
         string filePath, string typeName, string? members = null)
     {
-        _logger.LogInformation("GenerateToStringSafe: {File} type={Type}", filePath, typeName);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("GenerateToStringSafe: {File} type={Type}", filePath, typeName);
+        }
         IList<string>? memberList = members is null ? null
             : members.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
                      .Select(m => m.Trim())
@@ -423,7 +458,10 @@ public class SentinelAugmentTools
         string filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
-        _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
+        }
         return await _engine.ExtractMethodSafeAsync(
             filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
     }

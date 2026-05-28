@@ -24,15 +24,15 @@ public class ValidationEngine
 
         if (documentId == null)
         {
-            return new DiagnosticReport(false, new List<DiagnosticInfo> 
-            { 
-                new DiagnosticInfo("RS001", "Error", $"File not found: {filePath}", filePath, 0, 0, 0, 0) 
+            return new DiagnosticReport(false, new List<DiagnosticInfo>
+            {
+                new DiagnosticInfo("RS001", "Error", $"File not found: {filePath}", filePath, 0, 0, 0, 0)
             });
         }
 
         var document = solution.GetDocument(documentId)!;
         var oldText = await document.GetTextAsync(cancellationToken);
-        
+
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
@@ -40,9 +40,9 @@ public class ValidationEngine
         }
         catch (Exception ex)
         {
-            return new DiagnosticReport(false, new List<DiagnosticInfo> 
-            { 
-                new DiagnosticInfo("RS003", "Error", $"Failed to apply diff: {ex.Message}", filePath, 0, 0, 0, 0) 
+            return new DiagnosticReport(false, new List<DiagnosticInfo>
+            {
+                new DiagnosticInfo("RS003", "Error", $"Failed to apply diff: {ex.Message}", filePath, 0, 0, 0, 0)
             });
         }
     }
@@ -53,7 +53,10 @@ public class ValidationEngine
         var updatedSolution = solution;
         var affectedProjectIds = new HashSet<ProjectId>();
 
-        _logger.LogInformation("Applying {Count} file changes to in-memory solution fork...", fileChanges.Count);
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Applying {Count} file changes to in-memory solution fork...", fileChanges.Count);
+        }
 
         foreach (var change in fileChanges)
         {
@@ -63,9 +66,9 @@ public class ValidationEngine
 
             if (documentId == null)
             {
-                return new DiagnosticReport(false, new List<DiagnosticInfo> 
-                { 
-                    new DiagnosticInfo("RS001", "Error", $"File not found in solution: {filePath}", filePath, 0, 0, 0, 0) 
+                return new DiagnosticReport(false, new List<DiagnosticInfo>
+                {
+                    new DiagnosticInfo("RS001", "Error", $"File not found in solution: {filePath}", filePath, 0, 0, 0, 0)
                 });
             }
 
@@ -78,7 +81,10 @@ public class ValidationEngine
         foreach (var projectId in affectedProjectIds)
         {
             var project = updatedSolution.GetProject(projectId)!;
-            _logger.LogInformation("Compiling project {ProjectName} in-memory...", project.Name);
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Compiling project {ProjectName} in-memory...", project.Name);
+            }
 
             var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
@@ -90,7 +96,7 @@ public class ValidationEngine
             var diagnostics = compilation.GetDiagnostics(cancellationToken)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .Select(d => d.ToInfo());
-            
+
             allDiagnostics.AddRange(diagnostics);
         }
 

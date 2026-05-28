@@ -17,20 +17,29 @@ public class ApiIntegrationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null) throw new Exception("File not found.");
+        if (document == null)
+        {
+            throw new FileNotFoundException($"File not found: {filePath}");
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        if (root == null) throw new Exception("Could not parse syntax root.");
+        if (root == null)
+        {
+            throw new InvalidOperationException("Could not parse syntax root.");
+        }
 
         // First add the using directive if not present
-        if (!root.Usings.Any(u => u.Name.ToString() == "System.ComponentModel.DataAnnotations"))
+        if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel.DataAnnotations"))
         {
             root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.ComponentModel.DataAnnotations")));
         }
 
         // Now get the classNode from the updated root
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null) throw new Exception("Class not found.");
+        if (classNode == null)
+        {
+            throw new InvalidOperationException("Class not found.");
+        }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)
         static bool HasAttribute(PropertyDeclarationSyntax p, string name) =>
@@ -44,7 +53,7 @@ public class ApiIntegrationEngine
 
         // Replace properties with annotated versions
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>();
-        var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) => 
+        var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) =>
         {
             var typeStr = newProp.Type.ToString();
             var attributes = new List<AttributeListSyntax>();

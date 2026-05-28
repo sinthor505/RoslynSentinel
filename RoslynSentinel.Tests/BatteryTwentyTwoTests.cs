@@ -305,6 +305,8 @@ public class OrderService : IOrderService
     // --- CheckPackageInconsistency ---
 
     [Test]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
     public void CheckPackageInconsistency_ValidSolution_Throws()
     {
         SetSource(RichSource, "Test.cs");

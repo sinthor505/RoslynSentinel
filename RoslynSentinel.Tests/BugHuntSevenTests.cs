@@ -645,7 +645,7 @@ public class BH_RegressionGuardTests
     {
         const string source = """
             public class Config {
-                public int GetTimeout() {
+                public int GetCancelAfter() {
                     return 42;
                 }
             }

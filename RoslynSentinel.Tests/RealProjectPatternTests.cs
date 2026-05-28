@@ -392,7 +392,7 @@ public class AllergenService
         var results = new List<string>();
         foreach (var input in inputs)
         {
-            results.Add(input.ToUpper());
+            results.Add(input.ToUpperInvariant());
         }
         return results;
     }

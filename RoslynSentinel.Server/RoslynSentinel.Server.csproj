@@ -30,4 +30,12 @@
     <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EditorConfigFiles Remove="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Server\.editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Server\.editorconfig" />
+  </ItemGroup>
+
 </Project>
