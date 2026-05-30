@@ -1,10 +1,19 @@
 using System.ComponentModel;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
+
+/// <summary>Structural outline entry returned by get_file_outline.</summary>
+public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
+
+/// <summary>Single text-search hit returned by search_solution_text.</summary>
+public record TextSearchMatch(string FilePath, int Line, int Column, string Preview);
 
 [McpServerToolType]
 public class SentinelWorkspaceTools
@@ -307,4 +316,336 @@ public class SentinelWorkspaceTools
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
     public async Task<string> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
         => await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+
+    // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
+
+    [McpServerTool]
+    [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match when names are overloaded.")]
+    public async Task<string> GetMethodSource(string filePath, string methodName)
+    {
+        var solution       = await _workspaceManager.GetBranchedSolutionAsync();
+        var normalizedPath = Path.GetFullPath(filePath);
+
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault()
+            ?? solution.Projects
+                       .SelectMany(p => p.Documents)
+                       .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
+                                                          StringComparison.OrdinalIgnoreCase));
+
+        if (document == null)
+        {
+            throw new FileNotFoundException(
+                $"File not found in solution: {normalizedPath} " +
+                $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).");
+        }
+
+        var root = await document.GetSyntaxRootAsync()
+                   ?? throw new InvalidOperationException("Syntax root not found.");
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                         .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
+                  ?? root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                         .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+
+        if (method == null)
+        {
+            throw new InvalidOperationException($"Method '{methodName}' not found in '{filePath}'.");
+        }
+
+        return method.ToFullString();
+    }
+
+    [McpServerTool]
+    [Description("Returns a structural outline of a file: namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Does not include member bodies.")]
+    public async Task<List<OutlineItem>> GetFileOutline(string filePath)
+    {
+        var solution       = await _workspaceManager.GetBranchedSolutionAsync();
+        var normalizedPath = Path.GetFullPath(filePath);
+
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault()
+            ?? solution.Projects
+                       .SelectMany(p => p.Documents)
+                       .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
+                                                          StringComparison.OrdinalIgnoreCase));
+
+        if (document == null)
+        {
+            throw new FileNotFoundException(
+                $"File not found in solution: {normalizedPath} " +
+                $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).");
+        }
+
+        var root = await document.GetSyntaxRootAsync()
+                   ?? throw new InvalidOperationException("Syntax root not found.");
+
+        var items = new List<OutlineItem>();
+
+        foreach (var node in root.DescendantNodes())
+        {
+            string? kind      = null;
+            string? name      = null;
+            string? container = null;
+
+            switch (node)
+            {
+                case BaseNamespaceDeclarationSyntax ns:
+                    kind = "namespace";
+                    name = ns.Name.ToString();
+                    break;
+
+                case ClassDeclarationSyntax cls:
+                    kind      = "class";
+                    name      = cls.Identifier.Text;
+                    container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
+                             ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+
+                case InterfaceDeclarationSyntax iface:
+                    kind      = "interface";
+                    name      = iface.Identifier.Text;
+                    container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
+                             ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+
+                case MethodDeclarationSyntax method:
+                    kind      = "method";
+                    name      = method.Identifier.Text;
+                    container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+
+                case PropertyDeclarationSyntax prop:
+                    kind      = "property";
+                    name      = prop.Identifier.Text;
+                    container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                    break;
+            }
+
+            if (kind == null || name == null)
+            {
+                continue;
+            }
+
+            var span = node.GetLocation().GetLineSpan();
+            items.Add(new OutlineItem(
+                Kind:      kind,
+                Name:      name,
+                Container: container,
+                StartLine: span.StartLinePosition.Line + 1,
+                EndLine:   span.EndLinePosition.Line + 1));
+        }
+
+        return items;
+    }
+
+    [McpServerTool]
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. Solution-scoped grep. maxResults caps total matches.")]
+    public async Task<List<TextSearchMatch>> SearchSolutionText(
+        string  pattern,
+        bool    isRegex    = false,
+        string? fileGlob   = null,
+        int     maxResults = 200)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results  = new List<TextSearchMatch>();
+
+        Regex? regex = null;
+        if (isRegex)
+        {
+            regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase,
+                              matchTimeout: TimeSpan.FromSeconds(5));
+        }
+
+        foreach (var project in solution.Projects)
+        {
+            foreach (var document in project.Documents)
+            {
+                if (results.Count >= maxResults)
+                {
+                    break;
+                }
+
+                var docPath = document.FilePath ?? "";
+                if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
+                {
+                    continue;
+                }
+
+                var sourceText = (await document.GetTextAsync()).ToString();
+                var lines      = sourceText.Split('\n');
+
+                for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
+                {
+                    var line = lines[i];
+                    int col  = -1;
+
+                    if (isRegex && regex != null)
+                    {
+                        try
+                        {
+                            var m = regex.Match(line);
+                            if (m.Success)
+                            {
+                                col = m.Index;
+                            }
+                        }
+                        catch (RegexMatchTimeoutException)
+                        {
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        col = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+                    }
+
+                    if (col >= 0)
+                    {
+                        var preview = line.Trim();
+                        if (preview.Length > 120)
+                        {
+                            preview = preview[..120] + "\u2026";
+                        }
+
+                        results.Add(new TextSearchMatch(docPath, i + 1, col + 1, preview));
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private static bool GlobMatchesFileName(string filePath, string glob)
+    {
+        var fileName     = Path.GetFileName(filePath);
+        var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
+        return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
+    }
+
+    // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
+
+    [McpServerTool]
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter: 'failures', 'skipped', 'rolledback', 'file:<path>', or null for all items. maxItems caps the returned slice — never dumps the full document.")]
+    public async Task<OperationDetailResult> GetOperationDetail(
+        string  changeId,
+        string? filter   = null,
+        int     maxItems = 50)
+    {
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        var blobPath     = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+
+        if (blobPath == null)
+        {
+            return new OperationDetailResult
+            {
+                ChangeId      = changeId,
+                BlobName      = "",
+                TotalItems    = 0,
+                ReturnedItems = 0,
+                Filter        = filter,
+                Items         = new List<OperationItemRecord>(),
+            };
+        }
+
+        var json     = await File.ReadAllTextAsync(blobPath);
+        var doc      = JsonSerializer.Deserialize<JsonElement>(json);
+        var allItems = doc.GetProperty("items")
+                         .EnumerateArray()
+                         .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+                         .ToList();
+
+        IEnumerable<OperationItemRecord> filtered = allItems;
+
+        if (!string.IsNullOrEmpty(filter))
+        {
+            if (filter.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+            {
+                var pathFilter = filter[5..];
+                filtered = allItems.Where(r => r.FilePath.Contains(pathFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                filtered = filter.ToLowerInvariant() switch
+                {
+                    "failures"   => allItems.Where(r => r.Outcome == "failed"),
+                    "skipped"    => allItems.Where(r => r.Outcome == "skipped"),
+                    "rolledback" => allItems.Where(r => r.Outcome == "rolledback"),
+                    _            => allItems,
+                };
+            }
+        }
+
+        var slice = filtered.Take(maxItems).ToList();
+
+        return new OperationDetailResult
+        {
+            ChangeId      = changeId,
+            BlobName      = Path.GetFileName(blobPath),
+            TotalItems    = allItems.Count,
+            ReturnedItems = slice.Count,
+            Filter        = filter,
+            Items         = slice,
+        };
+    }
+
+    [McpServerTool]
+    [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Only available for operations written by batch-first tools (Phase 4+).")]
+    public async Task<string> UndoLastApply(string changeId)
+    {
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+        var blobPath     = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+
+        if (blobPath == null)
+        {
+            return $"No operation blob found for changeId '{changeId}'. " +
+                   "undo_last_apply is only available for operations written by batch-first tools.";
+        }
+
+        var json       = await File.ReadAllTextAsync(blobPath);
+        var doc        = JsonSerializer.Deserialize<JsonElement>(json);
+        var revertable = doc.GetProperty("items")
+                           .EnumerateArray()
+                           .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+                           .Where(r => r.Outcome == "succeeded" && r.BeforeSource != null)
+                           .ToList();
+
+        if (revertable.Count == 0)
+        {
+            return $"No reversible items in blob for changeId '{changeId}' " +
+                   "(need Outcome=succeeded with BeforeSource present).";
+        }
+
+        var reverted = new List<string>();
+        var failed   = new List<string>();
+
+        foreach (var item in revertable)
+        {
+            // Security: only revert files under the solution root to prevent path traversal.
+            if (solutionRoot != null &&
+                !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                failed.Add($"{item.FilePath}: outside solution root, skipped");
+                continue;
+            }
+
+            try
+            {
+                await File.WriteAllTextAsync(item.FilePath, item.BeforeSource!);
+                reverted.Add(item.FilePath);
+            }
+            catch (Exception ex)
+            {
+                failed.Add($"{item.FilePath}: {ex.Message}");
+            }
+        }
+
+        var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
+        return $"Reverted {reverted.Count} files.{failedPart}";
+    }
 }
