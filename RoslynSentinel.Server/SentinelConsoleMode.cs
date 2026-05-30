@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
+using Microsoft.Extensions.DependencyInjection;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -457,6 +459,71 @@ public static partial class SentinelConsoleMode
                 var pdesc = p.GetCustomAttribute<DescriptionAttribute>()?.Description ?? "";
                 Console.WriteLine($"    {p.Name,-30} {FriendlyType(p.ParameterType),-22} [{req}]  {pdesc}");
             }
+        }
+    }
+
+    // ─── Startup dump ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes tool_list.json (full MCP payload) and tool_list_simple.json (names only)
+    /// to <paramref name="outputDir"/> on every server startup.
+    /// Reads <see cref="McpServerTool.ProtocolTool"/> from registered DI instances —
+    /// the exact schema the MCP layer emits, not a hand-rolled reflection summary.
+    /// NOT an [McpServerTool] — internal diagnostic output only.
+    /// </summary>
+    public static void WriteStartupDump(IServiceProvider services, string outputDir)
+    {
+        try
+        {
+            var tools = services.GetServices<McpServerTool>()
+                .Select(t => t.ProtocolTool)
+                .OrderBy(t => t.Name)
+                .ToList();
+
+            string generatedUtc  = DateTime.UtcNow.ToString("O");
+            int    totalChars    = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
+
+            // ── tool_list.json — full payload: name + description + inputSchema ──
+            var fullPayload = new
+            {
+                _metadata = new
+                {
+                    toolCount         = tools.Count,
+                    generatedUtc      = generatedUtc,
+                    totalPayloadChars = totalChars,
+                },
+                tools = tools.Select(t => new
+                {
+                    name        = t.Name,
+                    description = t.Description,
+                    inputSchema = t.InputSchema,
+                }),
+            };
+
+            File.WriteAllText(
+                Path.Combine(outputDir, "tool_list.json"),
+                JsonSerializer.Serialize(fullPayload, PrettyJson),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            // ── tool_list_simple.json — names only for human readability ─────────
+            var simplePayload = new
+            {
+                _metadata = new
+                {
+                    toolCount    = tools.Count,
+                    generatedUtc = generatedUtc,
+                },
+                tools = tools.Select(t => t.Name).ToList(),
+            };
+
+            File.WriteAllText(
+                Path.Combine(outputDir, "tool_list_simple.json"),
+                JsonSerializer.Serialize(simplePayload, PrettyJson),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[StartupDump] Failed to write tool list: {ex.Message}");
         }
     }
 }

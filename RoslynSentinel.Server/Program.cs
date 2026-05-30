@@ -113,6 +113,9 @@ try
     // --- Pre-Warm MSBuildLocator + Auto-Load Solution ---
     host.Services.WarmupAndAutoLoad(solutionPath, logger);
 
+    // --- Startup tool dump (internal diagnostic — not an MCP tool) ---
+    SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory);
+
     if (logger.IsEnabled(LogLevel.Information))
     {
         logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
