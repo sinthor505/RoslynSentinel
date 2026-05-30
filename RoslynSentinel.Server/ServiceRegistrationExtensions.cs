@@ -92,6 +92,8 @@ public static class RoslynSentinelServiceExtensions
         {
             services.AddSingleton<SentinelWorkspaceTools>();
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
+            services.AddSingleton<DocumentationTools>();
+            mcpBuilder.WithTools<DocumentationTools>();
         }
         if (activeModes.Contains("Intelligence"))
         {

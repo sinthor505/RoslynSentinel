@@ -14,6 +14,27 @@ public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
 public record MethodLocation(string FilePath, string TypeName, string MethodName);
 public record InterfaceCandidateReport(string FilePath, string ClassName, List<string> PublicMethods);
 
+public class NamespacePathMismatch
+{
+    public string        FilePath          { get; set; } = "";
+    public string        ProjectName       { get; set; } = "";
+    public string        DeclaredNamespace { get; set; } = "";
+    public string        ExpectedNamespace { get; set; } = "";
+    public string        Severity          { get; set; } = "";
+    public string        Reason            { get; set; } = "";
+    public List<string>  ConflictingFiles  { get; set; } = [];
+}
+
+public class NamespacePathMismatchReport
+{
+    public List<NamespacePathMismatch> Errors        { get; set; } = [];
+    public List<NamespacePathMismatch> Warnings      { get; set; } = [];
+    public int    TotalFiles    { get; set; }
+    public int    MismatchCount { get; set; }
+    public bool   IsClean       { get; set; }
+    public string Summary       { get; set; } = "";
+}
+
 public class AnalysisEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -2044,5 +2065,311 @@ public class AnalysisEngine
         var kinds = body.DescendantNodes().Select(n => (int)n.Kind());
         var bytes = kinds.SelectMany(BitConverter.GetBytes).ToArray();
         return Convert.ToBase64String(SHA256.HashData(bytes));
+    }
+
+    // ── Namespace / path mismatch detection ───────────────────────────────────
+
+    public async Task<NamespacePathMismatchReport> FindNamespacePathMismatchesAsync(
+        Solution solution,
+        string? projectName,
+        CancellationToken cancellationToken = default)
+    {
+        var errors   = new List<NamespacePathMismatch>();
+        var warnings = new List<NamespacePathMismatch>();
+        int totalFiles = 0;
+
+        var projects = solution.Projects.AsEnumerable();
+        if (!string.IsNullOrEmpty(projectName))
+            projects = projects.Where(p =>
+                p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) ||
+                p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
+
+        // Build a cross-project lookup: fully-qualified-type-name → list of file paths
+        // Used to detect duplicate type names across mismatched paths (Error severity).
+        var typeToFiles = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+        // First pass: collect (document, declaredNamespace, expectedNamespace) for all relevant docs.
+        var findings = new List<(Document Doc, string? DeclaredNs, string ExpectedNs, List<string> TypeNames, string ProjectName)>();
+
+        foreach (var project in projects)
+        {
+            var rootNamespace = GetRootNamespace(project);
+            var projectRoot   = project.FilePath is not null
+                ? Path.GetDirectoryName(project.FilePath)
+                : null;
+
+            foreach (var doc in project.Documents)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var filePath = doc.FilePath;
+                if (filePath is null) continue;
+
+                // Skip generated files.
+                var fileName = Path.GetFileName(filePath);
+                if (fileName.EndsWith(".g.cs",         StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
+                    fileName.EndsWith(".Designer.cs",  StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                totalFiles++;
+
+                var syntaxRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+                if (syntaxRoot is null) continue;
+
+                // Extract all namespace declarations (both block and file-scoped).
+                var nsDecls = syntaxRoot.DescendantNodes()
+                    .Where(n => n is NamespaceDeclarationSyntax or FileScopedNamespaceDeclarationSyntax)
+                    .ToList();
+
+                // Extract top-level type names declared in this file (for duplicate detection).
+                var typeNames = syntaxRoot.DescendantNodes()
+                    .OfType<BaseTypeDeclarationSyntax>()
+                    .Where(t => t.Parent is NamespaceDeclarationSyntax
+                                         or FileScopedNamespaceDeclarationSyntax
+                                         or CompilationUnitSyntax)
+                    .Select(t => t.Identifier.Text)
+                    .ToList();
+
+                string? declaredNs;
+                if (nsDecls.Count == 0)
+                {
+                    declaredNs = null; // global namespace
+                }
+                else if (nsDecls.Count == 1)
+                {
+                    declaredNs = nsDecls[0] switch
+                    {
+                        NamespaceDeclarationSyntax ns    => ns.Name.ToString().Trim(),
+                        FileScopedNamespaceDeclarationSyntax fns => fns.Name.ToString().Trim(),
+                        _ => null
+                    };
+                }
+                else
+                {
+                    // Multiple namespace declarations — report as a warning, use first for path check.
+                    declaredNs = nsDecls[0] switch
+                    {
+                        NamespaceDeclarationSyntax ns    => ns.Name.ToString().Trim(),
+                        FileScopedNamespaceDeclarationSyntax fns => fns.Name.ToString().Trim(),
+                        _ => null
+                    };
+
+                    var expectedNsMulti = projectRoot is not null
+                        ? DeriveExpectedNamespace(filePath, projectRoot, rootNamespace)
+                        : rootNamespace;
+
+                    warnings.Add(new NamespacePathMismatch
+                    {
+                        FilePath          = filePath,
+                        ProjectName       = project.Name,
+                        DeclaredNamespace = declaredNs ?? "",
+                        ExpectedNamespace = expectedNsMulti,
+                        Severity          = "Warning",
+                        Reason            = "MultipleNamespacesInFile",
+                        ConflictingFiles  = []
+                    });
+                    continue;
+                }
+
+                var expectedNs = projectRoot is not null
+                    ? DeriveExpectedNamespace(filePath, projectRoot, rootNamespace)
+                    : rootNamespace;
+
+                // Track type → file for duplicate detection.
+                foreach (var typeName in typeNames)
+                {
+                    var fqn = $"{declaredNs ?? ""}.{typeName}";
+                    if (!typeToFiles.TryGetValue(fqn, out var list))
+                        typeToFiles[fqn] = list = [];
+                    list.Add(filePath);
+                }
+
+                findings.Add((doc, declaredNs, expectedNs, typeNames, project.Name));
+            }
+        }
+
+        // Second pass: classify each finding.
+        foreach (var (doc, declaredNs, expectedNs, typeNames, projName) in findings)
+        {
+            var filePath = doc.FilePath!;
+
+            if (declaredNs is null)
+            {
+                // No namespace declaration — global namespace is unexpected when a root namespace exists.
+                if (!string.IsNullOrEmpty(expectedNs))
+                {
+                    warnings.Add(new NamespacePathMismatch
+                    {
+                        FilePath          = filePath,
+                        ProjectName       = projName,
+                        DeclaredNamespace = "",
+                        ExpectedNamespace = expectedNs,
+                        Severity          = "Warning",
+                        Reason            = "GlobalNamespace",
+                        ConflictingFiles  = []
+                    });
+                }
+                continue;
+            }
+
+            if (string.Equals(declaredNs, expectedNs, StringComparison.OrdinalIgnoreCase))
+                continue;  // Clean — matches.
+
+            // Mismatch detected. Check for duplicate type names at the conflicting path.
+            var conflicting = new List<string>();
+            foreach (var typeName in typeNames)
+            {
+                var fqn = $"{expectedNs}.{typeName}";
+                if (typeToFiles.TryGetValue(fqn, out var otherFiles))
+                    conflicting.AddRange(otherFiles.Where(f =>
+                        !f.Equals(filePath, StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (conflicting.Count > 0)
+            {
+                errors.Add(new NamespacePathMismatch
+                {
+                    FilePath          = filePath,
+                    ProjectName       = projName,
+                    DeclaredNamespace = declaredNs,
+                    ExpectedNamespace = expectedNs,
+                    Severity          = "Error",
+                    Reason            = "DuplicateTypeAtMismatchedPath",
+                    ConflictingFiles  = conflicting.Distinct().ToList()
+                });
+            }
+            else
+            {
+                warnings.Add(new NamespacePathMismatch
+                {
+                    FilePath          = filePath,
+                    ProjectName       = projName,
+                    DeclaredNamespace = declaredNs,
+                    ExpectedNamespace = expectedNs,
+                    Severity          = "Warning",
+                    Reason            = "NamespaceFolderMismatch",
+                    ConflictingFiles  = []
+                });
+            }
+        }
+
+        // Partial-class-across-namespaces detection.
+        // Find partial type names declared in more than one namespace.
+        var partialTypeToNamespaces = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (doc, declaredNs, _, typeNames, _) in findings)
+        {
+            if (declaredNs is null) continue;
+            var syntaxRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+            if (syntaxRoot is null) continue;
+
+            var partials = syntaxRoot.DescendantNodes()
+                .OfType<BaseTypeDeclarationSyntax>()
+                .Where(t => t.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+                .Select(t => t.Identifier.Text);
+
+            foreach (var name in partials)
+            {
+                if (!partialTypeToNamespaces.TryGetValue(name, out var nss))
+                    partialTypeToNamespaces[name] = nss = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                nss.Add(declaredNs);
+            }
+        }
+        foreach (var (typeName, namespaces) in partialTypeToNamespaces)
+        {
+            if (namespaces.Count > 1)
+            {
+                // Find the files that contain this partial type.
+                var involvedFiles = findings
+                    .Where(f => f.TypeNames.Contains(typeName, StringComparer.OrdinalIgnoreCase))
+                    .Select(f => f.Doc.FilePath!)
+                    .ToList();
+
+                // Only report once per type (use first file).
+                if (involvedFiles.Count > 0)
+                {
+                    var first = involvedFiles[0];
+                    // Avoid double-reporting a file already in errors/warnings.
+                    if (!errors.Any(e => e.FilePath == first) && !warnings.Any(w => w.FilePath == first))
+                    {
+                        warnings.Add(new NamespacePathMismatch
+                        {
+                            FilePath          = first,
+                            ProjectName       = findings.First(f => f.Doc.FilePath == first).ProjectName,
+                            DeclaredNamespace = string.Join(", ", namespaces),
+                            ExpectedNamespace = "",
+                            Severity          = "Warning",
+                            Reason            = "PartialClassAcrossNamespaces",
+                            ConflictingFiles  = involvedFiles.Skip(1).ToList()
+                        });
+                    }
+                }
+            }
+        }
+
+        int mismatchCount = errors.Count + warnings.Count;
+        string summary = mismatchCount == 0
+            ? $"Clean: all {totalFiles} file(s) have matching namespaces and folder paths."
+            : $"{mismatchCount} mismatch(es) found in {totalFiles} file(s): "
+              + $"{errors.Count} error(s), {warnings.Count} warning(s).";
+
+        return new NamespacePathMismatchReport
+        {
+            Errors        = errors,
+            Warnings      = warnings,
+            TotalFiles    = totalFiles,
+            MismatchCount = mismatchCount,
+            IsClean       = mismatchCount == 0,
+            Summary       = summary
+        };
+    }
+
+    /// <summary>
+    /// Derives the expected namespace for a file based on its path relative to the project root.
+    /// </summary>
+    private static string DeriveExpectedNamespace(string filePath, string projectRoot, string rootNamespace)
+    {
+        // Get the directory containing the file, relative to the project root.
+        var fileDir    = Path.GetDirectoryName(filePath) ?? "";
+        var relativeDir = Path.GetRelativePath(projectRoot, fileDir);
+
+        if (relativeDir == ".")
+            return rootNamespace;
+
+        // Convert directory separators to namespace separators, strip leading dots.
+        var nsPart = relativeDir
+            .Replace('\\', '.')
+            .Replace('/', '.')
+            .Trim('.');
+
+        return string.IsNullOrEmpty(nsPart)
+            ? rootNamespace
+            : $"{rootNamespace}.{nsPart}";
+    }
+
+    /// <summary>
+    /// Reads the <c>&lt;RootNamespace&gt;</c> MSBuild property from the project file,
+    /// falling back to the project name (the .csproj stem).
+    /// </summary>
+    private static string GetRootNamespace(Project project)
+    {
+        // Try to read <RootNamespace> from the .csproj XML directly — works for both
+        // SDK-style and legacy project formats, and doesn't require a compilation.
+        if (project.FilePath is not null)
+        {
+            try
+            {
+                var xdoc = System.Xml.Linq.XDocument.Load(project.FilePath);
+                var ns   = xdoc.Descendants()
+                    .FirstOrDefault(e => string.Equals(e.Name.LocalName, "RootNamespace",
+                                                        StringComparison.OrdinalIgnoreCase))
+                    ?.Value;
+                if (!string.IsNullOrWhiteSpace(ns))
+                    return ns.Trim();
+            }
+            catch { /* best effort — fall through to project name */ }
+        }
+
+        return project.Name;
     }
 }

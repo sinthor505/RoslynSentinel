@@ -2,7 +2,7 @@
   "servers": {
     "roslyn-sentinel": {
       "type": "stdio",
-      "command": "${workspaceFolder}/publish/RoslynSentinel.Server.exe",
+      "command": "${workspaceFolder}\\publish\\RoslynSentinel.Server.exe",
       "args": ["--mode=all"],
       "env": {
         "DOTNET_ROOT": "C:\\Program Files\\dotnet",

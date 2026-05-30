@@ -1640,5 +1640,34 @@ public class SentinelQualityTools
         PropagateCtBatchInput input,
         CancellationToken cancellationToken = default)
         => await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(input, cancellationToken);
+
+    // ── Pre-flight diagnostics ─────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description(
+        "Scans the loaded solution for source files where the declared namespace does not match " +
+        "the file's folder path relative to its project root. Mismatches indicate that Roslyn's " +
+        "path-based document identity and namespace-based type identity are out of sync, which can " +
+        "cause batch refactoring tools to write changes to incorrect file locations. " +
+        "Syntax-only scan — no compilation required. Safe to run at any time including when the " +
+        "build is broken. Returns findings grouped by severity: Error (duplicate type names exist " +
+        "across mismatched paths — immediate risk), Warning (mismatch exists but no duplicate " +
+        "detected — latent risk). Optionally scoped to a single project.")]
+    public async Task<NamespacePathMismatchReport> FindNamespacePathMismatches(
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            return await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FindNamespacePathMismatches unexpected exception");
+            throw new InvalidOperationException(
+                $"FindNamespacePathMismatches failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+    }
 }
 
