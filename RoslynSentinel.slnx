@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+  <Project Path="DummyConsole/DummyApp/DummyApp.csproj" />
+  <Project Path="RoslynSentinel.HttpHost/RoslynSentinel.HttpHost.csproj" />
   <Project Path="RoslynSentinel.Server/RoslynSentinel.Server.csproj" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
 </Solution>

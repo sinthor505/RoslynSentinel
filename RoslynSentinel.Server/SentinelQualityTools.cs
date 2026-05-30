@@ -1429,17 +1429,20 @@ public class SentinelQualityTools
         the Asyncify-bridge pattern in a single call, using in-memory Roslyn compilation for
         validation (no MSBuild round-trips). For each candidate:
           1. Calls convert_to_async_bridge to produce the transformed source.
-          2. Validates the source with in-memory compilation.
-          3. On success: writes the file to disk and refreshes the workspace.
-          4. On error: flags the method [MigrationCandidate("NeedsManualReview")] and continues.
+          2. If propagateCancellationTokens=true: propagates CT to async callees in the new Async overload.
+          3. Validates the composite source with in-memory compilation.
+          4. On success: writes the file to disk and refreshes the workspace.
+          5. On error: flags the method [MigrationCandidate("NeedsManualReview")] and continues.
 
         Parameters:
-          projectName     — restrict candidate scan to one project (null = entire solution).
-          maxBridges      — max methods to process this call (default 10).
-          scoreThreshold  — only candidates with score ≤ this are eligible (default 60).
-                            flag_migration_candidates_in_project uses minScore 50, so no
-                            candidate is flagged below 50. 60 captures the simplest batch first.
-          dryRun          — when true, reports what would happen without writing files.
+          projectName                 — restrict candidate scan to one project (null = entire solution).
+          maxBridges                  — max methods to process this call (default 10).
+          scoreThreshold              — only candidates with score ≤ this are eligible (default 60).
+                                        flag_migration_candidates_in_project uses minScore 50, so no
+                                        candidate is flagged below 50. 60 captures the simplest batch first.
+          dryRun                      — when true, reports what would happen without writing files.
+          propagateCancellationTokens — when true (default), also propagates the CT parameter to
+                                        other async callees in the new async overload.
 
         Returns BridgeBatchResult with:
           Applied             — methods successfully bridged and written to disk.
@@ -1452,9 +1455,10 @@ public class SentinelQualityTools
         int     maxBridges     = 10,
         int     scoreThreshold = 60,
         bool    dryRun         = false,
+        bool    propagateCancellationTokens = true,
         CancellationToken cancellationToken = default)
         => await _asyncBatchEngine.RunBridgeBatchAsync(
-               projectName, maxBridges, scoreThreshold, dryRun, cancellationToken);
+               projectName, maxBridges, scoreThreshold, dryRun, propagateCancellationTokens, cancellationToken);
 
     [McpServerTool]
     [Description("""
@@ -1463,16 +1467,19 @@ public class SentinelQualityTools
         For each caller of the named bridged method:
           1. Bridges the caller (convert_to_async_bridge) to create callerAsync(CancellationToken).
           2. Rewrites the callerAsync body: bridgedMethod(args) → await bridgedMethodAsync(args, ct).
-          3. Validates in-memory.
-          4. On success: writes the file to disk.
-          5. On error: flags the caller [MigrationCandidate("NeedsManualReview")] and continues.
+          3. If propagateCancellationTokens=true: propagates CT to all other async callees in callerAsync.
+          4. Validates in-memory.
+          5. On success: writes the file to disk.
+          6. On error: flags the caller [MigrationCandidate("NeedsManualReview")] and continues.
 
         Parameters:
-          bridgedMethodName — name of the already-bridged sync method (e.g. "search").
-                              The async counterpart is assumed to be bridgedMethodName + "Async".
-          projectName       — restrict caller scan to one project (null = entire solution).
-          maxCallers        — max caller methods to process this call (default 10).
-          dryRun            — when true, reports what would happen without writing files.
+          bridgedMethodName              — name of the already-bridged sync method (e.g. "search").
+                                           The async counterpart is assumed to be bridgedMethodName + "Async".
+          projectName                    — restrict caller scan to one project (null = entire solution).
+          maxCallers                     — max caller methods to process this call (default 10).
+          dryRun                         — when true, reports what would happen without writing files.
+          propagateCancellationTokens    — when true (default), also propagates the CT parameter to
+                                           other async callees in the new async overload.
 
         Returns UpliftBatchResult with:
           Uplifted         — callers successfully uplifted and written to disk.
@@ -1485,8 +1492,153 @@ public class SentinelQualityTools
         string? projectName  = null,
         int     maxCallers   = 10,
         bool    dryRun       = false,
+        bool    propagateCancellationTokens = true,
         CancellationToken cancellationToken = default)
         => await _asyncBatchEngine.RunUpliftBatchAsync(
-               bridgedMethodName, projectName, maxCallers, dryRun, cancellationToken);
+               bridgedMethodName, projectName, maxCallers, dryRun, propagateCancellationTokens, cancellationToken);
+
+    [McpServerTool]
+    [Description("""
+        Runs run_uplift_batch for each bridged method in the provided list, collecting
+        per-method and aggregate results. Processes all targets sequentially; a failure on
+        one method does not block the others.
+
+        Input (UpliftBatchMultiInput):
+          Targets                   — list of { BridgedMethodName, ProjectName? } targets.
+          MaxCallersPerMethod       — max callers to process per bridged method (default 10).
+          DryRun                    — when true, reports what would happen without writing files.
+          PropagateCancellationTokens — when true (default), propagates CT to other async
+                                        callees in each newly created async overload.
+
+        Returns UpliftBatchMultiResult with:
+          PerMethod            — one UpliftBatchMultiMethodResult per target, each containing
+                                 the full UpliftBatchResult for that method plus any Error.
+          TotalUplifted        — total callers uplifted across all methods.
+          TotalSkipped         — total callers skipped across all methods.
+          TotalRemainingCallers — total pending callers not yet processed (budget cap).
+          StopReason           — "batch_complete" | "dry_run".
+        """)]
+    public async Task<UpliftBatchMultiResult> RunUpliftBatchMulti(
+        UpliftBatchMultiInput input,
+        CancellationToken cancellationToken = default)
+        => await _asyncBatchEngine.RunUpliftBatchMultiAsync(input, cancellationToken);
+
+    [McpServerTool]
+    [Description("""
+        Propagates an existing CancellationToken parameter from a method to all eligible
+        async callees within its body. The target method must already have a CancellationToken
+        parameter. For each call to an async method that has a CancellationToken overload but
+        isn't receiving the token, appends the token to the call site. Call sites that already
+        forward a CT or call methods without CT overloads are reported as skipped.
+        Returns a staged change-set; call apply_staged_changes to commit.
+
+        Parameters:
+          filePath   — absolute path to the source file containing the method.
+          methodName — name of the method to process (case-sensitive).
+          autoStage  — when true (default), stages the changes and returns a ChangeId.
+                       When false, returns the updated source text with no ChangeId.
+
+        Returns PropagateCtResult with:
+          MethodFound        — false if the method was not found in the file.
+          TokenParameterName — actual parameter name used (e.g. "ct" or "cancellationToken").
+          Forwarded          — call sites that were rewritten with the token.
+          Skipped            — call sites skipped with reason code.
+          ForwardedCount     — count of Forwarded.
+          SkippedCount       — count of Skipped.
+          ChangeId           — staged change id (null if autoStage=false or no changes).
+          Error              — non-null on hard failure (method has no CT param, etc.).
+        """)]
+    public async Task<PropagateCtResult> PropagateCancellationTokenInMethod(
+        string filePath,
+        string methodName,
+        bool   autoStage = true,
+        CancellationToken cancellationToken = default)
+    {
+        var (updatedSource, result) = await _asyncOptimizationEngine
+            .PropagateCancellationTokenInMethodAsync(filePath, methodName, cancellationToken);
+
+        if (!string.IsNullOrEmpty(result.Error))
+            return result;
+
+        if (!result.MethodFound || result.ForwardedCount == 0)
+            return result;
+
+        if (!autoStage)
+            return result;
+
+        var changeId = _workspaceManager.StageChanges(
+            new Dictionary<string, string> { { filePath, updatedSource } },
+            $"Propagate CancellationToken in '{methodName}'");
+        result.ChangeId = changeId;
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("""
+        Propagates CancellationToken parameters to all eligible call sites across all methods
+        in a file. For each method that has a CancellationToken parameter, applies the same
+        logic as propagate_cancellation_token_in_method. Methods without a CT parameter are
+        skipped silently. Returns aggregated per-method results and a staged change-set.
+
+        Parameters:
+          filePath    — absolute path to the source file.
+          methodNames — optional array of method names to restrict processing (null = all eligible).
+          autoStage   — when true (default), stages the changes and returns a ChangeId.
+
+        Returns PropagateCtFileResult with:
+          PerMethod        — one PropagateCtResult per method processed.
+          TotalForwarded   — total call sites rewritten across all methods.
+          TotalSkipped     — total call sites skipped across all methods.
+          MethodsProcessed — count of methods that had a CT param and were processed.
+          MethodsSkipped   — count of methods without a CT param (or filtered out).
+          ChangeId         — staged change id (null if autoStage=false or no changes).
+        """)]
+    public async Task<PropagateCtFileResult> PropagateCancellationTokenInFile(
+        string   filePath,
+        string[]? methodNames = null,
+        bool      autoStage   = true,
+        CancellationToken cancellationToken = default)
+    {
+        var (updatedSource, result) = await _asyncOptimizationEngine
+            .PropagateCancellationTokenInFileAsync(filePath, methodNames, cancellationToken);
+
+        result.FilePath = filePath;
+
+        if (result.TotalForwarded == 0 || !autoStage)
+            return result;
+
+        var changeId = _workspaceManager.StageChanges(
+            new Dictionary<string, string> { { filePath, updatedSource } },
+            $"Propagate CancellationToken in file '{System.IO.Path.GetFileName(filePath)}'");
+        result.ChangeId = changeId;
+        return result;
+    }
+
+    [McpServerTool]
+    [Description("""
+        Batch propagation of CancellationToken across multiple files. Accepts a list of file
+        paths with optional per-file method filters. Processes each file independently,
+        validating each in-memory before writing. Failed files do not block successful ones.
+        On failure with FlagFailures=true, flags offending methods with
+        [MigrationCandidate("CancellationTokenForwardCandidate")] for later manual review.
+
+        Input (PropagateCtBatchInput):
+          Targets      — list of { FilePath, MethodNames? } targets.
+          DryRun       — when true, computes results without writing files (default false).
+          MaxFiles     — max files to process (default 100).
+          FlagFailures — when true (default), flags failing methods with MigrationCandidate.
+
+        Returns PropagateCtBatchResult with:
+          Applied         — per-file results for files that were successfully processed.
+          Failed          — files that failed validation, with diagnostics and flagged methods.
+          TotalForwarded  — total call sites rewritten across all files.
+          TotalSkipped    — total call sites skipped.
+          RemainingFiles  — number of targets not processed (due to MaxFiles cap).
+          StopReason      — "batch_complete" | "budget_exhausted" | "dry_run".
+        """)]
+    public async Task<PropagateCtBatchResult> PropagateCancellationTokenBatch(
+        PropagateCtBatchInput input,
+        CancellationToken cancellationToken = default)
+        => await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(input, cancellationToken);
 }
 

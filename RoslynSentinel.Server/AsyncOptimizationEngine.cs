@@ -2377,5 +2377,642 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         return (score, reasons.ToString().TrimEnd());
     }
+
+    // ── PropagateCancellationToken ────────────────────────────────────────────
+
+    /// <summary>
+    /// Propagates an existing CancellationToken parameter from <paramref name="methodName"/>
+    /// to all eligible async callees within its body.  The method must already have a
+    /// CancellationToken parameter; call sites that already forward the token or whose callees
+    /// have no CT overload are reported as skipped.
+    /// </summary>
+    /// <returns>
+    /// A tuple of the full updated source string and per-call-site forward/skip lists.
+    /// The source is identical to the input when no call sites were rewritten.
+    /// </returns>
+    public async Task<(string UpdatedSource, PropagateCtResult Result)>
+        PropagateCancellationTokenInMethodAsync(
+            string filePath,
+            string methodName,
+            CancellationToken cancellationToken = default)
+    {
+        var result = new PropagateCtResult { MethodName = methodName };
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+        {
+            result.Error = $"File '{filePath}' not found in the loaded solution.";
+            return ("", result);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            result.Error = "Failed to get syntax root.";
+            return ("", result);
+        }
+
+        var methodNode = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+
+        if (methodNode == null)
+        {
+            result.MethodFound = false;
+            return (root.ToFullString(), result);
+        }
+
+        result.MethodFound = true;
+
+        // Find CancellationToken parameter
+        var ctParam = methodNode.ParameterList.Parameters.FirstOrDefault(p =>
+        {
+            var typeName = p.Type?.ToString() ?? "";
+            return typeName == "CancellationToken" ||
+                   typeName.EndsWith(".CancellationToken");
+        });
+
+        if (ctParam == null)
+        {
+            result.Error = "Method does not have a CancellationToken parameter";
+            return (root.ToFullString(), result);
+        }
+
+        var ctParamName = ctParam.Identifier.Text;
+        result.TokenParameterName = ctParamName;
+
+        SemanticModel? semanticModel = null;
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+
+        var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
+        if (body == null)
+        {
+            return (root.ToFullString(), result);
+        }
+
+        var invocations = body.DescendantNodes()
+            .OfType<InvocationExpressionSyntax>()
+            .ToList();
+
+        var replacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
+
+        foreach (var inv in invocations)
+        {
+            var lineSpan = inv.GetLocation().GetLineSpan();
+            int lineNum = lineSpan.StartLinePosition.Line + 1;
+
+            // Determine callee name and type
+            string? calleeName = inv.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                IdentifierNameSyntax id => id.Identifier.Text,
+                _ => null
+            };
+            string calleeType = inv.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Expression.ToString(),
+                _ => ""
+            };
+
+            if (calleeName == null)
+                continue;
+
+            // Check if already forwarding CT
+            bool alreadyForwarded = inv.ArgumentList.Arguments.Any(a =>
+                a.Expression.ToString().Contains(ctParamName) ||
+                (a.NameColon != null && a.NameColon.Name.Identifier.Text == "cancellationToken" &&
+                 a.Expression.ToString().Contains(ctParamName)));
+
+            if (alreadyForwarded)
+            {
+                result.Skipped.Add(new CallSiteSkip
+                {
+                    CalleeMethod = calleeName,
+                    Line = lineNum,
+                    Reason = "AlreadyForwarded"
+                });
+                continue;
+            }
+
+            // Check if callee is async (heuristic: ends with Async, or semantic check)
+            bool calleeIsAsync = calleeName.EndsWith("Async", StringComparison.Ordinal);
+            if (!calleeIsAsync && semanticModel != null)
+            {
+                var si = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                var sym = si.Symbol as IMethodSymbol
+                    ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
+                if (sym != null)
+                {
+                    var retType = sym.ReturnType.ToDisplayString();
+                    calleeIsAsync = retType.StartsWith("System.Threading.Tasks.Task") ||
+                                    retType.StartsWith("System.Threading.Tasks.ValueTask") ||
+                                    retType == "System.Threading.Tasks.Task" ||
+                                    retType == "System.Threading.Tasks.ValueTask";
+                }
+            }
+
+            if (!calleeIsAsync)
+            {
+                result.Skipped.Add(new CallSiteSkip
+                {
+                    CalleeMethod = calleeName,
+                    Line = lineNum,
+                    Reason = "CalleeNotAsync"
+                });
+                continue;
+            }
+
+            // Check for CT overload via semantic model
+            bool hasCtOverload = false;
+            bool isAmbiguous = false;
+
+            if (semanticModel != null)
+            {
+                var si = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                var candidates = new List<IMethodSymbol>();
+                if (si.Symbol is IMethodSymbol ms0) candidates.Add(ms0);
+                candidates.AddRange(si.CandidateSymbols.OfType<IMethodSymbol>());
+
+                if (candidates.Count == 0)
+                {
+                    // No symbol resolution — fall through to heuristic
+                    hasCtOverload = true;
+                }
+                else
+                {
+                    var containingType = candidates.First().ContainingType;
+                    if (containingType != null)
+                    {
+                        var overloads = containingType.GetMembers(calleeName)
+                            .OfType<IMethodSymbol>()
+                            .ToList();
+                        var ctOverloads = overloads.Where(o =>
+                            o.Parameters.Any(p =>
+                                p.Type.ToDisplayString() == "System.Threading.CancellationToken"))
+                            .ToList();
+                        hasCtOverload = ctOverloads.Count > 0;
+                        // Ambiguous if there's more than one CT overload with different non-CT params
+                        if (ctOverloads.Count > 1)
+                        {
+                            isAmbiguous = true;
+                        }
+                    }
+                    else
+                    {
+                        // Direct symbol; check it directly
+                        hasCtOverload = candidates.Any(o =>
+                            o.Parameters.Any(p =>
+                                p.Type.ToDisplayString() == "System.Threading.CancellationToken"));
+                    }
+                }
+            }
+            else
+            {
+                // No semantic model — heuristic: any *Async call can probably take CT
+                hasCtOverload = true;
+            }
+
+            if (!hasCtOverload)
+            {
+                result.Skipped.Add(new CallSiteSkip
+                {
+                    CalleeMethod = calleeName,
+                    Line = lineNum,
+                    Reason = "NoCancellationTokenOverload"
+                });
+                continue;
+            }
+
+            if (isAmbiguous)
+            {
+                result.Skipped.Add(new CallSiteSkip
+                {
+                    CalleeMethod = calleeName,
+                    Line = lineNum,
+                    Reason = "AmbiguousOverload"
+                });
+                continue;
+            }
+
+            // Check if call uses named arguments — if so, we need named CT arg too
+            bool hasNamedArgs = inv.ArgumentList.Arguments.Any(a => a.NameColon != null);
+
+            var beforeSnippet = inv.ToString();
+            ArgumentSyntax ctArg;
+            if (hasNamedArgs)
+            {
+                ctArg = SyntaxFactory.Argument(
+                    SyntaxFactory.NameColon(SyntaxFactory.IdentifierName("cancellationToken")),
+                    default,
+                    SyntaxFactory.IdentifierName(ctParamName));
+            }
+            else
+            {
+                ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName(ctParamName));
+            }
+
+            var newArgList = inv.ArgumentList.AddArguments(ctArg);
+            var newInv = inv.WithArgumentList(newArgList);
+            var afterSnippet = newInv.ToString();
+
+            replacements[inv] = newInv;
+            result.Forwarded.Add(new CallSiteForward
+            {
+                CalleeMethod = calleeName,
+                CalleeType = calleeType,
+                Line = lineNum,
+                BeforeSnippet = beforeSnippet,
+                AfterSnippet = afterSnippet
+            });
+        }
+
+        result.ForwardedCount = result.Forwarded.Count;
+        result.SkippedCount = result.Skipped.Count;
+
+        if (replacements.Count == 0)
+        {
+            return (root.ToFullString(), result);
+        }
+
+        // Apply all replacements in one pass
+        var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
+        return (newRoot.ToFullString(), result);
+    }
+
+    /// <summary>
+    /// Propagates CancellationToken parameters to all eligible call sites across all methods
+    /// in a file. For each method that has a CancellationToken parameter, applies the same
+    /// logic as <see cref="PropagateCancellationTokenInMethodAsync"/>. Methods without a CT
+    /// parameter are skipped silently.
+    /// </summary>
+    public async Task<(string UpdatedSource, PropagateCtFileResult Result)>
+        PropagateCancellationTokenInFileAsync(
+            string filePath,
+            string[]? methodNames = null,
+            CancellationToken cancellationToken = default)
+    {
+        var fileResult = new PropagateCtFileResult { FilePath = filePath };
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+        {
+            return ($"// Error: File '{filePath}' not found in the loaded solution.", fileResult);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return ("// Error: Failed to get syntax root.", fileResult);
+        }
+
+        SemanticModel? semanticModel = null;
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+
+        var requested = methodNames != null
+            ? new HashSet<string>(methodNames, StringComparer.Ordinal)
+            : null;
+
+        // Single-pass: collect all replacements across all eligible methods
+        var allReplacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
+
+        foreach (var methodNode in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        {
+            var name = methodNode.Identifier.Text;
+
+            // Apply method filter if provided
+            if (requested != null && !requested.Contains(name))
+            {
+                fileResult.MethodsSkipped++;
+                continue;
+            }
+
+            // Method must have a CancellationToken parameter
+            var ctParam = methodNode.ParameterList.Parameters.FirstOrDefault(p =>
+            {
+                var typeName = p.Type?.ToString() ?? "";
+                return typeName == "CancellationToken" ||
+                       typeName.EndsWith(".CancellationToken");
+            });
+
+            if (ctParam == null)
+            {
+                fileResult.MethodsSkipped++;
+                continue;
+            }
+
+            var ctParamName = ctParam.Identifier.Text;
+            var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
+            if (body == null)
+            {
+                fileResult.MethodsSkipped++;
+                continue;
+            }
+
+            var methodResult = new PropagateCtResult
+            {
+                MethodName = name,
+                TokenParameterName = ctParamName,
+                MethodFound = true
+            };
+
+            foreach (var inv in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var lineSpan = inv.GetLocation().GetLineSpan();
+                int lineNum = lineSpan.StartLinePosition.Line + 1;
+
+                string? calleeName = inv.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                    IdentifierNameSyntax id => id.Identifier.Text,
+                    _ => null
+                };
+                string calleeType = inv.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Expression.ToString(),
+                    _ => ""
+                };
+
+                if (calleeName == null) continue;
+
+                bool alreadyForwarded = inv.ArgumentList.Arguments.Any(a =>
+                    a.Expression.ToString().Contains(ctParamName) ||
+                    (a.NameColon != null &&
+                     a.NameColon.Name.Identifier.Text == "cancellationToken" &&
+                     a.Expression.ToString().Contains(ctParamName)));
+
+                if (alreadyForwarded)
+                {
+                    methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "AlreadyForwarded" });
+                    continue;
+                }
+
+                bool calleeIsAsync = calleeName.EndsWith("Async", StringComparison.Ordinal);
+                if (!calleeIsAsync && semanticModel != null)
+                {
+                    var si = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                    var sym = si.Symbol as IMethodSymbol
+                        ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
+                    if (sym != null)
+                    {
+                        var retType = sym.ReturnType.ToDisplayString();
+                        calleeIsAsync = retType.StartsWith("System.Threading.Tasks.Task") ||
+                                        retType.StartsWith("System.Threading.Tasks.ValueTask");
+                    }
+                }
+
+                if (!calleeIsAsync)
+                {
+                    methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "CalleeNotAsync" });
+                    continue;
+                }
+
+                bool hasCtOverload = false;
+                bool isAmbiguous = false;
+
+                if (semanticModel != null)
+                {
+                    var si = semanticModel.GetSymbolInfo(inv, cancellationToken);
+                    var candidates = new List<IMethodSymbol>();
+                    if (si.Symbol is IMethodSymbol ms0) candidates.Add(ms0);
+                    candidates.AddRange(si.CandidateSymbols.OfType<IMethodSymbol>());
+
+                    if (candidates.Count == 0)
+                    {
+                        hasCtOverload = true;
+                    }
+                    else
+                    {
+                        var containingType = candidates.First().ContainingType;
+                        if (containingType != null)
+                        {
+                            var ctOverloads = containingType.GetMembers(calleeName)
+                                .OfType<IMethodSymbol>()
+                                .Where(o => o.Parameters.Any(p =>
+                                    p.Type.ToDisplayString() == "System.Threading.CancellationToken"))
+                                .ToList();
+                            hasCtOverload = ctOverloads.Count > 0;
+                            isAmbiguous = ctOverloads.Count > 1;
+                        }
+                        else
+                        {
+                            hasCtOverload = candidates.Any(o =>
+                                o.Parameters.Any(p =>
+                                    p.Type.ToDisplayString() == "System.Threading.CancellationToken"));
+                        }
+                    }
+                }
+                else
+                {
+                    hasCtOverload = true;
+                }
+
+                if (!hasCtOverload)
+                {
+                    methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "NoCancellationTokenOverload" });
+                    continue;
+                }
+
+                if (isAmbiguous)
+                {
+                    methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "AmbiguousOverload" });
+                    continue;
+                }
+
+                bool hasNamedArgs = inv.ArgumentList.Arguments.Any(a => a.NameColon != null);
+                var beforeSnippet = inv.ToString();
+
+                ArgumentSyntax ctArg;
+                if (hasNamedArgs)
+                {
+                    ctArg = SyntaxFactory.Argument(
+                        SyntaxFactory.NameColon(SyntaxFactory.IdentifierName("cancellationToken")),
+                        default,
+                        SyntaxFactory.IdentifierName(ctParamName));
+                }
+                else
+                {
+                    ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName(ctParamName));
+                }
+
+                var newArgList = inv.ArgumentList.AddArguments(ctArg);
+                var newInv = inv.WithArgumentList(newArgList);
+                allReplacements[inv] = newInv;
+
+                methodResult.Forwarded.Add(new CallSiteForward
+                {
+                    CalleeMethod = calleeName,
+                    CalleeType = calleeType,
+                    Line = lineNum,
+                    BeforeSnippet = beforeSnippet,
+                    AfterSnippet = newInv.ToString()
+                });
+            }
+
+            methodResult.ForwardedCount = methodResult.Forwarded.Count;
+            methodResult.SkippedCount = methodResult.Skipped.Count;
+            fileResult.PerMethod.Add(methodResult);
+            fileResult.MethodsProcessed++;
+            fileResult.TotalForwarded += methodResult.ForwardedCount;
+            fileResult.TotalSkipped += methodResult.SkippedCount;
+        }
+
+        if (allReplacements.Count == 0)
+        {
+            return (root.ToFullString(), fileResult);
+        }
+
+        var newRoot = root.ReplaceNodes(allReplacements.Keys, (orig, _) => allReplacements[orig]);
+        return (newRoot.ToFullString(), fileResult);
+    }
+
+    /// <summary>
+    /// Propagates CancellationToken in a single named method within an in-memory source string.
+    /// Does not load from the workspace — uses a purely syntactic pass (no semantic model).
+    /// Used by batch operations that have transformed source that hasn't been written to disk yet.
+    /// </summary>
+    /// <param name="source">Full source file text to transform.</param>
+    /// <param name="filePath">File path (used only for error messages; not read from disk).</param>
+    /// <param name="methodName">Method to process.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public Task<(string UpdatedSource, PropagateCtFileResult Result)>
+        PropagateCancellationTokenInSourceAsync(
+            string source,
+            string filePath,
+            string methodName,
+            CancellationToken cancellationToken = default)
+    {
+        var fileResult = new PropagateCtFileResult { FilePath = filePath };
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
+        var root = tree.GetRoot(cancellationToken);
+
+        var allReplacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
+
+        var methodNode = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName);
+
+        if (methodNode == null)
+        {
+            fileResult.MethodsSkipped++;
+            return Task.FromResult((source, fileResult));
+        }
+
+        var ctParam = methodNode.ParameterList.Parameters.FirstOrDefault(p =>
+        {
+            var typeName = p.Type?.ToString() ?? "";
+            return typeName == "CancellationToken" || typeName.EndsWith(".CancellationToken");
+        });
+
+        if (ctParam == null)
+        {
+            fileResult.MethodsSkipped++;
+            return Task.FromResult((source, fileResult));
+        }
+
+        var ctParamName = ctParam.Identifier.Text;
+        var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
+        if (body == null)
+        {
+            fileResult.MethodsSkipped++;
+            return Task.FromResult((source, fileResult));
+        }
+
+        var methodResult = new PropagateCtResult
+        {
+            MethodName = methodName,
+            TokenParameterName = ctParamName,
+            MethodFound = true
+        };
+
+        foreach (var inv in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var lineSpan = inv.GetLocation().GetLineSpan();
+            int lineNum = lineSpan.StartLinePosition.Line + 1;
+
+            string? calleeName = inv.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                IdentifierNameSyntax id => id.Identifier.Text,
+                _ => null
+            };
+            string calleeType = inv.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Expression.ToString(),
+                _ => ""
+            };
+
+            if (calleeName == null) continue;
+
+            bool alreadyForwarded = inv.ArgumentList.Arguments.Any(a =>
+                a.Expression.ToString().Contains(ctParamName) ||
+                (a.NameColon != null &&
+                 a.NameColon.Name.Identifier.Text == "cancellationToken" &&
+                 a.Expression.ToString().Contains(ctParamName)));
+
+            if (alreadyForwarded)
+            {
+                methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "AlreadyForwarded" });
+                continue;
+            }
+
+            // Without a semantic model, rely on naming heuristic only
+            bool calleeIsAsync = calleeName.EndsWith("Async", StringComparison.Ordinal);
+            if (!calleeIsAsync)
+            {
+                methodResult.Skipped.Add(new CallSiteSkip { CalleeMethod = calleeName, Line = lineNum, Reason = "CalleeNotAsync" });
+                continue;
+            }
+
+            bool hasNamedArgs = inv.ArgumentList.Arguments.Any(a => a.NameColon != null);
+            var beforeSnippet = inv.ToString();
+
+            ArgumentSyntax ctArg;
+            if (hasNamedArgs)
+            {
+                ctArg = SyntaxFactory.Argument(
+                    SyntaxFactory.NameColon(SyntaxFactory.IdentifierName("cancellationToken")),
+                    default,
+                    SyntaxFactory.IdentifierName(ctParamName));
+            }
+            else
+            {
+                ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName(ctParamName));
+            }
+
+            var newArgList = inv.ArgumentList.AddArguments(ctArg);
+            var newInv = inv.WithArgumentList(newArgList);
+            allReplacements[inv] = newInv;
+
+            methodResult.Forwarded.Add(new CallSiteForward
+            {
+                CalleeMethod = calleeName,
+                CalleeType = calleeType,
+                Line = lineNum,
+                BeforeSnippet = beforeSnippet,
+                AfterSnippet = newInv.ToString()
+            });
+        }
+
+        methodResult.ForwardedCount = methodResult.Forwarded.Count;
+        methodResult.SkippedCount = methodResult.Skipped.Count;
+        fileResult.PerMethod.Add(methodResult);
+        fileResult.MethodsProcessed++;
+        fileResult.TotalForwarded += methodResult.ForwardedCount;
+        fileResult.TotalSkipped += methodResult.SkippedCount;
+
+        if (allReplacements.Count == 0)
+        {
+            return Task.FromResult((source, fileResult));
+        }
+
+        var newRoot2 = root.ReplaceNodes(allReplacements.Keys, (orig, _) => allReplacements[orig]);
+        return Task.FromResult((newRoot2.ToFullString(), fileResult));
+    }
 }
 

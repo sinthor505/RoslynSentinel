@@ -27,7 +27,33 @@ var activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCa
     ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
     : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
+// --- Fast-exit commands (no host build needed) ---
+if (args.Contains("--list-tools"))
+{
+    var outputPath = args.FirstOrDefault(a => a.StartsWith("--output=", StringComparison.Ordinal))?.Replace("--output=", "");
+    SentinelConsoleMode.ListTools(activeModes, outputPath);
+    return;
+}
+
 Console.Error.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
+
+// --- Interactive-mode pipe setup (streams must exist before host build) ---
+var isInteractive = args.Contains("--interactive");
+System.IO.Pipelines.Pipe? _c2sPipe = null;
+System.IO.Pipelines.Pipe? _s2cPipe = null;
+Stream? _interactiveServerInput = null;
+Stream? _interactiveServerOutput = null;
+Stream? _replWriteStream = null;
+Stream? _replReadStream = null;
+if (isInteractive)
+{
+    _c2sPipe = new System.IO.Pipelines.Pipe();
+    _s2cPipe = new System.IO.Pipelines.Pipe();
+    _interactiveServerInput = _c2sPipe.Reader.AsStream();
+    _interactiveServerOutput = _s2cPipe.Writer.AsStream();
+    _replWriteStream = _c2sPipe.Writer.AsStream();
+    _replReadStream = _s2cPipe.Reader.AsStream();
+}
 
 // --- Configure Logging (Redirection to File ONLY) ---
 // Clear default providers (especially Console which breaks MCP Stdio)
@@ -69,163 +95,23 @@ builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 try
 {
     // --- Register Infrastructure ---
-    builder.Services.AddSingleton<SentinelConfiguration>(); // <--- Global Toggle Service
-    builder.Services.AddSingleton<PersistentWorkspaceManager>();
-    builder.Services.AddSingleton<DiffEngine>();
-    builder.Services.AddSingleton<ValidationEngine>();
-    builder.Services.AddSingleton<ImpactAnalyzer>();
-    builder.Services.AddSingleton<RefactoringEngine>();
-    builder.Services.AddSingleton<MetricsEngine>();
-    builder.Services.AddSingleton<CodeHealingEngine>();
-    builder.Services.AddSingleton<AnalysisEngine>();
-    builder.Services.AddSingleton<PerformanceEngine>();
-    builder.Services.AddSingleton<SecurityEngine>();
-    builder.Services.AddSingleton<TestingEngine>();
-    builder.Services.AddSingleton<CodeGenerationEngine>();
-    builder.Services.AddSingleton<ModernizationEngine>();
-    builder.Services.AddSingleton<DependencyInjectionEngine>();
-    builder.Services.AddSingleton<ThreadSafetyEngine>();
-    builder.Services.AddSingleton<ArchitecturalEngine>();
-    builder.Services.AddSingleton<AdvancedRefactoringEngine>();
-    builder.Services.AddSingleton<DocumentationEngine>();
-    builder.Services.AddSingleton<SecurityAndSafetyEngine>();
-    builder.Services.AddSingleton<ApiIntegrationEngine>();
-    builder.Services.AddSingleton<InventoryEngine>();
-    builder.Services.AddSingleton<AsyncOptimizationEngine>();
-    builder.Services.AddSingleton<InstrumentationEngine>();
-    builder.Services.AddSingleton<AdvancedTypeEngine>();
-    builder.Services.AddSingleton<ModernLoggingEngine>();
-    builder.Services.AddSingleton<CodeFlowEngine>();
-    builder.Services.AddSingleton<StructuralRefinementEngine>();
-    builder.Services.AddSingleton<LogicOptimizationEngine>();
-    builder.Services.AddSingleton<SemanticSearchEngine>();
-    builder.Services.AddSingleton<ModernizationUpgradeEngine>();
-    builder.Services.AddSingleton<AsyncSafetyEngine>();
-    builder.Services.AddSingleton<ProjectStructureEngine>();
-    builder.Services.AddSingleton<DeadCodeEngine>();
-    builder.Services.AddSingleton<SyntaxUpgradeEngine>();
-    builder.Services.AddSingleton<RefinementEngine>();
-    builder.Services.AddSingleton<DiagnosticEngine>();
-    builder.Services.AddSingleton<SolutionManagementEngine>();
-    builder.Services.AddSingleton<MappingEngine>();
-    builder.Services.AddSingleton<IDEStyleEngine>();
-    builder.Services.AddSingleton<StandardRefactoringEngine>();
-    builder.Services.AddSingleton<ImmutabilityEngine>();
-    builder.Services.AddSingleton<CodeStyleEngine>();
-    builder.Services.AddSingleton<DependencyEngine>();
-    builder.Services.AddSingleton<AdvancedLogicEngine>();
-    builder.Services.AddSingleton<AdvancedStructuralEngine>();
-    builder.Services.AddSingleton<SemanticRefactoringLibrary>();
-    builder.Services.AddSingleton<GranularRefactoringEngine>();
-    builder.Services.AddSingleton<ApiAutomationEngine>();
-    builder.Services.AddSingleton<ControlFlowEngine>();
-    builder.Services.AddSingleton<HealthOrchestrationEngine>();
-    builder.Services.AddSingleton<SymbolNavigationEngine>();
-    builder.Services.AddSingleton<AntiPatternEngine>();
-    builder.Services.AddSingleton<CloneDetectionEngine>();
-    builder.Services.AddSingleton<OutParamRefactoringEngine>();
-    builder.Services.AddSingleton<DiscoveryEngine>();
-    builder.Services.AddSingleton<MsToolAugmentEngine>();
-    builder.Services.AddSingleton<CodeStyleAnalysisEngine>();
-    builder.Services.AddSingleton<ProjectConsistencyEngine>();
-    builder.Services.AddSingleton<BreakingChangeEngine>();
-    builder.Services.AddSingleton<PathDrivenTestEngine>();
-    builder.Services.AddSingleton<StackOverflowEngine>();
-    builder.Services.AddSingleton<AsyncBatchEngine>();
+    builder.Services.AddRoslynSentinelEngines();
 
     // --- Configure MCP Server Transport ---
-    var mcpBuilder = builder.Services.AddMcpServer().WithStdioServerTransport();
+    var mcpBuilder = builder.Services.AddMcpServer();
+    if (isInteractive)
+        mcpBuilder.WithStreamServerTransport(_interactiveServerInput!, _interactiveServerOutput!);
+    else
+        mcpBuilder.WithStdioServerTransport();
 
-    // --- Tool Registration ---
-    if (activeModes.Contains("Workspace"))
-    {
-        builder.Services.AddSingleton<SentinelWorkspaceTools>();
-        mcpBuilder.WithTools<SentinelWorkspaceTools>();
-    }
-    if (activeModes.Contains("Intelligence"))
-    {
-        builder.Services.AddSingleton<SentinelIntelligenceTools>();
-        mcpBuilder.WithTools<SentinelIntelligenceTools>();
-    }
-    if (activeModes.Contains("Refactor"))
-    {
-        builder.Services.AddSingleton<SentinelRefactoringTools>();
-        mcpBuilder.WithTools<SentinelRefactoringTools>();
-        builder.Services.AddSingleton<SentinelAugmentTools>();
-        mcpBuilder.WithTools<SentinelAugmentTools>();
-    }
-    if (activeModes.Contains("Modernize"))
-    {
-        builder.Services.AddSingleton<SentinelModernizationTools>();
-        mcpBuilder.WithTools<SentinelModernizationTools>();
-    }
-    if (activeModes.Contains("Quality"))
-    {
-        builder.Services.AddSingleton<SentinelQualityTools>();
-        mcpBuilder.WithTools<SentinelQualityTools>();
-    }
-    if (activeModes.Contains("Generation"))
-    {
-        builder.Services.AddSingleton<SentinelGenerationTools>();
-        mcpBuilder.WithTools<SentinelGenerationTools>();
-    }
-
-    // --- Centralized error-to-success filter ---
-    // The MCP SDK converts unhandled exceptions from [McpServerTool] methods into
-    // CallToolResult { IsError = true }, but GitHub Copilot silently drops the content
-    // of IsError=true results, showing only a generic "An error occurred" message.
-    // This filter catches InvalidOperationException (thrown when no solution is loaded)
-    // and returns it as a successful result so Copilot can display the helpful message.
-    mcpBuilder.WithRequestFilters(filters =>
-    {
-        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-            ModelContextProtocol.Protocol.CallToolRequestParams,
-            ModelContextProtocol.Protocol.CallToolResult>(
-            async (context, cancellationToken) =>
-            {
-                try
-                {
-                    return await next(context, cancellationToken);
-                }
-                catch (InvalidOperationException ex) when (ex.Message.StartsWith("No solution is loaded", StringComparison.Ordinal))
-                {
-                    return new ModelContextProtocol.Protocol.CallToolResult
-                    {
-                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                        IsError = false,
-                    };
-                }
-            }));
-    });
+    // --- Tool Registration and Error Filter ---
+    mcpBuilder.AddRoslynSentinelTools(builder.Services, activeModes);
 
     using var host = builder.Build();
     var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
-    // --- Pre-Warm MSBuildLocator (prevents 8s delay on first tools/list call) ---
-    // MSBuildLocator.RegisterDefaults() in PersistentWorkspaceManager takes ~5-8s.
-    // By forcing construction here (at startup), tools/list responds instantly.
-    logger.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
-    var warmupStart = System.Diagnostics.Stopwatch.StartNew();
-    _ = host.Services.GetRequiredService<PersistentWorkspaceManager>();
-    warmupStart.Stop();
-    if (logger.IsEnabled(LogLevel.Information))
-    {
-        logger.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
-    }
-
-    // --- Auto-Load Solution if Provided ---
-    if (!string.IsNullOrEmpty(solutionPath))
-    {
-        var workspaceManager = host.Services.GetRequiredService<PersistentWorkspaceManager>();
-        if (logger.IsEnabled(LogLevel.Information))
-        {
-            logger.LogInformation("Auto-loading solution: {Path}", solutionPath);
-        }
-        _ = workspaceManager.LoadSolutionAsync(solutionPath)
-            .ContinueWith(
-                t => logger.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
-                TaskContinuationOptions.OnlyOnFaulted);
-    }
+    // --- Pre-Warm MSBuildLocator + Auto-Load Solution ---
+    host.Services.WarmupAndAutoLoad(solutionPath, logger);
 
     if (logger.IsEnabled(LogLevel.Information))
     {
@@ -234,9 +120,26 @@ try
     }
     Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
 
+    // Temp testing output
+    Console.Error.WriteLine($"IsInputRedirected: {Console.IsInputRedirected}");
+    Console.Error.WriteLine($"IsOutputRedirected: {Console.IsOutputRedirected}");
+
     try
     {
-        await host.RunAsync();
+        if (isInteractive)
+        {
+            // Run the MCP server on pipe streams; drive it from the console REPL.
+            using var lifetimeCts = new CancellationTokenSource();
+            var hostTask = host.RunAsync(lifetimeCts.Token);
+            await SentinelConsoleMode.RunReplAsync(
+                _replWriteStream!, _replReadStream!, activeModes, lifetimeCts).ConfigureAwait(false);
+            await hostTask.ConfigureAwait(false);
+        }
+        else
+        {
+            await host.RunAsync().ConfigureAwait(false);
+        }
+
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation("Host shut down cleanly.");
