@@ -1,0 +1,1145 @@
+"name","description"
+"get_call_graph","Builds a forward call graph from a method: shows what that method calls, what those callees call, and so on up to maxDepth levels (default 3). Only follows calls into methods with source locations in the solution (not BCL/NuGet). Returns a CallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callees. Already-visited methods appear as leaf nodes to prevent cycles."
+"find_inconsistent_async_suffix","Finds async methods not ending with 'Async', and non-async methods that end with 'Async'. Excludes event handlers."
+"find_large_methods","Finds methods exceeding a line count threshold across the solution or a specific project. Returns MethodName, TypeName, FilePath, and LineCount. Methods over 50 lines are too large to modify safely without reading in full — they are also prime extract-method candidates. Default threshold is 50 lines."
+"find_internal_classes_that_could_be_private","Identifies internal classes that are only used in a single file and could be made private, optionally filtered by project."
+"sort_and_deduplicate_usings","Sorts using directives (System.* first, then alphabetical) AND removes exact
+duplicates in a single operation, writing the result directly to disk.
+
+FILLS GAP between two standard tools:
+  • sort_usings     → sorts but does NOT remove duplicates
+  • remove_unused_usings → removes unused usings, but a duplicate that is
+                           ""used"" (both copies resolve) won't be removed
+
+This tool handles the case where a file legitimately has two identical using
+directives (e.g., a merge conflict or copy-paste artifact) and you want both
+sorted AND deduplicated in one step.
+
+Parameters:
+  filePath    — absolute path to the .cs file to clean
+  writeToFile — true (default) = writes sorted/deduped content to disk immediately
+                false = preview mode, returns UpdatedContent without writing
+
+Returns: OriginalCount, RemovedDuplicates, UpdatedContent, WrittenToDisk."
+"read_plan","Reads a migration or refactor plan file from the solution's docs/plans/ directory. Only bare filenames are accepted; only documentation extensions are permitted."
+"propagate_cancellation_token_in_file","Propagates CancellationToken parameters to all eligible call sites across all methods
+in a file. For each method that has a CancellationToken parameter, applies the same
+logic as propagate_cancellation_token_in_method. Methods without a CT parameter are
+skipped silently. Returns aggregated per-method results and a staged change-set.
+
+Parameters:
+  filePath    — absolute path to the source file.
+  methodNames — optional array of method names to restrict processing (null = all eligible).
+  autoStage   — when true (default), stages the changes and returns a ChangeId.
+
+Returns PropagateCtFileResult with:
+  PerMethod        — one PropagateCtResult per method processed.
+  TotalForwarded   — total call sites rewritten across all methods.
+  TotalSkipped     — total call sites skipped across all methods.
+  MethodsProcessed — count of methods that had a CT param and were processed.
+  MethodsSkipped   — count of methods without a CT param (or filtered out).
+  ChangeId         — staged change id (null if autoStage=false or no changes)."
+"find_object_creation_sites","Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Set sortByFrequency=true to rank results by how often each resolved type is instantiated — useful when the typeName is broad (e.g. 'Exception') and you want the most-created types first. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context."
+"convert_property_to_methods","Converts a property into formal GetX() and SetX() methods."
+"find_unawaked_dispose","Detects DisposeAsync() calls that are not awaited. In a synchronous Dispose() method or any context without await, the ValueTask returned by DisposeAsync() is discarded — async cleanup (file flushes, connection teardown) finishes after the method returns, leaving resources dangling."
+"make_method_thread_safe","Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"get_project_framework_summary","Returns a summary of every project's TargetFramework value. Use this before check_project_consistency to see the full framework landscape across the solution."
+"find_value_type_mutation_intent","Flags methods that reassign a parameter inside the method body in a way that
+is invisible to the caller. Two warning patterns detected:
+
+ValueTypeParameterReassigned: A value-type parameter (int, bool, struct, enum)
+is reassigned but not returned — the caller's copy is unaffected. Use 'ref' or
+return the value if caller visibility was the intent.
+
+ReferenceTypeParameterReplaced: A reference-type parameter is replaced with a
+new instance (new ...) but not returned. The caller's reference still points to
+the original object.
+
+Parameters with 'ref', 'out', or 'in' modifiers are excluded. No auto-fix —
+these require developer judgement about intent."
+"check_for_unused_event_subscriptions","Scans a file for event subscriptions that are never unsubscribed, potential memory leaks."
+"run_uplift_batch","Uplifts callers of an Asyncify-bridge sync wrapper to use the async overload directly.
+Uses in-memory Roslyn compilation for validation — no MSBuild required.
+For each caller of the named bridged method:
+  1. Bridges the caller (convert_to_async_bridge) to create callerAsync(CancellationToken).
+  2. Rewrites the callerAsync body: bridgedMethod(args) → await bridgedMethodAsync(args, ct).
+  3. If propagateCancellationTokens=true: propagates CT to all other async callees in callerAsync.
+  4. Validates in-memory.
+  5. On success: writes the file to disk.
+  6. On error: flags the caller [MigrationCandidate(""NeedsManualReview"")] and continues.
+
+Parameters:
+  bridgedMethodName              — name of the already-bridged sync method (e.g. ""search"").
+                                   The async counterpart is assumed to be bridgedMethodName + ""Async"".
+  projectName                    — restrict caller scan to one project (null = entire solution).
+  maxCallers                     — max caller methods to process this call (default 10).
+  dryRun                         — when true, reports what would happen without writing files.
+  propagateCancellationTokens    — when true (default), also propagates the CT parameter to
+                                   other async callees in the new async overload.
+
+Returns UpliftBatchResult with:
+  Uplifted         — callers successfully uplifted and written to disk.
+  Skipped          — callers that failed (each flagged NeedsManualReview where possible).
+  RemainingCallers — count of callers still pending after this batch.
+  StopReason       — ""batch_complete"" | ""budget_exhausted"" | ""no_callers"" | ""dry_run""."
+"format_document_safe","FORMAT_DOCUMENT_SAFE — Roslyn formatter with true preview support.
+
+FIXES MS BUG: The standard format_document tool has no preview parameter at all.
+Changes are always applied immediately. There is no way to see what would change
+before committing.
+
+This tool fixes that by defaulting preview=true:
+  • preview=true  (default) → returns formatted content WITHOUT writing to disk
+  • preview=false            → writes to disk and updates the in-memory workspace
+
+Use preview=true first to verify the formatted output is as expected,
+then call again with preview=false to apply.
+
+Parameters:
+  filePath  — absolute path to the .cs file to format
+  preview   — true (default) = read-only, false = apply to disk"
+"find_services_not_registered","Scans all constructor parameters in the solution (or a specific project) and identifies injected service types that appear to be missing from the DI container registrations. Detects interfaces (IFoo pattern) and common service-like types (ending in Service, Repository, Manager, Factory, Provider, Handler, Validator, Dispatcher). Framework-provided types (ILogger, IOptions, IConfiguration, etc.) are excluded. Returns consumer class name, file, line, the missing type, and the parameter name. Use to catch unregistered dependencies before runtime failures."
+"convert_to_pattern","Modernizes code using C# pattern matching (C# 7.0+).
+Converts patterns like:
+- 'if (x == null)' → 'if (x is null)'
+- 'if (x != null)' → 'if (x is not null)'
+- 'if (obj != null && obj.Property > 0)' → 'if (obj is { Property: > 0 })'
+
+filePath: path to the .cs file to transform.
+Returns the updated file content with modern pattern matching applied."
+"analyze_method_control_flow","Analyzes control flow for an entire method body using Roslyn's semantic analysis.
+
+Unlike the raw line-based analyze_control_flow tool, this takes a method name — no
+need to count line numbers or worry about accidentally including the method signature
+(which causes a 'statements not within the same statement list' error in line-based tools).
+
+Returns: EndPointIsReachable (false = all code paths return/throw), ReturnStatements,
+ThrowStatements, BreakStatements, ContinueStatements.
+
+If the method has multiple overloads, supply disambiguateLine (any line number that
+falls inside the desired overload's body) to select the correct one."
+"convert_to_source_generated_logging","Converts LogInformation/LogError/LogWarning calls in a class to high-performance [LoggerMessage] partial methods and makes the class partial."
+"find_task_run_in","Detects 'await Task.Run(...)' patterns in server-side code. Task.Run wraps work in a new thread pool task which is wasteful in async server code. Prefer direct async methods."
+"find_obsolete_callers","Finds all call sites that invoke a method decorated with [Obsolete].
+Designed for tracking CS0618 migration progress — every result is a call site that still
+needs to be migrated away from the deprecated (Asyncify-bridge) method.
+
+Parameters:
+- messagePattern: Optional substring to filter by the [Obsolete] attribute message (case-insensitive).
+  Use ""Asyncify-bridge"" to restrict to bridge wrappers created by the async migration.
+- filePath: Optional; restrict results to call sites in this file.
+- projectName: Optional; restrict results to call sites in this project.
+
+Returns ObsoleteCallerFinding records: ObsoleteMethodName, ObsoleteMessage, DeclaringType,
+CallerMethod, CallerType, FilePath, Line, CodeSnippet."
+"apply_cancellation_token_to_file","Adds 'CancellationToken cancellationToken = default' to all eligible async methods in a
+file in a single Roslyn rewrite pass, then writes the result to disk and updates the
+in-memory workspace.
+
+Eligible methods: async or Task/ValueTask-returning, no existing CancellationToken
+parameter, and not event handlers (fixed-signature delegates).
+
+methodNames: optional array of method names to limit the scope. When omitted, all eligible
+methods in the file are processed.
+
+Returns ModifiedMethods (changed), SkippedMethods (eligible async methods skipped for a
+specific reason — already have CT, abstract, event handler, or outside the requested scope;
+sync methods are not included), TotalModified, WroteToFile, WorkspaceInSync, and
+WorkspaceVersion. If WorkspaceInSync is false, call load_solution before further analysis."
+"find_large_types","Finds types (classes, structs, records, interfaces) exceeding a line count threshold across the solution or a specific project. Returns TypeName, FilePath, and LineCount. Use before modifying a large class — anything over 500 lines is a prime extract-class candidate. Default threshold is 500 lines."
+"change_accessibility","Changes the accessibility modifier of a type or member.
+
+targetName is the class/method/property/field name to modify.
+accessibility must be one of: ""public"", ""private"", ""internal"", ""protected"",
+""protected internal"", or ""private protected"".
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"add_base_type","Adds a base type or interface to a type declaration.
+
+typeName is the class/record/struct/interface to modify; baseTypeName is what to add
+(e.g. ""IDisposable"", ""BaseController"", ""IMyService<string>"").
+If the type already inherits or implements baseTypeName, the file is returned unchanged.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"get_method_complexity","Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is."
+"find_async_void_without_try_catch","Detects async void methods whose entire body is not wrapped in a try/catch. Unhandled exceptions inside async void crash the process via the unhandled-exception handler — there is no way for a caller to catch them. Wrap the body in try { } catch (Exception ex) { }."
+"find_structural_smells","Scans the solution for structural issues with granular filtering. typeFilter options: All, MultiType, NameMismatch."
+"get_type_members_detail","Returns all members of a type (methods, properties, fields, events) with full metadata: signature, accessibility, kind, IsInherited, IsOverride, IsAbstract, IsStatic, file path, and line. Set includeInherited=false to show only directly declared members."
+"check_for_empty_catch_blocks","Scans for empty catch blocks. Optionally filtered by project."
+"detect_anti_patterns","Detects common C# anti-patterns introduced by AI code generation: BlockingTaskWait (.Result/.Wait()/.GetAwaiter().GetResult()), AsyncVoidMethod (non-event-handler async void), StringConcatInLoop (string += in loops), CatchExceptionSwallow (empty catch blocks), DisposedObjectUsage (use after Dispose), MissingCancellationToken (public async methods with 3+ params lacking CancellationToken), MagicNumber (unexplained numeric literals). Optionally scope by filePath, projectName, or patternFilter array."
+"get_file_diagnostics","Gets all compiler errors and warnings for a specific file."
+"use_time_provider","Replaces direct DateTime usage with modern TimeProvider abstractions for testability."
+"convert_to_background_service","Converts a class to a BackgroundService: adds BackgroundService base class, generates ExecuteAsync override, and adds Microsoft.Extensions.Hosting using directive."
+"find_circular_dependencies","Identifies circular project references (A -> B -> A)."
+"find_string_magic_values","Finds string literal magic values: the same string appearing 3+ times across a file, project, or solution. Returns value, occurrence count, suggested constant name (PascalCase), and all file/line locations. Excludes empty strings, nameof() args, attribute arguments, and strings shorter than 3 chars."
+"find_regex_new_in_loop","Detects new Regex() construction inside loop bodies (for/foreach/while/do). Constructing a Regex per iteration recompiles the pattern on every pass — a pure waste for literal patterns, and a ReDoS amplification vector for variable patterns. Hoist to a static readonly field."
+"add_cancellation_token_to_method","Adds 'CancellationToken cancellationToken = default' as the last parameter to a method
+and propagates it to async callees in the method body that have a CancellationToken
+overload. Also adds cancellationToken to Task.Delay() calls.
+Returns CancellationTokenResult where exactly one field is populated:
+  autoStage=true (default): ChangeId is set; apply with apply_staged_changes(changeId).
+  autoStage=false: Source is set; pass Source.UpdatedSource to apply_proposed_changes to save."
+"get_workspace_health","GET_WORKSPACE_HEALTH — Targeted workspace health check that fixes false negatives.
+
+FIXES MS BUG: The standard diagnose tool reports healthy:false even when all projects
+load successfully, because it tests MSBuild path existence rather than actual workspace
+state. A workspace with 86/86 projects loaded correctly can be falsely reported as
+unhealthy.
+
+This tool reads actual solution state directly:
+  • IsOperational  — true if workspace itself is functional (not throwing)
+  • HasLoadedSolution — true if a .sln or .csproj is currently loaded
+  • ProjectCount/DocumentCount — actual loaded counts from the workspace
+  • LoadErrors — non-fatal warnings that occurred during solution loading
+  • Summary — human-readable status
+
+Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
+been loaded yet — this is a normal state, not an error."
+"find_multiple_enumeration","Detects IEnumerable<T> or IQueryable<T> locals/parameters that are iterated more than once without a materializing call (ToList/ToArray). Multiple enumerations can execute a database query or generator multiple times. Reports variable name and enumeration line numbers."
+"find_duplicate_blocks_in_class","Finds duplicate statement sequences within the methods of a single class.
+Uses structural hashing (SyntaxKind-based) so blocks match regardless of
+variable names or literal values — the same control-flow shape is a clone.
+
+Returns groups of matching block locations including:
+• StatementCount — how many statements the clone spans
+• HasControlFlowExit — true if any statement is a return/break/continue/throw
+  (flag only; does not block the finding)
+• SnippetPreview — first 120 chars of the first statement
+• CapturedVariables — variables that would need to become parameters if extracted
+• ProducedVariables — variables that would need to be returned if extracted
+• Occurrences — method name, start line, end line, file path for each copy
+
+Use this to find Extract-Method candidates within a single class before the
+duplication spreads. Set minStatements lower (e.g. 3) for aggressive detection,
+higher (e.g. 6) for only substantial clones."
+"get_async_migration_progress","Returns async migration progress statistics for the solution or a single project.
+Reports: total async Task/ValueTask methods, how many already have a CancellationToken
+parameter (and how many still need one), percentage coverage, number of Asyncify-bridge
+wrapper methods ([Obsolete(""Asyncify-bridge:..."")]), number of call sites that still
+invoke those bridge wrappers (CS0618 sites pending migration), and count of async void
+event handlers (informational — their signatures cannot be extended).
+
+projectName: restrict statistics to a single project; null = entire solution."
+"get_solution_metrics","Gets deep metrics for the entire solution or a specific project."
+"validate_proposed_diff","Validates a proposed Unified Diff in-memory and returns compiler diagnostics."
+"generate_test_scaffold","Generates an xUnit+Moq test class scaffold for a given class. Auto-detects constructor parameters to create Mock<T> fields, instantiates the SUT, and adds one test method stub per public method with Arrange/Act/Assert comments."
+"simplify_verbosity","Simplifies redundant code patterns globally in a file (target-typed new, null-coalescing assignment, etc.)."
+"optimize_resource_disposal","Scans for IDisposable objects that are not properly disposed. Optionally filtered by project."
+"find_cancellation_token_not_forwarded","EPC31: Finds async methods that have a CancellationToken parameter but call awaitable
+methods ('*Async') without forwarding the token. Detects missed cancellation propagation
+that leaves callers unable to cancel downstream work.
+filePath: scan a single file. Leave null to scan the entire solution.
+Returns method name, file, line, the unforwarded callee name, and the CT parameter name."
+"get_comprehensive_health_report","Generates a paged comprehensive health report. engines: Structure, Modernization, Performance, Safety, Architecture. offset/limit for project paging."
+"find_task_void_usage","Detects dangerous 'async void' usage that can crash the application."
+"find_boxing_allocations","Finds potential boxing allocations. Optionally filtered by project."
+"find_types_by_attribute","Finds all TYPES (classes, interfaces, records, structs, enums) decorated with a specific attribute using the semantic model for accuracy. Unlike find_attribute_usages (which returns all targets including methods and properties), this returns only type-level decoration. Useful for: 'find all [ApiController] classes', 'find all [TestClass] types', 'find all [Serializable] types'. Returns TypeName, FilePath, and Line."
+"sort_members","Reorders members of a class/struct/record by convention: fields, constructors, destructors,
+properties, indexers, events, methods, operators, nested types.
+
+Within each category: static members come before instance members, then alphabetical by name.
+containerName is the type whose members to sort.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"detect_breaking_changes","Compares a previously captured API surface (baseline) against the current code and reports breaking changes: removed types, removed/renamed members, and signature changes. Workflow: (1) call get_public_api_surface_snapshot to capture the baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName or filePath as in step 1."
+"find_unused_references","Identifies NuGet package references in a project that are not being used."
+"find_interface_extraction_candidates","Finds public classes with 3+ public methods but no corresponding interface. Returns ClassName, FilePath, and the list of public method names. These are prime candidates for interface extraction — a prerequisite for testability (Moq/NSubstitute) and adding a second implementation. Increase minPublicMethods (default 3) for stricter filtering."
+"generate_test_skeleton","Generates a unit test skeleton for a class."
+"generate_classes_from_json","Generates C# classes from a JSON string."
+"analyze_control_flow","Analyzes control flow of a method: shows whether it always/sometimes/never returns, lists all return points, and identifies exit paths (throws, breaks, continues). methodName: the method to analyze. contextSnippet: optional snippet to disambiguate overloads. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns: AlwaysReturns, SometimesReturns, ReturnStatements, ThrowStatements, HasInfiniteLoop."
+"analyze_exception_handling","Analyzes exception handling anti-patterns in a file: CatchAll (bare catch or catch Exception), EmptyRethrow (throw ex; loses stack trace), SwallowedException (catch with no rethrow/log/return), ExceptionAsControlFlow (catching FormatException etc. inside loops). Severity: High for CatchAll/EmptyRethrow, Medium for SwallowedException/ExceptionAsControlFlow."
+"record_to_class","Converts a C# record back to a standard class."
+"get_public_api_surface_snapshot","Extracts a snapshot of the public API surface (all public/protected types, methods, constructors, properties, events) from a project or file. Save the returned list as a baseline, make code changes, then call detect_breaking_changes with the baseline to find removed or renamed members. Provide projectName to scope to one project, filePath to scope to one file, or omit both for the entire solution."
+"introduce_parameter","Introduces a new method parameter from an expression. Provide contextSnippet: a verbatim substring uniquely identifying the expression. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Updates the method signature (single-file only — call sites in other files not updated)."
+"find_use_frozen_collections","Finds private static readonly Dictionary<> and HashSet<> fields initialized inline. Suggests using FrozenDictionary/FrozenSet (System.Collections.Frozen) for better read performance."
+"list_files","Lists all files within a specific project."
+"invert_assignments","Swaps left and right sides of all assignment statements within a line range."
+"generate_equality_overrides","Generates Equals and GetHashCode overrides for a class."
+"optimize_task_wait","Adds .ConfigureAwait(false) to all await expressions in a file for library-safe async code."
+"convert_anonymous_to_named","Converts an anonymous object creation to a formal named class."
+"update_xml_docs_from_signature","Regenerates XML doc param/returns tags to match the current method signature: adds tags for new parameters, removes tags for deleted parameters, and adds a <returns> tag if missing on a non-void method."
+"generate_default_config_json","Scans a project for all config[""Key""] and IConfiguration.GetValue<T>(""Key"") usages and generates a JSON skeleton with all keys and inferred default values."
+"remove_member","Removes a specific member from a class or interface by name."
+"use_index_from_end","IDE0056: Upgrades manual index calculations (Length - 1) to modern [^1] syntax."
+"find_unsafe_lazy_init","Detects unsafe lazy initialization: double-checked locking without 'volatile' keyword (field may be partially initialized due to CPU reordering). Suggests Lazy<T> or volatile."
+"move_file_to_namespace_folder","Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves."
+"get_solution_diagnostics","Gets compiler errors and warnings across the entire loaded solution.
+Results are capped at maxDetails entries in the detail list (default 50) to keep
+output manageable — the Errors/Warnings counts always reflect the full totals.
+Errors are always sorted before warnings so the cap never hides an error.
+File paths are relative to the solution root for compact output.
+For complete diagnostics on a specific project, use get_project_diagnostics instead.
+Blazor source-generator false positives (CS0234/CS0246/CS0103) are automatically
+suppressed in Razor-component projects."
+"extract_constant","Extracts a literal expression to a named constant in the containing type. contextSnippet: a verbatim substring containing or surrounding the literal (e.g., '= 42;' or '""hello world""'). constantName: the name for the new constant. visibility: 'private' (default), 'protected', 'internal', or 'public'. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns the updated file content."
+"document_poco_fields","Adds comprehensive [Description] comments to all fields in a POCO class."
+"convert_switch_to_pattern_safe","Converts a switch statement to a switch expression safely.
+
+FIXES standard 'convert_to_pattern_matching' BUG: The standard tool silently
+drops variable assignments for cases that set more than one variable, generating
+incorrect code. This tool rejects those cases with a clear error message instead
+of producing broken output.
+
+Supports three switch forms:
+  1. All cases are assignments to the SAME variable:
+       case ""g"": factor = 1.0; break;
+       → factor = unit switch { ""g"" => 1.0, ... };
+
+  2. All cases are return statements:
+       case ""g"": return 1.0;
+       → return unit switch { ""g"" => 1.0, ... };
+
+  3. All cases are throw statements (or mixed with return).
+
+Rejects (with a clear error):
+  • Cases assigning to MULTIPLE different variables per case
+  • Cases assigning to different variables across cases
+  • Cases with complex multi-statement bodies
+
+Run AnalyzeSwitchForPatternConversion first if you are unsure.
+
+Parameters:
+  filePath       - Absolute path to the .cs file.
+  contextSnippet - A verbatim substring from the switch keyword or governing
+                   expression, e.g. ""switch (unit)"".
+  lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                   disambiguate when the snippet matches multiple locations.
+
+Returns: UpdatedContent on success, or Error describing exactly why conversion
+was rejected."
+"find_task_yield_usage","Detects Task.Yield() calls."
+"get_public_api_surface","Returns the complete public API surface of a named project: all public types (classes, interfaces, records, structs), their public and protected methods, properties, and constructors. Each entry includes the type name, member name, full signature, kind (Class/Interface/Method/Property/Constructor/Record/Struct), virtuality/abstractness/sealed flags, and any XML documentation summary. Use includeMethods/includeProperties/includeTypes flags to filter output. Ideal for generating SDK documentation, comparing API surfaces across versions, or producing API review reports."
+"sync_interface_to_implementation","Adds to the interface any public methods or properties that exist in the class but are missing from the interface. Finds the interface in the same file or anywhere in the solution. Returns the updated source of the file containing the interface (prefixed with '// Updated file: path' if it differs from the class file)."
+"find_naming_violations","Checks C# naming conventions across a file, project, or solution. Reports: private fields not following '_camelCase', non-private methods not following PascalCase, and parameters not following camelCase. Returns AntiPatternFinding records with Pattern='NamingViolation', Severity='Low'."
+"generate_fluent_builder","Generates a fluent builder class for any C# class. The builder provides With{Property}() methods for each public settable property and a Build() method that constructs the target type. Returns the complete builder source, class name, and a usage example."
+"validate_staged_changes","Validates a previously staged set of changes (from a refactoring tool) in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying staged changes."
+"find_configure_await_missing","Scans a file for await expressions missing .ConfigureAwait(false). Excludes classes ending in Controller/Hub/PageModel/ViewModel (those are app-level where ConfigureAwait is not needed). Returns method name, line, and reason."
+"simplify_member_access","Removes redundant 'this.' member access qualifiers from an entire file."
+"find_blocking_calls_in","Detects blocking calls inside async methods: Thread.Sleep, .Result, .Wait(), .GetAwaiter().GetResult(). These block the thread pool thread and can cause deadlocks."
+"find_namespace_path_mismatches","Scans the loaded solution for source files where the declared namespace does not match the file's folder path relative to its project root. Mismatches indicate that Roslyn's path-based document identity and namespace-based type identity are out of sync, which can cause batch refactoring tools to write changes to incorrect file locations. Syntax-only scan — no compilation required. Safe to run at any time including when the build is broken. Returns findings grouped by severity: Error (duplicate type names exist across mismatched paths — immediate risk), Warning (mismatch exists but no duplicate detected — latent risk). Optionally scoped to a single project."
+"add_braces","IDE0011: Adds braces to single-line if, foreach, and while statements."
+"list_dependencies","Lists all project and NuGet dependencies for a specific project."
+"find_methods_by_return_type","Finds all methods in the solution that return a specific type."
+"find_duplicate_methods","Finds structurally duplicate method implementations across the solution: methods that share the same statement structure and control flow even if identifiers differ (hash-based). Returns groups of duplicate methods with their file paths and type names. Use to find copy-paste code that should be consolidated into a shared helper. Increase minStatements (default 5) to reduce false positives on short utility methods."
+"extract_method","Extracts a block of statements into a new private method. Provide startLine and endLine (1-based, line range only — no column precision needed), the exact physical text of those two lines (used to detect stale files before modifying), and a name for the new method. Data flow analysis automatically determines parameters and return type. Returns BeforeSnippet/CallSiteReplacement/ExtractedMethodText previews plus UpdatedSourceContent for staging."
+"remove_base_type","Removes a base type or interface from a type declaration.
+
+typeName is the class/record/struct/interface to modify.
+baseTypeName is the base type or interface to remove (e.g. ""IDisposable"", ""BaseController"").
+If the type has no base list or does not implement/inherit baseTypeName, the file is returned unchanged.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_unvalidated_regex_source","Detects new Regex() or Regex.IsMatch/Match/Replace calls where the pattern argument is not a compile-time string literal. A non-literal pattern may originate from user input, enabling Regex injection (attacker-controlled matching logic) and ReDoS attacks."
+"find_circular_type_references","Finds circular constructor-injection dependencies among user-defined types: type A's constructor depends on type B, and B's constructor (transitively) depends on A. This is the exact cycle that causes .NET's DI container to throw at startup. Complements find_services_not_registered — use both before adding new service registrations. Optionally scoped to a project."
+"add_field","Generates a field declaration and adds it to a type.
+
+containerName is the class/struct to modify; fieldName and fieldType specify the field.
+accessibility defaults to ""private"". isReadonly and isStatic add those modifiers.
+initializer is an optional value expression (e.g. ""42"" or ""new List<string>()"").
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_possible_infinite_loops","Analyzes a file for potential infinite loops."
+"check_for_sql_injection","Scans for potential SQL injection vulnerabilities.
+Pass filePath to scope to a single file, projectName to scope to a project,
+or leave both null to scan the whole solution.
+
+Detects calls to common SQL execution methods (ExecuteNonQuery, ExecuteReader,
+ExecuteScalar, FromSqlRaw, Query, etc.) where the first argument is a dynamic
+string — either an interpolated string with expressions ($""...{x}..."") or string
+concatenation involving a non-literal operand.
+
+Returns a list of SecurityIssueReport with IssueType='PossibleSqlInjection',
+file path, line/column, and a description recommending parameterized queries.
+Does NOT check CommandText property assignments."
+"replace_constructor_with_factory","Replaces a class constructor with a private constructor plus a public static Create() factory method."
+"get_symbol_info","Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration. Provide lineBefore and/or lineAfter when the snippet could match multiple locations."
+"optimize_independent_awaits","Batches independent sequential await calls in a method into a single Task.WhenAll() for parallel execution."
+"find_unobserved_task_in_field","Detects Task or ValueTask-returning method calls assigned to fields or properties without await, where the field is never subsequently awaited or .Wait()ed anywhere in the class. The task silently fails — any exception it throws is never observed and may eventually crash the process via UnobservedTaskException."
+"find_implementations_safe","Finds all implementations of an interface member or virtual/abstract method in the solution
+without requiring line/column coordinates.
+Unlike the built-in find_implementations which needs a line number, this locates the symbol by name
+with an optional contextSnippet.
+symbolName: the interface member or virtual method name.
+contextSnippet: optional verbatim substring of the declaration to disambiguate overloads.
+Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+Returns TypeName, FilePath, Line, and Kind for each implementing symbol."
+"safe_delete","Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase."
+"find_todo_fixme_comments","Scans for TODO, FIXME, HACK, REVIEW, NOTE, BUG comments (case-insensitive) in a file, project, or entire solution. Sorted by severity: BUG/FIXME > HACK > TODO > REVIEW > NOTE."
+"inline_parameter","Removes a method parameter that is always passed the same compile-time constant literal (e.g. 42, true, ""text"") at every call site, and replaces references to the parameter inside the method body with that constant. Only works when ALL call sites pass the same constant — rejects if call sites are in other files, if the argument varies, or if the argument is not a literal."
+"find_readonly_field_candidates","Finds private, non-readonly fields that are only ever assigned inside constructors and could safely be marked readonly."
+"find_hardcoded_paths","Scans for hardcoded file system paths. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution."
+"verify_interface_completeness","Checks every class that implements an interface and reports which interface members each implementor has covered. Useful for finding partially-implemented interfaces across the solution."
+"convert_abstract_to_interface","Converts an abstract class to an interface."
+"find_unbounded_recursion","Detects recursive methods that lack a depth parameter or an early-exit base-case guard (non-recursive if-return before the recursive call). Unbounded recursion on large inputs causes StackOverflowException and crashes the process with no recoverable exception."
+"find_sequential_independent_awaits","Detects consecutive await expressions in async methods where neither result is used by the other await — missed Task.WhenAll() parallelism. Example: var a = await F(); var b = await G(); where b doesn't depend on a. Combining with Task.WhenAll cuts total latency to max(F,G)."
+"run_bridge_batch","Converts a batch of methods flagged with [MigrationCandidate(""AsyncBridgeCandidate"")] to
+the Asyncify-bridge pattern in a single call, using in-memory Roslyn compilation for
+validation (no MSBuild round-trips). For each candidate:
+  1. Calls convert_to_async_bridge to produce the transformed source.
+  2. If propagateCancellationTokens=true: propagates CT to async callees in the new Async overload.
+  3. Validates the composite source with in-memory compilation.
+  4. On success: writes the file to disk and refreshes the workspace.
+  5. On error: flags the method [MigrationCandidate(""NeedsManualReview"")] and continues.
+
+Parameters:
+  projectName                 — restrict candidate scan to one project (null = entire solution).
+  maxBridges                  — max methods to process this call (default 10).
+  scoreThreshold              — only candidates with score ≤ this are eligible (default 60).
+                                flag_migration_candidates_in_project uses minScore 50, so no
+                                candidate is flagged below 50. 60 captures the simplest batch first.
+  dryRun                      — when true, reports what would happen without writing files.
+  propagateCancellationTokens — when true (default), also propagates the CT parameter to
+                                other async callees in the new async overload.
+
+Returns BridgeBatchResult with:
+  Applied             — methods successfully bridged and written to disk.
+  Skipped             — methods that failed (each flagged NeedsManualReview).
+  RemainingCandidates — count of eligible [MigrationCandidate] methods still pending.
+  StopReason          — ""batch_complete"" | ""budget_exhausted"" | ""no_candidates"" | ""dry_run""."
+"create_project","Creates a new project and adds it to the current solution."
+"apply_proposed_changes","Commits a dictionary of file paths and their new contents to disk. Supports automatic retry for transient file locks."
+"convert_lock_to_semaphore_slim","Converts lock statements inside a method to async-safe SemaphoreSlim pattern: adds a 'private readonly SemaphoreSlim _semaphore = new(1,1)' field, replaces each lock block with 'await _semaphore.WaitAsync(); try { ... } finally { _semaphore.Release(); }', and makes the method async if needed. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"detect_long_parameter_lists","Detects methods with too many parameters and suggests a Parameter Object, optionally filtered by project."
+"modernize_exceptions","Replaces generic throw new Exception calls with custom typed exceptions and generates the new class files."
+"add_guard_clauses","Adds ArgumentNullException.ThrowIfNull guard clauses for all reference parameters in a method. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"find_migration_candidates","Returns all methods in the solution (or scoped to a file/project) that carry a
+[MigrationCandidate] attribute added by flag_migration_candidate.
+
+filePath:    restrict to a single file (full or partial path suffix).
+projectName: restrict to a single project (case-insensitive name).
+pattern:     restrict to one pattern — ""AsyncBridgeCandidate"", ""HandlerExtract"",
+             ""HandlerToAsync"", ""AsyncCallerUplift"", etc. Omit to return all patterns.
+
+Uses syntax-level analysis — no compilation needed — so results are accurate even
+immediately after flag_migration_candidate without a solution reload.
+
+Returns one MigrationCandidateFinding per flagged method per attribute.
+Each finding includes a Summary field for human-readable log output.
+A method flagged for two different patterns appears twice."
+"extract_interface","Extracts an interface from a class: creates a new file '{interfaceName}.cs' containing all public non-static properties and methods, then adds the interface to the class's base list. Returns a staged ChangeId (autoStage=true, default) or the raw file dictionary. Static members and constructors are excluded."
+"class_to_record","Converts a class to a C# record."
+"find_non_exhaustive_enum_switches","Finds switch statements on enum types that don't handle all enum members and have no default case. Returns the enum type name, the list of missing member names, the containing method name, file path, and line. Essential after adding a new enum member — tells you every switch that needs updating. Scope to a file or project, or scan the entire solution."
+"find_concurrent_collection_opportunities","Finds lock statements that protect List<T> or Dictionary<K,V> fields and suggests replacing them with ConcurrentDictionary<K,V> or ImmutableDictionary for better performance."
+"convert_to_null_coalescing","Modernizes null checks using null coalescing operators (?? and ??=).
+Converts patterns like:
+- 'if (x == null) x = y;' → 'x ??= y;'
+- 'x == null ? y : x' → 'x ?? y'
+- 'x != null ? x : defaultValue' → 'x ?? defaultValue'
+filePath: path to the .cs file to transform."
+"find_cas_loop_without_backoff","Detects while/do-while loops containing Interlocked.CompareExchange that have no back-off (no Thread.Sleep, Thread.SpinWait, SpinWait.SpinOnce, or Task.Delay). A spinning CAS loop without back-off can peg a CPU core at 100% under contention (live-lock)."
+"move_all_types_to_files","Atomically moves all secondary types in a file to their own files. Returns a ChangeId for ApplyStagedChanges plus first-15-line previews of each affected file's new content."
+"find_best_insertion_point","Returns the best 1-based line number where a new member of the given kind should be inserted in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types)."
+"detect_reflection_usage","Scans for System.Reflection usage. Optionally filtered by project."
+"append_completed_work","Appends an entry to a completed-work log in docs/completed/. Append-only — existing content cannot be overwritten or deleted. Use to record finished work as an immutable audit trail. Only bare filenames and documentation extensions are accepted. Entry size capped at 512 KB."
+"make_class_immutable","Makes a class immutable: adds 'readonly' to all fields and converts property setters to 'init'."
+"move_type_to_file","Moves a type to its own file. Returns a ChangeId for ApplyStagedChanges plus a ContentPreviews map showing first 10 + last 10 lines of each affected file for structural confirmation. Use autoStage=false to get the full raw file content dictionary instead."
+"generate_to_string","Generates a public override ToString() for a class based on its public properties.
+
+SECURITY: Sensitive properties are automatically excluded from the output to prevent
+credential leakage in logs. Properties whose names contain any of these substrings
+(case-insensitive) are excluded by default: password, passwd, secret, apikey, token,
+hash, salt, pin, cvv, ssn, creditcard, connectionstring, privatekey, clientsecret.
+
+Use excludeProperties to additionally exclude specific property names by exact name.
+
+Returns: UpdatedContent (the new file source), IncludedProperties, ExcludedProperties,
+and an optional Warning listing which properties were excluded and why.
+Skips generation if a ToString() override already exists."
+"generate_path_driven_tests","Generates path-driven xUnit/NUnit/MSTest test stubs for a method by walking
+its AST for decision points (if/else, switch, foreach) and emitting one test
+case per distinct execution path. Always includes a happy-path test first.
+
+For each path the report includes:
+- TestMethodName: suggested test method name following the MethodName_Condition_Outcome pattern
+- ScenarioDescription: human-readable description of the path
+- InputConstraints: inferred parameter values to trigger this path
+- ArrangeCode / ActCode / AssertCode: Arrange/Act/Assert scaffold with TODO markers
+- Note: caveats about heuristic inference
+
+Generated code is a starting point — TODO markers show where you must supply
+real values or mock setups that cannot be inferred statically.
+
+framework: ""NUnit"" (default), ""xunit"", or ""mstest""
+disambiguateLine: any line number inside the desired overload when the method is overloaded"
+"add_validation_to_poco","Adds [Required] and [StringLength(100)] data annotations to all string properties in a POCO class."
+"apply_staged_changes","Commits a previously staged set of changes (from a refactoring tool) to disk."
+"inline_method","Inlines a method solution-wide: replaces ALL call sites (across all files in the solution) with the method's expression, then removes the method declaration. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected. Returns a dictionary of filePath→updatedContent for every file that was modified."
+"encapsulate_field_safe","Encapsulates a public field into a private backing field + public property.
+
+FIXES standard 'encapsulate_field' BUG: The standard tool generates code like
+  private int SuccessCount;
+  public int SuccessCount { get { return SuccessCount; } }
+which causes infinite recursion / a compile error because the backing field and
+property share the same name.
+
+This tool always renames the backing field to _camelCase:
+  private int _successCount;
+  public int SuccessCount { get => _successCount; set => _successCount = value; }
+
+Parameters:
+  filePath            - Absolute path to the .cs file.
+  fieldName           - Exact name of the field to encapsulate (e.g. ""SuccessCount"").
+  overridePropertyName - Optional: provide a custom property name if the default
+                         (PascalCase of fieldName) would conflict.
+
+Returns: UpdatedContent with the corrected encapsulation applied."
+"find_double_checked_locking","Detects the double-checked locking (DCL) pattern where the lazily-initialized field is not declared volatile. Without volatile, a CPU or JIT may reorder the store and expose a partially-constructed object to the outer null-check on another thread. Use volatile or Lazy<T>."
+"interpolate_string_safe","Converts a string.Format(...) call to an interpolated string ($""..."").
+Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments
+via the semantic model, so it works even when the format string is a named const rather than a
+literal. Handles {0:format} format specifiers correctly.
+contextSnippet: verbatim substring identifying the string.Format call to convert (required).
+Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+Returns the updated file content."
+"diagnose","Checks the health of the Roslyn MCP server environment and workspace status."
+"find_di_registrations","Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a specific project/file. Returns service type, implementation type, lifetime, and source location for each registration. Use lifetimeFilter to narrow results ('Singleton', 'Scoped', 'Transient')."
+"upgrade_to_file_scoped_namespace","IDE0210: Converts a block-form namespace declaration ('namespace Foo { }') to C# 10 file-scoped form ('namespace Foo;'). Preserves using directives, extern aliases, and all type members. Returns the rewritten file content."
+"read_current_state","Reads the migration state file (docs/migration-state.yaml). Takes no parameters — there is exactly one state file."
+"move_all_types_to_files_in_solution","Atomically moves all secondary types in every file across the entire solution to their own files. If autoStage is true, returns a ChangeId."
+"implement_interface_safe","Generates stub implementations for all unimplemented members of an interface on a class. Unlike the built-in implement_interface, this never adds the 'override' keyword (which is incorrect for interface implementations). Pass filePath of the class file, className of the implementing class, and interfaceName of the interface to implement."
+"use_field_backed_properties","C# 14: Upgrades manual backing fields to modern 'field' keyword auto-properties."
+"generate_call_tree","Generates a markdown call tree for a specific method."
+"convert_out_params_to_value_tuple","Converts a method that uses 2+ 'out' parameters to return a ValueTuple instead.
+Rewrites the method declaration (return type, parameter list, return statements)
+and all call sites in the solution.
+
+Transformation applied:
+  void M(T1 a, out T2 b, out T3 c)  →  (T2 b, T3 c) M(T1 a)
+  bool M(T1 a, out T2 b, out T3 c)  →  (bool result, T2 b, T3 c) M(T1 a)
+
+Call site rewrites:
+  M(arg, out x, out y)          →  var (x, y) = M(arg);
+  bool ok = M(arg, out x, out y) →  var (ok, x, y) = M(arg);
+
+Complex call sites (e.g. inline in conditional expressions) receive a TODO
+comment and are listed in CallSiteWarnings for manual review.
+
+Use FindMultipleOutParameterMethods first to identify candidates.
+Changes are applied directly to the workspace via Roslyn's DocumentEditor."
+"analyze_path_coverage","Analyzes execution paths for test coverage."
+"apply_proposed_diff","Applies a Unified Diff to a file and writes the result to disk. Returns ApplyChangesResult with SucceededFiles, WorkspaceInSync, and WorkspaceVersion. To preview the result without writing, use validate_proposed_diff instead."
+"introduce_parameter_object","Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only those specified in parameterNames) into a 'public record {NewTypeName}(...)'. Rewrites parameter references in the method body to 'request.PropertyName'. Appends the record to the end of the file. Adds a TODO comment in the method body reminding to update call sites."
+"find_async_over_sync","Finds async methods with no await expressions, or that only await Task.FromResult/Task.CompletedTask."
+"find_extension_methods","Finds all extension methods whose receiver type matches the given type (or its base types / interfaces). Returns method name, full signature, defining class, namespace, file path, and line."
+"find_primitive_obsession","Finds methods/constructors where the same primitive type (string/int/long/Guid/bool) appears 3+ times as distinct parameters."
+"analyze_semaphore_usage","Analyzes SemaphoreSlim usage to find potentially missing Release() calls."
+"introduce_field","Introduces a new private readonly field from an expression. Provide contextSnippet: a verbatim substring from the expression (e.g., the expression text itself or the surrounding assignment). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. The expression type is inferred from semantics."
+"add_modifier","Adds a modifier keyword to a type or member (idempotent).
+
+targetName is the class/method/property name to modify.
+modifier is the keyword to add: virtual, abstract, sealed, static, readonly, override,
+partial, async, new, extern, unsafe, volatile.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"list_projects","Lists all projects in the current solution."
+"find_missing_generic_constraints","Finds generic methods with type parameters used in ways that require constraints but have none declared: (1) 'new T()' instantiation without 'where T : new()', (2) 'param == null' comparison without 'where T : class' (always false for value types). Returns file path, line number, method name, and a description of the specific violation. Scope by file or project, or scan the entire solution."
+"analyze_performance","Analyzes a file for common performance issues."
+"detect_unused_local_variables","Identifies local variables that are declared but never used within their scope."
+"get_type_hierarchy","Returns the full type hierarchy for a named type: direct base class, full base class chain
+(excluding System.Object), all implemented interfaces (including transitive ones), derived
+classes (via SymbolFinder.FindDerivedClassesAsync), and — if the type is an interface —
+all implementing types (via FindImplementationsAsync).
+Each entry includes TypeName, FilePath, Line, and Kind (Class/Interface/Struct).
+IsInterface, IsAbstract, IsSealed flags are included on the root type."
+"get_test_coverage_map","Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag."
+"generate_xml_documentation_stubs","Generates XML documentation stubs (<summary>, <param>, <returns>) for ALL undocumented public methods in a file. Unlike document_poco_fields (which targets a specific class's fields), this covers every public method in the file that lacks XML docs. Returns the updated file content. Apply with apply_proposed_changes to write to disk."
+"get_project_diagnostics","Gets all compiler errors and warnings for a specific project."
+"add_constructor_parameter","Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment.
+
+className is the target class; paramName and paramType define the parameter.
+fieldName overrides the derived field name (defaults to _camelCase of paramName).
+If the class has no constructor one is created. Expression-bodied constructors are converted to block bodies.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_unsafe_lazy_init_thread","Detects the unsafe lazy initialization pattern (if (_field == null) { _field = new X(); }) outside a lock and without a volatile field or Lazy<T>. Without volatile, the CPU or JIT may reorder the store and expose a partially-constructed object on another thread."
+"update_plan","Writes (creates or overwrites) a plan file in the solution's docs/plans/ directory. Only bare filenames and documentation extensions are accepted. Content size capped at 512 KB."
+"discard_staged_changes","Manually removes a staged change set from the server-side buffer without applying it."
+"flag_migration_candidates_in_project","Autonomously scans every method in a project (or the whole solution), scores each
+against the specified migration pattern, and stamps qualifying methods with
+[MigrationCandidate(""pattern"")] — all in a single call. No agent iteration over
+files or methods required.
+
+projectName: name of the project to scan (case-insensitive). Omit to scan the whole solution.
+pattern:     migration pattern to apply. Default ""AsyncBridgeCandidate"".
+             Known patterns: AsyncBridgeCandidate, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+minScore:    minimum score a method must reach to be flagged. Default 50.
+dryRun:      when true, scores methods and returns what WOULD be flagged without writing any
+             files. Use to preview before committing.
+forceRescan: when true, ignores existing [MigrationCandidate] attributes and re-evaluates
+             every method from scratch. Use after changing scoring rules for a clean result.
+
+Scoring heuristics (AsyncBridgeCandidate):
+  +40 — body contains blocking calls (.GetAwaiter().GetResult(), .Result, .Wait())
+  +30 — body calls CommonSearch (the project's async-ready SQL wrapper)
+  +25 — body uses SqlCommand / SqlConnection / getDataContext / DataContext
+  +15 — class name ends with Service
+  +5  — method is static (easier to bridge in isolation)
+  -20 — method is virtual or override (interface widening may be required)
+  disqualified — abstract, extern, already async, name ends with Async,
+                 has yield return, has ref/out parameters, carries [Obsolete],
+                 has sql-access only with no async leaf (linq-to-sql-only)
+Event handlers (object sender, XxxEventArgs e) are automatically tagged as
+AsyncHandlerCandidate instead of AsyncBridgeCandidate, with a +20 semantic bonus when
+the handler calls an [Obsolete]-decorated bridge wrapper.
+The +20 calls-obsolete-wrapper bonus applies to ALL methods (not just handlers) that
+call any [Obsolete]-decorated method — catching helpers like initComboBox() that call
+the deprecated sync CommonSearch.search() and need to migrate to searchAsync().
+
+Returns FlagCandidatesInProjectResult:
+  Flagged        — methods written (or that would be written when dryRun=true)
+  Skipped        — methods scored but below minScore
+  AlreadyFlagged — methods that already had [MigrationCandidate(""pattern"")]
+  TotalMethodsExamined / TotalFilesWritten for progress tracking"
+"remove_attribute","Removes a named attribute from a type or member.
+
+targetName is the class/method/property name to modify.
+attributeName is the attribute to remove, with or without the 'Attribute' suffix and brackets
+(e.g. ""Obsolete"", ""ObsoleteAttribute"", or ""[Obsolete]"" — all match [Obsolete]).
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_re_do_s_patterns","Detects Regex patterns in string literals that contain nested quantifiers ((a+)+, (a*b*)+, etc.) — a common ReDoS vulnerability. On non-matching input these patterns cause catastrophic backtracking, making the CPU spin indefinitely. Reports the pattern and the dangerous construct."
+"find_finalizer_on_disposable","Detects classes that implement IDisposable AND declare a finalizer (~C()) without a disposed-flag guard (if (_disposed) return;). The GC may call the finalizer after Dispose() has already run, causing double-free of unmanaged resources."
+"acknowledge_sync","Clears the external drift list, indicating the AI has acknowledged and read the latest disk changes."
+"use_exception_expressions","Replaces throw new ArgumentNullException(nameof(x)) with ArgumentNullException.ThrowIfNull(x) and throw new ArgumentOutOfRangeException(nameof(x)) with ArgumentOutOfRangeException.ThrowIfNegative(x) in the specified method."
+"read_completed_work","Reads a completed-work log file from the solution's docs/completed/ directory. Only bare filenames and documentation extensions are accepted."
+"find_unused_constructors","Identifies constructors that are never called in the entire solution."
+"upgrade_to_primary_constructor","Converts a class with a simple assignment-only constructor into a C# 12 primary constructor. Removes the explicit constructor and its corresponding private readonly fields, then rewrites field references to use the parameter names directly. Only succeeds if every constructor statement is a field assignment."
+"read_project_documentation","Reads a project documentation file from the solution's docs/documentation/ directory. The filename parameter is treated as a bare filename — any path components are stripped and rejected. Only documentation file types (.md, .yaml, .yml, .json, .txt) are permitted. Cannot read source files or files outside the docs directory."
+"find_string_format_in_loops","Detects string interpolation ($""..."") and string.Format() calls inside loop bodies. Each iteration allocates a new string — use StringBuilder for accumulation or move the format outside the loop."
+"pull_up_member","Pulls a member (method or property) up from a derived class to its base class.
+
+Removes the 'override' modifier and adds 'virtual' (if not already abstract/virtual),
+then moves the declaration from the derived class into the base class. Returns a two-file
+change dict: derived class file (with member removed) + base class file (with member added).
+
+Requires: the source class has a base class with accessible source code in the solution.
+If autoStage is true (default), returns a ChangeId for use with ApplyStagedChanges."
+"extract_class","Extracts named members (methods, properties, fields) from a class into a new '{newClassName}.cs' file. The source class is updated: extracted members are removed and a public auto-property 'public {NewClassName} {NewClassName} { get; } = new();' is added as the composition point, making the extracted class accessible to external callers. Cross-file call sites that previously called 'sourceObj.Method()' are automatically rewritten to 'sourceObj.NewClassName.Method()' solution-wide. Returns a dictionary of filePath→updatedContent for every affected file."
+"generate_async_overload","Generates an async overload for a synchronous method by wrapping it in Task.Run."
+"move_all_types_to_files_in_project","Atomically moves all secondary types in every file in a project to their own files. If autoStage is true, returns a ChangeId."
+"propagate_cancellation_token_batch","Batch propagation of CancellationToken across multiple files. Accepts a list of file
+paths with optional per-file method filters. Processes each file independently,
+validating each in-memory before writing. Failed files do not block successful ones.
+On failure with FlagFailures=true, flags offending methods with
+[MigrationCandidate(""CancellationTokenForwardCandidate"")] for later manual review.
+
+Input (PropagateCtBatchInput):
+  Targets      — list of { FilePath, MethodNames? } targets.
+  DryRun       — when true, computes results without writing files (default false).
+  MaxFiles     — max files to process (default 100).
+  FlagFailures — when true (default), flags failing methods with MigrationCandidate.
+
+Returns PropagateCtBatchResult with:
+  Applied         — per-file results for files that were successfully processed.
+  Failed          — files that failed validation, with diagnostics and flagged methods.
+  TotalForwarded  — total call sites rewritten across all files.
+  TotalSkipped    — total call sites skipped.
+  RemainingFiles  — number of targets not processed (due to MaxFiles cap).
+  StopReason      — ""batch_complete"" | ""budget_exhausted"" | ""dry_run""."
+"wrap_in_region","Wraps a line range with #region / #endregion preprocessor directives.
+
+startLine and endLine are 1-based line numbers. regionName is the label after #region.
+This uses text manipulation rather than AST transformation.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"validate_proposed_changes","Validates a dictionary of proposed file changes in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying changes."
+"detect_memory_leaks","Scans a file for potential memory leaks (e.g. unhooked events)."
+"retry_failed_changes","Retries committing previously failed file changes using server-side cached content. Token-efficient: no need to re-send file contents."
+"detect_inefficient_string_comparisons","Scans for common string comparison pitfalls. Optionally filtered by project."
+"reduce_block_depth","Inverts a single-branch if statement to an early-return guard clause, reducing nesting depth."
+"check_for_redundant_cast","Detects redundant type casts. Optionally filtered by project."
+"update_current_state","Writes the migration state file (docs/migration-state.yaml). Takes no filename parameter — there is exactly one state file. Content size capped at 512 KB."
+"get_external_changes","Returns a list of files that have been modified externally (on disk) since the AI last synced."
+"analyze_data_flow","Analyzes data flow of a method body: identifies variables read before assignment, variables that flow out, write-only variables (possible bugs), and captured closure variables. methodName: the method to analyze. contextSnippet: optional snippet to disambiguate overloads. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns: ReadBeforeAssignment, WrittenInside, ReadInside, CapturedVariables, DataFlowWarnings."
+"find_unawaited_fire_and_forget","Finds Task-returning methods called without await (fire-and-forget). Exceptions will be silently swallowed. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution."
+"write_handoff","Writes (creates or overwrites) a session handoff document in the solution's docs/handoffs/ directory. Only bare filenames and documentation extensions are accepted. Content size capped at 512 KB."
+"add_property","Generates an auto-property and adds it to a type.
+
+containerName is the class/record/struct to modify; propertyName and propertyType specify the property.
+accessibility defaults to ""public"". hasSetter=true generates { get; set; }; false generates { get; }.
+isInit=true generates { get; init; } (requires hasSetter=true).
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"extension_to_static","Converts an extension method into a standard static method call."
+"invert_boolean_logic","Inverts all usages of a boolean identifier across the solution: wraps each usage with '!' and removes double negations. Returns a file-to-content map of changed files."
+"add_summary_comment","Adds or replaces a /// <summary>...</summary> XML doc comment on a type or member.
+
+targetName is the class/method/property name to document.
+summaryText is the text content of the summary (single line).
+If a summary already exists it will be replaced.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"convert_to_switch","Replaces if-else chains with switch statements for better readability.
+Converts patterns like:
+- 'if (x == 1) {...} else if (x == 2) {...}' → 'switch (x) { case 1: ...; case 2: ... }'
+
+filePath: path to the .cs file to transform.
+Automatically detects and converts eligible if-else chains (minimum 3 branches).
+Returns the updated file content with switch statements applied."
+"inline_class","Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. Automatically updates ALL type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution, renaming them to the target class. Returns a dictionary of filePath→updatedContent for every affected file."
+"find_possible_deadlocks","Analyzes a solution or project for deadlocks. Optional scope."
+"check_package_inconsistency","Checks for NuGet package version inconsistencies across multiple projects."
+"flag_migration_candidates_batch","Flags multiple methods with [MigrationCandidate] attributes in a single call. Groups
+rewrites by file so each source file is read once and written once — avoids line-number
+drift that occurs when sequential single-method calls modify the same file.
+
+items: array of { FilePath, MethodName, Pattern, Score?, Reason? } objects.
+
+Writes all changes directly to disk. Returns FlagMigrationCandidatesBatchResult with
+per-method outcomes and any errors (items that failed do not abort the batch).
+
+Prefer flag_migration_candidates_in_project when you want autonomous discovery.
+Use this tool when you already have a specific list of methods to flag."
+"format_document_preview","Returns a preview of what format_document would change without applying the changes.
+Shows each changed line range with ±3 lines of context (similar to a unified diff).
+Returns Changed=false and an empty Hunks list if the file is already formatted correctly.
+Use this to inspect formatting changes before committing to format_document.
+filePath: path to the .cs file to preview."
+"check_project_consistency","Checks solution-wide consistency: TargetFramework alignment across projects and project naming convention adherence. Returns a list of issues with IssueType (TargetFrameworkMismatch, NamingConventionViolation), description, project name, and file path. NuGet package version consistency is covered by check_package_inconsistency."
+"cleanup_implicit_spans","ImplicitSpanCleanup: Removes unnecessary .AsSpan() calls that are implicit in modern C#."
+"list_features","Lists all available analysis/refactoring features and their current enabled status."
+"find_all_throw_sites","Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Set sortByFrequency=true to rank results by how often each exception type is thrown (most frequent first) — useful for auditing dominant error patterns."
+"flag_migration_candidate","Adds a [MigrationCandidate(""pattern"")] attribute to a method, marking it for a future
+async migration refactoring pass. The attribute is source-injected — no new project
+references are required.
+
+Writes the change directly to disk — no apply_staged_changes or apply_proposed_changes
+step needed. If MigrationCandidateAttribute.cs does not yet exist in the project it is
+also generated in the same directory.
+
+Known patterns: AsyncBridgeCandidate, HandlerExtract, HandlerToAsync, AsyncCallerUplift.
+Re-flagging a method with the same pattern is idempotent: the existing attribute is
+replaced with the updated score/reason/date.
+
+The specialist tool (e.g. convert_to_async_bridge) automatically removes [MigrationCandidate]
+when it processes the method. Remove the attribute manually if the method is ruled ineligible.
+
+Returns FlagMigrationCandidateResult with slim metadata only (no file source in the payload).
+WasAlreadyFlagged and PreviousPattern indicate idempotency state."
+"detect_unused_private_fields","Detects private fields that are never read or written in the file."
+"sync_type_and_filename","Synchronizes the filename to match the primary type declared within it."
+"find_unused_private_members","Finds all unused private members in a class."
+"upgrade_to_modern_guards","ModernGuardClauses: Upgrades if-throw null checks to ArgumentNullException.ThrowIfNull / ArgumentException.ThrowIfNullOrEmpty."
+"extract_local_variable","Extracts an inline expression into a local variable declaration.
+Converts patterns like:
+- 'return x + y;' → 'var sum = x + y; return sum;'
+- 'var result = getValue();' → Extracts getValue() to a variable
+
+contextSnippet: a verbatim substring containing or surrounding the expression to extract.
+variableName: the name for the new variable.
+Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+Returns the updated file content with the expression extracted to a variable."
+"update_project_documentation","Writes (creates or overwrites) a project documentation file in the solution's docs/documentation/ directory. Filename is treated as bare — path components are stripped and rejected. Only documentation file types permitted. Content size capped at 512 KB. Cannot write source files or files outside the docs directory."
+"generate_repository_interface","Extracts an interface from a concrete class. Returns: the interface source code ready to paste into a new file, a DI registration snippet (services.AddScoped<IFoo, Foo>()), and a Moq mock setup snippet for use in unit tests."
+"fix_thread_sleep","EPC33: Replaces Thread.Sleep with Task.Delay in async methods."
+"generate_decorator_class","Generates a Decorator pattern class for a given interface. The decorator wraps any implementation, delegates all interface members to an inner instance, and includes TODO comments for adding cross-cutting concerns (logging, caching, retry). Returns the full .cs file source."
+"introduce_variable","Introduces a new local variable based on a selected expression and replaces usages. Provide contextSnippet: a verbatim substring uniquely identifying the expression to extract. Provide lineBefore and/or lineAfter when the snippet could match multiple locations."
+"insert_member_before","Inserts a new member immediately before a named member in a type declaration.
+
+Finds the container type by name, then locates the member named beforeMemberName and inserts
+newMemberSource directly before it (e.g. insert a field before a constructor).
+If beforeMemberName is not found, the new member is appended at the end of the type.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_duplicate_blocks_in_hierarchy","Finds duplicate statement sequences across all types in an inheritance or
+interface hierarchy — base class, derived classes, and implementing types.
+
+Scoped to avoid noise: only types that share a common ancestor or interface
+with the named type are included. Cross-hierarchy clones (unrelated types)
+are excluded. This makes findings directly actionable: duplicates in a hierarchy
+are candidates for extraction to the base class or a shared abstract method.
+
+Returns the same DuplicateBlockGroup shape as FindDuplicateBlocksInClass,
+with ContainingType and MethodName populated per occurrence so you can see
+exactly which derived class has the copy.
+
+typeName: the root type to anchor the hierarchy search (class or interface name).
+projectName: optional filter to limit the search scope.
+minStatements: minimum window size (default 4)."
+"insert_member_after","Inserts a new member immediately after a named member in a type declaration.
+
+Finds the container type by name, then locates the member named afterMemberName and inserts
+newMemberSource directly after it (e.g. insert a new method after an existing method).
+If afterMemberName is not found, the new member is appended at the end of the type.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"convert_property_safe","Converts a property between auto-property and full property with backing field.
+Unlike the built-in convert_property, this correctly preserves initializers when converting
+ToFullProperty (the initializer moves to the backing field) and handles virtual/override/new
+modifiers without dropping them.
+direction: ""ToFullProperty"" (auto-prop → backing field + expression-body accessors) or
+           ""ToAutoProperty"" (full property → auto-prop, moving backing field initializer to property).
+propertyName: the property to convert.
+contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
+Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+Returns the updated file content."
+"make_method_static","Makes a method static if it does not access any instance members (fields, properties, methods)."
+"move_type_to_outer_scope","Moves a nested type out to the containing namespace scope."
+"generate_http_client","Generates a typed HttpClient for a Web API controller."
+"upgrade_pattern_matching","IDE0019/20: Upgrades legacy type checks and casts to modern C# pattern matching (is string s)."
+"get_code_inventory","Generates a structured report of all namespaces, classes, methods, and properties in a file."
+"find_missing_cancellation_tokens","Finds async Task/ValueTask methods that lack a CancellationToken parameter but call at least one method that accepts one. These are methods that should thread cancellation through but aren't. Excludes: event handler methods with (object sender, XxxEventArgs e) signatures (delegate-bound, cannot accept CT), abstract methods, and methods that already have a CT parameter. Returns method name, containing type, file/line, and the callee names that accept CancellationToken."
+"find_async_in_constructor","Finds constructors that call async methods or contain await expressions. Constructors cannot be async — use a factory method or AsyncHelper instead."
+"detect_mismatched_await","Detects Task-returning method calls that are not awaited (potential fire-and-forget bugs). Skips intentional patterns: discard assignments (_ = MethodAsync()), Task.WhenAll/WhenAny arguments, return/arrow-body expressions, .GetAwaiter().GetResult() chains (those are blocking sync-over-async — use find_blocking_calls_in instead), ContinueWith/ConfigureAwait chains, field assignments, and variables later passed to WhenAll. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the solution."
+"preview_add_missing_usings","PREVIEW_ADD_MISSING_USINGS — Preview what usings would be added, without modifying the file.
+
+FIXES MS BUG: The standard add_missing_usings tool with preview:true silently APPLIES
+changes to the file on disk anyway — the preview flag is completely ignored. Files are
+always modified regardless of what preview value you pass.
+
+This tool performs the analysis in read-only mode:
+  • Finds CS0246/CS0103 diagnostics (unresolved type/name errors)
+  • Searches all projects in the solution for matching type declarations
+  • Returns the list of namespaces that WOULD be added
+  • Returns UpdatedContent — the file content WITH the usings added (for review)
+  • Does NOT write to disk under any circumstances
+
+Prerequisites: A solution must be loaded (HasLoadedSolution=true from GetWorkspaceHealth).
+The file must be part of the loaded solution.
+
+Returns: SolutionRequired, UsingsToAdd, Warning, UpdatedContent."
+"detect_value_task_misuse","Detects invalid ValueTask usage patterns: (A) double await on same variable, (B) ValueTask stored and deferred-awaited with intervening statements, (C) ValueTask passed to Task.WhenAll() without .AsTask(), (D) .Result accessed on ValueTask. Reports method name and line for each violation."
+"generate_mapping","Generates a mapping method between two types."
+"optimize_to_value_task","Converts a method's Task/Task<T> return type to ValueTask/ValueTask<T> for reduced heap allocation on hot paths."
+"read_handoff","Reads a session handoff document from the solution's docs/handoffs/ directory. Only bare filenames and documentation extensions are accepted."
+"list_project_documentation","Lists all files in the solution's docs/ directory tree. Returns relative paths within docs/ only. Cannot enumerate source files or directories outside docs/."
+"find_linq_n1_patterns","Detects LINQ N+1 query patterns: LINQ terminal calls (Where, FirstOrDefault, Any, Count, etc.) inside foreach/for/while loops where the loop variable appears in the LINQ chain — each iteration triggers a separate query. Reports file, line, and the loop variable involved."
+"convert_expression_body","Converts a method or property between expression body (=>) and block body forms. direction: 'ToExpressionBody' or 'ToBlockBody'. memberName: the method/property name. contextSnippet: optional verbatim substring to disambiguate overloads. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns the updated file content."
+"detect_layer_violations","Detects namespace-level layer architecture violations (e.g. Controllers importing from Data/Repositories directly, Domain models depending on infrastructure layers). Operates on using directives — fast, no compilation required. Returns violation type, description, source layer, forbidden dependency namespace, file path, and line. Scope with projectName or filePath, or omit for the entire solution."
+"find_task_delay_zero_usage","Detects redundant Task.Delay(0) calls."
+"find_large_switch_statements","Finds switch statements with a large number of cases that may need refactoring, optionally filtered by project."
+"analyze_type_cohesion","Analyzes class cohesion using an LCOM-based metric. Returns per-class analysis including field/method counts, LCOM score (0=cohesive, 1=disconnected), a rating (Excellent/Good/Poor/Very Poor), and informal suggestions for classes that could be split. Useful for identifying god classes and extraction opportunities."
+"find_linq_redundant_where","Detects LINQ chains of the form .Where(pred).First() / .Where(pred).Any() / .Where(pred).Count() where the intermediate Where creates an unnecessary IEnumerable allocation. Suggests collapsing to .First(pred) / .Any(pred) / .Count(pred) for a single-pass, allocation-free alternative."
+"trace_variable_lifetime","Traces a variable's complete lifetime from declaration through every read, write, ref/out pass,
+return, and closure capture, across all code paths (loops, conditionals, try/catch) in the
+enclosing scope.
+filePath: file containing the variable declaration.
+variableName: the exact identifier name.
+lineNumber: 1-based line of the declaration (used to disambiguate variables with the same name).
+Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned,
+IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/
+Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional."
+"find_unused_interfaces","Identifies interfaces that are declared but never implemented in the solution or a specific project."
+"propagate_cancellation_token_in_method","Propagates an existing CancellationToken parameter from a method to all eligible
+async callees within its body. The target method must already have a CancellationToken
+parameter. For each call to an async method that has a CancellationToken overload but
+isn't receiving the token, appends the token to the call site. Call sites that already
+forward a CT or call methods without CT overloads are reported as skipped.
+Returns a staged change-set; call apply_staged_changes to commit.
+
+Parameters:
+  filePath   — absolute path to the source file containing the method.
+  methodName — name of the method to process (case-sensitive).
+  autoStage  — when true (default), stages the changes and returns a ChangeId.
+               When false, returns the updated source text with no ChangeId.
+
+Returns PropagateCtResult with:
+  MethodFound        — false if the method was not found in the file.
+  TokenParameterName — actual parameter name used (e.g. ""ct"" or ""cancellationToken"").
+  Forwarded          — call sites that were rewritten with the token.
+  Skipped            — call sites skipped with reason code.
+  ForwardedCount     — count of Forwarded.
+  SkippedCount       — count of Skipped.
+  ChangeId           — staged change id (null if autoStage=false or no changes).
+  Error              — non-null on hard failure (method has no CT param, etc.)."
+"add_member_to_class","Adds a new member (method, field, etc.) to an existing class, interface, record, or struct."
+"inline_field","Inlines a private field by replacing all usages with its initializer value."
+"find_check_then_act_on_dictionary","Detects the check-then-act race on Dictionary/ConcurrentDictionary: ContainsKey() or TryGetValue() followed by Add()/TryAdd() on the same variable outside of any lock. Another thread may insert the same key between the check and add. Use GetOrAdd() or TryAdd() for atomic insertion."
+"convert_method_to_indexer","Converts a Get(index) method into a formal C# indexer."
+"find_long_parameter_list","Finds methods/constructors with >= minParameters (default 4) parameters. Excludes DI-only constructors (all params end with Service/Repository/Options/Factory)."
+"upgrade_thread_safety","Upgrades threading patterns (locks, semaphores) to modern/safe versions."
+"split_project_by_folder","Moves all files under a specific folder from a source project to a new target project, preserving folder structure."
+"find_callers_safe","Finds all call sites (references) to a symbol in the solution without requiring line/column coordinates.
+Unlike the built-in find_callers which needs a line number, this locates the symbol by name with
+an optional contextSnippet to disambiguate overloads.
+symbolName: the method/property/field name to search for.
+contextSnippet: optional verbatim substring of the declaration (e.g. the method signature line).
+Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
+Returns CallerMethod, CallerType, FilePath, Line, and CodeSnippet for each call site."
+"add_using_directive","Adds a using directive to a file if not already present.
+
+Pass just the namespace name (e.g. ""System.Linq"", ""Microsoft.Extensions.DependencyInjection"").
+For static usings, prefix with ""static "" (e.g. ""static System.Math"").
+If the directive already exists, the file is returned unchanged.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"extract_method_safe","extract_method_safe— extracts selected statements into a new method with the CORRECT return type.
+
+Fixes a bug in the standard extract_method tool where selections ending with `return <expression>`
+are extracted into a method declared `private void MethodName(...)`. The void return type is
+incorrect and causes a compile error. This tool uses Roslyn's SemanticModel to determine the
+actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list.
+
+Requires a solution to be loaded first (via set_solution_path or equivalent), because semantic
+analysis is needed to determine types.
+
+Parameters:
+  filePath        — absolute path to the .cs file (must be in the loaded solution)
+  newMethodName   — valid C# identifier for the new extracted method
+  contextSnippet  — a short unique code snippet that identifies the selection
+  lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
+  lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
+
+Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+         or Success=false and Error with a human-readable explanation."
+"get_blast_radius","Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns all call sites and affected projects."
+"add_configure_await_false","Adds .ConfigureAwait(false) to all await expressions in a file that don't already have it. Use libraryMode=true (default) for library code, false for ASP.NET app code. Idempotent — skips already-configured awaits. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"extract_constant_safe","EXTRACT_CONSTANT_SAFE — Extract a literal to a named constant using context, not line/column.
+
+FIXES MS BUG: The standard extract_constant tool requires exact 1-based line/column
+coordinates. When these are even slightly wrong (off by one, trailing whitespace,
+CRLF vs LF differences) it throws a cryptic error: ""Column 99 is beyond end of line"".
+There is no human-readable guidance on how to fix the coordinates.
+
+This tool uses contextSnippet to locate the literal — the same approach used by all
+other safe Sentinel tools:
+  • No line/column arithmetic required
+  • Human-readable error messages when the literal cannot be found
+  • Replaces ALL identical literals in the file (not just the one occurrence)
+  • Inserts the constant as the first member of the containing type
+
+Parameters:
+  filePath        — absolute path to the .cs file
+  contextSnippet  — the literal itself or a short surrounding snippet (e.g., '""hello world""')
+  constantName    — valid C# identifier for the constant (e.g., 'GreetingMessage')
+  lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
+  lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
+
+Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+         or Success=false and Error with a human-readable explanation."
+"rename_symbol","Renames a symbol (class, method, property, field, local, etc.) across the entire solution. Pass 'symbolName' (the exact identifier to rename) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). Example: symbolName=""GetById"", contextSnippet=""public async Task<Product?> GetById("". Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. Returns an error if the snippet matches zero or multiple locations. Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges."
+"find_misbound_overload_chains","Validates overload chain correctness across the solution. For each group of same-named methods where shorter overloads delegate to fuller ones, detects: (1) ChainMissingParameter — a parameter from the calling overload is absent from the forwarding call, silently dropping the caller's value; (2) ChainArgumentOrder — source parameters appear in inverted order in the forwarding call, binding to the wrong target parameter; (3) OverloadCycle — two overloads delegate to each other, causing guaranteed StackOverflowException. Requires a loaded solution."
+"extract_superclass","Extracts common members from multiple classes into a new shared base class."
+"remove_modifier","Removes a modifier keyword from a type or member (idempotent).
+
+targetName is the class/method/property name to modify.
+modifier is the keyword to remove: virtual, abstract, sealed, static, readonly, override,
+partial, async, new, extern, unsafe, volatile.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"safe_delete_symbol","Safe deletes a symbol only if it has zero usages in the entire codebase. Provide contextSnippet: a verbatim substring from the symbol's declaration line. Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. If autoStage is true, returns a ChangeId."
+"find_multiple_out_parameter_methods","Finds methods with 2 or more 'out' parameters — a common sign that the method
+is doing the work of returning multiple values through side-channels instead of
+a proper return type.
+
+Returns the current return type, the out-parameter names and types, and a suggested
+ValueTuple signature. Use ConvertOutParamsToValueTuple to apply the conversion
+automatically once you've reviewed the findings.
+
+Scope to a file or project, or scan the entire solution."
+"replace_member","Surgically replaces a specific member (method, property, class) in a file by name with new source code."
+"find_task_when_all_usage","Detects sequential await calls that could be parallelized."
+"find_uninstantiated_types","Identifies classes that are never instantiated across the entire solution or a specific project."
+"detect_unreachable_code","Detects statements within a specific method that are unreachable due to a preceding return, throw, break, or continue on all code paths. Returns string descriptions of each unreachable statement and the reason it cannot execute. Use before adding code at the end of a method to confirm the insertion point is actually reached."
+"extract_members_to_partial","Extracts specific members from a class into a new partial file."
+"upgrade_unbound_nameof","IDE0340: Upgrades nameof(List<int>) to modern C# 14 nameof(List<>). Provide contextSnippet: the verbatim nameof expression text. Provide lineBefore and/or lineAfter when the snippet could match multiple locations."
+"inline_variable","Inlines a local temporary variable into all its usages within the scope."
+"preview_rename_impact","Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate. Provide lineBefore and/or lineAfter when the snippet could match multiple locations."
+"get_feature_status","Gets the enabled status of specific features by name."
+"analyze_security","Analyzes a file for potential security vulnerabilities."
+"load_solution","Loads a .NET solution into memory for persistent analysis."
+"update_features","Batch updates the enabled status of one or more features."
+"fix_mismatched_namespaces","Corrects the namespace declaration in a file to match its actual folder structure relative to the project root."
+"find_task_delay_usage","Detects Task.Delay() usage."
+"find_unbounded_static_collections","Detects static fields that hold unbounded collections (Dictionary, List, HashSet, etc.) that are populated with .Add()/.TryAdd() but never .Clear()ed and have no Count-based size cap. A common memory exhaustion DoS vector when populated from user-controlled data."
+"wrap_in_try_catch","Wraps a range of statements in a try/catch block.
+
+startLine and endLine are 1-based line numbers of the statements to wrap.
+exceptionType defaults to ""Exception""; catchVariableName defaults to ""ex"".
+catchBody is an optional statement for the catch block body (e.g. ""_logger.LogError(ex, \""msg\"");"").
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"wrap_in_using","Wraps a range of code in a using statement for an IDisposable object."
+"get_diagnostics_summary","Returns a grouped summary of Roslyn compiler diagnostics (errors and warnings) for a file,
+project, or the entire solution. Groups by diagnostic ID (e.g. CS0103) so you can see which
+issues are most common without scrolling through hundreds of raw messages.
+filePath: analyze a single file (mutually exclusive with projectName).
+projectName: analyze all files in a project.
+Leave both null to analyze the entire solution.
+topN: max number of groups to return, sorted by count descending (default 20).
+Returns TotalIssues, Errors, Warnings, and a TopIssues list with DiagnosticId, Severity,
+MessageTemplate, Count, and Locations."
+"simplify_boolean_expressions","Simplifies boolean expressions: rewrites 'x == true' to 'x', 'x == false' to '!x', and similar redundant patterns."
+"find_implicit_nullable_boxing","Detects explicit casts of Nullable<T> values to object or dynamic, which box the nullable and can produce surprising null-equality behavior ((object)(int?)null == null is true, but two boxed int? values with the same value are not reference-equal). Uses the semantic model for accuracy."
+"find_mutable_public_collection_properties","Detects public properties that expose mutable collection types (List<T>, Dictionary<K,V>, HashSet<T>, etc.) with a public non-init setter, allowing callers to completely replace the collection. Use IReadOnlyList<T>/IReadOnlyDictionary<K,V>, or change the setter to private/init."
+"run_uplift_batch_multi","Runs run_uplift_batch for each bridged method in the provided list, collecting
+per-method and aggregate results. Processes all targets sequentially; a failure on
+one method does not block the others.
+
+Input (UpliftBatchMultiInput):
+  Targets                   — list of { BridgedMethodName, ProjectName? } targets.
+  MaxCallersPerMethod       — max callers to process per bridged method (default 10).
+  DryRun                    — when true, reports what would happen without writing files.
+  PropagateCancellationTokens — when true (default), propagates CT to other async
+                                callees in each newly created async overload.
+
+Returns UpliftBatchMultiResult with:
+  PerMethod            — one UpliftBatchMultiMethodResult per target, each containing
+                         the full UpliftBatchResult for that method plus any Error.
+  TotalUplifted        — total callers uplifted across all methods.
+  TotalSkipped         — total callers skipped across all methods.
+  TotalRemainingCallers — total pending callers not yet processed (budget cap).
+  StopReason           — ""batch_complete"" | ""dry_run""."
+"convert_to_async_enumerable","Converts a method returning Task<List<T>>, Task<IEnumerable<T>>, or List<T> to IAsyncEnumerable<T>. Transforms 'results.Add(item)' patterns to 'yield return item', removes the list variable and return statement, and adds a CancellationToken parameter if missing. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"analyze_method_data_flow","Analyzes data flow for an entire method body using Roslyn's semantic analysis.
+
+Unlike the raw line-based analyze_data_flow tool, this takes a method name — no
+need to count line numbers or worry about accidentally including the method signature.
+
+Returns: DataFlowsIn (variables read but declared outside), DataFlowsOut (variables
+assigned inside and read outside), VariablesDeclared (locals), AlwaysAssigned (always
+initialized on all code paths), ReadInside, WrittenInside.
+
+If the method has multiple overloads, supply disambiguateLine (any line number that
+falls inside the desired overload's body) to select the correct one."
+"remove_configure_await_false","Removes all .ConfigureAwait(x) calls from a file, leaving the bare awaited expression. Useful when migrating library code to ASP.NET app code where ConfigureAwait is unnecessary. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"analyze_foreach_for_linq_conversion","ANALYZE_FOREACH_FOR_LINQ_CONVERSION — Pre-flight safety analysis for convert_foreach_linq.
+
+FIXES MS BUG: The standard convert_foreach_linq tool silently destroys data.
+When a collection is modified BEFORE the foreach (e.g., results.Add(""header"") before
+the loop), the standard tool re-initializes the variable with 'new List<T>()',
+discarding those pre-loop additions WITHOUT any warning.
+
+ALWAYS call this tool before using convert_foreach_linq.
+Only proceed with conversion if IsSafeToConvert=true.
+
+Parameters:
+  filePath        — absolute path to the .cs file
+  contextSnippet  — a short snippet of the foreach statement (e.g., ""foreach (var item in"")
+  lineBefore      — optional: the line of code immediately before contextSnippet
+  lineAfter       — optional: the line of code immediately after contextSnippet
+
+Returns: IsSafeToConvert, CollectionVariableName, StatementsBeforeForeach, BlockingReason,
+         and a Recommendation."
+"get_staged_changes","Returns the full file content of a staged change set for inspection."
+"convert_switch_to_expression","IfToSwitch: Converts a switch statement in a method to a switch expression."
+"convert_static_to_extension","Converts a standard static method into an extension method by prepending 'this' to its first parameter."
+"detect_json_anti_patterns","Detects unsafe or incorrect System.Text.Json usage patterns in a file: (1) JsonDocument.Parse() not wrapped in a 'using' — leaks pooled memory back to the ArrayPool, (2) JsonElement.GetProperty() instead of TryGetProperty() — throws KeyNotFoundException on missing keys at runtime. Returns SecurityIssueReport with IssueType, file path, line/column, and remediation description."
+"generate_to_string_safe","generate_tostring_safe — generates a ToString() override with CORRECTLY ESCAPED interpolated strings.
+
+Fixes a bug in the standard generate_tostring tool where literal { characters in the format section
+are left unescaped, producing broken code like $""Type { Prop = {Prop} }"" that fails with
+CS8086 (invalid interpolation hole). This tool always emits {{ and }} for literal braces,
+producing valid code like $""Type {{ Prop = {Prop} }}"".
+
+Parameters:
+  filePath  — absolute path to the .cs file
+  typeName  — the class/struct to add ToString() to
+  members   — optional comma-separated list of property/field names to include;
+              if omitted, all public instance properties and fields are used
+
+Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
+         or Success=false and Error with a human-readable explanation."
+"find_all_implementations","Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project."
+"analyze_stack_overflow_risks","Statically analyzes a C# file for potential StackOverflowException causes.
+
+Detects six distinct categories:
+- DirectRecursion       (Definite)   — method calls itself with no conditional guard
+- OverrideCallsSelf     (Definite)   — override calls own name instead of base.X()
+- PropertySelfRead      (Definite)   — property getter reads itself (missing backing field)
+- PropertySelfWrite     (Definite)   — property setter assigns to itself
+- InheritanceCycle      (Definite/Suspicious) — override → base → virtual dispatch → same override
+- ConditionalRecursion  (Suspicious) — guarded self-call whose base case may be unreachable
+- ArgumentNotDecreasing (Suspicious) — recursive call passes parameter unchanged or growing
+- MutualRecursion       (Suspicious) — A calls B calls ... calls A (up to 5-hop cycles)
+- DeepCallChain         (Informational, opt-in) — >40 static frames deep
+
+Inheritance cycle detection covers both in-file class hierarchies (syntactic) and
+cross-file base classes (semantic). The most dangerous case — override calls base which
+calls an abstract/virtual that this class overrides, creating a hidden dispatch loop —
+is detected with full CyclePath tracing.
+
+includeInformational: set true to include DeepCallChain findings (default: false)"
+"analyze_switch_for_pattern_conversion","Pre-flight analysis: checks whether a switch statement is safe to convert to a
+switch expression using the standard 'convert_to_pattern_matching' tool.
+
+WHY YOU NEED THIS: The standard tool silently drops variable assignments in switch
+cases that assign to multiple variables. For example:
+  case ""g"":
+    totalOz   = rawValue / 28.3495m;   // ← DROPPED by standard tool
+    totalGrams = rawValue;               // ← only this survives
+    break;
+This produces broken, data-loss code with no warning.
+
+This tool returns a full case-by-case analysis, tells you which cases have multiple
+assignments, and gives a clear blocking reason when conversion is unsafe.
+
+If IsSafeToConvert is true, the standard tool (or ConvertSwitchToPatternSafe) will
+produce correct output.
+
+Parameters:
+  filePath       - Absolute path to the .cs file.
+  contextSnippet - A verbatim substring from the switch keyword or governing
+                   expression line, e.g. ""switch (unit)"" or ""switch (rawUnit)"".
+  lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                   disambiguate when the snippet matches multiple locations."
+"change_signature","Reorders parameters in a method signature and updates all call sites globally."
+"convert_to_async_bridge","Converts a synchronous method to the Asyncify-bridge pattern in one atomic step.
+
+Three things happen:
+  1. A new async overload '<methodName>Async' is inserted immediately after the original.
+     It has the original body copied verbatim (NOT a Task.Run wrapper or scaffold),
+     'CancellationToken cancellationToken = default' appended as the last parameter,
+     and the 'async' modifier added. Expression-bodied originals are converted to block
+     bodies so downstream CT-propagation tools can operate on them.
+  2. The original sync method body is replaced with the bridge call:
+       return <methodName>Async(params...).GetAwaiter().GetResult();
+     (bare expression statement for void-returning methods)
+  3. [Obsolete(""Asyncify-bridge: call <methodName>Async instead."", false)] is added
+     to the original sync method — CS0618 warnings at call sites are the migration
+     tracking mechanism.
+
+The async body is NOT further transformed. Use apply_cancellation_token_to_file or
+add_cancellation_token_to_method in a follow-up step to propagate the CancellationToken
+to inner async callees.
+
+Returns CancellationTokenResult where exactly one field is populated:
+  autoStage=true (default): ChangeId is set; apply with apply_staged_changes(changeId).
+  autoStage=false: Source is set; pass Source.UpdatedSource to apply_proposed_changes.
+
+Hard preconditions (throws if any fail): method must not already be async; must not
+end with 'Async'; must not be abstract; must not be an event handler; must not have
+ref/out parameters; '<methodName>Async' must not already exist in the class."
+"generate_constructor","Generates a constructor for a class from its private/readonly fields. Skips if a constructor already exists. Returns the updated file content."
+"add_enum_value","Adds a new value to an existing enum declaration.
+
+Specify the enum name and the new value name. Optionally provide an explicit integer value
+(e.g. enumName=""Status"", valueName=""Archived"", explicitValue=99 produces 'Archived = 99').
+If the enum is not found in the file, the file is returned unchanged.
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"add_benchmark_stub","Adds a BenchmarkDotNet stub class for performance testing a specific method. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save."
+"add_attribute","Adds an attribute to a named type or member.
+
+targetName is the class name or method/property name to decorate.
+attributeSource is the attribute text with or without brackets (e.g. ""[ApiController]"" or ""Required"").
+Complex attributes with arguments are supported (e.g. ""[HttpGet(\""/api/items\"")]"").
+Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges."
+"find_mutable_public_properties","Finds public mutable properties (public setter) on non-DTO public classes. Reports classes that expose state directly rather than through controlled mutation. Classes whose names end with Request/Response/Dto/ViewModel/Model/Options/Settings/Config/Entity/Event/Command/Query are excluded. Scope to a file or project, or scan the whole solution."
+"convert_string_format_to_interpolated_smart","Converts a string.Format() call to an interpolated string.
+
+FIXES standard 'convert_to_interpolated_string' LIMITATION: The standard tool
+fails with ""First argument must be a string literal"" when the format string is a
+named constant or static field, e.g.:
+  string.Format(CacheKeyFmt, userId, date)
+  string.Format(ErrorMessages.NotFound, id)
+
+This tool uses the semantic model to resolve the constant value at compile time,
+then builds the interpolated string from the resolved format pattern.
+
+Supported format string sources:
+  • Inline string literal:   string.Format(""User {0}"", id)
+  • const field/property:    string.Format(MyConst, id)
+  • Static readonly string:  string.Format(Templates.Key, id) (if const)
+
+Supports format specifiers:   string.Format(""{0:yyyy-MM-dd}"", date) → $""{date:yyyy-MM-dd}""
+
+Parameters:
+  filePath       - Absolute path to the .cs file.
+  contextSnippet - A verbatim substring from the string.Format call, e.g.
+                   ""string.Format(CacheKeyFmt"" or ""Format(MyErrorTemplate,"".
+  lineBefore/lineAfter - Verbatim text from the line above/below the target to
+                   disambiguate when the snippet matches multiple locations.
+
+Returns: UpdatedContent with the interpolated string, or Error if the format
+string could not be resolved to a compile-time constant."
+"find_attribute_usages","Finds all usages of a named attribute across the solution, optionally scoped to a
+project or file. Accepts both ""Authorize"" and ""AuthorizeAttribute"" (or ""[Authorize]"")
+spelling — all three resolve identically.
+
+Returns: AttributeName, TargetKind (Class/Method/Property/Field/Parameter/Constructor/
+Interface/Record/Struct/Enum), TargetName, ContainingType (empty for type-level attrs),
+FilePath, and Line.
+
+Common use cases:
+  • Security audit: find every endpoint missing [Authorize] by listing controllers and
+    diffing against this result.
+  • API review: ""find_attribute_usages [ProducesResponseType]"" to see which actions
+    document their return types.
+  • Validation audit: ""find_attribute_usages [Required]"" to map all required properties.
+  • Obsolete API detection: ""find_attribute_usages [Obsolete]"" to find every member
+    still marked deprecated."
+"get_reverse_call_graph","Builds a reverse call graph (who calls this method): shows all methods that call the given method, what calls those, etc., up to maxDepth levels. Uses Roslyn SymbolFinder for accurate semantic reference resolution — not text search. Returns a ReverseCallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callers."
