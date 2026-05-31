@@ -47,55 +47,9 @@ public class SentinelGenerationTools
         return result;
     }
 
-    [McpServerTool]
-    [Description("Generates a constructor for a class from its private/readonly fields. Skips if a constructor already exists. Returns the updated file content.")]
-    public async Task<string> GenerateConstructor(string filePath, string className)
-    {
-        var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"GenerateConstructor failed for '{className}' in '{filePath}': " +
-                "file not found in workspace or class not found. Ensure the solution is loaded.");
-        }
 
-        return result;
-    }
 
-    [McpServerTool]
-    [Description("Extracts an interface from a concrete class. Returns: the interface source code ready to paste into a new file, a DI registration snippet (services.AddScoped<IFoo, Foo>()), and a Moq mock setup snippet for use in unit tests.")]
-    public async Task<RepositoryInterfaceResult> GenerateRepositoryInterface(string filePath, string className)
-        => await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(filePath, className);
 
-    [McpServerTool]
-    [Description("Generates a fluent builder class for any C# class. The builder provides With{Property}() methods for each public settable property and a Build() method that constructs the target type. Returns the complete builder source, class name, and a usage example.")]
-    public async Task<FluentBuilderResult> GenerateFluentBuilder(string filePath, string className)
-    {
-        try
-        {
-            return await _codeGenerationEngine.GenerateFluentBuilderAsync(filePath, className);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GenerateFluentBuilder failed for '{ClassName}' in '{FilePath}'", className, filePath);
-            return new FluentBuilderResult(className, string.Empty, string.Empty, $"{ex.GetType().Name}: {ex.Message}");
-        }
-    }
-
-    [McpServerTool]
-    [Description("Generates a Decorator pattern class for a given interface. The decorator wraps any implementation, delegates all interface members to an inner instance, and includes TODO comments for adding cross-cutting concerns (logging, caching, retry). Returns the full .cs file source.")]
-    public async Task<DecoratorResult> GenerateDecoratorClass(string interfaceName, string decoratorPrefix = "Logging", string? projectName = null)
-    {
-        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(interfaceName, decoratorPrefix, projectName);
-        if (result == null)
-        {
-            throw new InvalidOperationException(
-                $"Interface '{interfaceName}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. " +
-                "Ensure the interface name matches exactly (including the leading 'I') and is part of the loaded solution.");
-        }
-
-        return result;
-    }
 
     [McpServerTool]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and generates a JSON skeleton with all keys and inferred default values.")]
@@ -112,80 +66,8 @@ public class SentinelGenerationTools
         return result;
     }
 
-    [McpServerTool]
-    [Description("Generates an async overload for a synchronous method by wrapping it in Task.Run.")]
-    public async Task<string> GenerateAsyncOverload(string filePath, string methodName)
-    {
-        try
-        {
-            var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(filePath, methodName);
-            if (string.IsNullOrEmpty(result))
-            {
-                throw new InvalidOperationException(
-                    $"GenerateAsyncOverload failed for '{methodName}' in '{filePath}': " +
-                    "file not found in workspace or method not found. Ensure the solution is loaded.");
-            }
 
-            return result;
-        }
-        catch (InvalidOperationException) { throw; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GenerateAsyncOverload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            throw new InvalidOperationException($"GenerateAsyncOverload for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
 
-    [McpServerTool]
-    [Description("Adds [Required] and [StringLength(100)] data annotations to all string properties in a POCO class.")]
-    public async Task<string> AddValidationToPoco(string filePath, string className)
-    {
-        try
-        {
-            var result = await _apiIntegrationEngine.AddValidationToPocoAsync(filePath, className);
-            if (string.IsNullOrEmpty(result))
-            {
-                throw new InvalidOperationException(
-                    $"AddValidationToPoco failed for '{className}' in '{filePath}': " +
-                    "file not found in workspace or class not found. Ensure the solution is loaded.");
-            }
-
-            return result;
-        }
-        catch (InvalidOperationException) { throw; }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddValidationToPoco unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
-            throw new InvalidOperationException($"AddValidationToPoco for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("""
-        Converts a property between auto-property and full property with backing field.
-        Unlike the built-in convert_property, this correctly preserves initializers when converting
-        ToFullProperty (the initializer moves to the backing field) and handles virtual/override/new
-        modifiers without dropping them.
-        direction: "ToFullProperty" (auto-prop → backing field + expression-body accessors) or
-                   "ToAutoProperty" (full property → auto-prop, moving backing field initializer to property).
-        propertyName: the property to convert.
-        contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
-        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
-        Returns the updated file content.
-        """)]
-    public async Task<string> ConvertPropertySafe(
-        string filePath, string propertyName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-    {
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propertyName, direction, contextSnippet, lineBefore, lineAfter);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertPropertySafe failed for property '{propertyName}' ({direction}) in '{filePath}': " +
-                "file not found in workspace, property not found, or the specified context snippet did not match. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
 
     [McpServerTool]
     [Description("""

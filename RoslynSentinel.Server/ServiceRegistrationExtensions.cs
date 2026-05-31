@@ -124,6 +124,12 @@ public static class RoslynSentinelServiceExtensions
             services.AddSingleton<SentinelGenerationTools>();
             mcpBuilder.WithTools<SentinelGenerationTools>();
         }
+        if (activeModes.Contains("Refactor") || activeModes.Contains("Modernize") ||
+            activeModes.Contains("Quality") || activeModes.Contains("Generation"))
+        {
+            services.AddSingleton<SentinelCodemodTools>();
+            mcpBuilder.WithTools<SentinelCodemodTools>();
+        }
 
         // Centralized error-to-success filter:
         // Converts "No solution is loaded" InvalidOperationException into a successful

@@ -121,15 +121,7 @@ public class SentinelRefactoringTools
         return changes;
     }
 
-    [McpServerTool]
-    [Description("Makes a method static if it does not access any instance members (fields, properties, methods).")]
-    public async Task<string> MakeMethodStatic(string filePath, string methodName) 
-        => await _standardRefactoringEngine.MakeMethodStaticAsync(filePath, methodName);
 
-    [McpServerTool]
-    [Description("Converts an extension method into a standard static method call.")]
-    public async Task<string> ExtensionToStatic(string filePath, string methodName) 
-        => await _advancedLogicEngine.ExtensionToStaticAsync(filePath, methodName);
 
     [McpServerTool]
     [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
@@ -154,20 +146,6 @@ public class SentinelRefactoringTools
         return new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, result.FileChanges };
     }
 
-    [McpServerTool]
-    [Description("Converts an abstract class to an interface.")]
-    public async Task<string> ConvertAbstractToInterface(string filePath, string className)
-    {
-        try
-        {
-            return await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(filePath, className);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ConvertAbstractToInterface unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
-            throw new InvalidOperationException($"ConvertAbstractToInterface for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
 
     [McpServerTool]
     [Description("Generates a mapping method between two types.")]
@@ -184,15 +162,7 @@ public class SentinelRefactoringTools
     public async Task<Dictionary<string, string>> InlineClass(string sourceFilePath, string targetFilePath, string className) 
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
-    [McpServerTool]
-    [Description("Converts a property into formal GetX() and SetX() methods.")]
-    public async Task<string> ConvertPropertyToMethods(string filePath, string propertyName) 
-        => await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propertyName);
 
-    [McpServerTool]
-    [Description("Converts a Get(index) method into a formal C# indexer.")]
-    public async Task<string> ConvertMethodToIndexer(string filePath, string methodName) 
-        => await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName);
 
     [McpServerTool]
     [Description("Atomically moves all secondary types in a file to their own files. Returns a ChangeId for ApplyStagedChanges plus first-15-line previews of each affected file's new content.")]
@@ -324,25 +294,13 @@ public class SentinelRefactoringTools
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.");
     }
 
-    [McpServerTool]
-    [Description("Replaces a class constructor with a private constructor plus a public static Create() factory method.")]
-    public async Task<string> ReplaceConstructorWithFactory(string filePath, string className)
-        => await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(filePath, className);
 
     [McpServerTool]
     [Description("Swaps left and right sides of all assignment statements within a line range.")]
     public async Task<string> InvertAssignments(string filePath, int startLine, int endLine)
         => await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine);
 
-    [McpServerTool]
-    [Description("Inverts a single-branch if statement to an early-return guard clause, reducing nesting depth.")]
-    public async Task<string> ReduceBlockDepth(string filePath, string methodName)
-        => await _codeFlowEngine.ReduceBlockDepthAsync(filePath, methodName);
 
-    [McpServerTool]
-    [Description("Adds .ConfigureAwait(false) to all await expressions in a file for library-safe async code.")]
-    public async Task<string> OptimizeTaskWait(string filePath)
-        => await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath);
 
     [McpServerTool]
     [Description("""
@@ -416,27 +374,6 @@ public class SentinelRefactoringTools
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.");
     }
 
-    [McpServerTool]
-    [Description("""
-        Reorders members of a class/struct/record by convention: fields, constructors, destructors,
-        properties, indexers, events, methods, operators, nested types.
-        
-        Within each category: static members come before instance members, then alphabetical by name.
-        containerName is the type whose members to sort.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> SortMembers(string filePath, string containerName, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.SortMembersAsync(filePath, containerName);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Sort members of '{containerName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Sorts members of '{containerName}' by convention in {Path.GetFileName(filePath)}.");
-    }
 
     [McpServerTool]
     [Description("""
@@ -479,72 +416,9 @@ public class SentinelRefactoringTools
         return result;
     }
 
-    [McpServerTool]
-    [Description("Regenerates XML doc param/returns tags to match the current method signature: adds tags for new parameters, removes tags for deleted parameters, and adds a <returns> tag if missing on a non-void method.")]
-    public async Task<string> UpdateXmlDocsFromSignature(string filePath, string methodName)
-    {
-        var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"UpdateXmlDocsFromSignature failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace or method not found. Ensure the solution is loaded.");
-        }
 
-        return result;
-    }
 
-    [McpServerTool]
-    [Description("Converts a method or property between expression body (=>) and block body forms. " +
-                 "direction: 'ToExpressionBody' or 'ToBlockBody'. " +
-                 "memberName: the method/property name. " +
-                 "contextSnippet: optional verbatim substring to disambiguate overloads. " +
-                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
-                 "Returns the updated file content.")]
-    public async Task<string> ConvertExpressionBody(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-    {
-        var result = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, memberName, direction, contextSnippet, lineBefore, lineAfter);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertExpressionBody failed for '{memberName}' ({direction}) in '{filePath}': " +
-                "file not found in workspace, member not found, or context snippet did not match. Ensure the solution is loaded.");
-        }
 
-        return result;
-    }
-
-    [McpServerTool]
-    [Description("""
-        Returns a preview of what format_document would change without applying the changes.
-        Shows each changed line range with ±3 lines of context (similar to a unified diff).
-        Returns Changed=false and an empty Hunks list if the file is already formatted correctly.
-        Use this to inspect formatting changes before committing to format_document.
-        filePath: path to the .cs file to preview.
-        """)]
-    public async Task<FormatPreviewResult> FormatDocumentPreview(string filePath)
-        => await _refactoringEngine.FormatDocumentPreviewAsync(filePath);
-
-    [McpServerTool]
-    [Description("""
-        Modernizes null checks using null coalescing operators (?? and ??=).
-        Converts patterns like:
-        - 'if (x == null) x = y;' → 'x ??= y;'
-        - 'x == null ? y : x' → 'x ?? y'
-        - 'x != null ? x : defaultValue' → 'x ?? defaultValue'
-        filePath: path to the .cs file to transform.
-        """)]
-    public async Task<string> ConvertToNullCoalescing(string filePath)
-    {
-        var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertToNullCoalescing failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
 
     [McpServerTool]
     [Description("""
@@ -571,75 +445,8 @@ public class SentinelRefactoringTools
         return result;
     }
 
-    [McpServerTool]
-    [Description("""
-        Replaces if-else chains with switch statements for better readability.
-        Converts patterns like:
-        - 'if (x == 1) {...} else if (x == 2) {...}' → 'switch (x) { case 1: ...; case 2: ... }'
-        
-        filePath: path to the .cs file to transform.
-        Automatically detects and converts eligible if-else chains (minimum 3 branches).
-        Returns the updated file content with switch statements applied.
-        """)]
-    public async Task<string> ConvertToSwitch(string filePath)
-    {
-        var result = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertToSwitch failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        }
 
-        return result;
-    }
 
-    [McpServerTool]
-    [Description("""
-        Modernizes code using C# pattern matching (C# 7.0+).
-        Converts patterns like:
-        - 'if (x == null)' → 'if (x is null)'
-        - 'if (x != null)' → 'if (x is not null)'
-        - 'if (obj != null && obj.Property > 0)' → 'if (obj is { Property: > 0 })'
-        
-        filePath: path to the .cs file to transform.
-        Returns the updated file content with modern pattern matching applied.
-        """)]
-    public async Task<string> ConvertToPattern(string filePath)
-    {
-        var result = await _modernizationEngine.ConvertToPatternAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertToPattern failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
-
-    [McpServerTool]
-    [Description("""
-        Converts a method that uses 2+ 'out' parameters to return a ValueTuple instead.
-        Rewrites the method declaration (return type, parameter list, return statements)
-        and all call sites in the solution.
-
-        Transformation applied:
-          void M(T1 a, out T2 b, out T3 c)  →  (T2 b, T3 c) M(T1 a)
-          bool M(T1 a, out T2 b, out T3 c)  →  (bool result, T2 b, T3 c) M(T1 a)
-
-        Call site rewrites:
-          M(arg, out x, out y)          →  var (x, y) = M(arg);
-          bool ok = M(arg, out x, out y) →  var (ok, x, y) = M(arg);
-
-        Complex call sites (e.g. inline in conditional expressions) receive a TODO
-        comment and are listed in CallSiteWarnings for manual review.
-
-        Use FindMultipleOutParameterMethods first to identify candidates.
-        Changes are applied directly to the workspace via Roslyn's DocumentEditor.
-        """)]
-    public async Task<OutParamConversionResult> ConvertOutParamsToValueTuple(
-        string filePath,
-        string methodName)
-        => await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(filePath, methodName);
 
     [McpServerTool]
     [Description("Modifies an attribute on a named type or member. action: add (add attributeSource to targetName), remove (remove attributeName from targetName). attributeSource/attributeName: attribute text with or without brackets or 'Attribute' suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). Use autoStage=true (default) for ChangeId.")]

@@ -98,15 +98,7 @@ public class SentinelIntelligenceTools
     public async Task<List<DeadCodeReport>> ScanUnusedPrivateMembers(string filePath, string className)
         => await _deadCodeEngine.FindUnusedPrivateMembersAsync(filePath, className);
 
-    [McpServerTool]
-    [Description("Adds comprehensive [Description] comments to all fields in a POCO class.")]
-    public async Task<string> DocumentPocoFields(string filePath, string className)
-        => await _documentationEngine.DocumentPocoFieldsAsync(filePath, className);
 
-    [McpServerTool]
-    [Description("Generates Equals and GetHashCode overrides for a class.")]
-    public async Task<string> GenerateEqualityOverrides(string filePath, string className)
-        => await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className);
 
     [McpServerTool]
     [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation — returns SymbolHoverInfo) or blastRadius (all call sites and affected projects if the symbol is changed — returns ImpactReport). Provide contextSnippet: a verbatim substring identifying the symbol. Provide lineBefore/lineAfter to disambiguate.")]
@@ -183,15 +175,7 @@ public class SentinelIntelligenceTools
     }
 
 
-    [McpServerTool]
-    [Description("Converts a class to a BackgroundService: adds BackgroundService base class, generates ExecuteAsync override, and adds Microsoft.Extensions.Hosting using directive.")]
-    public async Task<string> ConvertToBackgroundService(string filePath, string className)
-        => await _architecturalEngine.ConvertToBackgroundServiceAsync(filePath, className);
 
-    [McpServerTool]
-    [Description("Corrects the namespace declaration in a file to match its actual folder structure relative to the project root.")]
-    public async Task<string> FixMismatchedNamespaces(string filePath)
-        => await _projectStructureEngine.FixMismatchedNamespacesAsync(filePath);
 
     [McpServerTool]
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
@@ -350,20 +334,6 @@ public class SentinelIntelligenceTools
         => await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath);
 
 
-    [McpServerTool]
-    [Description("Generates XML documentation stubs (<summary>, <param>, <returns>) for ALL undocumented public methods in a file. Unlike document_poco_fields (which targets a specific class's fields), this covers every public method in the file that lacks XML docs. Returns the updated file content. Apply with apply_proposed_changes to write to disk.")]
-    public async Task<string> GenerateXmlDocumentationStubs(string filePath)
-    {
-        var result = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"GenerateXmlDocumentationStubs failed for '{filePath}': " +
-                "file not found in workspace. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
 
 
     [McpServerTool]

@@ -156,67 +156,8 @@ public class SentinelAugmentTools
         return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
-    // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("""
-        Sorts using directives (System.* first, then alphabetical) AND removes exact
-        duplicates in a single operation, writing the result directly to disk.
-
-        FILLS GAP between two standard tools:
-          • sort_usings     → sorts but does NOT remove duplicates
-          • remove_unused_usings → removes unused usings, but a duplicate that is
-                                   "used" (both copies resolve) won't be removed
-
-        This tool handles the case where a file legitimately has two identical using
-        directives (e.g., a merge conflict or copy-paste artifact) and you want both
-        sorted AND deduplicated in one step.
-
-        Parameters:
-          filePath    — absolute path to the .cs file to clean
-          writeToFile — true (default) = writes sorted/deduped content to disk immediately
-                        false = preview mode, returns UpdatedContent without writing
-
-        Returns: OriginalCount, RemovedDuplicates, UpdatedContent, WrittenToDisk.
-        """)]
-    public async Task<UsingsCleanupResult> SortAndDeduplicateUsings(string filePath, bool writeToFile = true)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("SortAndDeduplicateUsings: {File} (write={Write})", filePath, writeToFile);
-        }
-        return await _engine.SortAndDeduplicateUsingsAsync(filePath, writeToFile);
-    }
-
     // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
 
-    [McpServerTool]
-    [Description("""
-        FORMAT_DOCUMENT_SAFE — Roslyn formatter with true preview support.
-
-        FIXES MS BUG: The standard format_document tool has no preview parameter at all.
-        Changes are always applied immediately. There is no way to see what would change
-        before committing.
-
-        This tool fixes that by defaulting preview=true:
-          • preview=true  (default) → returns formatted content WITHOUT writing to disk
-          • preview=false            → writes to disk and updates the in-memory workspace
-
-        Use preview=true first to verify the formatted output is as expected,
-        then call again with preview=false to apply.
-
-        Parameters:
-          filePath  — absolute path to the .cs file to format
-          preview   — true (default) = read-only, false = apply to disk
-        """)]
-    public async Task<MsAugmentResult> FormatDocumentSafe(string filePath, bool preview = true)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("FormatDocumentSafe: {File} preview={Preview}", filePath, preview);
-        }
-        return await _engine.FormatDocumentSafeAsync(filePath, preview);
-    }
 
     // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
 
@@ -282,70 +223,7 @@ public class SentinelAugmentTools
         return await _engine.GetWorkspaceHealthAsync();
     }
 
-    // ── 9. PreviewAddMissingUsings ────────────────────────────────────────────
 
-    [McpServerTool]
-    [Description("""
-        PREVIEW_ADD_MISSING_USINGS — Preview what usings would be added, without modifying the file.
-
-        FIXES MS BUG: The standard add_missing_usings tool with preview:true silently APPLIES
-        changes to the file on disk anyway — the preview flag is completely ignored. Files are
-        always modified regardless of what preview value you pass.
-
-        This tool performs the analysis in read-only mode:
-          • Finds CS0246/CS0103 diagnostics (unresolved type/name errors)
-          • Searches all projects in the solution for matching type declarations
-          • Returns the list of namespaces that WOULD be added
-          • Returns UpdatedContent — the file content WITH the usings added (for review)
-          • Does NOT write to disk under any circumstances
-
-        Prerequisites: A solution must be loaded (HasLoadedSolution=true from GetWorkspaceHealth).
-        The file must be part of the loaded solution.
-
-        Returns: SolutionRequired, UsingsToAdd, Warning, UpdatedContent.
-        """)]
-    public async Task<AddUsingsPreview> PreviewAddMissingUsings(string filePath)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("PreviewAddMissingUsings: {File}", filePath);
-        }
-        return await _engine.PreviewAddMissingUsingsAsync(filePath);
-    }
-
-    // ── 11. GenerateToStringSafe ──────────────────────────────────────────────
-
-    [McpServerTool, Description("""
-        generate_tostring_safe — generates a ToString() override with CORRECTLY ESCAPED interpolated strings.
-
-        Fixes a bug in the standard generate_tostring tool where literal { characters in the format section
-        are left unescaped, producing broken code like $"Type { Prop = {Prop} }" that fails with
-        CS8086 (invalid interpolation hole). This tool always emits {{ and }} for literal braces,
-        producing valid code like $"Type {{ Prop = {Prop} }}".
-
-        Parameters:
-          filePath  — absolute path to the .cs file
-          typeName  — the class/struct to add ToString() to
-          members   — optional comma-separated list of property/field names to include;
-                      if omitted, all public instance properties and fields are used
-
-        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
-                 or Success=false and Error with a human-readable explanation.
-        """)]
-    public async Task<MsAugmentResult> GenerateToStringSafe(
-        string filePath, string typeName, string? members = null)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("GenerateToStringSafe: {File} type={Type}", filePath, typeName);
-        }
-        IList<string>? memberList = members is null ? null
-            : members.Split(',', System.StringSplitOptions.RemoveEmptyEntries)
-                     .Select(m => m.Trim())
-                     .Where(m => m.Length > 0)
-                     .ToList();
-        return await _engine.GenerateToStringSafeAsync(filePath, typeName, memberList);
-    }
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
 

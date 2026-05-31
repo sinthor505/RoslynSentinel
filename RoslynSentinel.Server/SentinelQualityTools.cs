@@ -212,110 +212,18 @@ public class SentinelQualityTools
         _logger = logger;
     }
 
-    [McpServerTool]
-    [Description("Generates a unit test skeleton for a class.")]
-    public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className)
-        => await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
 
-    [McpServerTool]
-    [Description("Generates an xUnit+Moq test class scaffold for a given class. Auto-detects constructor parameters to create Mock<T> fields, instantiates the SUT, and adds one test method stub per public method with Arrange/Act/Assert comments.")]
-    public async Task<TestScaffoldResult> GenerateTestScaffold(string filePath, string className)
-        => await _testingEngine.GenerateTestScaffoldAsync(filePath, className);
 
     [McpServerTool]
     [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
     public async Task<TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
         => await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
 
-    [McpServerTool]
-    [Description("Adds ArgumentNullException.ThrowIfNull guard clauses for all reference parameters in a method. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> AddGuardClauses(string filePath, string methodName)
-    {
-        var result = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"AddGuardClauses failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace or method not found. Ensure the solution is loaded.");
-        }
 
-        return new SourceTransformResult(result, false, false, filePath);
-    }
 
-    [McpServerTool]
-    [Description("Adds a BenchmarkDotNet stub class for performance testing a specific method. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> AddBenchmarkStub(string filePath, string className, string methodName)
-    {
-        var result = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"AddBenchmarkStub failed for '{className}.{methodName}' in '{filePath}': " +
-                "file not found in workspace, class not found, or method not found. Ensure the solution is loaded.");
-        }
 
-        return new SourceTransformResult(result, false, false, filePath);
-    }
 
-    [McpServerTool]
-    [Description("Adds .ConfigureAwait(false) to all await expressions in a file that don't already have it. Use libraryMode=true (default) for library code, false for ASP.NET app code. Idempotent — skips already-configured awaits. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> AddConfigureAwaitFalse(string filePath, bool libraryMode = true)
-    {
-        var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"AddConfigureAwaitFalse failed for '{filePath}': " +
-                "file not found in workspace. Ensure the solution is loaded.");
-        }
 
-        return new SourceTransformResult(result, false, false, filePath);
-    }
-
-    [McpServerTool]
-    [Description("Removes all .ConfigureAwait(x) calls from a file, leaving the bare awaited expression. Useful when migrating library code to ASP.NET app code where ConfigureAwait is unnecessary. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> RemoveConfigureAwaitFalse(string filePath)
-    {
-        var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"RemoveConfigureAwaitFalse failed for '{filePath}': " +
-                "file not found in workspace. Ensure the solution is loaded.");
-        }
-
-        return new SourceTransformResult(result, false, false, filePath);
-    }
-
-    [McpServerTool]
-    [Description("Converts lock statements inside a method to async-safe SemaphoreSlim pattern: adds a 'private readonly SemaphoreSlim _semaphore = new(1,1)' field, replaces each lock block with 'await _semaphore.WaitAsync(); try { ... } finally { _semaphore.Release(); }', and makes the method async if needed. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> ConvertLockToSemaphoreSlim(string filePath, string methodName)
-    {
-        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertLockToSemaphoreSlim failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace, method not found, or no lock statements found in method. Ensure the solution is loaded.");
-        }
-
-        return new SourceTransformResult(result, false, false, filePath);
-    }
-
-    [McpServerTool]
-    [Description("Converts a method returning Task<List<T>>, Task<IEnumerable<T>>, or List<T> to IAsyncEnumerable<T>. Transforms 'results.Add(item)' patterns to 'yield return item', removes the list variable and return statement, and adds a CancellationToken parameter if missing. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> ConvertToAsyncEnumerable(string filePath, string methodName)
-    {
-        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(filePath, methodName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ConvertToAsyncEnumerable failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace, method not found, or method does not return Task<List<T>> or similar. Ensure the solution is loaded.");
-        }
-
-        return new SourceTransformResult(result, false, false, filePath);
-    }
 
     [McpServerTool]
     [Description("""
@@ -745,51 +653,12 @@ public class SentinelQualityTools
         string? pattern     = null)
         => await _asyncOptimizationEngine.FindMigrationCandidatesAsync(filePath, projectName, pattern);
 
-    [McpServerTool]
-    [Description("Adds a private lock object field and wraps a method body in a lock statement. Specify lockFieldName if '_lock' is already used for another type. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
-    public async Task<SourceTransformResult> MakeMethodThreadSafe(string filePath, string methodName, string lockFieldName = "_lock")
-    {
-        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(filePath, methodName, lockFieldName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"MakeMethodThreadSafe failed for '{methodName}' in '{filePath}': " +
-                "file not found in workspace or method not found. Ensure the solution is loaded.");
-        }
-
-        return new SourceTransformResult(result, false, false, filePath);
-    }
 
     [McpServerTool]
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
     public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
         => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
 
-    [McpServerTool]
-    [Description("""
-        Generates path-driven xUnit/NUnit/MSTest test stubs for a method by walking
-        its AST for decision points (if/else, switch, foreach) and emitting one test
-        case per distinct execution path. Always includes a happy-path test first.
-
-        For each path the report includes:
-        - TestMethodName: suggested test method name following the MethodName_Condition_Outcome pattern
-        - ScenarioDescription: human-readable description of the path
-        - InputConstraints: inferred parameter values to trigger this path
-        - ArrangeCode / ActCode / AssertCode: Arrange/Act/Assert scaffold with TODO markers
-        - Note: caveats about heuristic inference
-
-        Generated code is a starting point — TODO markers show where you must supply
-        real values or mock setups that cannot be inferred statically.
-
-        framework: "NUnit" (default), "xunit", or "mstest"
-        disambiguateLine: any line number inside the desired overload when the method is overloaded
-        """)]
-    public async Task<PathDrivenTestReport> GeneratePathDrivenTests(
-        string filePath,
-        string methodName,
-        string framework = "NUnit",
-        int? disambiguateLine = null)
-        => await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine);
 
     // ── Phase 7: apply_cancellation_token_to_file ─────────────────────────────
 
