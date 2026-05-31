@@ -313,45 +313,6 @@ public class SentinelAugmentTools
         return await _engine.PreviewAddMissingUsingsAsync(filePath);
     }
 
-    // ── 10. ExtractConstantSafe ───────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("""
-        EXTRACT_CONSTANT_SAFE — Extract a literal to a named constant using context, not line/column.
-
-        FIXES MS BUG: The standard extract_constant tool requires exact 1-based line/column
-        coordinates. When these are even slightly wrong (off by one, trailing whitespace,
-        CRLF vs LF differences) it throws a cryptic error: "Column 99 is beyond end of line".
-        There is no human-readable guidance on how to fix the coordinates.
-
-        This tool uses contextSnippet to locate the literal — the same approach used by all
-        other safe Sentinel tools:
-          • No line/column arithmetic required
-          • Human-readable error messages when the literal cannot be found
-          • Replaces ALL identical literals in the file (not just the one occurrence)
-          • Inserts the constant as the first member of the containing type
-
-        Parameters:
-          filePath        — absolute path to the .cs file
-          contextSnippet  — the literal itself or a short surrounding snippet (e.g., '"hello world"')
-          constantName    — valid C# identifier for the constant (e.g., 'GreetingMessage')
-          lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
-          lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
-
-        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
-                 or Success=false and Error with a human-readable explanation.
-        """)]
-    public async Task<MsAugmentResult> ExtractConstantSafe(
-        string filePath, string contextSnippet, string constantName,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("ExtractConstantSafe: {File} constant={Name}", filePath, constantName);
-        }
-        return await _engine.ExtractConstantSafeAsync(filePath, contextSnippet, constantName, lineBefore, lineAfter);
-    }
-
     // ── 11. GenerateToStringSafe ──────────────────────────────────────────────
 
     [McpServerTool, Description("""

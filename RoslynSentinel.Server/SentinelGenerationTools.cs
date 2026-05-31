@@ -161,21 +161,6 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
-    [Description("Generates stub implementations for all unimplemented members of an interface on a class. Unlike the built-in implement_interface, this never adds the 'override' keyword (which is incorrect for interface implementations). Pass filePath of the class file, className of the implementing class, and interfaceName of the interface to implement.")]
-    public async Task<string> ImplementInterfaceSafe(string filePath, string className, string interfaceName)
-    {
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ImplementInterfaceSafe failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
-                "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
-
-    [McpServerTool]
     [Description("""
         Converts a property between auto-property and full property with backing field.
         Unlike the built-in convert_property, this correctly preserves initializers when converting

@@ -25,6 +25,9 @@ public class SentinelRefactoringTools
     private readonly LogicOptimizationEngine _logicOptimizationEngine;
     private readonly ModernizationEngine _modernizationEngine;
     private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
+    private readonly MsToolAugmentEngine _augmentEngine;
+    private readonly CodeGenerationEngine _codeGenerationEngine;
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
@@ -46,6 +49,9 @@ public class SentinelRefactoringTools
         LogicOptimizationEngine logicOptimizationEngine,
         ModernizationEngine modernizationEngine,
         OutParamRefactoringEngine outParamRefactoringEngine,
+        MsToolAugmentEngine augmentEngine,
+        CodeGenerationEngine codeGenerationEngine,
+        SymbolNavigationEngine symbolNavigationEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
@@ -66,30 +72,12 @@ public class SentinelRefactoringTools
         _logicOptimizationEngine = logicOptimizationEngine;
         _modernizationEngine = modernizationEngine;
         _outParamRefactoringEngine = outParamRefactoringEngine;
+        _augmentEngine = augmentEngine;
+        _codeGenerationEngine = codeGenerationEngine;
+        _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
         _config = config;
         _logger = logger;
-    }
-
-    [McpServerTool]
-    [Description("Extracts common members from multiple classes into a new shared base class.")]
-    public async Task<object> ExtractSuperclass(string[] filePaths, string[] classNames, string newBaseClassName, bool autoStage = true) 
-    {
-        try
-        {
-            var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(filePaths, classNames, newBaseClassName);
-            if (autoStage)
-            {
-                return _workspaceManager.StageChanges(changes, $"Extract superclass '{newBaseClassName}' from {classNames.Length} classes.");
-            }
-
-            return changes;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ExtractSuperclass unexpected exception for '{NewBaseClassName}'", newBaseClassName);
-            throw new InvalidOperationException($"ExtractSuperclass for '{newBaseClassName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
     }
 
     private static string PreviewFileContent(string content)
@@ -121,21 +109,6 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Inlines a method solution-wide: replaces ALL call sites (across all files in the solution) with the method's expression, then removes the method declaration. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected. Returns a dictionary of filePath→updatedContent for every file that was modified.")]
-    public async Task<Dictionary<string, string>> InlineMethod(string filePath, string methodName)
-    {
-        try
-        {
-            return await _refinementEngine.InlineMethodAsync(filePath, methodName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "InlineMethod unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            throw new InvalidOperationException($"InlineMethod for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
     [Description("Reorders parameters in a method signature and updates all call sites globally.")]
     public async Task<object> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true) 
     {
@@ -147,26 +120,6 @@ public class SentinelRefactoringTools
 
         return changes;
     }
-
-    [McpServerTool]
-    [Description("Introduces a new private readonly field from an expression. Provide contextSnippet: a verbatim substring from the expression (e.g., the expression text itself or the surrounding assignment). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. The expression type is inferred from semantics.")]
-    public async Task<string> IntroduceField(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null) 
-        => await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newFieldName, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Introduces a new method parameter from an expression. Provide contextSnippet: a verbatim substring uniquely identifying the expression. Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Updates the method signature (single-file only — call sites in other files not updated).")]
-    public async Task<string> IntroduceParameter(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null) 
-        => await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newParamName, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Inlines a private field by replacing all usages with its initializer value.")]
-    public async Task<string> InlineField(string filePath, string fieldName) 
-        => await _granularRefactoringEngine.InlineFieldAsync(filePath, fieldName);
-
-    [McpServerTool]
-    [Description("Removes a method parameter that is always passed the same compile-time constant literal (e.g. 42, true, \"text\") at every call site, and replaces references to the parameter inside the method body with that constant. Only works when ALL call sites pass the same constant — rejects if call sites are in other files, if the argument varies, or if the argument is not a literal.")]
-    public async Task<string> InlineParameter(string filePath, string methodName, string parameterName) 
-        => await _granularRefactoringEngine.InlineParameterAsync(filePath, methodName, parameterName);
 
     [McpServerTool]
     [Description("Makes a method static if it does not access any instance members (fields, properties, methods).")]
@@ -202,49 +155,6 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Extracts an interface from a class: creates a new file '{interfaceName}.cs' containing all public non-static properties and methods, then adds the interface to the class's base list. Returns a staged ChangeId (autoStage=true, default) or the raw file dictionary. Static members and constructors are excluded.")]
-    public async Task<object> ExtractInterface(string filePath, string className, string interfaceName, bool autoStage = true) 
-    {
-        try
-        {
-            var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, interfaceName);
-            if (autoStage)
-            {
-                return _workspaceManager.StageChanges(changes, $"Extract interface '{interfaceName}' from '{className}'.");
-            }
-
-            return changes;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ExtractInterface unexpected exception for '{InterfaceName}' from '{ClassName}' in '{FilePath}'", interfaceName, className, filePath);
-            throw new InvalidOperationException($"ExtractInterface for '{interfaceName}' from '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Moves a type to its own file. Returns a ChangeId for ApplyStagedChanges plus a ContentPreviews map showing first 10 + last 10 lines of each affected file for structural confirmation. Use autoStage=false to get the full raw file content dictionary instead.")]
-    public async Task<object> MoveTypeToFile(string filePath, string typeName, bool autoStage = true) 
-    {
-        var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName);
-        if (autoStage)
-        {
-            var id = _workspaceManager.StageChanges(changes, $"Move type '{typeName}' from '{Path.GetFileName(filePath)}'");
-            return new
-            {
-                ChangeId = id,
-                Description = $"Moves '{typeName}' to its own file. Call ApplyStagedChanges(\"{id}\") to apply.",
-                AffectedFiles = changes.Keys.ToList(),
-                ContentPreviews = changes.ToDictionary(
-                    kvp => Path.GetFileName(kvp.Key),
-                    kvp => PreviewFileContent(kvp.Value)
-                )
-            };
-        }
-        return changes;
-    }
-
-    [McpServerTool]
     [Description("Converts an abstract class to an interface.")]
     public async Task<string> ConvertAbstractToInterface(string filePath, string className)
     {
@@ -265,11 +175,6 @@ public class SentinelRefactoringTools
         => await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType);
 
     [McpServerTool]
-    [Description("Wraps a range of code in a using statement for an IDisposable object.")]
-    public async Task<string> WrapInUsing(string filePath, int startLine, int endLine, string disposalName) 
-        => await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, disposalName);
-
-    [McpServerTool]
     [Description("Converts an anonymous object creation to a formal named class.")]
     public async Task<Dictionary<string, string>> ConvertAnonymousToNamed(string filePath, string newClassName) 
         => await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName);
@@ -280,39 +185,14 @@ public class SentinelRefactoringTools
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
     [McpServerTool]
-    [Description("Introduces a new local variable based on a selected expression and replaces usages. Provide contextSnippet: a verbatim substring uniquely identifying the expression to extract. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
-    public async Task<string> IntroduceVariable(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null) 
-        => await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newVariableName, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Inlines a local temporary variable into all its usages within the scope.")]
-    public async Task<string> InlineVariable(string filePath, string variableName) 
-        => await _semanticRefactoringLibrary.InlineVariableAsync(filePath, variableName);
-
-    [McpServerTool]
     [Description("Converts a property into formal GetX() and SetX() methods.")]
     public async Task<string> ConvertPropertyToMethods(string filePath, string propertyName) 
         => await _codeStyleEngine.ConvertPropertyToMethodsAsync(filePath, propertyName);
 
     [McpServerTool]
-    [Description("Extracts named members (methods, properties, fields) from a class into a new '{newClassName}.cs' file. The source class is updated: extracted members are removed and a public auto-property 'public {NewClassName} {NewClassName} { get; } = new();' is added as the composition point, making the extracted class accessible to external callers. Cross-file call sites that previously called 'sourceObj.Method()' are automatically rewritten to 'sourceObj.NewClassName.Method()' solution-wide. Returns a dictionary of filePath→updatedContent for every affected file.")]
-    public async Task<Dictionary<string, string>> ExtractClass(string filePath, string className, string newClassName, string[] memberNames) 
-        => await _advancedStructuralEngine.ExtractClassAsync(filePath, className, newClassName, memberNames);
-
-    [McpServerTool]
-    [Description("Extracts specific members from a class into a new partial file.")]
-    public async Task<Dictionary<string, string>> ExtractMembersToPartial(string filePath, string className, string[] memberNames) 
-        => await _granularRefactoringEngine.ExtractMembersToPartialAsync(filePath, className, memberNames);
-
-    [McpServerTool]
     [Description("Converts a Get(index) method into a formal C# indexer.")]
     public async Task<string> ConvertMethodToIndexer(string filePath, string methodName) 
         => await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName);
-
-    [McpServerTool]
-    [Description("Moves a nested type out to the containing namespace scope.")]
-    public async Task<string> MoveTypeToOuterScope(string filePath, string typeName)
-        => await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
 
     [McpServerTool]
     [Description("Atomically moves all secondary types in a file to their own files. Returns a ChangeId for ApplyStagedChanges plus first-15-line previews of each affected file's new content.")]
@@ -396,11 +276,6 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Adds a new member (method, field, etc.) to an existing class, interface, record, or struct.")]
-    public async Task<string> AddMemberToClass(string filePath, string containerName, string newMemberSource) 
-        => await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
-
-    [McpServerTool]
     [Description("Removes a specific member from a class or interface by name.")]
     public async Task<string> RemoveMember(string filePath, string memberName) 
         => await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
@@ -447,94 +322,6 @@ public class SentinelRefactoringTools
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Inserts a new member immediately after a named member in a type declaration.
-        
-        Finds the container type by name, then locates the member named afterMemberName and inserts
-        newMemberSource directly after it (e.g. insert a new method after an existing method).
-        If afterMemberName is not found, the new member is appended at the end of the type.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> InsertMemberAfter(string filePath, string containerName, string afterMemberName, string newMemberSource, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Insert member after '{afterMemberName}' in '{containerName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Inserts a new member immediately before a named member in a type declaration.
-        
-        Finds the container type by name, then locates the member named beforeMemberName and inserts
-        newMemberSource directly before it (e.g. insert a field before a constructor).
-        If beforeMemberName is not found, the new member is appended at the end of the type.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> InsertMemberBefore(string filePath, string containerName, string beforeMemberName, string newMemberSource, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Insert member before '{beforeMemberName}' in '{containerName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Inserts new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Adds an attribute to a named type or member.
-        
-        targetName is the class name or method/property name to decorate.
-        attributeSource is the attribute text with or without brackets (e.g. "[ApiController]" or "Required").
-        Complex attributes with arguments are supported (e.g. "[HttpGet(\"/api/items\")]").
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> AddAttribute(string filePath, string targetName, string attributeSource, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attributeSource);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Add attribute '{attributeSource}' to '{targetName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{attributeSource}' to '{targetName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Adds a base type or interface to a type declaration.
-        
-        typeName is the class/record/struct/interface to modify; baseTypeName is what to add
-        (e.g. "IDisposable", "BaseController", "IMyService<string>").
-        If the type already inherits or implements baseTypeName, the file is returned unchanged.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> AddBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Add base type '{baseTypeName}' to '{typeName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{baseTypeName}' to the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
     }
 
     [McpServerTool]
@@ -587,50 +374,6 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Removes a named attribute from a type or member.
-        
-        targetName is the class/method/property name to modify.
-        attributeName is the attribute to remove, with or without the 'Attribute' suffix and brackets
-        (e.g. "Obsolete", "ObsoleteAttribute", or "[Obsolete]" — all match [Obsolete]).
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> RemoveAttribute(string filePath, string targetName, string attributeName, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, attributeName);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Remove attribute '{attributeName}' from '{targetName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{attributeName}' from '{targetName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Removes a base type or interface from a type declaration.
-        
-        typeName is the class/record/struct/interface to modify.
-        baseTypeName is the base type or interface to remove (e.g. "IDisposable", "BaseController").
-        If the type has no base list or does not implement/inherit baseTypeName, the file is returned unchanged.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> RemoveBaseType(string filePath, string typeName, string baseTypeName, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Remove base type '{baseTypeName}' from '{typeName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{baseTypeName}' from the base list of '{typeName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
         Changes the accessibility modifier of a type or member.
         
         targetName is the class/method/property/field name to modify.
@@ -649,50 +392,6 @@ public class SentinelRefactoringTools
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Adds a modifier keyword to a type or member (idempotent).
-        
-        targetName is the class/method/property name to modify.
-        modifier is the keyword to add: virtual, abstract, sealed, static, readonly, override,
-        partial, async, new, extern, unsafe, volatile.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> AddModifier(string filePath, string targetName, string modifier, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Add '{modifier}' modifier to '{targetName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{modifier}' to '{targetName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Removes a modifier keyword from a type or member (idempotent).
-        
-        targetName is the class/method/property name to modify.
-        modifier is the keyword to remove: virtual, abstract, sealed, static, readonly, override,
-        partial, async, new, extern, unsafe, volatile.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> RemoveModifier(string filePath, string targetName, string modifier, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Remove '{modifier}' modifier from '{targetName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Removes '{modifier}' from '{targetName}' in {Path.GetFileName(filePath)}.");
     }
 
     [McpServerTool]
@@ -719,50 +418,6 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Generates an auto-property and adds it to a type.
-        
-        containerName is the class/record/struct to modify; propertyName and propertyType specify the property.
-        accessibility defaults to "public". hasSetter=true generates { get; set; }; false generates { get; }.
-        isInit=true generates { get; init; } (requires hasSetter=true).
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> AddProperty(string filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, propertyName, propertyType, accessibility, hasSetter, isInit);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Add property '{propertyName}' to '{containerName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{propertyType} {propertyName}' property to '{containerName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Generates a field declaration and adds it to a type.
-        
-        containerName is the class/struct to modify; fieldName and fieldType specify the field.
-        accessibility defaults to "private". isReadonly and isStatic add those modifiers.
-        initializer is an optional value expression (e.g. "42" or "new List<string>()").
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> AddField(string filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, fieldName, fieldType, accessibility, isReadonly, isStatic, initializer);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Add field '{fieldName}' to '{containerName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{fieldType} {fieldName}' field to '{containerName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
         Reorders members of a class/struct/record by convention: fields, constructors, destructors,
         properties, indexers, events, methods, operators, nested types.
         
@@ -785,28 +440,6 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Wraps a range of statements in a try/catch block.
-        
-        startLine and endLine are 1-based line numbers of the statements to wrap.
-        exceptionType defaults to "Exception"; catchVariableName defaults to "ex".
-        catchBody is an optional statement for the catch block body (e.g. "_logger.LogError(ex, \"msg\");").
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> WrapInTryCatch(string filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
         Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment.
         
         className is the target class; paramName and paramType define the parameter.
@@ -825,42 +458,6 @@ public class SentinelRefactoringTools
         var changes = new Dictionary<string, string> { [filePath] = updated };
         var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
         return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("""
-        Wraps a line range with #region / #endregion preprocessor directives.
-        
-        startLine and endLine are 1-based line numbers. regionName is the label after #region.
-        This uses text manipulation rather than AST transformation.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<object> WrapInRegion(string filePath, int startLine, int endLine, string regionName, bool autoStage = true)
-    {
-        var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, regionName);
-        if (!autoStage)
-        {
-            return updated;
-        }
-
-        var changes = new Dictionary<string, string> { [filePath] = updated };
-        var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{regionName}'.");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{regionName}' in {Path.GetFileName(filePath)}.");
-    }
-
-    [McpServerTool]
-    [Description("Adds to the interface any public methods or properties that exist in the class but are missing from the interface. Finds the interface in the same file or anywhere in the solution. Returns the updated source of the file containing the interface (prefixed with '// Updated file: path' if it differs from the class file).")]
-    public async Task<string> SyncInterfaceToImplementation(string filePath, string className, string interfaceName)
-    {
-        var result = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"SyncInterfaceToImplementation failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
-                "file not found in workspace, class not found, or interface not found in solution. Ensure the solution is loaded.");
-        }
-
-        return result;
     }
 
     [McpServerTool]
@@ -1043,4 +640,417 @@ public class SentinelRefactoringTools
         string filePath,
         string methodName)
         => await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(filePath, methodName);
+
+    [McpServerTool]
+    [Description("Modifies an attribute on a named type or member. action: add (add attributeSource to targetName), remove (remove attributeName from targetName). attributeSource/attributeName: attribute text with or without brackets or 'Attribute' suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). Use autoStage=true (default) for ChangeId.")]
+    public async Task<object> ModifyAttribute(string filePath, string targetName, string attribute, string action, bool autoStage = true)
+    {
+        string updated;
+        if (action == "add")
+        {
+            updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attribute);
+        }
+        else if (action == "remove")
+        {
+            updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, attribute);
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown action '{action}'. Valid values: add, remove.");
+        }
+        if (!autoStage)
+        {
+            return updated;
+        }
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{attribute}' on '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{attribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("Modifies a modifier keyword on a type or member. action: add or remove. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Use autoStage=true (default) for ChangeId.")]
+    public async Task<object> ModifyModifier(string filePath, string targetName, string modifier, string action, bool autoStage = true)
+    {
+        string updated;
+        if (action == "add")
+        {
+            updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
+        }
+        else if (action == "remove")
+        {
+            updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown action '{action}'. Valid values: add, remove.");
+        }
+        if (!autoStage)
+        {
+            return updated;
+        }
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("Modifies the base type/interface list of a type. action: add or remove. baseTypeName: the type to add or remove (e.g. \"IDisposable\", \"BaseController\"). Use autoStage=true (default) for ChangeId.")]
+    public async Task<object> ModifyBaseType(string filePath, string typeName, string baseTypeName, string action, bool autoStage = true)
+    {
+        string updated;
+        if (action == "add")
+        {
+            updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
+        }
+        else if (action == "remove")
+        {
+            updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown action '{action}'. Valid values: add, remove.");
+        }
+        if (!autoStage)
+        {
+            return updated;
+        }
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
+    }
+
+    [McpServerTool]
+    [Description("Introduces a new named symbol from an expression. as: localVariable (local variable), field (private readonly field), parameter (method parameter, single-file), constant (extract to const — returns MsAugmentResult). contextSnippet: verbatim substring identifying the expression. newName: name for the new symbol. lineBefore/lineAfter for disambiguation.")]
+    public async Task<object> Introduce(string filePath, string contextSnippet, string newName, string @as, string? lineBefore = null, string? lineAfter = null)
+    {
+        if (@as == "localVariable")
+        {
+            return await _granularRefactoringEngine.IntroduceVariableAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+        }
+        if (@as == "field")
+        {
+            return await _granularRefactoringEngine.IntroduceFieldAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+        }
+        if (@as == "parameter")
+        {
+            return await _granularRefactoringEngine.IntroduceParameterAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+        }
+        if (@as == "constant")
+        {
+            return await _augmentEngine.ExtractConstantSafeAsync(filePath, contextSnippet, newName, lineBefore, lineAfter);
+        }
+        throw new ArgumentException($"Unknown as '{@as}'. Valid values: localVariable, field, parameter, constant.");
+    }
+
+    [McpServerTool]
+    [Description("Extracts members from a class into a new type. as: interface (public API → new interface file, newTypeName required), class (named members → new class, memberNames + newTypeName required), partial (named members → new partial file, memberNames required), superclass (common members → new base class, newTypeName required; for multiple classes supply filePaths[] + classNames[]). Use autoStage=true (default) for ChangeId where applicable.")]
+    public async Task<object> ExtractMembers(
+        string filePath,
+        string className,
+        string @as,
+        string? newTypeName = null,
+        string[]? memberNames = null,
+        string[]? filePaths = null,
+        string[]? classNames = null,
+        bool autoStage = true)
+    {
+        if (@as == "interface")
+        {
+            if (string.IsNullOrEmpty(newTypeName))
+            {
+                throw new ArgumentException("newTypeName (interface name) is required when as=interface.");
+            }
+            try
+            {
+                var changes = await _refactoringEngine.ExtractInterfaceAsync(filePath, className, newTypeName);
+                if (autoStage)
+                {
+                    return _workspaceManager.StageChanges(changes, $"Extract interface '{newTypeName}' from '{className}'.");
+                }
+                return changes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ExtractMembers/interface unexpected exception for '{NewTypeName}'", newTypeName);
+                throw new InvalidOperationException($"ExtractMembers as=interface for '{newTypeName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            }
+        }
+        if (@as == "class")
+        {
+            if (memberNames == null || memberNames.Length == 0)
+            {
+                throw new ArgumentException("memberNames is required when as=class.");
+            }
+            if (string.IsNullOrEmpty(newTypeName))
+            {
+                throw new ArgumentException("newTypeName (new class name) is required when as=class.");
+            }
+            return await _advancedStructuralEngine.ExtractClassAsync(filePath, className, newTypeName, memberNames);
+        }
+        if (@as == "partial")
+        {
+            if (memberNames == null || memberNames.Length == 0)
+            {
+                throw new ArgumentException("memberNames is required when as=partial.");
+            }
+            return await _granularRefactoringEngine.ExtractMembersToPartialAsync(filePath, className, memberNames);
+        }
+        if (@as == "superclass")
+        {
+            if (string.IsNullOrEmpty(newTypeName))
+            {
+                throw new ArgumentException("newTypeName (new base class name) is required when as=superclass.");
+            }
+            var actualFilePaths = filePaths ?? [filePath];
+            var actualClassNames = classNames ?? [className];
+            try
+            {
+                var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(actualFilePaths, actualClassNames, newTypeName);
+                if (autoStage)
+                {
+                    return _workspaceManager.StageChanges(changes, $"Extract superclass '{newTypeName}' from {actualClassNames.Length} classes.");
+                }
+                return changes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ExtractMembers/superclass unexpected exception for '{NewTypeName}'", newTypeName);
+                throw new InvalidOperationException($"ExtractMembers as=superclass for '{newTypeName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            }
+        }
+        throw new ArgumentException($"Unknown as '{@as}'. Valid values: interface, class, partial, superclass.");
+    }
+
+    [McpServerTool]
+    [Description("Manages interface/class synchronization. action: implement (generate stub implementations for all unimplemented interface members on className — returns updated file content), sync (add to interface any public members in className missing from interfaceName — returns updated interface file), verify (report coverage of all implementing classes — requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync; interfaceName is always required.")]
+    public async Task<object> SyncInterface(string filePath, string interfaceName, string action, string? className = null, string? projectName = null)
+    {
+        if (action == "implement")
+        {
+            if (string.IsNullOrEmpty(className))
+            {
+                throw new ArgumentException("className is required when action=implement.");
+            }
+            var result = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
+            if (string.IsNullOrEmpty(result))
+            {
+                throw new InvalidOperationException(
+                    $"SyncInterface implement failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
+                    "file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.");
+            }
+            return result;
+        }
+        if (action == "sync")
+        {
+            if (string.IsNullOrEmpty(className))
+            {
+                throw new ArgumentException("className is required when action=sync.");
+            }
+            var result = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
+            if (string.IsNullOrEmpty(result))
+            {
+                throw new InvalidOperationException(
+                    $"SyncInterface sync failed for '{className}' implementing '{interfaceName}' in '{filePath}': " +
+                    "file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.");
+            }
+            return result;
+        }
+        if (action == "verify")
+        {
+            return await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
+        }
+        throw new ArgumentException($"Unknown action '{action}'. Valid values: implement, sync, verify.");
+    }
+
+    [McpServerTool]
+    [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline method body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
+    public async Task<object> Inline(string filePath, string targetName, string kind, string? methodName = null)
+    {
+        if (kind == "method")
+        {
+            try
+            {
+                return await _refinementEngine.InlineMethodAsync(filePath, targetName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Inline/method unexpected exception for '{TargetName}' in '{FilePath}'", targetName, filePath);
+                throw new InvalidOperationException($"Inline method '{targetName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            }
+        }
+        if (kind == "variable")
+        {
+            return await _semanticRefactoringLibrary.InlineVariableAsync(filePath, targetName);
+        }
+        if (kind == "field")
+        {
+            return await _granularRefactoringEngine.InlineFieldAsync(filePath, targetName);
+        }
+        if (kind == "parameter")
+        {
+            if (string.IsNullOrEmpty(methodName))
+            {
+                throw new ArgumentException("methodName is required when kind=parameter.");
+            }
+            return await _granularRefactoringEngine.InlineParameterAsync(filePath, methodName, targetName);
+        }
+        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: method, variable, field, parameter.");
+    }
+
+    [McpServerTool]
+    [Description("Adds a new member to a type. containerName: target class/struct/interface. newMemberSource: full member declaration text. position: null or 'end' (append at end), 'after:MemberName' (insert after named member), 'before:MemberName' (insert before named member). Use autoStage=true (default) for ChangeId.")]
+    public async Task<object> AddMember(string filePath, string containerName, string newMemberSource, string? position = null, bool autoStage = true)
+    {
+        string updated;
+        string description;
+        if (string.IsNullOrEmpty(position) || position == "end")
+        {
+            updated = await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
+            description = $"Adds new member to '{containerName}' in {Path.GetFileName(filePath)}.";
+        }
+        else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
+        {
+            var afterMemberName = position.Substring("after:".Length);
+            updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
+            description = $"Inserts new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
+        }
+        else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
+        {
+            var beforeMemberName = position.Substring("before:".Length);
+            updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
+            description = $"Inserts new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.");
+        }
+        if (!autoStage)
+        {
+            return updated;
+        }
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, description);
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
+    }
+
+    [McpServerTool]
+    [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. containerName: target class/struct. name: member name. type: C# type. For property: hasSetter (default true), isInit, accessibility (default 'public'). For field: isReadonly, isStatic, initializer (optional expression), accessibility (default 'private'). Use autoStage=true (default) for ChangeId.")]
+    public async Task<object> AddMemberTyped(
+        string filePath,
+        string containerName,
+        string name,
+        string type,
+        string kind,
+        string accessibility = "public",
+        bool hasSetter = true,
+        bool isInit = false,
+        bool isReadonly = false,
+        bool isStatic = false,
+        string? initializer = null,
+        bool autoStage = true)
+    {
+        string updated;
+        string description;
+        if (kind == "property")
+        {
+            updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit);
+            description = $"Adds '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
+        }
+        else if (kind == "field")
+        {
+            updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer);
+            description = $"Adds '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown kind '{kind}'. Valid values: property, field.");
+        }
+        if (!autoStage)
+        {
+            return updated;
+        }
+        var changes = new Dictionary<string, string> { [filePath] = updated };
+        var id = _workspaceManager.StageChanges(changes, description);
+        return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
+    }
+
+    [McpServerTool]
+    [Description("Wraps a line range. wrapper: tryCatch (wrap in try/catch — name is exceptionType default 'Exception'; also use catchVariableName default 'ex', catchBody optional), using (wrap in using statement — name is disposalName, required), region (wrap in #region — name is region label, required). startLine and endLine are 1-based. Use autoStage=true (default) for ChangeId (tryCatch/region only; using returns content string directly).")]
+    public async Task<object> WrapRange(
+        string filePath,
+        int startLine,
+        int endLine,
+        string wrapper,
+        string? name = null,
+        string catchVariableName = "ex",
+        string? catchBody = null,
+        bool autoStage = true)
+    {
+        if (wrapper == "tryCatch")
+        {
+            var exceptionType = name ?? "Exception";
+            var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
+            if (!autoStage)
+            {
+                return updated;
+            }
+            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
+            return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
+        }
+        if (wrapper == "using")
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("name (disposalName) is required when wrapper=using.");
+            }
+            return await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
+        }
+        if (wrapper == "region")
+        {
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new ArgumentException("name (regionName) is required when wrapper=region.");
+            }
+            var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
+            if (!autoStage)
+            {
+                return updated;
+            }
+            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.");
+            return new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(filePath)}.");
+        }
+        throw new ArgumentException($"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.");
+    }
+
+    [McpServerTool]
+    [Description("Moves a type to a new location. destination: ownFile (move to its own '.cs' file — returns ChangeId + content previews; use autoStage=false for raw file dict), outerScope (move nested type to containing namespace scope — returns updated file content).")]
+    public async Task<object> MoveType(string filePath, string typeName, string destination, bool autoStage = true)
+    {
+        if (destination == "ownFile")
+        {
+            var changes = await _refactoringEngine.MoveTypeToFileAsync(filePath, typeName);
+            if (!autoStage)
+            {
+                return changes;
+            }
+            var id = _workspaceManager.StageChanges(changes, $"Move type '{typeName}' from '{Path.GetFileName(filePath)}'");
+            return new
+            {
+                ChangeId = id,
+                Description = $"Moves '{typeName}' to its own file. Call staged_change(action=\"apply\", changeId=\"{id}\") to apply.",
+                AffectedFiles = changes.Keys.ToList(),
+                ContentPreviews = changes.ToDictionary(
+                    kvp => Path.GetFileName(kvp.Key),
+                    kvp => PreviewFileContent(kvp.Value)
+                )
+            };
+        }
+        if (destination == "outerScope")
+        {
+            return await _granularRefactoringEngine.MoveTypeToOuterScopeAsync(filePath, typeName);
+        }
+        throw new ArgumentException($"Unknown destination '{destination}'. Valid values: ownFile, outerScope.");
+    }
 }

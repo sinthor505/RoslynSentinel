@@ -139,13 +139,6 @@ public class SentinelIntelligenceTools
 
 
     [McpServerTool]
-    [Description("Checks every class that implements an interface and reports which interface members each implementor has covered. Useful for finding partially-implemented interfaces across the solution.")]
-    public async Task<List<InterfaceImplementorCoverage>> VerifyInterfaceCompleteness(
-        string interfaceName, string? projectName = null)
-        => await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
-
-
-    [McpServerTool]
     [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
     public async Task<List<CircularDependencyChain>> ScanCircularTypeDependencies(string? projectName = null)
         => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
