@@ -478,10 +478,15 @@ public static partial class SentinelConsoleMode
     /// the exact schema the MCP layer emits, not a hand-rolled reflection summary.
     /// NOT an [McpServerTool] — internal diagnostic output only.
     /// </summary>
-    public static void WriteStartupDump(IServiceProvider services, string outputDir)
+    public static void WriteStartupDump(IServiceProvider services, string outputDir, string modeArg)
     {
         try
         {
+            var modeSuffix = "_" + modeArg.ToLowerInvariant()
+                                         .Replace(", ", "_")
+                                         .Replace(",",  "_")
+                                         .Replace(" ",  "_");
+
             var tools = services.GetServices<McpServerTool>()
                 .Select(t => t.ProtocolTool)
                 .OrderBy(t => t.Name)
@@ -508,7 +513,7 @@ public static partial class SentinelConsoleMode
             };
 
             File.WriteAllText(
-                Path.Combine(outputDir, "tool_list.json"),
+                Path.Combine(outputDir, $"tool_list{modeSuffix}.json"),
                 JsonSerializer.Serialize(fullPayload, PrettyJson),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
@@ -524,7 +529,7 @@ public static partial class SentinelConsoleMode
             };
 
             File.WriteAllText(
-                Path.Combine(outputDir, "tool_list_simple.json"),
+                Path.Combine(outputDir, $"tool_list_simple{modeSuffix}.json"),
                 JsonSerializer.Serialize(simplePayload, PrettyJson),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         }
@@ -543,10 +548,15 @@ public static partial class SentinelConsoleMode
     /// inventory of public instance methods — no manual editing required.
     /// NOT an [McpServerTool] — internal diagnostic output only.
     /// </summary>
-    public static void WriteMethodInventory(string outputDir)
+    public static void WriteMethodInventory(string outputDir, string modeArg)
     {
         try
         {
+            var modeSuffix = "_" + modeArg.ToLowerInvariant()
+                                         .Replace(", ", "_")
+                                         .Replace(",",  "_")
+                                         .Replace(" ",  "_");
+
             var solutionRoot = FindSolutionRoot(outputDir) ?? outputDir;
             var serverSrcDir = Path.Combine(solutionRoot, "RoslynSentinel.Server");
             var inventoryDir = Directory.Exists(serverSrcDir) ? serverSrcDir : solutionRoot;
@@ -591,12 +601,12 @@ public static partial class SentinelConsoleMode
             var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
             File.WriteAllText(
-                Path.Combine(inventoryDir, "all_methods.csv"),
+                Path.Combine(inventoryDir, $"all_methods{modeSuffix}.csv"),
                 string.Join(Environment.NewLine, csvLines) + Environment.NewLine,
                 encoding);
 
             File.WriteAllText(
-                Path.Combine(inventoryDir, "engine_methods.json"),
+                Path.Combine(inventoryDir, $"engine_methods{modeSuffix}.json"),
                 JsonSerializer.Serialize(jsonEntries, PrettyJson),
                 encoding);
         }

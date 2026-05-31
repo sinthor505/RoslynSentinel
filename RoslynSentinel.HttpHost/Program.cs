@@ -89,6 +89,10 @@ var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Ros
 // Pre-warm MSBuildLocator (~5-8 s) and optionally auto-load solution
 app.Services.WarmupAndAutoLoad(solutionPath, logger);
 
+// Startup tool dump (internal diagnostic — not an MCP tool)
+SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+
 if (logger.IsEnabled(LogLevel.Information))
     logger.LogInformation(
         "RoslynSentinel HTTP Host starting. Port={Port} | Modes={Modes} | Log={Log}",

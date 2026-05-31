@@ -114,8 +114,8 @@ try
     host.Services.WarmupAndAutoLoad(solutionPath, logger);
 
     // --- Startup tool dump (internal diagnostic — not an MCP tool) ---
-    SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory);
-    SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory);
+    SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+    SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
     if (logger.IsEnabled(LogLevel.Information))
     {
