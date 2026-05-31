@@ -648,4 +648,21 @@ public class SentinelWorkspaceTools
         var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
         return $"Reverted {reverted.Count} files.{failedPart}";
     }
+
+    // ── Phase 3 — Circuit breaker tools ────────────────────────────────────
+
+    [McpServerTool]
+    [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
+    public string ResetBreaker()
+    {
+        _workspaceManager.ResetBreaker();
+        return "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled.";
+    }
+
+    [McpServerTool]
+    [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
+    public PersistentWorkspaceManager.BreakerStatusReport GetBreakerStatus()
+    {
+        return _workspaceManager.GetBreakerStatus();
+    }
 }
