@@ -83,15 +83,7 @@ public class SentinelIntelligenceTools
         int timeoutSeconds = 25)
         => await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
 
-    [McpServerTool]
-    [Description("Gets the blast radius (impact analysis) of changing a symbol. Provide contextSnippet: a verbatim substring from the symbol's declaration or reference (e.g., 'public async Task<T> GetById('). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. Returns all call sites and affected projects.")]
-    public async Task<ImpactReport> GetBlastRadius(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
-        => await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
 
-    [McpServerTool]
-    [Description("Finds all methods in the solution that return a specific type.")]
-    public async Task<List<SearchResult>> ScanMethodsByReturnType(string returnType)
-        => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(returnType);
 
     [McpServerTool]
     [Description("Gets deep metrics for the entire solution or a specific project.")]
@@ -126,10 +118,6 @@ public class SentinelIntelligenceTools
     public async Task<List<string>> ScanCircularProjectDependencies()
         => await _analysisEngine.FindCircularDependenciesAsync();
 
-    [McpServerTool]
-    [Description("Generates a markdown call tree for a specific method.")]
-    public async Task<string> GenerateCallTree(string filePath, string methodName, int depth = 3)
-        => await _analysisEngine.GenerateCallTreeAsync(filePath, methodName, depth);
 
     [McpServerTool]
     [Description("Adds comprehensive [Description] comments to all fields in a POCO class.")]
@@ -196,14 +184,25 @@ public class SentinelIntelligenceTools
         => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath) ?? throw new InvalidOperationException("Unused event subscriptions not found.");
 
     [McpServerTool]
-    [Description("Gets deep metadata for a symbol: type, kind, accessibility, attributes, documentation. Provide contextSnippet: a verbatim substring identifying the symbol usage or declaration. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
-    public async Task<SymbolHoverInfo> GetSymbolInfo(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
-        => await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter) ?? throw new InvalidOperationException("Symbol info not found.");
+    [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation — returns SymbolHoverInfo) or blastRadius (all call sites and affected projects if the symbol is changed — returns ImpactReport). Provide contextSnippet: a verbatim substring identifying the symbol. Provide lineBefore/lineAfter to disambiguate.")]
+    public async Task<object> InspectSymbol(
+        string filePath,
+        string contextSnippet,
+        string aspect,
+        string? lineBefore = null,
+        string? lineAfter = null)
+    {
+        if (aspect == "info")
+        {
+            return await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter) ?? throw new InvalidOperationException("Symbol info not found.");
+        }
+        if (aspect == "blastRadius")
+        {
+            return await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        }
+        throw new ArgumentException($"Unknown aspect '{aspect}'. Valid values: info, blastRadius.");
+    }
 
-    [McpServerTool]
-    [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
-    public async Task<List<ImplementationInfo>> GetAllImplementations(string typeName, string? projectName = null)
-        => await _symbolNavigationEngine.FindAllImplementationsAsync(typeName, projectName);
 
     [McpServerTool]
     [Description("Finds private, non-readonly fields that are only ever assigned inside constructors and could safely be marked readonly.")]
@@ -218,11 +217,6 @@ public class SentinelIntelligenceTools
         string? lifetimeFilter = null)
         => await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter);
 
-    [McpServerTool]
-    [Description("Returns all members of a type (methods, properties, fields, events) with full metadata: signature, accessibility, kind, IsInherited, IsOverride, IsAbstract, IsStatic, file path, and line. Set includeInherited=false to show only directly declared members.")]
-    public async Task<List<TypeMemberDetail>> GetTypeMembersDetail(
-        string typeName, string? projectName = null, bool includeInherited = true)
-        => await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
 
     [McpServerTool]
     [Description("Checks every class that implements an interface and reports which interface members each implementor has covered. Useful for finding partially-implemented interfaces across the solution.")]
@@ -230,11 +224,6 @@ public class SentinelIntelligenceTools
         string interfaceName, string? projectName = null)
         => await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
 
-    [McpServerTool]
-    [Description("Finds all extension methods whose receiver type matches the given type (or its base types / interfaces). Returns method name, full signature, defining class, namespace, file path, and line.")]
-    public async Task<List<ExtensionMethodInfo>> GetExtensionMethods(
-        string targetTypeName, string? projectName = null)
-        => await _symbolNavigationEngine.FindExtensionMethodsAsync(targetTypeName, projectName);
 
     [McpServerTool]
     [Description("Analyzes class cohesion using an LCOM-based metric. Returns per-class analysis including field/method counts, LCOM score (0=cohesive, 1=disconnected), a rating (Excellent/Good/Poor/Very Poor), and informal suggestions for classes that could be split. Useful for identifying god classes and extraction opportunities.")]
@@ -247,37 +236,44 @@ public class SentinelIntelligenceTools
         => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
 
     [McpServerTool]
-    [Description("Builds a forward call graph from a method: shows what that method calls, what those callees call, and so on up to maxDepth levels (default 3). Only follows calls into methods with source locations in the solution (not BCL/NuGet). Returns a CallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callees. Already-visited methods appear as leaf nodes to prevent cycles.")]
-    public async Task<CallGraphNode> GetCallGraph(
-        string filePath, string methodName, int maxDepth = 3)
+    [Description("Builds a call graph for a method. direction: forward (what the method calls, returns CallGraphNode tree), reverse (who calls this method, returns ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth: traversal depth (default 3).")]
+    public async Task<object> GetCallGraph(
+        string filePath,
+        string methodName,
+        string direction = "forward",
+        int maxDepth = 3)
     {
-        var result = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
-        if (result == null)
+        if (direction == "forward")
         {
-            throw new InvalidOperationException(
-                $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
-                "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
-                "Use get_document_outline to list available methods in the file.");
+            var fwd = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
+            if (fwd == null)
+            {
+                throw new InvalidOperationException(
+                    $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                    "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
+                    "Use get_document_outline to list available methods in the file.");
+            }
+            return fwd;
         }
-
-        return result;
+        if (direction == "reverse")
+        {
+            var rev = await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
+            if (rev == null)
+            {
+                throw new InvalidOperationException(
+                    $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                    "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
+                    "Use get_document_outline to list available methods in the file.");
+            }
+            return rev;
+        }
+        if (direction == "tree")
+        {
+            return await _analysisEngine.GenerateCallTreeAsync(filePath, methodName, maxDepth);
+        }
+        throw new ArgumentException($"Unknown direction '{direction}'. Valid values: forward, reverse, tree.");
     }
 
-    [McpServerTool]
-    [Description("Builds a reverse call graph (who calls this method): shows all methods that call the given method, what calls those, etc., up to maxDepth levels. Uses Roslyn SymbolFinder for accurate semantic reference resolution — not text search. Returns a ReverseCallGraphNode tree: MethodName, ContainingType, FilePath, Line, Callers.")]
-    public async Task<ReverseCallGraphNode> GetReverseCallGraph(string filePath, string methodName, int maxDepth = 3)
-    {
-        var result = await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth);
-        if (result == null)
-        {
-            throw new InvalidOperationException(
-                $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
-                "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
-                "Use get_document_outline to list available methods in the file.");
-        }
-
-        return result;
-    }
 
     [McpServerTool]
     [Description("Converts a class to a BackgroundService: adds BackgroundService base class, generates ExecuteAsync override, and adds Microsoft.Extensions.Hosting using directive.")]
@@ -304,22 +300,61 @@ public class SentinelIntelligenceTools
         => await _discoveryEngine.FindAllThrowSitesAsync(exceptionType, filePath, projectName, sortByFrequency);
 
     [McpServerTool]
-    [Description("Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Set sortByFrequency=true to rank results by how often each resolved type is instantiated — useful when the typeName is broad (e.g. 'Exception') and you want the most-created types first. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context.")]
-    public async Task<List<ObjectCreationSite>> GetObjectCreationSites(
-        string typeName,
-        string? filePath = null,
+    [Description("Finds symbols by name using various lookup strategies. kind: implementorsOf (all types implementing or deriving from the named type), attributeUsages (all usages of a named attribute across the solution), objectCreations (all new T() sites for a type name), extensionsFor (extension methods for a target type), typesWithAttribute (types decorated with a specific attribute), methodsByReturnType (methods returning a specific type). projectName and filePath narrow the scope where supported. sortByFrequency ranks results by frequency (supported for kind=objectCreations).")]
+    public async Task<object> FindByName(
+        string name,
+        string kind,
         string? projectName = null,
+        string? filePath = null,
         bool sortByFrequency = false)
-        => await _discoveryEngine.FindObjectCreationSitesAsync(typeName, filePath, projectName, sortByFrequency);
+    {
+        if (kind == "implementorsOf")
+        {
+            return await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName);
+        }
+        if (kind == "attributeUsages")
+        {
+            return await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath);
+        }
+        if (kind == "objectCreations")
+        {
+            return await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency);
+        }
+        if (kind == "extensionsFor")
+        {
+            return await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName);
+        }
+        if (kind == "typesWithAttribute")
+        {
+            return await _semanticSearchEngine.FindTypesByAttributeAsync(name);
+        }
+        if (kind == "methodsByReturnType")
+        {
+            return await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name);
+        }
+        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.");
+    }
 
     [McpServerTool]
-    [Description("Returns the complete public API surface of a named project: all public types (classes, interfaces, records, structs), their public and protected methods, properties, and constructors. Each entry includes the type name, member name, full signature, kind (Class/Interface/Method/Property/Constructor/Record/Struct), virtuality/abstractness/sealed flags, and any XML documentation summary. Use includeMethods/includeProperties/includeTypes flags to filter output. Ideal for generating SDK documentation, comparing API surfaces across versions, or producing API review reports.")]
-    public async Task<List<ApiSurfaceEntry>> GetPublicApiSurface(
-        string projectName,
+    [Description("Returns the public API surface of a project. persistBaseline=false (default): returns full List<ApiSurfaceEntry> with type/member signatures, virtuality, and XML doc — use for SDK documentation or API review. persistBaseline=true: returns compact List<PublicApiMember> baseline suitable for passing to scan_breaking_changes to detect removed or renamed members. filePath scopes to a single file (only used when persistBaseline=true). includeMethods/includeProperties/includeTypes filter the output (only used when persistBaseline=false).")]
+    public async Task<object> GetPublicApiSurface(
+        string? projectName = null,
+        bool persistBaseline = false,
+        string? filePath = null,
         bool includeMethods = true,
         bool includeProperties = true,
         bool includeTypes = true)
-        => await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+    {
+        if (persistBaseline)
+        {
+            return await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
+        }
+        if (string.IsNullOrEmpty(projectName))
+        {
+            throw new ArgumentException("projectName is required when persistBaseline=false.");
+        }
+        return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+    }
 
     [McpServerTool]
     [Description("Scans all constructor parameters in the solution (or a specific project) and identifies injected service types that appear to be missing from the DI container registrations. Detects interfaces (IFoo pattern) and common service-like types (ending in Service, Repository, Manager, Factory, Provider, Handler, Validator, Dispatcher). Framework-provided types (ILogger, IOptions, IConfiguration, etc.) are excluded. Returns consumer class name, file, line, the missing type, and the parameter name. Use to catch unregistered dependencies before runtime failures.")]
@@ -343,17 +378,25 @@ public class SentinelIntelligenceTools
         => await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
-    [Description("""
-        Finds all call sites (references) to a symbol in the solution without requiring line/column coordinates.
-        Unlike the built-in find_callers which needs a line number, this locates the symbol by name with
-        an optional contextSnippet to disambiguate overloads.
-        symbolName: the method/property/field name to search for.
-        contextSnippet: optional verbatim substring of the declaration (e.g. the method signature line).
-        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
-        Returns CallerMethod, CallerType, FilePath, Line, and CodeSnippet for each call site.
-        """)]
-    public async Task<List<CallerInfo>> GetCallers(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+    [Description("Finds all call sites (kind=callers) or implementing members/overrides (kind=implementations) for a symbol, without requiring line/column coordinates. symbolName: the method/property/field name. contextSnippet: optional verbatim substring of the declaration to disambiguate overloads. Provide lineBefore/lineAfter for further disambiguation. Returns List<CallerInfo> for callers, List<ImplementationInfo> for implementations.")]
+    public async Task<object> FindReferences(
+        string filePath,
+        string symbolName,
+        string kind,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null)
+    {
+        if (kind == "callers")
+        {
+            return await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+        }
+        if (kind == "implementations")
+        {
+            return await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+        }
+        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: callers, implementations.");
+    }
 
     [McpServerTool]
     [Description("""
@@ -371,30 +414,38 @@ public class SentinelIntelligenceTools
         => await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber);
 
     [McpServerTool]
-    [Description("""
-        Returns the full type hierarchy for a named type: direct base class, full base class chain
-        (excluding System.Object), all implemented interfaces (including transitive ones), derived
-        classes (via SymbolFinder.FindDerivedClassesAsync), and — if the type is an interface —
-        all implementing types (via FindImplementationsAsync).
-        Each entry includes TypeName, FilePath, Line, and Kind (Class/Interface/Struct).
-        IsInterface, IsAbstract, IsSealed flags are included on the root type.
-        """)]
-    public async Task<TypeHierarchyReport> GetTypeHierarchy(string typeName, string? projectName = null)
-        => await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
+    [Description("Returns type information for a named type. include: hierarchy (base class chain, interfaces, derived types — returns TypeHierarchyReport), members (all public/protected members with full metadata — returns List<TypeMemberDetail>), both (returns object with Hierarchy and Members properties). projectName scopes the lookup. includeInherited controls whether inherited members appear (default true; used for include=members and both).")]
+    public async Task<object> GetTypeInfo(
+        string typeName,
+        string include = "both",
+        string? projectName = null,
+        bool includeInherited = true)
+    {
+        TypeHierarchyReport? hierarchy = null;
+        List<TypeMemberDetail>? members = null;
+        if (include == "hierarchy" || include == "both")
+        {
+            hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
+        }
+        if (include == "members" || include == "both")
+        {
+            members = await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
+        }
+        if (include == "hierarchy")
+        {
+            return hierarchy!;
+        }
+        if (include == "members")
+        {
+            return members!;
+        }
+        if (include == "both")
+        {
+            return new { Hierarchy = hierarchy, Members = members };
+        }
+        throw new ArgumentException($"Unknown include '{include}'. Valid values: hierarchy, members, both.");
+    }
 
-    [McpServerTool]
-    [Description("""
-        Finds all implementations of an interface member or virtual/abstract method in the solution
-        without requiring line/column coordinates.
-        Unlike the built-in find_implementations which needs a line number, this locates the symbol by name
-        with an optional contextSnippet.
-        symbolName: the interface member or virtual method name.
-        contextSnippet: optional verbatim substring of the declaration to disambiguate overloads.
-        Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
-        Returns TypeName, FilePath, Line, and Kind for each implementing symbol.
-        """)]
-    public async Task<List<ImplementationInfo>> GetImplementations(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
     [Description("Checks solution-wide consistency: TargetFramework alignment across projects and project naming convention adherence. Returns a list of issues with IssueType (TargetFrameworkMismatch, NamingConventionViolation), description, project name, and file path. NuGet package version consistency is covered by check_package_inconsistency.")]
@@ -406,12 +457,6 @@ public class SentinelIntelligenceTools
     public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummary()
         => await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
 
-    [McpServerTool]
-    [Description("Extracts a snapshot of the public API surface (all public/protected types, methods, constructors, properties, events) from a project or file. Save the returned list as a baseline, make code changes, then call detect_breaking_changes with the baseline to find removed or renamed members. Provide projectName to scope to one project, filePath to scope to one file, or omit both for the entire solution.")]
-    public async Task<List<PublicApiMember>> GetPublicApiSurfaceSnapshot(
-        string? projectName = null,
-        string? filePath = null)
-        => await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
 
     [McpServerTool]
     [Description("Compares a previously captured API surface (baseline) against the current code and reports breaking changes: removed types, removed/renamed members, and signature changes. Workflow: (1) call get_public_api_surface_snapshot to capture the baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName or filePath as in step 1.")]
@@ -458,10 +503,6 @@ public class SentinelIntelligenceTools
     public async Task<List<string>> ScanMissingGenericConstraints(string? projectName = null, string? filePath = null)
         => await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
 
-    [McpServerTool]
-    [Description("Finds all TYPES (classes, interfaces, records, structs, enums) decorated with a specific attribute using the semantic model for accuracy. Unlike find_attribute_usages (which returns all targets including methods and properties), this returns only type-level decoration. Useful for: 'find all [ApiController] classes', 'find all [TestClass] types', 'find all [Serializable] types'. Returns TypeName, FilePath, and Line.")]
-    public async Task<List<SearchResult>> ScanTypesByAttribute(string attributeName)
-        => await _semanticSearchEngine.FindTypesByAttributeAsync(attributeName);
 
     [McpServerTool]
     [Description("Generates XML documentation stubs (<summary>, <param>, <returns>) for ALL undocumented public methods in a file. Unlike document_poco_fields (which targets a specific class's fields), this covers every public method in the file that lacks XML docs. Returns the updated file content. Apply with apply_proposed_changes to write to disk.")]
@@ -478,30 +519,6 @@ public class SentinelIntelligenceTools
         return result;
     }
 
-    [McpServerTool]
-    [Description("""
-        Finds all usages of a named attribute across the solution, optionally scoped to a
-        project or file. Accepts both "Authorize" and "AuthorizeAttribute" (or "[Authorize]")
-        spelling — all three resolve identically.
-
-        Returns: AttributeName, TargetKind (Class/Method/Property/Field/Parameter/Constructor/
-        Interface/Record/Struct/Enum), TargetName, ContainingType (empty for type-level attrs),
-        FilePath, and Line.
-
-        Common use cases:
-          • Security audit: find every endpoint missing [Authorize] by listing controllers and
-            diffing against this result.
-          • API review: "find_attribute_usages [ProducesResponseType]" to see which actions
-            document their return types.
-          • Validation audit: "find_attribute_usages [Required]" to map all required properties.
-          • Obsolete API detection: "find_attribute_usages [Obsolete]" to find every member
-            still marked deprecated.
-        """)]
-    public async Task<List<AttributeUsageSite>> GetAttributeUsages(
-        string attributeName,
-        string? projectName = null,
-        string? filePath = null)
-        => await _discoveryEngine.FindAttributeUsagesAsync(attributeName, projectName, filePath);
 
     [McpServerTool]
     [Description("""

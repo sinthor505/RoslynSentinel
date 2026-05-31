@@ -68,41 +68,46 @@ public class SentinelWorkspaceTools
         => _config.GetFeatureStatuses(featureNames);
 
     [McpServerTool]
-    [Description("Lists all projects in the current solution.")]
-    public async Task<List<object>> ListProjects()
+    [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
+    public async Task<object> List(string kind, string? projectName = null)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        return solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList();
-    }
-
-    [McpServerTool]
-    [Description("Lists all files within a specific project.")]
-    public async Task<List<string>> ListFiles(string projectName)
-    {
-        try
+        if (kind == "projects")
         {
             var solution = await _workspaceManager.GetBranchedSolutionAsync();
-            var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-            if (project == null)
-            {
-                throw new InvalidOperationException($"Project '{projectName}' not found.");
-            }
-
-            return project.Documents.Select(d => d.FilePath ?? d.Name).ToList();
+            return solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList();
         }
-        catch (InvalidOperationException) { throw; }
-        catch (Exception ex)
+        if (kind == "files")
         {
-            _logger.LogError(ex, "ListFiles unexpected exception for project '{ProjectName}'", projectName);
-            throw new InvalidOperationException($"ListFiles for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            if (string.IsNullOrEmpty(projectName))
+            {
+                throw new ArgumentException("projectName is required when kind=files.");
+            }
+            try
+            {
+                var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+                if (project == null)
+                {
+                    throw new InvalidOperationException($"Project '{projectName}' not found.");
+                }
+                return project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>();
+            }
+            catch (InvalidOperationException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
+                throw new InvalidOperationException($"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            }
         }
-    }
-
-    [McpServerTool]
-    [Description("Lists all project and NuGet dependencies for a specific project.")]
-    public async Task<DependencyEngine.ProjectDependencyReport> ListDependencies(string projectName)
-    {
-        return await _dependencyEngine.GetProjectDependenciesAsync(projectName);
+        if (kind == "dependencies")
+        {
+            if (string.IsNullOrEmpty(projectName))
+            {
+                throw new ArgumentException("projectName is required when kind=dependencies.");
+            }
+            return await _dependencyEngine.GetProjectDependenciesAsync(projectName);
+        }
+        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: projects, files, dependencies.");
     }
 
     [McpServerTool]
@@ -275,8 +280,76 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Gets all compiler errors and warnings for a specific file.")]
-    public async Task<DiagnosticSummary> GetFileDiagnostics(string filePath) => await _diagnosticEngine.GetFileDiagnosticsAsync(filePath);
+    [Description("""
+        Gets compiler diagnostics for a file, project, or the entire solution.
+        scope: file|project|solution.
+        scopeName: filePath when scope=file, projectName when scope=project; ignored for scope=solution.
+        summarize: when true, groups results by diagnostic ID and returns counts instead of raw details.
+        maxDetails: caps the raw detail list (default 50); error/warning counts are always full totals. Only used when summarize=false.
+        topN: max groups to return sorted by count descending (default 20). Only used when summarize=true.
+        """)]
+    public async Task<object> GetDiagnostics(string scope, string? scopeName = null, bool summarize = false, int maxDetails = 50, int topN = 20)
+    {
+        DiagnosticSummary summary;
+        if (scope == "file")
+        {
+            if (string.IsNullOrEmpty(scopeName))
+            {
+                throw new ArgumentException("scopeName (filePath) is required when scope=file.");
+            }
+            summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
+        }
+        else if (scope == "project")
+        {
+            if (string.IsNullOrEmpty(scopeName))
+            {
+                throw new ArgumentException("scopeName (projectName) is required when scope=project.");
+            }
+            summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
+        }
+        else if (scope == "solution")
+        {
+            summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
+        }
+        else
+        {
+            throw new ArgumentException($"Unknown scope '{scope}'. Valid values: file, project, solution.");
+        }
+
+        if (!summarize)
+        {
+            return summary;
+        }
+
+        var relevant = summary.Details
+            .Where(d => d.Severity is "Error" or "Warning")
+            .ToList();
+
+        var groups = relevant
+            .GroupBy(d => d.Id)
+            .Select(g =>
+            {
+                var first = g.First();
+                var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
+                return new DiagnosticGroupSummary(
+                    DiagnosticId: g.Key,
+                    Severity: first.Severity,
+                    MessageTemplate: first.Message,
+                    Count: g.Count(),
+                    Locations: locations
+                );
+            })
+            .OrderByDescending(g => g.Count)
+            .Take(topN)
+            .ToList();
+
+        return new DiagnosticsSummaryResult(
+            TotalIssues: relevant.Count,
+            Errors: summary.Errors,
+            Warnings: summary.Warnings,
+            TopIssues: groups
+        );
+    }
 
     [McpServerTool]
     [Description("Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase.")]
@@ -287,25 +360,6 @@ public class SentinelWorkspaceTools
     [Description("Creates a new project and adds it to the current solution.")]
     public async Task<string> CreateProject(string projectName, string projectType = "console")
         => await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
-
-    [McpServerTool]
-    [Description("Gets all compiler errors and warnings for a specific project.")]
-    public async Task<DiagnosticSummary> GetProjectDiagnostics(string projectName)
-        => await _diagnosticEngine.GetProjectDiagnosticsAsync(projectName);
-
-    [McpServerTool]
-    [Description("""
-        Gets compiler errors and warnings across the entire loaded solution.
-        Results are capped at maxDetails entries in the detail list (default 50) to keep
-        output manageable — the Errors/Warnings counts always reflect the full totals.
-        Errors are always sorted before warnings so the cap never hides an error.
-        File paths are relative to the solution root for compact output.
-        For complete diagnostics on a specific project, use get_project_diagnostics instead.
-        Blazor source-generator false positives (CS0234/CS0246/CS0103) are automatically
-        suppressed in Razor-component projects.
-        """)]
-    public async Task<DiagnosticSummary> GetSolutionDiagnostics(int maxDetails = 50)
-        => await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
 
     [McpServerTool]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
