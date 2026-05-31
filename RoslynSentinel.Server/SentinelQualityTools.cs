@@ -213,26 +213,6 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
-    [Description("Analyzes a file for common performance issues.")]
-    public async Task<List<PerformanceIssueReport>> AnalyzePerformance(string filePath)
-    {
-        try
-        {
-            return await _performanceEngine.AnalyzePerformanceAsync(filePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AnalyzePerformance unexpected exception for '{FilePath}'", filePath);
-            throw new InvalidOperationException($"AnalyzePerformance for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Analyzes a file for potential security vulnerabilities.")]
-    public async Task<List<SecurityIssueReport>> AnalyzeSecurity(string filePath)
-        => await _securityEngine.AnalyzeSecurityAsync(filePath);
-
-    [McpServerTool]
     [Description("Generates a unit test skeleton for a class.")]
     public async Task<TestSkeletonReport> GenerateTestSkeleton(string filePath, string className)
         => await _testingEngine.GenerateTestSkeletonAsync(filePath, className);
@@ -241,11 +221,6 @@ public class SentinelQualityTools
     [Description("Generates an xUnit+Moq test class scaffold for a given class. Auto-detects constructor parameters to create Mock<T> fields, instantiates the SUT, and adds one test method stub per public method with Arrange/Act/Assert comments.")]
     public async Task<TestScaffoldResult> GenerateTestScaffold(string filePath, string className)
         => await _testingEngine.GenerateTestScaffoldAsync(filePath, className);
-
-    [McpServerTool]
-    [Description("Analyzes execution paths for test coverage.")]
-    public async Task<PathCoverageReport> AnalyzePathCoverage(string filePath, string methodName)
-        => await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
 
     [McpServerTool]
     [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
@@ -268,31 +243,6 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
-    [Description("Scans for IDisposable objects that are not properly disposed. Optionally filtered by project.")]
-    public async Task<List<string>> OptimizeResourceDisposal(string? filePath = null, string? projectName = null)
-    {
-        try
-        {
-            return await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "OptimizeResourceDisposal unexpected exception for '{FilePath}' / '{ProjectName}'", filePath, projectName);
-            throw new InvalidOperationException($"OptimizeResourceDisposal failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Scans for common string comparison pitfalls. Optionally filtered by project.")]
-    public async Task<List<string>> ScanInefficientStringComparisons(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Finds potential boxing allocations. Optionally filtered by project.")]
-    public async Task<List<string>> ScanBoxingAllocations(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
-
-    [McpServerTool]
     [Description("Adds a BenchmarkDotNet stub class for performance testing a specific method. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
     public async Task<SourceTransformResult> AddBenchmarkStub(string filePath, string className, string methodName)
     {
@@ -306,179 +256,6 @@ public class SentinelQualityTools
 
         return new SourceTransformResult(result, false, false, filePath);
     }
-
-    [McpServerTool]
-    [Description("Analyzes a solution or project for deadlocks. Optional scope.")]
-    public async Task<List<string>> ScanPossibleDeadlocks(string? projectName = null, string? filePath = null)
-    {
-        try
-        {
-            return await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FindPossibleDeadlocks unexpected exception for '{ProjectName}' / '{FilePath}'", projectName, filePath);
-            throw new InvalidOperationException($"FindPossibleDeadlocks failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Analyzes SemaphoreSlim usage to find potentially missing Release() calls.")]
-    public async Task<List<string>> AnalyzeSemaphoreUsage(string filePath)
-        => await _analysisEngine.AnalyzeSemaphoreUsageAsync(filePath);
-
-    [McpServerTool]
-    [Description("Scans a file for potential memory leaks (e.g. unhooked events).")]
-    public async Task<List<string>> ScanMemoryLeaks(string filePath)
-        => await _analysisEngine.DetectMemoryLeaksAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects dangerous 'async void' usage that can crash the application.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskVoidUsage(string filePath)
-        => await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects Task.Yield() calls.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskYieldUsage(string filePath)
-        => await _asyncSafetyEngine.FindTaskYieldUsageAsync(filePath);
-
-    [McpServerTool]
-    [Description("Scans for System.Reflection usage. Optionally filtered by project.")]
-    public async Task<List<string>> ScanReflectionUsage(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Scans for empty catch blocks. Optionally filtered by project.")]
-    public async Task<List<string>> CheckForEmptyCatchBlocks(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Detects Task.Delay() usage.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskDelayUsage(string filePath)
-        => await _asyncSafetyEngine.FindTaskDelayUsageAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects redundant type casts. Optionally filtered by project.")]
-    public async Task<List<string>> CheckForRedundantCast(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Detects redundant Task.Delay(0) calls.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskDelayZeroUsage(string filePath)
-        => await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects sequential await calls that could be parallelized.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskWhenAllUsage(string filePath)
-        => await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects common C# anti-patterns introduced by AI code generation: BlockingTaskWait (.Result/.Wait()/.GetAwaiter().GetResult()), AsyncVoidMethod (non-event-handler async void), StringConcatInLoop (string += in loops), CatchExceptionSwallow (empty catch blocks), DisposedObjectUsage (use after Dispose), MissingCancellationToken (public async methods with 3+ params lacking CancellationToken), MagicNumber (unexplained numeric literals). Optionally scope by filePath, projectName, or patternFilter array.")]
-    public async Task<List<AntiPatternFinding>> ScanAntiPatterns(
-        string? filePath = null,
-        string? projectName = null,
-        string[]? patternFilter = null)
-        => await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, patternFilter);
-
-    [McpServerTool]
-    [Description("Analyzes a file for potential infinite loops.")]
-    public async Task<List<string>> ScanPossibleInfiniteLoops(string filePath)
-        => await _analysisEngine.FindPossibleInfiniteLoopsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects Task-returning method calls that are not awaited (potential fire-and-forget bugs). Skips intentional patterns: discard assignments (_ = MethodAsync()), Task.WhenAll/WhenAny arguments, return/arrow-body expressions, .GetAwaiter().GetResult() chains (those are blocking sync-over-async — use find_blocking_calls_in instead), ContinueWith/ConfigureAwait chains, field assignments, and variables later passed to WhenAll. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the solution.")]
-    public async Task<List<string>> ScanMismatchedAwait(string? filePath = null, string? projectName = null)
-        => await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Scans for hardcoded file system paths. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution.")]
-    public async Task<List<SecurityIssueReport>> ScanHardcodedPaths(string? filePath = null, string? projectName = null)
-        => await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Finds public mutable properties (public setter) on non-DTO public classes. Reports classes that expose state directly rather than through controlled mutation. Classes whose names end with Request/Response/Dto/ViewModel/Model/Options/Settings/Config/Entity/Event/Command/Query are excluded. Scope to a file or project, or scan the whole solution.")]
-    public async Task<List<AntiPatternFinding>> ScanMutablePublicProperties(
-        string? filePath = null, string? projectName = null)
-        => await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Checks C# naming conventions across a file, project, or solution. Reports: private fields not following '_camelCase', non-private methods not following PascalCase, and parameters not following camelCase. Returns AntiPatternFinding records with Pattern='NamingViolation', Severity='Low'.")]
-    public async Task<List<AntiPatternFinding>> ScanNamingViolations(
-        string? filePath = null, string? projectName = null)
-        => await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Finds string literal magic values: the same string appearing 3+ times across a file, project, or solution. Returns value, occurrence count, suggested constant name (PascalCase), and all file/line locations. Excludes empty strings, nameof() args, attribute arguments, and strings shorter than 3 chars.")]
-    public async Task<List<MagicValueFinding>> ScanStringMagicValues(string? filePath = null, string? projectName = null, int minOccurrences = 3)
-        => await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, minOccurrences);
-
-    [McpServerTool]
-    [Description("Finds async Task/ValueTask methods that lack a CancellationToken parameter but call at least one method that accepts one. These are methods that should thread cancellation through but aren't. Excludes: event handler methods with (object sender, XxxEventArgs e) signatures (delegate-bound, cannot accept CT), abstract methods, and methods that already have a CT parameter. Returns method name, containing type, file/line, and the callee names that accept CancellationToken.")]
-    public async Task<List<MissingCancellationTokenFinding>> ScanMissingCancellationTokens(string? filePath = null, string? projectName = null)
-        => await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Analyzes exception handling anti-patterns in a file: CatchAll (bare catch or catch Exception), EmptyRethrow (throw ex; loses stack trace), SwallowedException (catch with no rethrow/log/return), ExceptionAsControlFlow (catching FormatException etc. inside loops). Severity: High for CatchAll/EmptyRethrow, Medium for SwallowedException/ExceptionAsControlFlow.")]
-    public async Task<List<ExceptionHandlingFinding>> AnalyzeExceptionHandling(string filePath)
-        => await _antiPatternEngine.AnalyzeExceptionHandlingAsync(filePath);
-
-    [McpServerTool]
-    [Description("""
-        Scans for potential SQL injection vulnerabilities.
-        Pass filePath to scope to a single file, projectName to scope to a project,
-        or leave both null to scan the whole solution.
-
-        Detects calls to common SQL execution methods (ExecuteNonQuery, ExecuteReader,
-        ExecuteScalar, FromSqlRaw, Query, etc.) where the first argument is a dynamic
-        string — either an interpolated string with expressions ($"...{x}...") or string
-        concatenation involving a non-literal operand.
-
-        Returns a list of SecurityIssueReport with IssueType='PossibleSqlInjection',
-        file path, line/column, and a description recommending parameterized queries.
-        Does NOT check CommandText property assignments.
-        """)]
-    public async Task<List<SecurityIssueReport>> CheckForSqlInjection(string? filePath = null, string? projectName = null)
-    {
-        try
-        {
-            return await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "CheckForSqlInjection unexpected exception for '{FilePath}'", filePath);
-            throw new InvalidOperationException($"CheckForSqlInjection for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Scans a file for await expressions missing .ConfigureAwait(false). Excludes classes ending in Controller/Hub/PageModel/ViewModel (those are app-level where ConfigureAwait is not needed). Returns method name, line, and reason.")]
-    public async Task<List<AsyncSafetyReport>> ScanConfigureAwaitMissing(string filePath)
-        => await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects blocking calls inside async methods: Thread.Sleep, .Result, .Wait(), .GetAwaiter().GetResult(). These block the thread pool thread and can cause deadlocks.")]
-    public async Task<List<AsyncSafetyReport>> ScanBlockingCallsInAsync(string filePath)
-        => await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(filePath);
-
-    [McpServerTool]
-    [Description("Finds constructors that call async methods or contain await expressions. Constructors cannot be async — use a factory method or AsyncHelper instead.")]
-    public async Task<List<AsyncSafetyReport>> ScanAsyncInConstructor(string filePath)
-        => await _asyncSafetyEngine.FindAsyncInConstructorAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects 'await Task.Run(...)' patterns in server-side code. Task.Run wraps work in a new thread pool task which is wasteful in async server code. Prefer direct async methods.")]
-    public async Task<List<AsyncSafetyReport>> ScanTaskRunInAsync(string filePath)
-        => await _asyncSafetyEngine.FindTaskRunInAsyncAsync(filePath);
-
-    [McpServerTool]
-    [Description("Finds lock statements that protect List<T> or Dictionary<K,V> fields and suggests replacing them with ConcurrentDictionary<K,V> or ImmutableDictionary for better performance.")]
-    public async Task<List<AsyncSafetyReport>> ScanConcurrentCollectionOpportunities(string filePath)
-        => await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects unsafe lazy initialization: double-checked locking without 'volatile' keyword (field may be partially initialized due to CPU reordering). Suggests Lazy<T> or volatile.")]
-    public async Task<List<AsyncSafetyReport>> ScanUnsafeLazyInit(string filePath)
-        => await _asyncSafetyEngine.FindUnsafeLazyInitAsync(filePath);
 
     [McpServerTool]
     [Description("Adds .ConfigureAwait(false) to all await expressions in a file that don't already have it. Use libraryMode=true (default) for library code, false for ASP.NET app code. Idempotent — skips already-configured awaits. Returns the updated source as a string. Does NOT write to disk or update the workspace. Pass the result to apply_proposed_changes to save.")]
@@ -539,11 +316,6 @@ public class SentinelQualityTools
 
         return new SourceTransformResult(result, false, false, filePath);
     }
-
-    [McpServerTool]
-    [Description("Detects invalid ValueTask usage patterns: (A) double await on same variable, (B) ValueTask stored and deferred-awaited with intervening statements, (C) ValueTask passed to Task.WhenAll() without .AsTask(), (D) .Result accessed on ValueTask. Reports method name and line for each violation.")]
-    public async Task<List<AsyncSafetyReport>> ScanValueTaskMisuse(string filePath)
-        => await _asyncSafetyEngine.DetectValueTaskMisuseAsync(filePath);
 
     [McpServerTool]
     [Description("""
@@ -989,217 +761,9 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
-    [Description("Finds async methods with no await expressions, or that only await Task.FromResult/Task.CompletedTask.")]
-    public async Task<List<AsyncSafetyReport>> ScanAsyncOverSync(string filePath)
-        => await _asyncSafetyEngine.FindAsyncOverSyncAsync(filePath);
-
-    [McpServerTool]
-    [Description("Finds Task-returning methods called without await (fire-and-forget). Exceptions will be silently swallowed. Pass filePath to scope to a single file, projectName to scope to a project, or leave both null to scan the whole solution.")]
-    public async Task<List<AsyncSafetyReport>> ScanUnawaitedFireAndForget(string? filePath = null, string? projectName = null)
-        => await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Finds methods/constructors with >= minParameters (default 4) parameters. Excludes DI-only constructors (all params end with Service/Repository/Options/Factory).")]
-    public async Task<List<AntiPatternFinding>> ScanLongParameterList(string? filePath = null, string? projectName = null, int minParameters = 4)
-        => await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, minParameters);
-
-    [McpServerTool]
-    [Description("Finds methods/constructors where the same primitive type (string/int/long/Guid/bool) appears 3+ times as distinct parameters.")]
-    public async Task<List<AntiPatternFinding>> ScanPrimitiveObsession(string? filePath = null, string? projectName = null)
-        => await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Finds async methods not ending with 'Async', and non-async methods that end with 'Async'. Excludes event handlers.")]
-    public async Task<List<AntiPatternFinding>> ScanInconsistentAsyncSuffix(string? filePath = null, string? projectName = null)
-        => await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Detects unsafe or incorrect System.Text.Json usage patterns in a file: (1) JsonDocument.Parse() not wrapped in a 'using' — leaks pooled memory back to the ArrayPool, (2) JsonElement.GetProperty() instead of TryGetProperty() — throws KeyNotFoundException on missing keys at runtime. Returns SecurityIssueReport with IssueType, file path, line/column, and remediation description.")]
-    public async Task<List<SecurityIssueReport>> ScanJsonAntiPatterns(string filePath)
-        => await _securityEngine.DetectJsonAntiPatternsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects statements within a specific method that are unreachable due to a preceding return, throw, break, or continue on all code paths. Returns string descriptions of each unreachable statement and the reason it cannot execute. Use before adding code at the end of a method to confirm the insertion point is actually reached.")]
-    public async Task<List<string>> ScanUnreachableCode(string filePath, string methodName)
-        => await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
-
-    // ── Performance: new detectors ─────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects LINQ N+1 query patterns: LINQ terminal calls (Where, FirstOrDefault, Any, Count, etc.) inside foreach/for/while loops where the loop variable appears in the LINQ chain — each iteration triggers a separate query. Reports file, line, and the loop variable involved.")]
-    public async Task<List<PerformanceIssueReport>> ScanLinqN1Patterns(string? filePath = null, string? projectName = null)
-        => await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Detects string interpolation ($\"...\") and string.Format() calls inside loop bodies. Each iteration allocates a new string — use StringBuilder for accumulation or move the format outside the loop.")]
-    public async Task<List<PerformanceIssueReport>> ScanStringFormatInLoops(string? filePath = null)
-        => await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects IEnumerable<T> or IQueryable<T> locals/parameters that are iterated more than once without a materializing call (ToList/ToArray). Multiple enumerations can execute a database query or generator multiple times. Reports variable name and enumeration line numbers.")]
-    public async Task<List<PerformanceIssueReport>> ScanMultipleEnumeration(string? filePath = null)
-        => await _performanceEngine.FindMultipleEnumerationAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects LINQ chains of the form .Where(pred).First() / .Where(pred).Any() / .Where(pred).Count() where the intermediate Where creates an unnecessary IEnumerable allocation. Suggests collapsing to .First(pred) / .Any(pred) / .Count(pred) for a single-pass, allocation-free alternative.")]
-    public async Task<List<PerformanceIssueReport>> ScanLinqRedundantWhere(string? filePath = null)
-        => await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects explicit casts of Nullable<T> values to object or dynamic, which box the nullable and can produce surprising null-equality behavior ((object)(int?)null == null is true, but two boxed int? values with the same value are not reference-equal). Uses the semantic model for accuracy.")]
-    public async Task<List<PerformanceIssueReport>> ScanImplicitNullableBoxing(string? filePath = null)
-        => await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
-
-    // ── Analysis: new detectors ────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects classes that implement IDisposable AND declare a finalizer (~C()) without a disposed-flag guard (if (_disposed) return;). The GC may call the finalizer after Dispose() has already run, causing double-free of unmanaged resources.")]
-    public async Task<List<string>> ScanFinalizerOnDisposable(string? projectName = null)
-        => await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
-
-    [McpServerTool]
-    [Description("Detects static fields that hold unbounded collections (Dictionary, List, HashSet, etc.) that are populated with .Add()/.TryAdd() but never .Clear()ed and have no Count-based size cap. A common memory exhaustion DoS vector when populated from user-controlled data.")]
-    public async Task<List<string>> ScanUnboundedStaticCollections(string? projectName = null)
-        => await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
-
-    [McpServerTool]
-    [Description("Detects recursive methods that lack a depth parameter or an early-exit base-case guard (non-recursive if-return before the recursive call). Unbounded recursion on large inputs causes StackOverflowException and crashes the process with no recoverable exception.")]
-    public async Task<List<string>> ScanUnboundedRecursion(string? projectName = null)
-        => await _analysisEngine.FindUnboundedRecursionAsync(projectName);
-
-    [McpServerTool]
-    [Description("Validates overload chain correctness across the solution. For each group of same-named methods where shorter overloads delegate to fuller ones, detects: (1) ChainMissingParameter — a parameter from the calling overload is absent from the forwarding call, silently dropping the caller's value; (2) ChainArgumentOrder — source parameters appear in inverted order in the forwarding call, binding to the wrong target parameter; (3) OverloadCycle — two overloads delegate to each other, causing guaranteed StackOverflowException. Requires a loaded solution.")]
-    public async Task<List<string>> ScanMisboundOverloadChains(string? projectName = null)
-        => await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
-
-    // ── Thread safety: new detectors ───────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects the unsafe lazy initialization pattern (if (_field == null) { _field = new X(); }) outside a lock and without a volatile field or Lazy<T>. Without volatile, the CPU or JIT may reorder the store and expose a partially-constructed object on another thread.")]
-    public async Task<List<string>> ScanUnsafeLazyInitThread(string? projectName = null, string? filePath = null)
-        => await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Detects while/do-while loops containing Interlocked.CompareExchange that have no back-off (no Thread.Sleep, Thread.SpinWait, SpinWait.SpinOnce, or Task.Delay). A spinning CAS loop without back-off can peg a CPU core at 100% under contention (live-lock).")]
-    public async Task<List<string>> ScanCasLoopWithoutBackoff(string? projectName = null, string? filePath = null)
-        => await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Detects the double-checked locking (DCL) pattern where the lazily-initialized field is not declared volatile. Without volatile, a CPU or JIT may reorder the store and expose a partially-constructed object to the outer null-check on another thread. Use volatile or Lazy<T>.")]
-    public async Task<List<string>> ScanDoubleCheckedLocking(string? projectName = null, string? filePath = null)
-        => await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Detects the check-then-act race on Dictionary/ConcurrentDictionary: ContainsKey() or TryGetValue() followed by Add()/TryAdd() on the same variable outside of any lock. Another thread may insert the same key between the check and add. Use GetOrAdd() or TryAdd() for atomic insertion.")]
-    public async Task<List<string>> ScanCheckThenActOnDictionary(string? projectName = null, string? filePath = null)
-        => await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
-
-    // ── Security: new detectors ────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects Regex patterns in string literals that contain nested quantifiers ((a+)+, (a*b*)+, etc.) — a common ReDoS vulnerability. On non-matching input these patterns cause catastrophic backtracking, making the CPU spin indefinitely. Reports the pattern and the dangerous construct.")]
-    public async Task<List<SecurityIssueReport>> ScanReDoSPatterns(string filePath)
-        => await _securityEngine.FindReDoSPatternsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects new Regex() or Regex.IsMatch/Match/Replace calls where the pattern argument is not a compile-time string literal. A non-literal pattern may originate from user input, enabling Regex injection (attacker-controlled matching logic) and ReDoS attacks.")]
-    public async Task<List<SecurityIssueReport>> ScanUnvalidatedRegexSource(string filePath)
-        => await _securityEngine.FindUnvalidatedRegexSourceAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects new Regex() construction inside loop bodies (for/foreach/while/do). Constructing a Regex per iteration recompiles the pattern on every pass — a pure waste for literal patterns, and a ReDoS amplification vector for variable patterns. Hoist to a static readonly field.")]
-    public async Task<List<SecurityIssueReport>> ScanRegexNewInLoop(string filePath)
-        => await _securityEngine.FindRegexNewInLoopAsync(filePath);
-
-    // ── Async safety: new detectors ────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects consecutive await expressions in async methods where neither result is used by the other await — missed Task.WhenAll() parallelism. Example: var a = await F(); var b = await G(); where b doesn't depend on a. Combining with Task.WhenAll cuts total latency to max(F,G).")]
-    public async Task<List<AsyncSafetyReport>> ScanSequentialIndependentAwaits(string? filePath = null)
-        => await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects async void methods whose entire body is not wrapped in a try/catch. Unhandled exceptions inside async void crash the process via the unhandled-exception handler — there is no way for a caller to catch them. Wrap the body in try { } catch (Exception ex) { }.")]
-    public async Task<List<AsyncSafetyReport>> ScanAsyncVoidWithoutTryCatch(string? filePath = null)
-        => await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects DisposeAsync() calls that are not awaited. In a synchronous Dispose() method or any context without await, the ValueTask returned by DisposeAsync() is discarded — async cleanup (file flushes, connection teardown) finishes after the method returns, leaving resources dangling.")]
-    public async Task<List<AsyncSafetyReport>> ScanUnawakedDisposeAsync(string? filePath = null)
-        => await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
-
-    [McpServerTool]
-    [Description("Detects Task or ValueTask-returning method calls assigned to fields or properties without await, where the field is never subsequently awaited or .Wait()ed anywhere in the class. The task silently fails — any exception it throws is never observed and may eventually crash the process via UnobservedTaskException.")]
-    public async Task<List<AsyncSafetyReport>> ScanUnobservedTaskInField(string? filePath = null)
-        => await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
-
-    [McpServerTool]
-    [Description("""
-        EPC31: Finds async methods that have a CancellationToken parameter but call awaitable
-        methods ('*Async') without forwarding the token. Detects missed cancellation propagation
-        that leaves callers unable to cancel downstream work.
-        filePath: scan a single file. Leave null to scan the entire solution.
-        Returns method name, file, line, the unforwarded callee name, and the CT parameter name.
-        """)]
-    public async Task<List<AsyncSafetyReport>> ScanCancellationTokenNotForwarded(string? filePath = null)
-        => await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
-
-    // ── Code style: new detectors ──────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("Detects public properties that expose mutable collection types (List<T>, Dictionary<K,V>, HashSet<T>, etc.) with a public non-init setter, allowing callers to completely replace the collection. Use IReadOnlyList<T>/IReadOnlyDictionary<K,V>, or change the setter to private/init.")]
-    public async Task<List<string>> ScanMutablePublicCollectionProperties(string? projectName = null)
-        => await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
-
-    [McpServerTool]
-    [Description("Finds switch statements on enum types that don't handle all enum members and have no default case. Returns the enum type name, the list of missing member names, the containing method name, file path, and line. Essential after adding a new enum member — tells you every switch that needs updating. Scope to a file or project, or scan the entire solution.")]
-    public async Task<List<EnumSwitchGap>> ScanNonExhaustiveEnumSwitches(
-        string? filePath = null,
-        string? projectName = null)
-        => await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
-
-    [McpServerTool]
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
     public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
         => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
-
-    [McpServerTool]
-    [Description("""
-        Finds methods with 2 or more 'out' parameters — a common sign that the method
-        is doing the work of returning multiple values through side-channels instead of
-        a proper return type.
-
-        Returns the current return type, the out-parameter names and types, and a suggested
-        ValueTuple signature. Use ConvertOutParamsToValueTuple to apply the conversion
-        automatically once you've reviewed the findings.
-
-        Scope to a file or project, or scan the entire solution.
-        """)]
-    public async Task<List<OutParamMethodFinding>> ScanMultipleOutParameterMethods(
-        string? filePath = null,
-        string? projectName = null)
-        => await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
-
-    [McpServerTool]
-    [Description("""
-        Flags methods that reassign a parameter inside the method body in a way that
-        is invisible to the caller. Two warning patterns detected:
-
-        ValueTypeParameterReassigned: A value-type parameter (int, bool, struct, enum)
-        is reassigned but not returned — the caller's copy is unaffected. Use 'ref' or
-        return the value if caller visibility was the intent.
-
-        ReferenceTypeParameterReplaced: A reference-type parameter is replaced with a
-        new instance (new ...) but not returned. The caller's reference still points to
-        the original object.
-
-        Parameters with 'ref', 'out', or 'in' modifiers are excluded. No auto-fix —
-        these require developer judgement about intent.
-        """)]
-    public async Task<List<AntiPatternFinding>> ScanValueTypeMutationIntent(
-        string? filePath = null,
-        string? projectName = null)
-        => await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("""
@@ -1226,55 +790,6 @@ public class SentinelQualityTools
         string framework = "NUnit",
         int? disambiguateLine = null)
         => await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(filePath, methodName, framework, disambiguateLine);
-
-    [McpServerTool]
-    [Description("""
-        Statically analyzes a C# file for potential StackOverflowException causes.
-
-        Detects six distinct categories:
-        - DirectRecursion       (Definite)   — method calls itself with no conditional guard
-        - OverrideCallsSelf     (Definite)   — override calls own name instead of base.X()
-        - PropertySelfRead      (Definite)   — property getter reads itself (missing backing field)
-        - PropertySelfWrite     (Definite)   — property setter assigns to itself
-        - InheritanceCycle      (Definite/Suspicious) — override → base → virtual dispatch → same override
-        - ConditionalRecursion  (Suspicious) — guarded self-call whose base case may be unreachable
-        - ArgumentNotDecreasing (Suspicious) — recursive call passes parameter unchanged or growing
-        - MutualRecursion       (Suspicious) — A calls B calls ... calls A (up to 5-hop cycles)
-        - DeepCallChain         (Informational, opt-in) — >40 static frames deep
-
-        Inheritance cycle detection covers both in-file class hierarchies (syntactic) and
-        cross-file base classes (semantic). The most dangerous case — override calls base which
-        calls an abstract/virtual that this class overrides, creating a hidden dispatch loop —
-        is detected with full CyclePath tracing.
-
-        includeInformational: set true to include DeepCallChain findings (default: false)
-        """)]
-    public async Task<StackOverflowReport> AnalyzeStackOverflowRisks(
-        string filePath,
-        bool includeInformational = false)
-        => await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(filePath, includeInformational);
-
-    [McpServerTool]
-    [Description("""
-        Finds all call sites that invoke a method decorated with [Obsolete].
-        Designed for tracking CS0618 migration progress — every result is a call site that still
-        needs to be migrated away from the deprecated (Asyncify-bridge) method.
-
-        Parameters:
-        - messagePattern: Optional substring to filter by the [Obsolete] attribute message (case-insensitive).
-          Use "Asyncify-bridge" to restrict to bridge wrappers created by the async migration.
-        - filePath: Optional; restrict results to call sites in this file.
-        - projectName: Optional; restrict results to call sites in this project.
-
-        Returns ObsoleteCallerFinding records: ObsoleteMethodName, ObsoleteMessage, DeclaringType,
-        CallerMethod, CallerType, FilePath, Line, CodeSnippet.
-        """)]
-    public async Task<List<ObsoleteCallerFinding>> ScanObsoleteCallers(
-        string? messagePattern = null,
-        string? filePath = null,
-        string? projectName = null,
-        CancellationToken cancellationToken = default)
-        => await _antiPatternEngine.FindObsoleteCallersAsync(messagePattern, filePath, projectName, cancellationToken);
 
     // ── Phase 7: apply_cancellation_token_to_file ─────────────────────────────
 
@@ -1573,35 +1088,6 @@ public class SentinelQualityTools
         PropagateCtBatchInput input,
         CancellationToken cancellationToken = default)
         => await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(input, cancellationToken);
-
-    // ── Pre-flight diagnostics ─────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Scans the loaded solution for source files where the declared namespace does not match " +
-        "the file's folder path relative to its project root. Mismatches indicate that Roslyn's " +
-        "path-based document identity and namespace-based type identity are out of sync, which can " +
-        "cause batch refactoring tools to write changes to incorrect file locations. " +
-        "Syntax-only scan — no compilation required. Safe to run at any time including when the " +
-        "build is broken. Returns findings grouped by severity: Error (duplicate type names exist " +
-        "across mismatched paths — immediate risk), Warning (mismatch exists but no duplicate " +
-        "detected — latent risk). Optionally scoped to a single project.")]
-    public async Task<NamespacePathMismatchReport> ScanNamespacePathMismatches(
-        string? projectName = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
-            return await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FindNamespacePathMismatches unexpected exception");
-            throw new InvalidOperationException(
-                $"FindNamespacePathMismatches failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
 
     // ── Phase 4 — Batch-first mutation tools ──────────────────────────────────
 

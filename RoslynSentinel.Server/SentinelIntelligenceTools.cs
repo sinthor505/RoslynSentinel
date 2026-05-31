@@ -99,27 +99,6 @@ public class SentinelIntelligenceTools
         => await _deadCodeEngine.FindUnusedPrivateMembersAsync(filePath, className);
 
     [McpServerTool]
-    [Description("Detects private fields that are never read or written in the file.")]
-    public async Task<List<DeadCodeReport>> ScanUnusedPrivateFields(string filePath)
-        => await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(filePath);
-
-    [McpServerTool]
-    [Description("Identifies local variables that are declared but never used within their scope.")]
-    public async Task<List<DeadCodeReport>> ScanUnusedLocalVariables(string filePath)
-        => await _deadCodeEngine.DetectUnusedLocalVariablesAsync(filePath);
-
-    [McpServerTool]
-    [Description("Identifies classes that are never instantiated across the entire solution or a specific project.")]
-    public async Task<List<string>> ScanUninstantiatedTypes(string? projectName = null)
-        => await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
-
-    [McpServerTool]
-    [Description("Identifies circular project references (A -> B -> A).")]
-    public async Task<List<string>> ScanCircularProjectDependencies()
-        => await _analysisEngine.FindCircularDependenciesAsync();
-
-
-    [McpServerTool]
     [Description("Adds comprehensive [Description] comments to all fields in a POCO class.")]
     public async Task<string> DocumentPocoFields(string filePath, string className)
         => await _documentationEngine.DocumentPocoFieldsAsync(filePath, className);
@@ -128,60 +107,6 @@ public class SentinelIntelligenceTools
     [Description("Generates Equals and GetHashCode overrides for a class.")]
     public async Task<string> GenerateEqualityOverrides(string filePath, string className)
         => await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className);
-
-    [McpServerTool]
-    [Description("Identifies NuGet package references in a project that are not being used.")]
-    public async Task<List<string>> ScanUnusedReferences(string projectName)
-        => await _dependencyEngine.FindUnusedReferencesAsync(projectName);
-
-    [McpServerTool]
-    [Description("Checks for NuGet package version inconsistencies across multiple projects.")]
-    public async Task<List<string>> CheckPackageInconsistency()
-        => await _dependencyEngine.CheckPackageInconsistencyAsync();
-
-    [McpServerTool]
-    [Description("Identifies interfaces that are declared but never implemented in the solution or a specific project.")]
-    public async Task<List<string>> ScanUnusedInterfaces(string? projectName = null)
-        => await _analysisEngine.FindUnusedInterfacesAsync(projectName);
-
-    [McpServerTool]
-    [Description("Identifies internal classes that are only used in a single file and could be made private, optionally filtered by project.")]
-    public async Task<List<string>> ScanInternalClassesThatCouldBePrivate(string? projectName = null)
-        => await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
-
-    [McpServerTool]
-    [Description("Finds switch statements with a large number of cases that may need refactoring, optionally filtered by project.")]
-    public async Task<List<string>> ScanLargeSwitchStatements(int threshold = 10, string? projectName = null)
-        => await _analysisEngine.FindLargeSwitchStatementsAsync(threshold, projectName);
-    [McpServerTool]
-    [Description("Scans the solution for structural issues with granular filtering. typeFilter options: All, MultiType, NameMismatch.")]
-    public async Task<List<string>> ScanStructuralSmells(
-        ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All,
-        string? projectName = null,
-        string? filePath = null)
-    {
-        return await _projectStructureEngine.FindStructuralSmellsAsync(typeFilter, projectName, filePath);
-    }
-
-    [McpServerTool]
-    [Description("Identifies constructors that are never called in the entire solution.")]
-    public async Task<List<DeadCodeReport>> ScanUnusedConstructors(string filePath)
-    {
-        try
-        {
-            return await _deadCodeEngine.FindUnusedConstructorsAsync(filePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FindUnusedConstructors unexpected exception for '{FilePath}'", filePath);
-            throw new InvalidOperationException($"FindUnusedConstructors for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Scans a file for event subscriptions that are never unsubscribed, potential memory leaks.")]
-    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptions(string filePath)
-        => await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(filePath) ?? throw new InvalidOperationException("Unused event subscriptions not found.");
 
     [McpServerTool]
     [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation — returns SymbolHoverInfo) or blastRadius (all call sites and affected projects if the symbol is changed — returns ImpactReport). Provide contextSnippet: a verbatim substring identifying the symbol. Provide lineBefore/lineAfter to disambiguate.")]
@@ -205,11 +130,6 @@ public class SentinelIntelligenceTools
 
 
     [McpServerTool]
-    [Description("Finds private, non-readonly fields that are only ever assigned inside constructors and could safely be marked readonly.")]
-    public async Task<List<ReadonlyFieldCandidate>> ScanReadonlyFieldCandidates(string filePath)
-        => await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(filePath);
-
-    [McpServerTool]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a specific project/file. Returns service type, implementation type, lifetime, and source location for each registration. Use lifetimeFilter to narrow results ('Singleton', 'Scoped', 'Transient').")]
     public async Task<List<DiRegistration>> GetDiRegistrations(
         string? projectName = null,
@@ -224,11 +144,6 @@ public class SentinelIntelligenceTools
         string interfaceName, string? projectName = null)
         => await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
 
-
-    [McpServerTool]
-    [Description("Analyzes class cohesion using an LCOM-based metric. Returns per-class analysis including field/method counts, LCOM score (0=cohesive, 1=disconnected), a rating (Excellent/Good/Poor/Very Poor), and informal suggestions for classes that could be split. Useful for identifying god classes and extraction opportunities.")]
-    public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesion(string filePath, string? className = null)
-        => await _metricsEngine.AnalyzeTypeCohesionAsync(filePath, className);
 
     [McpServerTool]
     [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
@@ -291,15 +206,6 @@ public class SentinelIntelligenceTools
         => await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
 
     [McpServerTool]
-    [Description("Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Set sortByFrequency=true to rank results by how often each exception type is thrown (most frequent first) — useful for auditing dominant error patterns.")]
-    public async Task<List<ThrowSiteInfo>> ScanAllThrowSites(
-        string? exceptionType = null,
-        string? filePath = null,
-        string? projectName = null,
-        bool sortByFrequency = false)
-        => await _discoveryEngine.FindAllThrowSitesAsync(exceptionType, filePath, projectName, sortByFrequency);
-
-    [McpServerTool]
     [Description("Finds symbols by name using various lookup strategies. kind: implementorsOf (all types implementing or deriving from the named type), attributeUsages (all usages of a named attribute across the solution), objectCreations (all new T() sites for a type name), extensionsFor (extension methods for a target type), typesWithAttribute (types decorated with a specific attribute), methodsByReturnType (methods returning a specific type). projectName and filePath narrow the scope where supported. sortByFrequency ranks results by frequency (supported for kind=objectCreations).")]
     public async Task<object> FindByName(
         string name,
@@ -357,20 +263,9 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Scans all constructor parameters in the solution (or a specific project) and identifies injected service types that appear to be missing from the DI container registrations. Detects interfaces (IFoo pattern) and common service-like types (ending in Service, Repository, Manager, Factory, Provider, Handler, Validator, Dispatcher). Framework-provided types (ILogger, IOptions, IConfiguration, etc.) are excluded. Returns consumer class name, file, line, the missing type, and the parameter name. Use to catch unregistered dependencies before runtime failures.")]
-    public async Task<List<UnregisteredServiceFinding>> ScanServicesNotRegistered(
-        string? projectName = null)
-        => await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
-
-    [McpServerTool]
     [Description("Returns the best 1-based line number where a new member of the given kind should be inserted in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<BestInsertionResult> GetBestInsertionPoint(string filePath, string containerName, string memberKind)
         => await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind);
-
-    [McpServerTool]
-    [Description("Scans for TODO, FIXME, HACK, REVIEW, NOTE, BUG comments (case-insensitive) in a file, project, or entire solution. Sorted by severity: BUG/FIXME > HACK > TODO > REVIEW > NOTE.")]
-    public async Task<List<TodoCommentFinding>> ScanTodoFixmeComments(string? filePath = null, string? projectName = null)
-        => await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
 
     [McpServerTool]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
@@ -448,11 +343,6 @@ public class SentinelIntelligenceTools
 
 
     [McpServerTool]
-    [Description("Checks solution-wide consistency: TargetFramework alignment across projects and project naming convention adherence. Returns a list of issues with IssueType (TargetFrameworkMismatch, NamingConventionViolation), description, project name, and file path. NuGet package version consistency is covered by check_package_inconsistency.")]
-    public async Task<List<ProjectConsistencyIssue>> CheckProjectConsistency()
-        => await _projectConsistencyEngine.CheckConsistencyAsync();
-
-    [McpServerTool]
     [Description("Returns a summary of every project's TargetFramework value. Use this before check_project_consistency to see the full framework landscape across the solution.")]
     public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummary()
         => await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
@@ -465,43 +355,6 @@ public class SentinelIntelligenceTools
         string? projectName = null,
         string? filePath = null)
         => await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath);
-
-    [McpServerTool]
-    [Description("Detects namespace-level layer architecture violations (e.g. Controllers importing from Data/Repositories directly, Domain models depending on infrastructure layers). Operates on using directives — fast, no compilation required. Returns violation type, description, source layer, forbidden dependency namespace, file path, and line. Scope with projectName or filePath, or omit for the entire solution.")]
-    public async Task<List<ArchitecturalEngine.LayerViolation>> ScanLayerViolations(
-        string? projectName = null,
-        string? filePath = null)
-        => await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Finds types (classes, structs, records, interfaces) exceeding a line count threshold across the solution or a specific project. Returns TypeName, FilePath, and LineCount. Use before modifying a large class — anything over 500 lines is a prime extract-class candidate. Default threshold is 500 lines.")]
-    public async Task<List<LargeTypeReport>> ScanLargeTypes(int maxLines = 500, string? projectName = null)
-        => await _analysisEngine.FindLargeTypesAsync(maxLines, projectName);
-
-    [McpServerTool]
-    [Description("Finds methods exceeding a line count threshold across the solution or a specific project. Returns MethodName, TypeName, FilePath, and LineCount. Methods over 50 lines are too large to modify safely without reading in full — they are also prime extract-method candidates. Default threshold is 50 lines.")]
-    public async Task<List<LargeMethodReport>> ScanLargeMethods(int maxLines = 50, string? projectName = null)
-        => await _analysisEngine.FindLargeMethodsAsync(maxLines, projectName);
-
-    [McpServerTool]
-    [Description("Finds structurally duplicate method implementations across the solution: methods that share the same statement structure and control flow even if identifiers differ (hash-based). Returns groups of duplicate methods with their file paths and type names. Use to find copy-paste code that should be consolidated into a shared helper. Increase minStatements (default 5) to reduce false positives on short utility methods.")]
-    public async Task<List<DuplicateMethodGroup>> ScanDuplicateMethods(int minStatements = 5, string? projectName = null)
-        => await _analysisEngine.FindDuplicateMethodsAsync(minStatements, projectName);
-
-    [McpServerTool]
-    [Description("Finds public classes with 3+ public methods but no corresponding interface. Returns ClassName, FilePath, and the list of public method names. These are prime candidates for interface extraction — a prerequisite for testability (Moq/NSubstitute) and adding a second implementation. Increase minPublicMethods (default 3) for stricter filtering.")]
-    public async Task<List<InterfaceCandidateReport>> ScanInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
-        => await _analysisEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods, projectName);
-
-    [McpServerTool]
-    [Description("Finds circular constructor-injection dependencies among user-defined types: type A's constructor depends on type B, and B's constructor (transitively) depends on A. This is the exact cycle that causes .NET's DI container to throw at startup. Complements find_services_not_registered — use both before adding new service registrations. Optionally scoped to a project.")]
-    public async Task<List<string>> ScanCircularTypeReferences(string? projectName = null)
-        => await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
-
-    [McpServerTool]
-    [Description("Finds generic methods with type parameters used in ways that require constraints but have none declared: (1) 'new T()' instantiation without 'where T : new()', (2) 'param == null' comparison without 'where T : class' (always false for value types). Returns file path, line number, method name, and a description of the specific violation. Scope by file or project, or scan the entire solution.")]
-    public async Task<List<string>> ScanMissingGenericConstraints(string? projectName = null, string? filePath = null)
-        => await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
 
 
     [McpServerTool]
@@ -544,28 +397,4 @@ public class SentinelIntelligenceTools
         string className,
         int minStatements = 4)
         => await _cloneDetectionEngine.FindDuplicateBlocksInClassAsync(filePath, className, minStatements);
-
-    [McpServerTool]
-    [Description("""
-        Finds duplicate statement sequences across all types in an inheritance or
-        interface hierarchy — base class, derived classes, and implementing types.
-
-        Scoped to avoid noise: only types that share a common ancestor or interface
-        with the named type are included. Cross-hierarchy clones (unrelated types)
-        are excluded. This makes findings directly actionable: duplicates in a hierarchy
-        are candidates for extraction to the base class or a shared abstract method.
-
-        Returns the same DuplicateBlockGroup shape as FindDuplicateBlocksInClass,
-        with ContainingType and MethodName populated per occurrence so you can see
-        exactly which derived class has the copy.
-
-        typeName: the root type to anchor the hierarchy search (class or interface name).
-        projectName: optional filter to limit the search scope.
-        minStatements: minimum window size (default 4).
-        """)]
-    public async Task<List<DuplicateBlockGroup>> ScanDuplicateBlocksInHierarchy(
-        string typeName,
-        string? projectName = null,
-        int minStatements = 4)
-        => await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(typeName, projectName, minStatements);
 }

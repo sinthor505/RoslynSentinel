@@ -552,11 +552,6 @@ public class SentinelModernizationTools
     }
 
     [McpServerTool]
-    [Description("Finds private static readonly Dictionary<> and HashSet<> fields initialized inline. Suggests using FrozenDictionary/FrozenSet (System.Collections.Frozen) for better read performance.")]
-    public async Task<List<AntiPatternFinding>> ScanUseFrozenCollections(string? filePath = null, string? projectName = null)
-        => await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
-
-    [McpServerTool]
     [Description("Replaces throw new ArgumentNullException(nameof(x)) with ArgumentNullException.ThrowIfNull(x) and throw new ArgumentOutOfRangeException(nameof(x)) with ArgumentOutOfRangeException.ThrowIfNegative(x) in the specified method.")]
     public async Task<string> UseExceptionExpressions(string filePath, string methodName)
     {

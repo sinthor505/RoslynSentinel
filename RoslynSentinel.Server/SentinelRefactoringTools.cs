@@ -918,24 +918,6 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Analyzes control flow of a method: shows whether it always/sometimes/never returns, lists all return points, and identifies exit paths (throws, breaks, continues). " +
-                 "methodName: the method to analyze. " +
-                 "contextSnippet: optional snippet to disambiguate overloads. " +
-                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
-                 "Returns: AlwaysReturns, SometimesReturns, ReturnStatements, ThrowStatements, HasInfiniteLoop.")]
-    public async Task<ControlFlowSummary> AnalyzeControlFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, contextSnippet, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Analyzes data flow of a method body: identifies variables read before assignment, variables that flow out, write-only variables (possible bugs), and captured closure variables. " +
-                 "methodName: the method to analyze. " +
-                 "contextSnippet: optional snippet to disambiguate overloads. " +
-                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
-                 "Returns: ReadBeforeAssignment, WrittenInside, ReadInside, CapturedVariables, DataFlowWarnings.")]
-    public async Task<DataFlowSummary> AnalyzeDataFlow(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, contextSnippet, lineBefore, lineAfter);
-
-    [McpServerTool]
     [Description("""
         Returns a preview of what format_document would change without applying the changes.
         Shows each changed line range with ±3 lines of context (similar to a unified diff).

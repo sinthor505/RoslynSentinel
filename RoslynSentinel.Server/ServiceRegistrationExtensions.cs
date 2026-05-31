@@ -99,6 +99,8 @@ public static class RoslynSentinelServiceExtensions
         {
             services.AddSingleton<SentinelIntelligenceTools>();
             mcpBuilder.WithTools<SentinelIntelligenceTools>();
+            services.AddSingleton<SentinelScanTools>();
+            mcpBuilder.WithTools<SentinelScanTools>();
         }
         if (activeModes.Contains("Refactor"))
         {
