@@ -1,6 +1,9 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -228,25 +231,259 @@ public class SentinelQualityTools
         projectName: restrict to a single project (case-insensitive name).
         pattern:     restrict to one pattern — "AsyncBridgeCandidate", "HandlerExtract",
                      "HandlerToAsync", "AsyncCallerUplift", etc. Omit to return all patterns.
+        summarize:   when true, returns MigrationScanSummary (counts by pattern/project/score
+                     bucket) instead of the raw finding list.
+        limit:       max findings to return per page (default 50, ignored when summarize=true).
+        offset:      zero-based page offset (default 0, ignored when summarize=true).
 
         Uses syntax-level analysis — no compilation needed — so results are accurate even
         immediately after flag_migration_candidate without a solution reload.
 
-        Returns one MigrationCandidateFinding per flagged method per attribute.
-        Each finding includes a Summary field for human-readable log output.
-        A method flagged for two different patterns appears twice.
+        Returns MigrationResult<MigrationScanSummary> when summarize=true, otherwise
+        MigrationResult<List<MigrationCandidateFinding>>. Checks HasMore/TotalRecords for paging.
+        When the serialized payload exceeds 256 KB the result is written to disk and
+        LargeResult.OperationId can be passed to get_scan_result to page through it.
         """)]
-    public async Task<List<MigrationCandidateFinding>> ScanMigrationCandidates(
+    public async Task<object> ScanMigrationCandidates(
         string? filePath    = null,
         string? projectName = null,
-        string? pattern     = null)
-        => await _asyncOptimizationEngine.FindMigrationCandidatesAsync(filePath, projectName, pattern);
+        string? pattern     = null,
+        bool    summarize   = false,
+        int     limit       = 50,
+        int     offset      = 0)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new MigrationResult<object>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        List<MigrationCandidateFinding> allFindings;
+        try
+        {
+            allFindings = await _asyncOptimizationEngine
+                .FindMigrationCandidatesAsync(filePath, projectName, pattern);
+        }
+        catch (ArgumentException ex)
+        {
+            return new MigrationResult<object>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+            };
+        }
+        catch (Exception ex)
+        {
+            return new MigrationResult<object>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+
+        // ── summarize=true path ───────────────────────────────────────────
+        if (summarize)
+        {
+            var buckets = new Dictionary<string, int>
+            {
+                ["<0"]    = 0,
+                ["0-25"]  = 0,
+                ["26-50"] = 0,
+                ["51-75"] = 0,
+                ["76+"]   = 0,
+            };
+            foreach (var f in allFindings)
+            {
+                var key = f.Score < 0  ? "<0"
+                        : f.Score <= 25 ? "0-25"
+                        : f.Score <= 50 ? "26-50"
+                        : f.Score <= 75 ? "51-75"
+                        : "76+";
+                buckets[key]++;
+            }
+
+            var byPattern = allFindings
+                .GroupBy(f => f.Pattern)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var byProject = allFindings
+                .GroupBy(f => System.IO.Path.GetFileNameWithoutExtension(f.FilePath) ?? "Unknown")
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            return new MigrationResult<MigrationScanSummary>
+            {
+                Success = true,
+                Data    = new MigrationScanSummary(
+                    TotalCandidates: allFindings.Count,
+                    ByPattern:       byPattern,
+                    ByProject:       byProject,
+                    ByScoreBucket:   buckets)
+            };
+        }
+
+        // ── paginate ──────────────────────────────────────────────────────
+        int totalCount = allFindings.Count;
+        var page = allFindings.Skip(offset).Take(limit).ToList();
+        bool hasMore = (offset + limit) < totalCount;
+
+        // ── size threshold: 256 KB ────────────────────────────────────────
+        const int ThresholdBytes = 256 * 1024;
+        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(page);
+
+        if (jsonBytes.Length > ThresholdBytes)
+        {
+            var operationId = Guid.NewGuid().ToString("N");
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            string scanFilePath;
+            bool written = false;
+
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                Directory.CreateDirectory(dir);
+                var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+                scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{operationId}.json");
+                await File.WriteAllTextAsync(
+                    scanFilePath,
+                    JsonSerializer.Serialize(page, new JsonSerializerOptions { WriteIndented = true }),
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                written = true;
+            }
+            else
+            {
+                scanFilePath = string.Empty;
+            }
+
+            return new MigrationResult<List<MigrationCandidateFinding>>
+            {
+                Success     = written,
+                TotalRecords = totalCount,
+                HasMore      = hasMore,
+                LargeResult  = new LargeResultInfo(
+                    WrittenToFile: written,
+                    FilePath:      scanFilePath,
+                    OperationId:   operationId,
+                    SizeBytes:     jsonBytes.Length,
+                    TotalRecords:  totalCount)
+            };
+        }
+
+        // ── inline result ─────────────────────────────────────────────────
+        return new MigrationResult<List<MigrationCandidateFinding>>
+        {
+            Success      = true,
+            Data         = page,
+            TotalRecords = totalCount,
+            HasMore      = hasMore,
+        };
+    }
 
 
     [McpServerTool]
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
     public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
         => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+
+    // ── get_scan_result ────────────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        Pages through a large scan result that was previously written to disk by
+        scan_migration_candidates when the payload exceeded the inline size threshold.
+
+        changeId: the OperationId returned in LargeResult.OperationId — resolves to
+                  .roslynsentinel/operations/scan_*_{changeId}.json.
+        filePath: full path to the scan file (alternative to changeId).
+                  Must match the scan_*.json pattern inside the operations directory.
+        limit:    max findings per page (default 50).
+        offset:   zero-based page offset (default 0).
+
+        Returns MigrationResult<List<MigrationCandidateFinding>> with TotalRecords and HasMore.
+        """)]
+    public async Task<MigrationResult<List<MigrationCandidateFinding>>> GetScanResult(
+        string? changeId  = null,
+        string? filePath  = null,
+        int     limit     = 50,
+        int     offset    = 0)
+    {
+        string? resolvedPath = null;
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
+
+        if (!string.IsNullOrEmpty(changeId) && !string.IsNullOrEmpty(solutionRoot))
+        {
+            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+            if (Directory.Exists(dir))
+            {
+                resolvedPath = Directory
+                    .EnumerateFiles(dir, $"scan_*_{changeId}.json")
+                    .FirstOrDefault();
+            }
+        }
+        else if (!string.IsNullOrEmpty(filePath))
+        {
+            // Validate: path must be inside the operations directory and match the scan_*.json pattern.
+            var fileName = System.IO.Path.GetFileName(filePath);
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                var opsDir = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations"));
+                var candidate = System.IO.Path.GetFullPath(filePath);
+                if (candidate.StartsWith(opsDir, StringComparison.OrdinalIgnoreCase)
+                    && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
+                    && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                    && File.Exists(candidate))
+                {
+                    resolvedPath = candidate;
+                }
+            }
+        }
+
+        if (resolvedPath == null)
+        {
+            return new MigrationResult<List<MigrationCandidateFinding>>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.InvalidArgument,
+                              "Scan file not found. Supply a valid changeId or filePath pointing to a scan_*.json file in the operations directory.")
+            };
+        }
+
+        List<MigrationCandidateFinding> all;
+        try
+        {
+            var json = await File.ReadAllTextAsync(resolvedPath);
+            all = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(
+                      json,
+                      new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                  ?? new List<MigrationCandidateFinding>();
+        }
+        catch (Exception ex)
+        {
+            return new MigrationResult<List<MigrationCandidateFinding>>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.Exception,
+                              "Failed to read scan file.", ex.Message)
+            };
+        }
+
+        var page   = all.Skip(offset).Take(limit).ToList();
+        bool hasMore = (offset + limit) < all.Count;
+
+        return new MigrationResult<List<MigrationCandidateFinding>>
+        {
+            Success      = true,
+            Data         = page,
+            TotalRecords = all.Count,
+            HasMore      = hasMore,
+        };
+    }
+
     // ── Phase 8: get_async_migration_progress ─────────────────────────────────
 
     [McpServerTool]
@@ -260,10 +497,40 @@ public class SentinelQualityTools
 
         projectName: restrict statistics to a single project; null = entire solution.
         """)]
-    public async Task<AsyncMigrationProgressReport> GetAsyncMigrationProgress(
+    public async Task<MigrationResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         string? projectName = null,
         CancellationToken cancellationToken = default)
-        => await _antiPatternEngine.GetAsyncMigrationProgressAsync(projectName, cancellationToken);
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new MigrationResult<AsyncMigrationProgressReport>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var report = await _antiPatternEngine
+                .GetAsyncMigrationProgressAsync(projectName, cancellationToken);
+            return new MigrationResult<AsyncMigrationProgressReport>
+            {
+                Success = true,
+                Data    = report
+            };
+        }
+        catch (Exception ex)
+        {
+            return new MigrationResult<AsyncMigrationProgressReport>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
 
     // ── Phase 4 / Phase 7 — async_migrate internal helpers ─────────────────────
 

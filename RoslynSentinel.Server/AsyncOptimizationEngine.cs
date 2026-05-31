@@ -1794,16 +1794,24 @@ internal sealed class MigrationCandidateAttribute : Attribute
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
+        // Normalize filePath separator once — avoids per-document allocation.
+        var normalizedFilter = filePath?.Replace('\\', '/');
+        int totalFilteredDocs = 0;
+
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();
-            if (filePath != null)
+            if (normalizedFilter != null)
             {
                 docs = docs.Where(d => d.FilePath != null &&
-                                       d.FilePath.EndsWith(filePath, StringComparison.OrdinalIgnoreCase));
+                                       d.FilePath.Replace('\\', '/').EndsWith(
+                                           normalizedFilter, StringComparison.OrdinalIgnoreCase));
             }
 
-            foreach (var doc in docs)
+            var docList = docs.ToList();
+            totalFilteredDocs += docList.Count;
+
+            foreach (var doc in docList)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -1845,11 +1853,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                     a => a.Expression) ?? new Dictionary<string, ExpressionSyntax>();
 
                             int attrScore = 0;
-                            if (namedArgs.TryGetValue("Score", out var scoreExpr) &&
-                                scoreExpr is LiteralExpressionSyntax scoreLit &&
-                                scoreLit.Token.Value is int scoreVal)
+                            if (namedArgs.TryGetValue("Score", out var scoreExpr))
                             {
-                                attrScore = scoreVal;
+                                if (scoreExpr is LiteralExpressionSyntax scoreLit &&
+                                    scoreLit.Token.Value is int scoreVal)
+                                {
+                                    attrScore = scoreVal;
+                                }
+                                else if (scoreExpr is PrefixUnaryExpressionSyntax
+                                    { RawKind: (int)SyntaxKind.UnaryMinusExpression } negExpr &&
+                                    negExpr.Operand is LiteralExpressionSyntax negLit &&
+                                    negLit.Token.Value is int negVal)
+                                {
+                                    attrScore = -negVal;
+                                }
                             }
 
                             string? attrReason = null;
@@ -1883,6 +1900,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     }
                 }
             }
+        }
+
+        // Guard: if filePath filter matched zero documents across all projects, the caller
+        // supplied a path that doesn't exist in the solution — surface this as an actionable error.
+        if (normalizedFilter != null && totalFilteredDocs == 0)
+        {
+            throw new ArgumentException(
+                $"filePath '{filePath}' matched no documents in solution");
         }
 
         return findings;
