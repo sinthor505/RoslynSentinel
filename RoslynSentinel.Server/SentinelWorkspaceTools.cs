@@ -186,68 +186,80 @@ public class SentinelWorkspaceTools
     public void AcknowledgeSync() => _workspaceManager.ClearDrift();
 
     [McpServerTool]
-    [Description("Validates a proposed Unified Diff in-memory and returns compiler diagnostics.")]
-    public async Task<DiagnosticReport> ValidateProposedDiff(string filePath, string unifiedDiff)
-        => await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
-
-    [McpServerTool]
-    [Description("Validates a dictionary of proposed file changes in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying changes.")]
-    public async Task<DiagnosticReport> ValidateProposedChanges(Dictionary<string, string> changes)
+    [Description("""
+        Applies or validates a proposed change set.
+        format: files (dictionary of filePath→newContent) or diff (unified diff string for one file).
+        action: apply (write to disk) or validate (dry-run compiler diagnostics).
+        For format=files: supply the changes dict. retryCount controls retry on file locks (apply only, default 3).
+        For format=diff: supply filePath and unifiedDiff.
+        """)]
+    public async Task<object> ProposedChange(
+        string format,
+        string action,
+        Dictionary<string, string>? changes = null,
+        string? filePath = null,
+        string? unifiedDiff = null,
+        int retryCount = 3)
     {
-        try
+        if (format == "files")
         {
-            return await _validationEngine.ValidateChangesAsync(changes);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ValidateProposedChanges unexpected exception");
-            throw new InvalidOperationException($"ValidateProposedChanges failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
-    }
-
-    [McpServerTool]
-    [Description("Validates a previously staged set of changes (from a refactoring tool) in-memory and returns compiler diagnostics. Use this for a 'dry run' before applying staged changes.")]
-    public async Task<DiagnosticReport> ValidateStagedChanges(string changeId)
-    {
-        var changes = _workspaceManager.GetStagedChanges(changeId);
-        return await _validationEngine.ValidateChangesAsync(changes);
-    }
-
-    [McpServerTool]
-    [Description("Applies a Unified Diff to a file and writes the result to disk. Returns ApplyChangesResult with SucceededFiles, WorkspaceInSync, and WorkspaceVersion. To preview the result without writing, use validate_proposed_diff instead.")]
-    public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyProposedDiff(string filePath, string unifiedDiff)
-    {
-        try
-        {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
-            var document = solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-            if (document == null)
+            if (changes == null)
             {
-                throw new InvalidOperationException("File not found.");
+                throw new ArgumentException("changes is required when format=files.");
             }
-
-            var oldText = await document.GetTextAsync();
-            var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
-            // Use document.FilePath (absolute) as the key so ApplyProposedChangesAsync writes to
-            // the correct location even when the caller passed a short filename matched by d.Name.
-            var targetPath = document.FilePath ?? filePath;
-            return await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<string, string> { [targetPath] = newContent });
+            if (action == "apply")
+            {
+                return await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
+            }
+            if (action == "validate")
+            {
+                try
+                {
+                    return await _validationEngine.ValidateChangesAsync(changes);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ProposedChange validate unexpected exception");
+                    throw new InvalidOperationException($"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                }
+            }
         }
-        catch (InvalidOperationException) { throw; }
-        catch (Exception ex)
+        else if (format == "diff")
         {
-            _logger.LogError(ex, "ApplyProposedDiff unexpected exception for '{FilePath}'", filePath);
-            throw new InvalidOperationException($"ApplyProposedDiff for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
+            {
+                throw new ArgumentException("filePath and unifiedDiff are required when format=diff.");
+            }
+            if (action == "apply")
+            {
+                try
+                {
+                    var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                    var document = solution.Projects.SelectMany(p => p.Documents)
+                        .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+                    if (document == null)
+                    {
+                        throw new InvalidOperationException("File not found.");
+                    }
+                    var oldText = await document.GetTextAsync();
+                    var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                    var targetPath = document.FilePath ?? filePath;
+                    return await _workspaceManager.ApplyProposedChangesAsync(
+                        new Dictionary<string, string> { [targetPath] = newContent });
+                }
+                catch (InvalidOperationException) { throw; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
+                    throw new InvalidOperationException($"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+                }
+            }
+            if (action == "validate")
+            {
+                return await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
+            }
         }
-    }
-
-    [McpServerTool]
-    [Description("Commits a dictionary of file paths and their new contents to disk. Supports automatic retry for transient file locks.")]
-    public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyProposedChanges(Dictionary<string, string> changes, int retryCount = 3)
-    {
-        return await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
+        throw new ArgumentException($"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.");
     }
 
     [McpServerTool]
@@ -258,25 +270,33 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Commits a previously staged set of changes (from a refactoring tool) to disk.")]
-    public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyStagedChanges(string changeId, int retryCount = 3)
+    [Description("""
+        Manages a staged change set produced by a refactoring tool.
+        action: apply (write to disk), get (return file contents dict), validate (dry-run compiler diagnostics), discard (remove without applying).
+        changeId: the id returned by the refactoring tool that staged the changes.
+        retryCount: only used for action=apply (default 3).
+        """)]
+    public async Task<object> StagedChange(string action, string changeId, int retryCount = 3)
     {
-        return await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
-    }
-
-    [McpServerTool]
-    [Description("Returns the full file content of a staged change set for inspection.")]
-    public Dictionary<string, string> GetStagedChanges(string changeId)
-    {
-        return _workspaceManager.GetStagedChanges(changeId);
-    }
-
-    [McpServerTool]
-    [Description("Manually removes a staged change set from the server-side buffer without applying it.")]
-    public string DiscardStagedChanges(string changeId)
-    {
-        var success = _workspaceManager.DiscardStagedChanges(changeId);
-        return success ? $"Staged change '{changeId}' discarded." : $"Staged change '{changeId}' not found.";
+        if (action == "apply")
+        {
+            return await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
+        }
+        if (action == "get")
+        {
+            return _workspaceManager.GetStagedChanges(changeId);
+        }
+        if (action == "validate")
+        {
+            var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
+            return await _validationEngine.ValidateChangesAsync(stagingChanges);
+        }
+        if (action == "discard")
+        {
+            var success = _workspaceManager.DiscardStagedChanges(changeId);
+            return success ? $"Staged change '{changeId}' discarded." : $"Staged change '{changeId}' not found.";
+        }
+        throw new ArgumentException($"Unknown action '{action}'. Valid values: apply, get, validate, discard.");
     }
 
     [McpServerTool]
