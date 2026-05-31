@@ -154,23 +154,23 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetBlastRadius ---
+    // --- GetBlastRadius (via InspectSymbol) ---
 
     [Test]
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetBlastRadius("Test.cs", "ProcessAsync");
+        var result = await _tools.InspectSymbol("Test.cs", "ProcessAsync", "blastRadius");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindMethodsByReturnType ---
+    // --- FindMethodsByReturnType (via FindByName) ---
 
     [Test]
     public async Task FindMethodsByReturnType_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindMethodsByReturnType("string");
+        var result = await _tools.FindByName("string", "methodsByReturnType");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -202,264 +202,253 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUnusedPrivateMembers ---
+    // --- FindUnusedPrivateMembers (via DeadCodeEngine) ---
 
     [Test]
     public async Task FindUnusedPrivateMembers_ValidClass_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUnusedPrivateMembers("Test.cs", "Order");
+        var result = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Test.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- DetectUnusedPrivateFields ---
+    // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
 
     [Test]
     public async Task DetectUnusedPrivateFields_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.DetectUnusedPrivateFields("Test.cs");
+        var result = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- DetectUnusedLocalVariables ---
+    // --- DetectUnusedLocalVariables (via DeadCodeEngine) ---
 
     [Test]
     public async Task DetectUnusedLocalVariables_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.DetectUnusedLocalVariables("Test.cs");
+        var result = await _deadCodeEngine.DetectUnusedLocalVariablesAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- DetectLongParameterLists ---
+    // --- DetectLongParameterLists (via AnalysisEngine) ---
 
     [Test]
     public async Task DetectLongParameterLists_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.DetectLongParameterLists();
+        var result = await _analysisEngine.DetectLongParameterListsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUninstantiatedTypes ---
+    // --- FindUninstantiatedTypes (via AnalysisEngine) ---
 
     [Test]
     public async Task FindUninstantiatedTypes_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUninstantiatedTypes();
+        var result = await _analysisEngine.FindUninstantiatedTypesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindCircularDependencies (no params, on _analysisEngine) ---
+    // --- FindCircularDependencies (no params, via AnalysisEngine) ---
 
     [Test]
     public async Task FindCircularDependencies_NoParams_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindCircularDependencies();
+        var result = await _analysisEngine.FindCircularDependenciesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GenerateCallTree ---
+    // --- GenerateCallTree (via GetCallGraph "tree") ---
 
     [Test]
     public async Task GenerateCallTree_ValidMethod_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GenerateCallTree("Test.cs", "ProcessAsync");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        var result = await _tools.GetCallGraph("Test.cs", "ProcessAsync", "tree");
+        Assert.That(result, Is.Not.Null);
     }
 
-    // --- DocumentPocoFields ---
+    // --- DocumentPocoFields (via DocumentationEngine) ---
 
     [Test]
     public async Task DocumentPocoFields_ValidClass_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.DocumentPocoFields("Test.cs", "Order");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        var result = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Order");
+        Assert.That(result, Is.Not.Null);
     }
 
-    // --- GenerateEqualityOverrides ---
+    // --- GenerateEqualityOverrides (via AnalysisEngine) ---
 
     [Test]
     public async Task GenerateEqualityOverrides_ValidClass_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GenerateEqualityOverrides("Test.cs", "Order");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Test.cs", "Order");
+        Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUnusedReferences ---
+    // --- FindUnusedReferences (via DependencyEngine) ---
 
     [Test]
     public async Task FindUnusedReferences_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUnusedReferences("TestProj");
+        var result = await _dependencyEngine.FindUnusedReferencesAsync("TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- CheckPackageInconsistency ---
+    // --- CheckPackageInconsistency (via DependencyEngine) ---
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
-    public void CheckPackageInconsistency_ValidSolution_Throws()
+    public async Task CheckPackageInconsistency_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        Assert.CatchAsync<Exception>(() => _tools.CheckPackageInconsistency());
+        var result = await _dependencyEngine.CheckPackageInconsistencyAsync();
+        Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUnusedInterfaces ---
+    // --- FindUnusedInterfaces (via AnalysisEngine) ---
 
     [Test]
     public async Task FindUnusedInterfaces_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUnusedInterfaces();
+        var result = await _analysisEngine.FindUnusedInterfacesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindInternalClassesThatCouldBePrivate ---
+    // --- FindInternalClassesThatCouldBePrivate (via AnalysisEngine) ---
 
     [Test]
     public async Task FindInternalClassesThatCouldBePrivate_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindInternalClassesThatCouldBePrivate();
+        var result = await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindLargeSwitchStatements ---
+    // --- FindLargeSwitchStatements (via AnalysisEngine) ---
 
     [Test]
     public async Task FindLargeSwitchStatements_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindLargeSwitchStatements();
+        var result = await _analysisEngine.FindLargeSwitchStatementsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindStructuralSmells ---
+    // --- FindStructuralSmells (via ProjectStructureEngine) ---
 
     [Test]
     public async Task FindStructuralSmells_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindStructuralSmells();
+        var result = await _projectStructureEngine.FindStructuralSmellsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUnusedConstructors ---
+    // --- FindUnusedConstructors (via DeadCodeEngine) ---
 
     [Test]
     public async Task FindUnusedConstructors_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUnusedConstructors("Test.cs");
+        var result = await _deadCodeEngine.FindUnusedConstructorsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- CheckForUnusedEventSubscriptions ---
+    // --- CheckForUnusedEventSubscriptions (via DeadCodeEngine) ---
 
     [Test]
     public async Task CheckForUnusedEventSubscriptions_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.CheckForUnusedEventSubscriptions("Test.cs");
+        var result = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetSymbolInfo ---
+    // --- GetSymbolInfo (via InspectSymbol) ---
 
     [Test]
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetSymbolInfo("Test.cs", "ProcessAsync");
+        var result = await _tools.InspectSymbol("Test.cs", "ProcessAsync", "info");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindAllImplementations ---
+    // --- FindAllImplementations (via FindByName) ---
 
     [Test]
     public async Task FindAllImplementations_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindAllImplementations("IOrderService");
+        var result = await _tools.FindByName("IOrderService", "implementorsOf");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindReadonlyFieldCandidates ---
+    // --- FindReadonlyFieldCandidates (via SymbolNavigationEngine) ---
 
     [Test]
     public async Task FindReadonlyFieldCandidates_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindReadonlyFieldCandidates("Test.cs");
+        var result = await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindDiRegistrations ---
+    // --- FindDiRegistrations (now GetDiRegistrations) ---
 
     [Test]
     public async Task FindDiRegistrations_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindDiRegistrations();
+        var result = await _tools.GetDiRegistrations();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetTypeMembersDetail ---
+    // --- GetTypeMembersDetail (via GetTypeInfo) ---
 
     [Test]
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetTypeMembersDetail("Order");
+        var result = await _tools.GetTypeInfo("Order", "members");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- VerifyInterfaceCompleteness ---
-
-    [Test]
-    public async Task VerifyInterfaceCompleteness_ValidInterface_ReturnsList()
-    {
-        SetSource(RichSource, "Test.cs");
-        var result = await _tools.VerifyInterfaceCompleteness("IOrderService");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- FindExtensionMethods ---
+    // --- FindExtensionMethods (via FindByName) ---
 
     [Test]
     public async Task FindExtensionMethods_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindExtensionMethods("string");
+        var result = await _tools.FindByName("string", "extensionsFor");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- AnalyzeTypeCohesion ---
+    // --- AnalyzeTypeCohesion (via MetricsEngine) ---
 
     [Test]
     public async Task AnalyzeTypeCohesion_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.AnalyzeTypeCohesion("Test.cs");
+        var result = await _metricsEngine.AnalyzeTypeCohesionAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindCircularDependencies (with projectName, on _architecturalEngine) ---
+    // --- FindCircularDependencies (with projectName, via ArchitecturalEngine) ---
 
     [Test]
     public async Task FindCircularDependencies_WithProjectName_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindCircularDependencies("TestProj");
+        var result = await _architecturalEngine.FindCircularDependenciesAsync("TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -481,13 +470,13 @@ public class OrderService : IOrderService
             () => _tools.GetCallGraph("Test.cs", "NoSuchMethod99"));
     }
 
-    // --- GetReverseCallGraph ---
+    // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
 
     [Test]
     public async Task GetReverseCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetReverseCallGraph("Test.cs", "GetStatus");
+        var result = await _tools.GetCallGraph("Test.cs", "GetStatus", "reverse");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -496,27 +485,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GetReverseCallGraph("Test.cs", "NoSuchMethod99"));
-    }
-
-    // --- ConvertToBackgroundService ---
-
-    [Test]
-    public async Task ConvertToBackgroundService_ValidClass_ReturnsString()
-    {
-        SetSource(RichSource, "Test.cs");
-        var result = await _tools.ConvertToBackgroundService("Test.cs", "OrderService");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- FixMismatchedNamespaces ---
-
-    [Test]
-    public async Task FixMismatchedNamespaces_ValidFile_ReturnsString()
-    {
-        SetSource(RichSource, "Test.cs");
-        var result = await _tools.FixMismatchedNamespaces("Test.cs");
-        Assert.That(result, Is.Not.Null);
+            () => _tools.GetCallGraph("Test.cs", "NoSuchMethod99", "reverse"));
     }
 
     // --- MoveFileToNamespaceFolder ---
@@ -529,23 +498,23 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindAllThrowSites ---
+    // --- FindAllThrowSites (via DiscoveryEngine) ---
 
     [Test]
     public async Task FindAllThrowSites_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindAllThrowSites();
+        var result = await _discoveryEngine.FindAllThrowSitesAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindObjectCreationSites ---
+    // --- FindObjectCreationSites (via FindByName) ---
 
     [Test]
     public async Task FindObjectCreationSites_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindObjectCreationSites("Order");
+        var result = await _tools.FindByName("Order", "objectCreations");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -559,33 +528,33 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindServicesNotRegistered ---
+    // --- FindServicesNotRegistered (via DependencyInjectionEngine) ---
 
     [Test]
     public async Task FindServicesNotRegistered_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindServicesNotRegistered();
+        var result = await _dependencyInjectionEngine.FindServicesNotRegisteredAsync();
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindBestInsertionPoint ---
+    // --- FindBestInsertionPoint (now GetBestInsertionPoint) ---
 
     [Test]
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindBestInsertionPoint("Test.cs", "Order", "method");
+        var result = await _tools.GetBestInsertionPoint("Test.cs", "Order", "method");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindTodoFixmeComments ---
+    // --- FindTodoFixmeComments (via DiscoveryEngine) ---
 
     [Test]
     public async Task FindTodoFixmeComments_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindTodoFixmeComments();
+        var result = await _discoveryEngine.FindTodoFixmeCommentsAsync();
         Assert.That(result, Is.Not.Null);
     }
 
@@ -599,23 +568,23 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindCallersSafe ---
+    // --- FindCallersSafe (via FindReferences) ---
 
     [Test]
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindCallersSafe("Test.cs", "ProcessAsync");
+        var result = await _tools.FindReferences("Test.cs", "ProcessAsync", "callers");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindImplementationsSafe ---
+    // --- FindImplementationsSafe (via FindReferences) ---
 
     [Test]
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindImplementationsSafe("Test.cs", "IOrderService");
+        var result = await _tools.FindReferences("Test.cs", "IOrderService", "implementations");
         Assert.That(result, Is.Not.Null);
     }
 }

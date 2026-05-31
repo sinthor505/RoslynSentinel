@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -209,8 +210,14 @@ public static partial class SentinelConsoleMode
                 ["params"] = new
                 {
                     protocolVersion = "2024-11-05",
-                    capabilities = new { },
-                    clientInfo = new { name = "sentinel-repl", version = "1.0" },
+                    capabilities = new
+                    {
+                    },
+                    clientInfo = new
+                    {
+                        name = "sentinel-repl",
+                        version = "1.0"
+                    },
                 },
             }, CompactJson) + "\n").ConfigureAwait(false);
 
@@ -480,21 +487,21 @@ public static partial class SentinelConsoleMode
                 .OrderBy(t => t.Name)
                 .ToList();
 
-            string generatedUtc  = DateTime.UtcNow.ToString("O");
-            int    totalChars    = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
+            string generatedUtc = DateTime.UtcNow.ToString("O");
+            int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
 
             // ── tool_list.json — full payload: name + description + inputSchema ──
             var fullPayload = new
             {
                 _metadata = new
                 {
-                    toolCount         = tools.Count,
-                    generatedUtc      = generatedUtc,
+                    toolCount = tools.Count,
+                    generatedUtc = generatedUtc,
                     totalPayloadChars = totalChars,
                 },
                 tools = tools.Select(t => new
                 {
-                    name        = t.Name,
+                    name = t.Name,
                     description = t.Description,
                     inputSchema = t.InputSchema,
                 }),
@@ -510,7 +517,7 @@ public static partial class SentinelConsoleMode
             {
                 _metadata = new
                 {
-                    toolCount    = tools.Count,
+                    toolCount = tools.Count,
                     generatedUtc = generatedUtc,
                 },
                 tools = tools.Select(t => t.Name).ToList(),
@@ -526,4 +533,124 @@ public static partial class SentinelConsoleMode
             Console.Error.WriteLine($"[StartupDump] Failed to write tool list: {ex.Message}");
         }
     }
+
+    // ─── Method inventory dump ───────────────────────────────────────────────
+
+    /// <summary>
+    /// Writes <c>all_methods.csv</c> and <c>engine_methods.json</c> to the solution root
+    /// on every server startup, replacing any hand-maintained copies.
+    /// Reflects over every concrete class in the assembly to produce an up-to-date
+    /// inventory of public instance methods — no manual editing required.
+    /// NOT an [McpServerTool] — internal diagnostic output only.
+    /// </summary>
+    public static void WriteMethodInventory(string outputDir)
+    {
+        try
+        {
+            var solutionRoot = FindSolutionRoot(outputDir) ?? outputDir;
+            var serverSrcDir = Path.Combine(solutionRoot, "RoslynSentinel.Server");
+            var inventoryDir = Directory.Exists(serverSrcDir) ? serverSrcDir : solutionRoot;
+
+            var types = typeof(SentinelConsoleMode).Assembly
+                .GetTypes()
+                .Where(t => t.IsClass
+                         && !t.IsAbstract
+                         && !t.IsGenericTypeDefinition
+                         && t.Namespace == "RoslynSentinel.Server"
+                         && !t.Name.Contains('<'))
+                .OrderBy(t => t.Name)
+                .ToList();
+
+            var csvLines = new List<string> { "\"Engine\",\"Line\",\"Method\"" };
+            var jsonEntries = new Dictionary<string, List<object>>();
+
+            foreach (var type in types)
+            {
+                var methods = type
+                    .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                    .Where(m => !m.IsSpecialName)
+                    .OrderBy(m => m.MetadataToken)
+                    .ToList();
+
+                if (methods.Count == 0) continue;
+
+                var jsonMethods = new List<object>();
+                foreach (var method in methods)
+                {
+                    var sig = BuildMethodSignature(method);
+                    var returnType = ExtractInnerReturnType(method.ReturnType);
+                    var sigTrunc = sig.Length > 120 ? sig[..120] : sig;
+
+                    csvLines.Add($"\"{type.Name}\",\"{EscapeCsvField(sigTrunc)}\",\"{method.Name}\"");
+                    jsonMethods.Add(new { ReturnType = returnType, Signature = sig, Name = method.Name });
+                }
+
+                jsonEntries[type.Name] = jsonMethods;
+            }
+
+            var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
+            File.WriteAllText(
+                Path.Combine(inventoryDir, "all_methods.csv"),
+                string.Join(Environment.NewLine, csvLines) + Environment.NewLine,
+                encoding);
+
+            File.WriteAllText(
+                Path.Combine(inventoryDir, "engine_methods.json"),
+                JsonSerializer.Serialize(jsonEntries, PrettyJson),
+                encoding);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[MethodInventory] Failed to write method inventory: {ex.Message}");
+        }
+    }
+
+    private static string? FindSolutionRoot(string startDir)
+    {
+        var dir = new DirectoryInfo(startDir);
+        while (dir is not null)
+        {
+            if (dir.GetFiles("Directory.Build.props").Length > 0)
+                return dir.FullName;
+            dir = dir.Parent;
+        }
+        return null;
+    }
+
+    private static string BuildMethodSignature(MethodInfo method)
+    {
+        var isAsync = method.GetCustomAttribute<AsyncStateMachineAttribute>() is not null;
+        var asyncMod = isAsync ? "async " : "";
+        var returnType = FriendlyType(method.ReturnType);
+        var @params = string.Join(", ", method.GetParameters().Select(BuildParamString));
+        return $"public {asyncMod}{returnType} {method.Name}({@params})";
+    }
+
+    private static string BuildParamString(ParameterInfo p)
+    {
+        var typeName = FriendlyType(p.ParameterType);
+        var name = p.Name ?? "_";
+        if (!p.HasDefaultValue) return $"{typeName} {name}";
+        var defStr = p.DefaultValue switch
+        {
+            null => "null",
+            string s => $"\\{s}\\",
+            bool b => b ? "true" : "false",
+            var other => other?.ToString() ?? "null",
+        };
+        return $"{typeName} {name} = {defStr}";
+    }
+
+    private static string ExtractInnerReturnType(Type returnType)
+    {
+        if (returnType.IsGenericType
+            && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+            return FriendlyType(returnType.GetGenericArguments()[0]);
+        if (returnType == typeof(Task) || returnType == typeof(void))
+            return "void";
+        return FriendlyType(returnType);
+    }
+
+    private static string EscapeCsvField(string s) => s.Replace("\"", "\"\"");
 }

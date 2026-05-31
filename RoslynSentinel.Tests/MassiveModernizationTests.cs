@@ -12,6 +12,7 @@ public class MassiveModernizationTests
     private PersistentWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
+    private ModernizationEngine _modernizationEngine;
     private SentinelModernizationTools _modernizationTools;
 
     [SetUp]
@@ -21,8 +22,9 @@ public class MassiveModernizationTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
-        
+
         var modern = new ModernizationEngine(_workspaceManager, config);
+        _modernizationEngine = modern;
         var upgrade = new ModernizationUpgradeEngine(_workspaceManager);
         var logging = new ModernLoggingEngine(_workspaceManager);
         var analysis = new AnalysisEngine(_workspaceManager, config);
@@ -33,7 +35,7 @@ public class MassiveModernizationTests
         var ideStyle = new IDEStyleEngine(_workspaceManager);
         var immutability = new ImmutabilityEngine(_workspaceManager);
         var asyncOpt = new AsyncOptimizationEngine(_workspaceManager);
-        
+
         _modernizationTools = new SentinelModernizationTools(modern, upgrade, logging, _syntaxUpgradeEngine, analysis, logic, style, healing, advLogic, ideStyle, immutability, asyncOpt, _workspaceManager, config, NullLogger<SentinelModernizationTools>.Instance);
     }
 
@@ -54,11 +56,11 @@ public class MassiveModernizationTests
     [TestCase(5)]
     public async Task UpgradePatternMatching_ShouldSimplifyIfStatements(int id)
     {
-        SetSource($@"public class C{id} {{ 
-            public int M(object o) {{ 
-                if (o is string) {{ var s = (string)o; return s.Length; }} 
-                return 0; 
-            }} 
+        SetSource($@"public class C{id} {{
+            public int M(object o) {{
+                if (o is string) {{ var s = (string)o; return s.Length; }}
+                return 0;
+            }}
         }}", $"C{id}.cs");
         var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync($"C{id}.cs");
         Assert.That(result, Contains.Substring("is string s"));
@@ -72,10 +74,10 @@ public class MassiveModernizationTests
     [TestCase(5)]
     public async Task UsePrimaryConstructors_ShouldModernizeClass(int id)
     {
-        SetSource($@"public class C{id} {{ 
-            private readonly int _x; 
-            public C{id}(int x) {{ _x = x; }} 
-            public int X => _x; 
+        SetSource($@"public class C{id} {{
+            private readonly int _x;
+            public C{id}(int x) {{ _x = x; }}
+            public int X => _x;
         }}", $"C{id}.cs");
         var result = await _refactoringEngine.ConvertToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
         Assert.That(result, Contains.Substring($"class C{id}(int x)"));
@@ -90,7 +92,7 @@ public class MassiveModernizationTests
     public async Task ClassToRecord_ShouldModernize(int id)
     {
         SetSource($@"public class C{id} {{ public int Id {{ get; set; }} }}", $"C{id}.cs");
-        var result = await _modernizationTools.ClassToRecord($"C{id}.cs", $"C{id}");
+        var result = await _modernizationEngine.ClassToRecordAsync($"C{id}.cs", $"C{id}");
         Assert.That(result, Contains.Substring("record C"));
     }
 }

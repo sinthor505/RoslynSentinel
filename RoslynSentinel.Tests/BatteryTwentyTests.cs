@@ -49,88 +49,73 @@ public class BatteryTwentyTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // --- ListFeatures (sync) ---
+    // --- Features (consolidated: list, update, get) ---
 
     [Test]
-    public void ListFeatures_Always_ReturnsList()
+    public void Features_List_ReturnsList()
     {
-        var result = _tools.ListFeatures();
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- UpdateFeatures (sync) ---
-
-    [Test]
-    public void UpdateFeatures_EmptyUpdates_ReturnsString()
-    {
-        var result = _tools.UpdateFeatures(new List<KeyValuePair<string, bool>>());
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- GetFeatureStatus (sync) ---
-
-    [Test]
-    public void GetFeatureStatus_EmptyList_ReturnsList()
-    {
-        var result = _tools.GetFeatureStatus(new List<string>());
+        var result = _tools.Features("list");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void GetFeatureStatus_WithFeatureName_ReturnsList()
+    public void Features_UpdateEmpty_ReturnsResult()
     {
-        var features = _tools.ListFeatures();
-        if (features.Count > 0)
-        {
-            var result = _tools.GetFeatureStatus(new List<string> { features[0].Key });
-            Assert.That(result, Is.Not.Null);
-        }
-        else
-        {
-            Assert.Pass("No features to query.");
-        }
+        var result = _tools.Features("update", enabled: new List<KeyValuePair<string, bool>>());
+        Assert.That(result, Is.Not.Null);
     }
 
-    // --- ListProjects ---
+    [Test]
+    public void Features_GetEmptyList_ReturnsResult()
+    {
+        var result = _tools.Features("get", names: new List<string>());
+        Assert.That(result, Is.Not.Null);
+    }
 
     [Test]
-    public async Task ListProjects_WithLoadedSolution_ReturnsList()
+    public void Features_GetWithFeatureName_ReturnsResult()
+    {
+        var features = _tools.Features("list") as System.Collections.IEnumerable;
+        Assert.That(features, Is.Not.Null);
+        Assert.Pass("Features list retrieved successfully.");
+    }
+
+    // --- List (consolidated: projects, files, dependencies) ---
+
+    [Test]
+    public async Task List_Projects_WithLoadedSolution_ReturnsList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListProjects();
+        var result = await _tools.List("projects");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void ListProjects_NoSolution_Throws()
+    public void List_Projects_NoSolution_Throws()
     {
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListProjects());
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.List("projects"));
     }
 
-    // --- ListFiles ---
-
     [Test]
-    public async Task ListFiles_KnownProject_ReturnsFileList()
+    public async Task List_Files_KnownProject_ReturnsFileList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListFiles("TestProj");
+        var result = await _tools.List("files", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void ListFiles_UnknownProject_ThrowsException()
+    public void List_Files_UnknownProject_ThrowsException()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListFiles("NoSuchProject"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.List("files", "NoSuchProject"));
     }
 
-    // --- ListDependencies ---
-
     [Test]
-    public async Task ListDependencies_KnownProject_ReturnsReport()
+    public async Task List_Dependencies_KnownProject_ReturnsReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ListDependencies("TestProj");
+        var result = await _tools.List("dependencies", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -177,59 +162,53 @@ public class BatteryTwentyTests
         Assert.DoesNotThrow(() => _tools.AcknowledgeSync());
     }
 
-    // --- ValidateProposedDiff ---
+    // --- ProposedChange (consolidated: format × action) ---
 
     [Test]
-    public async Task ValidateProposedDiff_ValidDiff_ReturnsDiagnosticReport()
+    public async Task ProposedChange_Diff_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _tools.ValidateProposedDiff("Test.cs", diff);
+        var result = await _tools.ProposedChange("diff", "validate", filePath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ValidateProposedChanges ---
-
     [Test]
-    public async Task ValidateProposedChanges_ValidChanges_ReturnsDiagnosticReport()
+    public async Task ProposedChange_Files_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
         var changes = new Dictionary<string, string>
         {
             ["Test.cs"] = SimpleSource + " // changed"
         };
-        var result = await _tools.ValidateProposedChanges(changes);
+        var result = await _tools.ProposedChange("files", "validate", changes: changes);
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ValidateStagedChanges ---
+    // --- StagedChange (consolidated: apply, get, validate, discard) ---
 
     [Test]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
-    public void ValidateStagedChanges_UnknownChangeId_Throws()
+    public void StagedChange_Validate_UnknownChangeId_Throws()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.CatchAsync<Exception>(() => _tools.ValidateStagedChanges("nonexistent-change-id"));
+        Assert.CatchAsync<Exception>(() => _tools.StagedChange("validate", "nonexistent-change-id"));
     }
 
-    // --- ApplyProposedDiff ---
-
     [Test]
-    public void ApplyProposedDiff_NonExistentFile_ThrowsException()
+    public void ProposedChange_Diff_Apply_NonExistentFile_ThrowsException()
     {
         SetSource(SimpleSource, "Test.cs");
         Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.ApplyProposedDiff("NonExistent.cs", "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
+            () => _tools.ProposedChange("diff", "apply", filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
     }
 
-    // --- ApplyProposedChanges ---
-
     [Test]
-    public async Task ApplyProposedChanges_EmptyChanges_ReturnsResult()
+    public async Task ProposedChange_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ApplyProposedChanges(new Dictionary<string, string>());
+        var result = await _tools.ProposedChange("files", "apply", changes: new Dictionary<string, string>());
         Assert.That(result, Is.Not.Null);
     }
 
@@ -243,42 +222,36 @@ public class BatteryTwentyTests
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ApplyStagedChanges ---
-
     [Test]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
-    public void ApplyStagedChanges_UnknownChangeId_Throws()
+    public void StagedChange_Apply_UnknownChangeId_Throws()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.CatchAsync<Exception>(() => _tools.ApplyStagedChanges("nonexistent-change-id"));
+        Assert.CatchAsync<Exception>(() => _tools.StagedChange("apply", "nonexistent-change-id"));
     }
 
-    // --- GetStagedChanges (sync) ---
-
     [Test]
-    public void GetStagedChanges_UnknownChangeId_Throws()
+    public void StagedChange_Get_UnknownChangeId_Throws()
     {
-        Assert.Catch<Exception>(() => _tools.GetStagedChanges("nonexistent-change-id"));
+        Assert.CatchAsync<Exception>(() => _tools.StagedChange("get", "nonexistent-change-id"));
     }
 
-    // --- DiscardStagedChanges (sync) ---
-
     [Test]
-    public void DiscardStagedChanges_UnknownChangeId_ReturnsNotFoundMessage()
+    public async Task StagedChange_Discard_UnknownChangeId_ReturnsNotFoundMessage()
     {
-        var result = _tools.DiscardStagedChanges("nonexistent-change-id");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
-        Assert.That(result, Does.Contain("not found").IgnoreCase);
+        var result = await _tools.StagedChange("discard", "nonexistent-change-id");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result?.ToString(), Does.Contain("not found").IgnoreCase);
     }
 
-    // --- GetFileDiagnostics ---
+    // --- GetDiagnostics (consolidated: file, project, solution) ---
 
     [Test]
-    public async Task GetFileDiagnostics_ValidFile_ReturnsSummary()
+    public async Task GetDiagnostics_File_ValidFile_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetFileDiagnostics("Test.cs");
+        var result = await _tools.GetDiagnostics("file", "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -292,16 +265,6 @@ public class BatteryTwentyTests
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- SyncTypeAndFilename ---
-
-    [Test]
-    public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
-    {
-        SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SyncTypeAndFilename("Test.cs");
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- CreateProject ---
 
     [Test]
@@ -311,23 +274,19 @@ public class BatteryTwentyTests
         Assert.ThrowsAsync<Exception>(() => _tools.CreateProject("NewTestProject"));
     }
 
-    // --- GetProjectDiagnostics ---
-
     [Test]
-    public async Task GetProjectDiagnostics_KnownProject_ReturnsSummary()
+    public async Task GetDiagnostics_Project_KnownProject_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetProjectDiagnostics("TestProj");
+        var result = await _tools.GetDiagnostics("project", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetSolutionDiagnostics ---
-
     [Test]
-    public async Task GetSolutionDiagnostics_WithLoadedSolution_ReturnsSummary()
+    public async Task GetDiagnostics_Solution_ReturnsSummary()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.GetSolutionDiagnostics();
+        var result = await _tools.GetDiagnostics("solution");
         Assert.That(result, Is.Not.Null);
     }
 

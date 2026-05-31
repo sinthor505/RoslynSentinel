@@ -181,7 +181,7 @@ public class SubscriberService
     public async Task CheckForUnusedEventSubscriptions_SqlStringConcatenation_NoFalsePositives()
     {
         SetSource(SqlConcatSource, "QueryBuilder.cs");
-        var results = await _intelligenceTools.CheckForUnusedEventSubscriptions("QueryBuilder.cs");
+        var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("QueryBuilder.cs");
 
         Assert.That(results, Is.Not.Null);
         Assert.That(
@@ -194,7 +194,7 @@ public class SubscriberService
     public async Task CheckForUnusedEventSubscriptions_NumericPlusEquals_NoFalsePositives()
     {
         SetSource(NumericPlusEqualsSource, "Counter.cs");
-        var results = await _intelligenceTools.CheckForUnusedEventSubscriptions("Counter.cs");
+        var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Counter.cs");
 
         Assert.That(results, Is.Not.Null);
         Assert.That(
@@ -207,7 +207,7 @@ public class SubscriberService
     public async Task CheckForUnusedEventSubscriptions_RealEventSubscription_IsDetected()
     {
         SetSource(RealEventSource, "Subscriber.cs");
-        var results = await _intelligenceTools.CheckForUnusedEventSubscriptions("Subscriber.cs");
+        var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Subscriber.cs");
 
         Assert.That(results, Is.Not.Null);
         Assert.That(
@@ -296,7 +296,7 @@ public class MultiCacheService
     public async Task DetectMismatchedAwait_ValueTaskWrapper_NoFalsePositives()
     {
         SetSource(ValueTaskWrapperSource, "CacheService.cs");
-        var results = await _qualityTools.DetectMismatchedAwait("CacheService.cs");
+        var results = await _analysisEngine.DetectMismatchedAwaitAsync("CacheService.cs");
 
         Assert.That(results, Is.Not.Null);
         Assert.That(
@@ -309,7 +309,7 @@ public class MultiCacheService
     public async Task DetectMismatchedAwait_TrulyUnawaitedTask_IsDetected()
     {
         SetSource(TrulyUnawaitedSource, "FireForget.cs");
-        var results = await _qualityTools.DetectMismatchedAwait("FireForget.cs");
+        var results = await _analysisEngine.DetectMismatchedAwaitAsync("FireForget.cs");
 
         Assert.That(results, Is.Not.Null);
         Assert.That(
@@ -322,7 +322,7 @@ public class MultiCacheService
     public async Task DetectMismatchedAwait_MultipleValueTaskWrappers_AllClean()
     {
         SetSource(MultipleValueTaskWrappersSource, "MultiCacheService.cs");
-        var results = await _qualityTools.DetectMismatchedAwait("MultiCacheService.cs");
+        var results = await _analysisEngine.DetectMismatchedAwaitAsync("MultiCacheService.cs");
 
         Assert.That(results, Is.Not.Null);
         var wrappedMethods = new[] { "FetchUserAsync", "FetchProductAsync", "FetchCategoryAsync" };

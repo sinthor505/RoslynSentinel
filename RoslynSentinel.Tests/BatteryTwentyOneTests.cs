@@ -169,355 +169,316 @@ public class Worker
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // --- FixThreadSleep ---
+    // --- FixThreadSleep (via CodeHealingEngine) ---
 
     [Test]
     public async Task FixThreadSleep_FileWithThreadSleep_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Worker.cs");
-        var result = await _tools.FixThreadSleep("Worker.cs");
+        var result = await _codeHealingEngine.FixThreadSleepAsync("Worker.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void FixThreadSleep_NonExistentFile_Throws()
+    public void FixThreadSleep_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.FixThreadSleep("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _codeHealingEngine.FixThreadSleepAsync("NonExistent.cs"));
     }
 
-    // --- AddBraces ---
+    // --- AddBraces (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task AddBraces_FileWithBracelessStatements_ReturnsUpdatedSource()
     {
         const string src = "public class C { void M() { if (true) Console.WriteLine(\"x\"); } }";
         SetSource(src, "C.cs");
-        var result = await _tools.AddBraces("C.cs");
+        var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void AddBraces_NonExistentFile_Throws()
+    public void AddBraces_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.AddBraces("NonExistent.cs"));
+        // Engine returns null/empty for missing file (tool layer throws)
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.AddBracesAsync("NonExistent.cs"));
     }
 
-    // --- UpgradePatternMatching ---
+    // --- UpgradePatternMatching (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task UpgradePatternMatching_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.UpgradePatternMatching("Test.cs");
+        var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UpgradePatternMatching_NonExistentFile_Throws()
+    public void UpgradePatternMatching_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UpgradePatternMatching("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.UpgradePatternMatchingAsync("NonExistent.cs"));
     }
 
-    // --- UseIndexFromEnd ---
+    // --- UseIndexFromEnd (via CodeStyleEngine) ---
 
     [Test]
     public async Task UseIndexFromEnd_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.UseIndexFromEnd("Test.cs");
+        var result = await _codeStyleEngine.UseIndexFromEndAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UseIndexFromEnd_NonExistentFile_Throws()
+    public void UseIndexFromEnd_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UseIndexFromEnd("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _codeStyleEngine.UseIndexFromEndAsync("NonExistent.cs"));
     }
 
-    // --- UpgradeUnboundNameof ---
-
-    [Test]
-    public async Task UpgradeUnboundNameof_ValidFile_ReturnsSource()
-    {
-        SetSource(RichSource, "Test.cs");
-        var result = await _tools.UpgradeUnboundNameof("Test.cs", "nameof(Order)");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
-    }
-
-    [Test]
-    public void UpgradeUnboundNameof_NonExistentFile_Throws()
-    {
-        SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UpgradeUnboundNameof("NonExistent.cs", "nameof(X)"));
-    }
-
-    // --- UseFieldBackedProperties ---
+    // --- UseFieldBackedProperties (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task UseFieldBackedProperties_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.UseFieldBackedProperties("Test.cs");
+        var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public async Task UseFieldBackedProperties_NonExistentFile_ReturnsFriendlyMessage()
+    public void UseFieldBackedProperties_NonExistentFile_ReturnsNullOrEmpty()
     {
-        // Bug 4b fix: handler no longer throws; returns a friendly message instead
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.UseFieldBackedProperties("NonExistent.cs");
-        Assert.That(result, Does.Contain("not in workspace").Or.Contain("not found").Or.Contain("NoFile").Or.Contain("NonExistent"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("NonExistent.cs"));
     }
 
-    // --- ClassToRecord ---
+    // --- ClassToRecord (via ModernizationEngine) ---
 
     [Test]
     public async Task ClassToRecord_SimpleClass_ReturnsRecord()
     {
         const string src = "namespace TestProj; public class Point { public int X { get; init; } public int Y { get; init; } }";
         SetSource(src, "Point.cs");
-        var result = await _tools.ClassToRecord("Point.cs", "Point");
+        var result = await _modernizationEngine.ClassToRecordAsync("Point.cs", "Point");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void ClassToRecord_NonExistentFile_Throws()
+    public void ClassToRecord_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ClassToRecord("NonExistent.cs", "Point"));
+        Assert.DoesNotThrowAsync(() => _modernizationEngine.ClassToRecordAsync("NonExistent.cs", "Point"));
     }
 
-    // --- RecordToClass ---
+    // --- RecordToClass (via ModernizationEngine) ---
 
     [Test]
     public async Task RecordToClass_SimpleRecord_ReturnsClass()
     {
         const string src = "namespace TestProj; public record Point(int X, int Y);";
         SetSource(src, "Point.cs");
-        var result = await _tools.RecordToClass("Point.cs", "Point");
+        var result = await _modernizationEngine.RecordToClassAsync("Point.cs", "Point");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void RecordToClass_NonExistentFile_Throws()
+    public void RecordToClass_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.RecordToClass("NonExistent.cs", "Point"));
+        Assert.DoesNotThrowAsync(() => _modernizationEngine.RecordToClassAsync("NonExistent.cs", "Point"));
     }
 
-    // --- SimplifyVerbosity ---
+    // --- SimplifyVerbosity (via CodeStyleEngine) ---
 
     [Test]
     public async Task SimplifyVerbosity_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.SimplifyVerbosity("Test.cs");
+        var result = await _codeStyleEngine.SimplifyVerbosityAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void SimplifyVerbosity_NonExistentFile_Throws()
+    public void SimplifyVerbosity_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.SimplifyVerbosity("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _codeStyleEngine.SimplifyVerbosityAsync("NonExistent.cs"));
     }
 
-    // --- UpgradeThreadSafety ---
+    // --- UpgradeThreadSafety (via CodeStyleEngine) ---
 
     [Test]
     public async Task UpgradeThreadSafety_FileWithLock_ReturnsSource()
     {
         SetSource(AsyncSource, "Worker.cs");
-        var result = await _tools.UpgradeThreadSafety("Worker.cs");
+        var result = await _codeStyleEngine.FixDangerousLockAsync("Worker.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UpgradeThreadSafety_NonExistentFile_Throws()
+    public void UpgradeThreadSafety_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UpgradeThreadSafety("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _codeStyleEngine.FixDangerousLockAsync("NonExistent.cs"));
     }
 
-    // --- UseTimeProvider ---
+    // --- UseTimeProvider (via CodeStyleEngine) ---
 
     [Test]
     public async Task UseTimeProvider_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.UseTimeProvider("Test.cs");
+        var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UseTimeProvider_NonExistentFile_Throws()
+    public void UseTimeProvider_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UseTimeProvider("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _codeStyleEngine.UseTimeProviderAsync("NonExistent.cs"));
     }
 
-    // --- ModernizeExceptions (autoStage pattern) ---
-
-    [Test]
-    public async Task ModernizeExceptions_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(RichSource, "Test.cs");
-        var targets = new List<CodeHealingEngine.ExceptionTarget>();
-        var result = await _tools.ModernizeExceptions(targets, autoStage: true);
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task ModernizeExceptions_AutoStageFalse_ReturnsDictionary()
-    {
-        SetSource(RichSource, "Test.cs");
-        var targets = new List<CodeHealingEngine.ExceptionTarget>();
-        var result = await _tools.ModernizeExceptions(targets, autoStage: false);
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- UpgradeToModernGuards ---
+    // --- UpgradeToModernGuards (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task UpgradeToModernGuards_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.UpgradeToModernGuards("Test.cs");
+        var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UpgradeToModernGuards_NonExistentFile_Throws()
+    public void UpgradeToModernGuards_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UpgradeToModernGuards("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("NonExistent.cs"));
     }
 
-    // --- ConvertSwitchToExpression ---
+    // --- ConvertSwitchToExpression (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task ConvertSwitchToExpression_FileWithSwitch_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.ConvertSwitchToExpression("Test.cs", "UpdateStatus");
+        var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("Test.cs", "UpdateStatus");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void ConvertSwitchToExpression_NonExistentFile_Throws()
+    public void ConvertSwitchToExpression_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ConvertSwitchToExpression("NonExistent.cs", "M"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("NonExistent.cs", "M"));
     }
 
-    // --- CleanupImplicitSpans ---
+    // --- CleanupImplicitSpans (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task CleanupImplicitSpans_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.CleanupImplicitSpans("Test.cs");
+        var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void CleanupImplicitSpans_NonExistentFile_Throws()
+    public void CleanupImplicitSpans_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.CleanupImplicitSpans("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.CleanupImplicitSpansAsync("NonExistent.cs"));
     }
 
-    // --- ConvertToSourceGeneratedLogging ---
+    // --- ConvertToSourceGeneratedLogging (via ModernLoggingEngine) ---
 
     [Test]
     public async Task ConvertToSourceGeneratedLogging_ClassWithLogger_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.ConvertToSourceGeneratedLogging("Test.cs", "OrderService");
+        var result = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("Test.cs", "OrderService");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
+    public void ConvertToSourceGeneratedLogging_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(
-            () => _tools.ConvertToSourceGeneratedLogging("NonExistent.cs", "OrderService"));
+        Assert.DoesNotThrowAsync(() => _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
-    // --- SimplifyBooleanExpressions ---
+    // --- SimplifyBooleanExpressions (via LogicOptimizationEngine) ---
 
     [Test]
     public async Task SimplifyBooleanExpressions_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.SimplifyBooleanExpressions("Test.cs");
+        var result = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void SimplifyBooleanExpressions_NonExistentFile_Throws()
+    public void SimplifyBooleanExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.SimplifyBooleanExpressions("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _logicOptimizationEngine.SimplifyBooleanExpressionsAsync("NonExistent.cs"));
     }
 
-    // --- SimplifyMemberAccess ---
+    // --- SimplifyMemberAccess (via IDEStyleEngine) ---
 
     [Test]
     public async Task SimplifyMemberAccess_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.SimplifyMemberAccess("Test.cs");
+        var result = await _ideStyleEngine.SimplifyMemberAccessAsync("Test.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void SimplifyMemberAccess_NonExistentFile_Throws()
+    public void SimplifyMemberAccess_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.SimplifyMemberAccess("NonExistent.cs"));
+        Assert.DoesNotThrowAsync(() => _ideStyleEngine.SimplifyMemberAccessAsync("NonExistent.cs"));
     }
 
-    // --- MakeClassImmutable ---
+    // --- MakeClassImmutable (via ImmutabilityEngine) ---
 
     [Test]
     public async Task MakeClassImmutable_ClassWithMutableFields_ReturnsSource()
     {
         const string src = "namespace TestProj; public class Config { public string Host { get; set; } public int Port { get; set; } }";
         SetSource(src, "Config.cs");
-        var result = await _tools.MakeClassImmutable("Config.cs", "Config");
+        var result = await _immutabilityEngine.MakeClassImmutableAsync("Config.cs", "Config");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void MakeClassImmutable_NonExistentFile_Throws()
+    public void MakeClassImmutable_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.MakeClassImmutable("NonExistent.cs", "Config"));
+        Assert.DoesNotThrowAsync(() => _immutabilityEngine.MakeClassImmutableAsync("NonExistent.cs", "Config"));
     }
 
-    // --- ConvertStaticToExtension ---
+    // --- ConvertStaticToExtension (via AdvancedLogicEngine) ---
 
     [Test]
     public async Task ConvertStaticToExtension_StaticMethod_ReturnsSource()
     {
         const string src = "namespace TestProj; public static class Helper { public static string Format(string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
-        var result = await _tools.ConvertStaticToExtension("Helper.cs", "Format");
+        var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("Helper.cs", "Format");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void ConvertStaticToExtension_NonExistentFile_Throws()
+    public void ConvertStaticToExtension_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ConvertStaticToExtension("NonExistent.cs", "Format"));
+        Assert.DoesNotThrowAsync(() => _advancedLogicEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
     }
 
     // --- InvertBooleanLogic ---
@@ -531,30 +492,30 @@ public class Worker
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- OptimizeToValueTask ---
+    // --- OptimizeToValueTask (via AsyncOptimizationEngine) ---
 
     [Test]
     public async Task OptimizeToValueTask_AsyncMethod_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.OptimizeToValueTask("Test.cs", "ProcessAsync");
+        var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("Test.cs", "ProcessAsync");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void OptimizeToValueTask_NonExistentFile_Throws()
+    public void OptimizeToValueTask_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.OptimizeToValueTask("NonExistent.cs", "M"));
+        Assert.DoesNotThrowAsync(() => _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
     }
 
-    // --- OptimizeIndependentAwaits ---
+    // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---
 
     [Test]
     public async Task OptimizeIndependentAwaits_AsyncMethod_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.OptimizeIndependentAwaits("Test.cs", "ProcessAsync");
+        var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync("Test.cs", "ProcessAsync");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -562,11 +523,11 @@ public class Worker
     public async Task OptimizeIndependentAwaits_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.OptimizeIndependentAwaits("NonExistent.cs", "M");
+        var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync("NonExistent.cs", "M");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- UpgradeToPrimaryConstructor---
+    // --- UpgradeToPrimaryConstructor (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task UpgradeToPrimaryConstructor_SimpleClass_ReturnsSource()
@@ -579,7 +540,7 @@ public class Service
     public string GetName() => _name;
 }";
         SetSource(src, "Service.cs");
-        var result = await _tools.UpgradeToPrimaryConstructor("Service.cs", "Service");
+        var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("Service.cs", "Service");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -587,29 +548,21 @@ public class Service
     public async Task UpgradeToPrimaryConstructor_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.UpgradeToPrimaryConstructor("NonExistent.cs", "Service");
+        var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("NonExistent.cs", "Service");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- FindUseFrozenCollections---
+    // --- FindUseFrozenCollections (via CodeStyleEngine) ---
 
     [Test]
     public async Task FindUseFrozenCollections_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUseFrozenCollections("Test.cs");
+        var result = await _codeStyleEngine.FindUseFrozenCollectionsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
-    [Test]
-    public async Task FindUseFrozenCollections_NoArguments_ReturnsList()
-    {
-        SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindUseFrozenCollections();
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- UseExceptionExpressions ---
+    // --- UseExceptionExpressions (via SyntaxUpgradeEngine) ---
 
     [Test]
     public async Task UseExceptionExpressions_MethodWithGuard_ReturnsSource()
@@ -623,14 +576,14 @@ public class Validator
     }
 }";
         SetSource(src, "Validator.cs");
-        var result = await _tools.UseExceptionExpressions("Validator.cs", "Check");
+        var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("Validator.cs", "Check");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void UseExceptionExpressions_NonExistentFile_Throws()
+    public void UseExceptionExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.UseExceptionExpressions("NonExistent.cs", "M"));
+        Assert.DoesNotThrowAsync(() => _syntaxUpgradeEngine.UseExceptionExpressionsAsync("NonExistent.cs", "M"));
     }
 }

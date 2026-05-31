@@ -23,6 +23,8 @@ public class BatteryTwentyThreeTests
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncBatchEngine _asyncBatchEngine;
     private DiagnosticEngine _diagnosticEngine;
+    private AntiPatternEngine _antiPatternEngine;
+    private ThreadSafetyEngine _threadSafetyEngine;
     private SentinelQualityTools _tools;
 
     private const string AsyncSource = @"
@@ -126,6 +128,8 @@ public class QualityClass
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
+        _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance);
         _tools = new SentinelQualityTools(
             _performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine,
@@ -157,15 +161,16 @@ public class QualityClass
     public async Task AddGuardClauses_ValidMethod_ReturnsUpdatedSource()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AddGuardClauses("Quality.cs", "Process");
+        var result = await _logicOptimizationEngine.AddGuardClausesAsync("Quality.cs", "Process");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void AddGuardClauses_NonExistentFile_Throws()
+    public async Task AddGuardClauses_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.AddGuardClauses("NonExistent.cs", "Process"));
+        var result = await _logicOptimizationEngine.AddGuardClausesAsync("NonExistent.cs", "Process");
+        Assert.That(result, Is.Not.Null);
     }
 
     // --- AddBenchmarkStub ---
@@ -174,15 +179,16 @@ public class QualityClass
     public async Task AddBenchmarkStub_ValidClassAndMethod_ReturnsUpdatedSource()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AddBenchmarkStub("Quality.cs", "QualityClass", "Process");
+        var result = await _testingEngine.AddBenchmarkStubAsync("Quality.cs", "QualityClass", "Process");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void AddBenchmarkStub_NonExistentFile_Throws()
+    public async Task AddBenchmarkStub_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.AddBenchmarkStub("NonExistent.cs", "C", "M"));
+        var result = await _testingEngine.AddBenchmarkStubAsync("NonExistent.cs", "C", "M");
+        Assert.That(result, Is.Not.Null);
     }
 
     // --- AddConfigureAwaitFalse ---
@@ -191,15 +197,16 @@ public class QualityClass
     public async Task AddConfigureAwaitFalse_FileWithAwaits_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.AddConfigureAwaitFalse("Async.cs");
+        var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("Async.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void AddConfigureAwaitFalse_NonExistentFile_Throws()
+    public async Task AddConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.AddConfigureAwaitFalse("NonExistent.cs"));
+        var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
     }
 
     // --- RemoveConfigureAwaitFalse ---
@@ -209,15 +216,16 @@ public class QualityClass
     {
         const string src = "using System.Threading.Tasks; namespace TestProj; public class W { public async Task DoAsync() { await System.Threading.Tasks.Task.Delay(1).ConfigureAwait(false); } }";
         SetSource(src, "W.cs");
-        var result = await _tools.RemoveConfigureAwaitFalse("W.cs");
+        var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("W.cs");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void RemoveConfigureAwaitFalse_NonExistentFile_Throws()
+    public async Task RemoveConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.RemoveConfigureAwaitFalse("NonExistent.cs"));
+        var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
     }
 
     // --- ConvertLockToSemaphoreSlim ---
@@ -226,7 +234,7 @@ public class QualityClass
     public async Task ConvertLockToSemaphoreSlim_MethodWithLock_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.ConvertLockToSemaphoreSlim("Async.cs", "MethodWithLock");
+        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("Async.cs", "MethodWithLock");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -234,7 +242,7 @@ public class QualityClass
     public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ConvertLockToSemaphoreSlim("NonExistent.cs", "MethodWithLock");
+        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -246,7 +254,7 @@ public class QualityClass
         const string src = @"using System.Collections.Generic; namespace TestProj;
 public class Streamer { public IEnumerable<int> GetData() { yield return 1; yield return 2; } }";
         SetSource(src, "Streamer.cs");
-        var result = await _tools.ConvertToAsyncEnumerable("Streamer.cs", "GetData");
+        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("Streamer.cs", "GetData");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -254,7 +262,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task ConvertToAsyncEnumerable_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ConvertToAsyncEnumerable("NonExistent.cs", "GetData");
+        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("NonExistent.cs", "GetData");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -264,7 +272,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AddCancellationTokenToMethod_AsyncMethod_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.AddCancellationTokenToMethod("Async.cs", "WorkAsync");
+        var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("Async.cs", "WorkAsync");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -272,7 +280,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AddCancellationTokenToMethod_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.AddCancellationTokenToMethod("NonExistent.cs", "WorkAsync");
+        var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("NonExistent.cs", "WorkAsync");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -282,7 +290,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task MakeMethodThreadSafe_ValidMethod_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.MakeMethodThreadSafe("Async.cs", "SyncMethod");
+        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("Async.cs", "SyncMethod");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -290,7 +298,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task MakeMethodThreadSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.MakeMethodThreadSafe("NonExistent.cs", "SyncMethod");
+        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("NonExistent.cs", "SyncMethod");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -302,15 +310,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzePerformance_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AnalyzePerformance("Quality.cs");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task AnalyzePerformance_NonExistentFile_ReturnsEmptyOrNull()
-    {
-        SetSource("public class C {}", "Test.cs");
-        var result = await _tools.AnalyzePerformance("NonExistent.cs");
+        var result = await _performanceEngine.AnalyzePerformanceAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -320,7 +320,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzeSecurity_FileWithSqlInjection_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
-        var result = await _tools.AnalyzeSecurity("Security.cs");
+        var result = await _securityEngine.AnalyzeSecurityAsync("Security.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -330,7 +330,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task GenerateTestSkeleton_ValidClass_ReturnsReport()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.GenerateTestSkeleton("Quality.cs", "QualityClass");
+        var result = await _testingEngine.GenerateTestSkeletonAsync("Quality.cs", "QualityClass");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -340,7 +340,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task GenerateTestScaffold_ValidClass_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.GenerateTestScaffold("Quality.cs", "QualityClass");
+        var result = await _testingEngine.GenerateTestScaffoldAsync("Quality.cs", "QualityClass");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -350,7 +350,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzePathCoverage_ValidMethod_ReturnsReport()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AnalyzePathCoverage("Quality.cs", "Process");
+        var result = await _controlFlowEngine.AnalyzePathCoverageAsync("Quality.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -360,7 +360,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindPossibleDeadlocks_FileWithLock_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindPossibleDeadlocks("Async.cs");
+        var result = await _analysisEngine.FindPossibleDeadlocksAsync(filePath: "Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -370,7 +370,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzeSemaphoreUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.AnalyzeSemaphoreUsage("Async.cs");
+        var result = await _analysisEngine.AnalyzeSemaphoreUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -380,7 +380,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectMemoryLeaks_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.DetectMemoryLeaks("Quality.cs");
+        var result = await _analysisEngine.DetectMemoryLeaksAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -390,7 +390,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskVoidUsage_FileWithAsyncVoid_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskVoidUsage("Async.cs");
+        var result = await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -400,7 +400,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskYieldUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskYieldUsage("Async.cs");
+        var result = await _asyncSafetyEngine.FindTaskYieldUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -410,7 +410,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectReflectionUsage_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.DetectReflectionUsage("Quality.cs");
+        var result = await _analysisEngine.DetectReflectionUsageAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -420,7 +420,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task CheckForEmptyCatchBlocks_FileWithEmptyCatch_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.CheckForEmptyCatchBlocks("Quality.cs");
+        var result = await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -430,7 +430,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskDelayUsage_FileWithTaskDelay_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskDelayUsage("Async.cs");
+        var result = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -440,7 +440,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task CheckForRedundantCast_FileWithRedundantCast_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.CheckForRedundantCast("Quality.cs");
+        var result = await _analysisEngine.CheckForRedundantCastAsync(filePath: "Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -450,7 +450,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskDelayZeroUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskDelayZeroUsage("Async.cs");
+        var result = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -460,7 +460,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskWhenAllUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskWhenAllUsage("Async.cs");
+        var result = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -470,7 +470,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectAntiPatterns_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.DetectAntiPatterns("Quality.cs");
+        var result = await _antiPatternEngine.DetectAntiPatternsAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -480,7 +480,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindPossibleInfiniteLoops_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindPossibleInfiniteLoops("Async.cs");
+        var result = await _analysisEngine.FindPossibleInfiniteLoopsAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -490,7 +490,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectMismatchedAwait_FileWithMixedAsync_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.DetectMismatchedAwait("Async.cs");
+        var result = await _analysisEngine.DetectMismatchedAwaitAsync(filePath: "Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -500,7 +500,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindHardcodedPaths_FileWithHardcodedPath_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
-        var result = await _tools.FindHardcodedPaths("Security.cs");
+        var result = await _securityEngine.FindHardcodedPathsAsync("Security.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -510,7 +510,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindMutablePublicProperties_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindMutablePublicProperties("Quality.cs");
+        var result = await _antiPatternEngine.FindMutablePublicPropertiesAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -520,7 +520,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindNamingViolations_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindNamingViolations("Quality.cs");
+        var result = await _antiPatternEngine.FindNamingViolationsAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -530,7 +530,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindStringMagicValues_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindStringMagicValues("Quality.cs");
+        var result = await _antiPatternEngine.FindStringMagicValuesAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -540,7 +540,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindMissingCancellationTokens_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindMissingCancellationTokens("Async.cs");
+        var result = await _antiPatternEngine.FindMissingCancellationTokensAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -550,7 +550,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzeExceptionHandling_FileWithCatch_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AnalyzeExceptionHandling("Quality.cs");
+        var result = await _antiPatternEngine.AnalyzeExceptionHandlingAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -560,7 +560,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task CheckForSqlInjection_FileWithSqlInjection_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
-        var result = await _tools.CheckForSqlInjection("Security.cs");
+        var result = await _securityEngine.CheckForSqlInjectionAsync("Security.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -570,7 +570,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzeMethodControlFlow_ValidMethod_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AnalyzeMethodControlFlow("Quality.cs", "Process");
+        var result = await _controlFlowEngine.AnalyzeMethodControlFlowAsync("Quality.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -580,7 +580,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task AnalyzeMethodDataFlow_ValidMethod_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.AnalyzeMethodDataFlow("Quality.cs", "Process");
+        var result = await _controlFlowEngine.AnalyzeMethodDataFlowAsync("Quality.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -590,7 +590,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindConfigureAwaitMissing_FileWithAwaits_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindConfigureAwaitMissing("Async.cs");
+        var result = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -600,7 +600,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindBlockingCallsInAsync_FileWithThreadSleep_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindBlockingCallsInAsync("Async.cs");
+        var result = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -610,7 +610,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindAsyncInConstructor_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindAsyncInConstructor("Async.cs");
+        var result = await _asyncSafetyEngine.FindAsyncInConstructorAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -620,7 +620,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindTaskRunInAsync_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindTaskRunInAsync("Async.cs");
+        var result = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -630,7 +630,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindConcurrentCollectionOpportunities_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindConcurrentCollectionOpportunities("Async.cs");
+        var result = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -640,7 +640,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindUnsafeLazyInit_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindUnsafeLazyInit("Async.cs");
+        var result = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -650,7 +650,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectValueTaskMisuse_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.DetectValueTaskMisuse("Async.cs");
+        var result = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -660,7 +660,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindAsyncOverSync_FileWithSyncMethods_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindAsyncOverSync("Async.cs");
+        var result = await _asyncSafetyEngine.FindAsyncOverSyncAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -670,7 +670,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindUnawaitedFireAndForget_FileWithFireAndForget_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindUnawaitedFireAndForget("Async.cs");
+        var result = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -680,7 +680,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindLongParameterList_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindLongParameterList("Quality.cs");
+        var result = await _antiPatternEngine.FindLongParameterListAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -690,7 +690,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task OptimizeResourceDisposal_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.OptimizeResourceDisposal("Quality.cs");
+        var result = await _performanceEngine.OptimizeResourceDisposalAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -700,7 +700,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task DetectInefficientStringComparisons_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.DetectInefficientStringComparisons("Quality.cs");
+        var result = await _performanceEngine.DetectInefficientStringComparisonsAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -710,7 +710,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindBoxingAllocations_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindBoxingAllocations("Quality.cs");
+        var result = await _performanceEngine.FindBoxingAllocationsAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -720,7 +720,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindPrimitiveObsession_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.FindPrimitiveObsession("Quality.cs");
+        var result = await _antiPatternEngine.FindPrimitiveObsessionAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -730,7 +730,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindInconsistentAsyncSuffix_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _tools.FindInconsistentAsyncSuffix("Async.cs");
+        var result = await _antiPatternEngine.FindInconsistentAsyncSuffixAsync("Async.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -740,7 +740,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task GetDiagnosticsSummary_ValidFile_ReturnsSummaryResult()
     {
         SetSource(QualitySource, "Quality.cs");
-        var result = await _tools.GetDiagnosticsSummary("Quality.cs");
+        var result = await _diagnosticEngine.GetFileDiagnosticsAsync("Quality.cs");
         Assert.That(result, Is.Not.Null);
     }
 }

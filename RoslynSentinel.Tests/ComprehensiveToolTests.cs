@@ -126,7 +126,7 @@ public class ComprehensiveToolTests
 
         _workspaceTools = new SentinelWorkspaceTools(_workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine, _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance);
         _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine, _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager), new CloneDetectionEngine(_workspaceManager), _config, NullLogger<SentinelIntelligenceTools>.Instance);
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine, _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine, _advancedLogicEngine, _refinementEngine, _advancedTypeEngine, _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine, _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine, new OutParamRefactoringEngine(_workspaceManager), _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
+        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine, _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine, _advancedLogicEngine, _refinementEngine, _advancedTypeEngine, _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine, _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine, new OutParamRefactoringEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), new CodeGenerationEngine(_workspaceManager), new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
 
         _modernizationTools = new SentinelModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<SentinelModernizationTools>.Instance);
         _qualityTools = new SentinelQualityTools(_performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine, _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine, new AntiPatternEngine(_workspaceManager), _asyncOptimizationEngine, new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new PathDrivenTestEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), _asyncBatchEngine, _workspaceManager, NullLogger<SentinelQualityTools>.Instance);
@@ -165,7 +165,7 @@ public class ComprehensiveToolTests
     {
         var source = "public class C { public void M() {} }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var report = await _intelligenceTools.GetBlastRadius("C.cs", "public void M()");
+        var report = await _impactAnalyzer.AnalyzeImpactAsync("C.cs", "public void M()");
         Assert.That(report, Is.Not.Null);
     }
 
@@ -182,7 +182,7 @@ public class ComprehensiveToolTests
     {
         var source = "public class C { public int Id { get; init; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var result = await _modernizationTools.ClassToRecord("C.cs", "C");
+        var result = await _modernizationEngine.ClassToRecordAsync("C.cs", "C");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -191,7 +191,7 @@ public class ComprehensiveToolTests
     {
         var source = "public class C { void M() { object o = 1; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
-        var results = await _qualityTools.FindBoxingAllocations("C.cs");
+        var results = await _performanceEngine.FindBoxingAllocationsAsync("C.cs");
         Assert.That(results, Is.Not.Null);
     }
 
@@ -199,7 +199,7 @@ public class ComprehensiveToolTests
     public async Task Comprehensive_DeadCode_Analysis()
     {
         SetSource("public class C { private int _unused; }", "C.cs");
-        var deadCode = await _intelligenceTools.DetectUnusedPrivateFields("C.cs");
+        var deadCode = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("C.cs");
         Assert.That(deadCode, Is.Not.Null);
     }
 

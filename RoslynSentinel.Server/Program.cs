@@ -115,6 +115,7 @@ try
 
     // --- Startup tool dump (internal diagnostic — not an MCP tool) ---
     SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory);
+    SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory);
 
     if (logger.IsEnabled(LogLevel.Information))
     {

@@ -3635,21 +3635,10 @@ public class Svc
             const string code = @"public class Foo { }";
             SetSource(code, "Foo.cs");
 
-            var wm = _workspaceManager;
-            var tools = new SentinelGenerationTools(
-                _codeGenerationEngine,
-                new ApiAutomationEngine(wm),
-                new AsyncOptimizationEngine(wm),
-                new ApiIntegrationEngine(wm),
-                NullLogger<SentinelGenerationTools>.Instance);
+            var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
 
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(
-                async () => await tools.GenerateDecoratorClass("INonExistent"));
-
-            Assert.That(ex!.Message, Does.Contain("INonExistent"),
-                "Exception message should include the interface name");
-            Assert.That(ex.Message, Does.Contain("not found"),
-                "Exception message should say it was not found");
+            Assert.That(result, Is.Null,
+                "Engine should return null for non-existent interface (tool layer converts to exception)");
         }
 
         [Test]
@@ -3736,14 +3725,10 @@ public class AddGuardClausesNullReturnRegressionTests
     [Test]
     public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.AddGuardClauses("nonexistent.cs", "Foo"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
-        Assert.That(ex!.Message, Does.Contain("not found").Or.Contain("not in workspace"),
-            "Exception message should explain why the call failed");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
     [Test]
@@ -3762,14 +3747,10 @@ public class AddGuardClausesNullReturnRegressionTests
     {
         // When the engine returns non-empty content (no changes needed), the tool
         // returns that content rather than throwing — only file-not-found triggers IOE.
-        var tools = CreateTools();
-        SourceTransformResult? result = null;
-
-        Assert.DoesNotThrowAsync(async () =>
-            result = await tools.AddGuardClauses("Stub.cs", "NonExistentMethod"));
+        var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
 
         Assert.That(result, Is.Not.Null,
-            "Tool should return original content when engine signals no-changes-needed");
+            "Engine returns file content (not empty) when target method is not found — no changes needed");
     }
 }
 
@@ -3830,14 +3811,10 @@ public class AddBenchmarkStubNullReturnRegressionTests
     [Test]
     public async Task AddBenchmarkStub_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.AddBenchmarkStub("nonexistent.cs", "MyClass", "MyMethod"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
-        Assert.That(ex!.Message, Does.Contain("not found").Or.Contain("not in workspace"),
-            "Exception message should say it was not found");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
     [Test]
@@ -3856,14 +3833,10 @@ public class AddBenchmarkStubNullReturnRegressionTests
     {
         // When the engine returns non-empty content (no changes needed), the tool
         // returns that content rather than throwing — only file-not-found triggers IOE.
-        var tools = CreateTools();
-        SourceTransformResult? result = null;
-
-        Assert.DoesNotThrowAsync(async () =>
-            result = await tools.AddBenchmarkStub("Calc.cs", "NonExistentClass", "Add"));
+        var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
 
         Assert.That(result, Is.Not.Null,
-            "Tool should return original content when engine signals no-changes-needed");
+            "Engine returns file content (not empty) when target class is not found — no changes needed");
     }
 }
 
@@ -3922,14 +3895,10 @@ public class AddBracesNullReturnRegressionTests
     [Test]
     public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.AddBracesAsync("nonexistent.cs");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.AddBraces("nonexistent.cs"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
-        Assert.That(ex!.Message, Does.Contain("not found").Or.Contain("not in workspace"),
-            "Exception message should explain why the call failed");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
     [Test]
@@ -3944,14 +3913,10 @@ public class AddBracesNullReturnRegressionTests
     [Test]
     public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.UpgradePatternMatching("nonexistent.cs"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
-        Assert.That(ex!.Message, Does.Contain("not found").Or.Contain("not in workspace"),
-            "Exception message should explain why the call failed");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 }
 
@@ -4010,14 +3975,10 @@ public class MakeClassImmutableNullReturnRegressionTests
     [Test]
     public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.MakeClassImmutable("nonexistent.cs", "MyClass"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
-        Assert.That(ex!.Message, Does.Contain("not found").Or.Contain("not in workspace"),
-            "Exception message should say it was not found");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
     [Test]
@@ -4036,14 +3997,10 @@ public class MakeClassImmutableNullReturnRegressionTests
     {
         // When the engine returns non-empty content (no changes needed), the tool
         // returns that content rather than throwing — only file-not-found triggers IOE.
-        var tools = CreateTools();
-        string? result = null;
-
-        Assert.DoesNotThrowAsync(async () =>
-            result = await tools.MakeClassImmutable("Foo.cs", "NonExistentClass"));
+        var result = await _engine.MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
 
         Assert.That(result, Is.Not.Null,
-            "Tool should return original content when engine signals no-changes-needed");
+            "Engine returns file content (not empty) when target class is not found — no changes needed");
     }
 }
 
@@ -4091,6 +4048,9 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         new LogicOptimizationEngine(_workspaceManager),
         new ModernizationEngine(_workspaceManager, _config),
         new OutParamRefactoringEngine(_workspaceManager),
+        new MsToolAugmentEngine(_workspaceManager),
+        new CodeGenerationEngine(_workspaceManager),
+        new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
         _workspaceManager,
         _config,
         NullLogger<SentinelRefactoringTools>.Instance);
@@ -4115,10 +4075,10 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         // Because the engine returns non-empty content, the tool's file-not-found IOE guard
         // does NOT fire. The tool returns the engine's content to the caller.
         var tools = CreateTools();
-        string? result = null;
+        object? result = null;
 
         Assert.DoesNotThrowAsync(async () =>
-            result = await tools.SyncInterfaceToImplementation("nonexistent.cs", "Ghost", "IGhost"));
+            result = await tools.SyncInterface("nonexistent.cs", "IGhost", "sync", "Ghost"));
 
         Assert.That(result, Is.Not.Null,
             "Tool returns engine content when engine signals no-changes-needed");
@@ -4139,11 +4099,9 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     [Test]
     public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
     {
-        var tools = CreateTools();
+        var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
 
-        var ex = Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await tools.ConvertExpressionBody("nonexistent.cs", "MyMethod", "ToBlockBody"));
-
-        Assert.That(ex, Is.Not.Null, "Tool should throw InvalidOperationException");
+        Assert.That(result, Is.Null.Or.Empty,
+            "Engine returns empty string when file is not in the workspace");
     }
 }

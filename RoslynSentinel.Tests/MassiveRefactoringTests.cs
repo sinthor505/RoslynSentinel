@@ -19,7 +19,7 @@ public class MassiveRefactoringTests
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
-        
+
         var sr = new StructuralRefinementEngine(_workspaceManager);
         var standard = new StandardRefactoringEngine(_workspaceManager);
         var advStruct = new AdvancedStructuralEngine(_workspaceManager);
@@ -34,8 +34,8 @@ public class MassiveRefactoringTests
         var advRefactoring = new AdvancedRefactoringEngine(_workspaceManager);
         var logicOpt = new LogicOptimizationEngine(_workspaceManager);
         var modernization = new ModernizationEngine(_workspaceManager, config);
-        
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, logicOpt, modernization, new OutParamRefactoringEngine(_workspaceManager), _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
+
+        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, logicOpt, modernization, new OutParamRefactoringEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), new CodeGenerationEngine(_workspaceManager), new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
     }
 
     [TearDown]
@@ -56,7 +56,7 @@ public class MassiveRefactoringTests
     public async Task ExtractInterface_ShouldCreateInterface(int id)
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = (Dictionary<string, string>)await _refactoringTools.ExtractInterface($"C{id}.cs", $"C{id}", $"IC{id}", autoStage: false);
+        var result = (Dictionary<string, string>)await _refactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
         Assert.That(result.Count, Is.GreaterThan(0));
     }
 
@@ -85,7 +85,7 @@ public class MassiveRefactoringTests
     public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = (Dictionary<string, string>)await _refactoringTools.MoveTypeToFile($"C{id}.cs", $"D{id}", autoStage: false);
+        var result = (Dictionary<string, string>)await _refactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
         Assert.That(result.Count, Is.GreaterThan(1));
     }
 }

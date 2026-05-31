@@ -63,6 +63,9 @@ public class BatteryThirtyOneTests
             _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine,
             _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine,
             new OutParamRefactoringEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
     }
 
@@ -257,7 +260,7 @@ public class Service
     public string Name { get; set; }
 }";
         SetSource(src, "Service.cs");
-        var result = await _tools.ExtractClass("Service.cs", "Service", "Validator", ["Process", "Validate"]);
+        var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
 
         Assert.That(result, Does.ContainKey("Service.cs"), "Updated source should be in result");
         var updatedSource = result["Service.cs"];
@@ -275,7 +278,7 @@ public class Service
             ("Service.cs", "namespace App; public class Service { public void Process() {} public void Validate() {} public string Name { get; set; } }"),
             ("Client.cs", "namespace App; public class Client { public void Run(Service s) { s.Process(); s.Validate(); } }"));
 
-        var result = await _tools.ExtractClass("Service.cs", "Service", "Validator", ["Process", "Validate"]);
+        var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
 
         Assert.That(result, Does.ContainKey("Client.cs"), "Client file should be updated with new call sites");
         var clientContent = result["Client.cs"];
@@ -292,7 +295,7 @@ public class Service
     {
         const string src = "public class MyClass { public int Compute(int x) => x * 2; }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "NoSuchMethod");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod");
 
         // Regression: was silently returning original content with no indication of failure
         Assert.That(result, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
@@ -304,7 +307,7 @@ public class Service
     {
         const string src = "public class MyClass { public int GetValue() => 42; }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "GetValue");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
 
         Assert.That(result, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
         Assert.That(result, Does.Contain("GetValue"), "Error should name the method");
@@ -315,7 +318,7 @@ public class Service
     {
         const string src = "public class MyClass { public int Get(int row, int col) => row + col; }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
         Assert.That(result, Does.Contain("Get"), "Error should name the method");
@@ -326,7 +329,7 @@ public class Service
     {
         const string src = "public class MyClass { public static int Get(int i) => i; }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
         Assert.That(result, Does.Contain("static"), "Error should mention static");
@@ -337,7 +340,7 @@ public class Service
     {
         const string src = "public abstract class Base { public abstract int Get(int i); }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
     }
@@ -351,7 +354,7 @@ public class MyList {
     public int Get(int i) { return _data[i]; }
 }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
         Assert.That(result, Does.Contain("this[int i]"), "Should produce indexer syntax");
@@ -367,7 +370,7 @@ public class MyList {
     public int Get(int index) => _data[index];
 }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
         Assert.That(result, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
         Assert.That(result, Does.Contain("this[int index]"), "Should produce indexer");
@@ -377,7 +380,7 @@ public class MyList {
     public async Task ConvertMethodToIndexer_UnknownFile_ReturnsEmpty()
     {
         SetSource("public class X {}", "Known.cs");
-        var result = await _tools.ConvertMethodToIndexer("unknown_file.cs", "Get");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
 
         Assert.That(result, Is.Empty, "File not found should return empty string");
     }
@@ -391,7 +394,7 @@ public class Lookup {
     public string Item(int n) => _items[n];
 }";
         SetSource(src, "Lookup.cs");
-        var result = await _tools.ConvertMethodToIndexer("Lookup.cs", "Item");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("Lookup.cs", "Item");
 
         Assert.That(result, Does.Contain("string"), "Indexer should preserve string return type");
         Assert.That(result, Does.Contain("this[int n]"), "Indexer should use original parameter name");
@@ -403,7 +406,7 @@ public class Lookup {
         // When an error is returned, the original content should still be present after the comment
         const string src = "public class C { public int Compute(int x) => x; }";
         SetSource(src, "C.cs");
-        var result = await _tools.ConvertMethodToIndexer("C.cs", "NotAMethod");
+        var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod");
 
         Assert.That(result, Does.Contain("class C"), "Original source should be included after error comment");
         Assert.That(result, Does.Contain("Compute"), "Original method should still be present");

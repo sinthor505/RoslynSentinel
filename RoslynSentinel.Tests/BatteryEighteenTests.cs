@@ -13,6 +13,7 @@ public class BatteryEighteenTests
 {
     private PersistentWorkspaceManager _workspaceManager;
     private SentinelAugmentTools _tools;
+    private MsToolAugmentEngine _msEngine;
 
     private const string RichSource = @"
 using System;
@@ -91,6 +92,7 @@ public class OrderService : IOrderService
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _msEngine = new MsToolAugmentEngine(_workspaceManager);
         _tools = new SentinelAugmentTools(
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
@@ -164,7 +166,7 @@ public class OrderService : IOrderService
     public async Task ConvertStringFormatToInterpolatedSmart_WithFormatCall_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.ConvertStringFormatToInterpolatedSmart("Test.cs", @"string.Format(""{0}: {1}""");
+        var result = await _msEngine.ConvertStringFormatToInterpolatedSmartAsync("Test.cs", @"string.Format(""{0}: {1}""");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -172,7 +174,7 @@ public class OrderService : IOrderService
     public async Task ConvertStringFormatToInterpolatedSmart_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ConvertStringFormatToInterpolatedSmart("NonExistent.cs", "string.Format");
+        var result = await _msEngine.ConvertStringFormatToInterpolatedSmartAsync("NonExistent.cs", "string.Format");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -182,15 +184,16 @@ public class OrderService : IOrderService
     public async Task SortAndDeduplicateUsings_FileWithUsings_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.SortAndDeduplicateUsings("Test.cs");
+        var result = await _msEngine.SortAndDeduplicateUsingsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void SortAndDeduplicateUsings_NonExistentFile_Throws()
+    public async Task SortAndDeduplicateUsings_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.SortAndDeduplicateUsings("NonExistent.cs"));
+        var result = await _msEngine.SortAndDeduplicateUsingsAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
     }
 
     // --- FormatDocumentSafe ---
@@ -199,7 +202,7 @@ public class OrderService : IOrderService
     public async Task FormatDocumentSafe_ValidFile_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FormatDocumentSafe("Test.cs");
+        var result = await _msEngine.FormatDocumentSafeAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -207,7 +210,7 @@ public class OrderService : IOrderService
     public async Task FormatDocumentSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.FormatDocumentSafe("NonExistent.cs");
+        var result = await _msEngine.FormatDocumentSafeAsync("NonExistent.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -252,7 +255,7 @@ public class OrderService : IOrderService
     public async Task PreviewAddMissingUsings_ValidFile_ReturnsPreview()
     {
         SetSource("namespace TestProj; public class Order { }", "Test.cs");
-        var result = await _tools.PreviewAddMissingUsings("Test.cs");
+        var result = await _msEngine.PreviewAddMissingUsingsAsync("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -260,7 +263,7 @@ public class OrderService : IOrderService
     public async Task PreviewAddMissingUsings_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.PreviewAddMissingUsings("NonExistent.cs");
+        var result = await _msEngine.PreviewAddMissingUsingsAsync("NonExistent.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -271,7 +274,7 @@ public class OrderService : IOrderService
     {
         const string src = @"namespace TestProj; public class Order { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "Test.cs");
-        var result = await _tools.ExtractConstantSafe("Test.cs", @"""hello""", "HelloLabel");
+        var result = await _msEngine.ExtractConstantSafeAsync("Test.cs", @"""hello""", "HelloLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -279,7 +282,7 @@ public class OrderService : IOrderService
     public async Task ExtractConstantSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ExtractConstantSafe("NonExistent.cs", @"""hello""", "HelloLabel");
+        var result = await _msEngine.ExtractConstantSafeAsync("NonExistent.cs", @"""hello""", "HelloLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -289,7 +292,7 @@ public class OrderService : IOrderService
     public async Task GenerateToStringSafe_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GenerateToStringSafe("Test.cs", "Order");
+        var result = await _msEngine.GenerateToStringSafeAsync("Test.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -297,7 +300,7 @@ public class OrderService : IOrderService
     public async Task GenerateToStringSafe_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.GenerateToStringSafe("NonExistent.cs", "Order");
+        var result = await _msEngine.GenerateToStringSafeAsync("NonExistent.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 

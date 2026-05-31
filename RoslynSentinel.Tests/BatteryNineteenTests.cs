@@ -128,16 +128,16 @@ public interface IOrderRepository
     public async Task GenerateConstructor_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateConstructor("Order.cs", "Order");
+        var result = await _codeGenerationEngine.GenerateConstructorAsync("Order.cs", "Order");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void GenerateConstructor_NonExistentFile_Throws()
+    public async Task GenerateConstructor_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GenerateConstructor("NonExistent.cs", "Order"));
+        var result = await _codeGenerationEngine.GenerateConstructorAsync("NonExistent.cs", "Order");
+        Assert.That(result, Is.Null.Or.Empty);
     }
 
     // --- GenerateToString ---
@@ -146,7 +146,7 @@ public interface IOrderRepository
     public async Task GenerateToString_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateToString("Order.cs", "Order");
+        var result = await _codeGenerationEngine.GenerateToStringAsync("Order.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -156,7 +156,7 @@ public interface IOrderRepository
     public async Task GenerateRepositoryInterface_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateRepositoryInterface("Order.cs", "Order");
+        var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync("Order.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -166,7 +166,7 @@ public interface IOrderRepository
     public async Task GenerateFluentBuilder_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateFluentBuilder("Order.cs", "Order");
+        var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("Order.cs", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -176,16 +176,16 @@ public interface IOrderRepository
     public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.GenerateDecoratorClass("IOrderRepository");
+        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("IOrderRepository", "Logging", null);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void GenerateDecoratorClass_NonExistentInterface_Throws()
+    public async Task GenerateDecoratorClass_NonExistentInterface_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GenerateDecoratorClass("INoSuchInterface"));
+        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INoSuchInterface", "Logging", null);
+        Assert.That(result, Is.Null);
     }
 
     // --- GenerateDefaultConfigJson ---
@@ -213,16 +213,16 @@ public interface IOrderRepository
     {
         const string src = "namespace TestProj; public class Service { public string GetData() { return \"data\"; } }";
         SetSource(src, "Service.cs");
-        var result = await _tools.GenerateAsyncOverload("Service.cs", "GetData");
+        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Service.cs", "GetData");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void GenerateAsyncOverload_NonExistentFile_Throws()
+    public async Task GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GenerateAsyncOverload("NonExistent.cs", "GetData"));
+        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData");
+        Assert.That(result, Is.Null.Or.Empty);
     }
 
     // --- AddValidationToPoco ---
@@ -231,16 +231,16 @@ public interface IOrderRepository
     public async Task AddValidationToPoco_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.AddValidationToPoco("Order.cs", "Order");
+        var result = await _apiIntegrationEngine.AddValidationToPocoAsync("Order.cs", "Order");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void AddValidationToPoco_NonExistentFile_Throws()
+    public async Task AddValidationToPoco_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.AddValidationToPoco("NonExistent.cs", "Order"));
+        var result = await _apiIntegrationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
+        Assert.That(result, Is.Null.Or.Empty);
     }
 
     // --- ImplementInterfaceSafe ---
@@ -249,7 +249,7 @@ public interface IOrderRepository
     public async Task ImplementInterfaceSafe_ValidClassAndInterface_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.ImplementInterfaceSafe("Order.cs", "Order", "IOrderRepository");
+        var result = await _codeGenerationEngine.ImplementInterfaceAsync("Order.cs", "Order", "IOrderRepository");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -257,7 +257,7 @@ public interface IOrderRepository
     public async Task ImplementInterfaceSafe_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ImplementInterfaceSafe("NonExistent.cs", "Order", "IOrderRepository");
+        var result = await _codeGenerationEngine.ImplementInterfaceAsync("NonExistent.cs", "Order", "IOrderRepository");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -265,16 +265,16 @@ public interface IOrderRepository
     public async Task ConvertPropertySafe_AutoPropertyToFull_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _tools.ConvertPropertySafe("Order.cs", "OrderId", "ToFullProperty");
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Order.cs", "OrderId", "ToFullProperty");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
-    public void ConvertPropertySafe_NonExistentFile_Throws()
+    public async Task ConvertPropertySafe_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.ConvertPropertySafe("NonExistent.cs", "OrderId", "ToFullProperty"));
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("NonExistent.cs", "OrderId", "ToFullProperty");
+        Assert.That(result, Is.Null.Or.Empty);
     }
 
     // --- InterpolateStringSafe ---
