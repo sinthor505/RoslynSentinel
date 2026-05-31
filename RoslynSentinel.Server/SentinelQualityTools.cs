@@ -587,6 +587,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use add_cancellation_token (BatchTargetInput) for new code.
+        Single-method form retained for backward compatibility.
+
         Adds 'CancellationToken cancellationToken = default' as the last parameter to a method
         and propagates it to async callees in the method body that have a CancellationToken
         overload. Also adds cancellationToken to Task.Delay() calls.
@@ -617,6 +620,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use convert_to_async_bridge (BatchTargetInput) for new code.
+        Single-method form retained for backward compatibility.
+
         Converts a synchronous method to the Asyncify-bridge pattern in one atomic step.
 
         Three things happen:
@@ -644,7 +650,7 @@ public class SentinelQualityTools
         end with 'Async'; must not be abstract; must not be an event handler; must not have
         ref/out parameters; '<methodName>Async' must not already exist in the class.
         """)]
-    public async Task<CancellationTokenResult> ConvertToAsyncBridge(
+    public async Task<CancellationTokenResult> ConvertToAsyncBridgeSingle(
         string filePath,
         string methodName,
         bool autoStage = true)
@@ -681,6 +687,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use flag_migration_candidates (FlagCandidatesInput, scope="targets") for new code.
+        Single-method form retained for backward compatibility.
+
         Adds a [MigrationCandidate("pattern")] attribute to a method, marking it for a future
         async migration refactoring pass. The attribute is source-injected — no new project
         references are required.
@@ -790,6 +799,8 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use flag_migration_candidates (FlagCandidatesInput, scope="targets") for new code.
+
         Flags multiple methods with [MigrationCandidate] attributes in a single call. Groups
         rewrites by file so each source file is read once and written once — avoids line-number
         drift that occurs when sequential single-method calls modify the same file.
@@ -896,6 +907,8 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use flag_migration_candidates (FlagCandidatesInput, scope="project") for new code.
+
         Autonomously scans every method in a project (or the whole solution), scores each
         against the specified migration pattern, and stamps qualifying methods with
         [MigrationCandidate("pattern")] — all in a single call. No agent iteration over
@@ -1366,6 +1379,8 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use add_cancellation_token (BatchTargetInput) for new code.
+
         Adds 'CancellationToken cancellationToken = default' to all eligible async methods in a
         file in a single Roslyn rewrite pass, then writes the result to disk and updates the
         in-memory workspace.
@@ -1425,6 +1440,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use convert_to_async_bridge (BatchTargetInput) for explicit targets.
+        run_bridge_batch's auto-discovery of [MigrationCandidate] candidates is not yet absorbed.
+
         Converts a batch of methods flagged with [MigrationCandidate("AsyncBridgeCandidate")] to
         the Asyncify-bridge pattern in a single call, using in-memory Roslyn compilation for
         validation (no MSBuild round-trips). For each candidate:
@@ -1462,6 +1480,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use run_uplift (RunUpliftInput) for new code.
+        Single-method-name form retained for backward compatibility.
+
         Uplifts callers of an Asyncify-bridge sync wrapper to use the async overload directly.
         Uses in-memory Roslyn compilation for validation — no MSBuild required.
         For each caller of the named bridged method:
@@ -1499,6 +1520,8 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use run_uplift (RunUpliftInput) for new code.
+
         Runs run_uplift_batch for each bridged method in the provided list, collecting
         per-method and aggregate results. Processes all targets sequentially; a failure on
         one method does not block the others.
@@ -1525,6 +1548,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use propagate_cancellation_token (BatchTargetInput) for new code.
+        Single-method form retained for backward compatibility.
+
         Propagates an existing CancellationToken parameter from a method to all eligible
         async callees within its body. The target method must already have a CancellationToken
         parameter. For each call to an async method that has a CancellationToken overload but
@@ -1575,6 +1601,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use propagate_cancellation_token (BatchTargetInput) for new code.
+        File-level form retained for backward compatibility.
+
         Propagates CancellationToken parameters to all eligible call sites across all methods
         in a file. For each method that has a CancellationToken parameter, applies the same
         logic as propagate_cancellation_token_in_method. Methods without a CT parameter are
@@ -1616,6 +1645,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
+        Deprecated: use propagate_cancellation_token (BatchTargetInput) for new code.
+        Old batch form retained for backward compatibility.
+
         Batch propagation of CancellationToken across multiple files. Accepts a list of file
         paths with optional per-file method filters. Processes each file independently,
         validating each in-memory before writing. Failed files do not block successful ones.
@@ -1669,5 +1701,670 @@ public class SentinelQualityTools
                 $"FindNamespacePathMismatches failed: {ex.GetType().Name}: {ex.Message}", ex);
         }
     }
-}
 
+    // ── Phase 4 — Batch-first mutation tools ──────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        Batch-first CancellationToken propagation across multiple files. Supersedes
+        propagate_cancellation_token_in_method, propagate_cancellation_token_in_file, and
+        propagate_cancellation_token_batch. Checks the circuit breaker before executing;
+        records batch outcome; writes a forensic blob.
+
+        input.Targets  — list of { FilePath, MethodNames? }. null MethodNames = all eligible methods.
+        input.DryRun   — when true, computes without writing files.
+        input.MaxItems — max files to process (default 100).
+
+        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-file details.
+        Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<BatchResultSummary> PropagateCancellationToken(
+        BatchTargetInput  input,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        var batchInput = new PropagateCtBatchInput
+        {
+            Targets = input.Targets.Select(t => new PropagateCtFileTarget
+            {
+                FilePath    = t.FilePath,
+                MethodNames = t.MethodNames,
+            }).ToList(),
+            DryRun       = input.DryRun,
+            MaxFiles     = input.MaxItems,
+            FlagFailures = true,
+        };
+
+        PropagateCtBatchResult result;
+        try
+        {
+            result = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(batchInput, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PropagateCancellationToken batch unexpected exception");
+            throw new InvalidOperationException(
+                $"PropagateCancellationToken failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        int succeeded = result.Applied.Count;
+        int failed    = result.Failed.Count;
+        int skipped   = result.RemainingFiles;
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var items    = new List<OperationItemRecord>();
+        foreach (var a in result.Applied)
+        {
+            items.Add(new OperationItemRecord
+            {
+                FilePath = a.FilePath,
+                Outcome  = a.TotalForwarded > 0 ? "succeeded" : "skipped",
+                Reason   = a.TotalForwarded == 0 ? "no eligible call sites" : null,
+            });
+        }
+        foreach (var f in result.Failed)
+        {
+            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = "failed", Reason = f.Reason });
+        }
+
+        var blobName  = await OperationBlobWriter.WriteAsync(
+            "propagate_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status    = _workspaceManager.GetBreakerStatus();
+        var failures  = result.Failed
+            .Take(15)
+            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = "failed" })
+            .ToList();
+
+        return new BatchResultSummary
+        {
+            ChangeId    = changeId,
+            BlobName    = blobName,
+            Succeeded   = succeeded,
+            Failed      = failed,
+            Skipped     = skipped,
+            RolledBack  = 0,
+            Attempted   = succeeded + failed + skipped,
+            Failures    = failures,
+            Severity    = status.Severity,
+            Directive   = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
+    [McpServerTool]
+    [Description("""
+        Batch-first Asyncify-bridge conversion. Supersedes the single-method
+        convert_to_async_bridge_single. Applies the bridge transform to each named method
+        across the provided targets. Checks the circuit breaker; records outcome; writes a forensic blob.
+
+        input.Targets  — list of { FilePath, MethodNames } — MethodNames must be specified.
+        input.DryRun   — when true, validates without writing files.
+        input.MaxItems — max (file×method) items to process (default 100).
+        propagateCancellationTokens — when true (default), propagates CT in the new async overload.
+
+        Each method is applied sequentially and written to disk immediately so that later
+        methods in the same file see the updated source. Errors on one method do not abort others.
+        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-method details.
+        """)]
+    public async Task<BatchResultSummary> ConvertToAsyncBridge(
+        BatchTargetInput  input,
+        bool              propagateCancellationTokens = true,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        int succeeded = 0;
+        int failed    = 0;
+        int processed = 0;
+        var items     = new List<OperationItemRecord>();
+        var failures  = new List<FailureDetail>();
+
+        foreach (var target in input.Targets)
+        {
+            if (target.MethodNames == null || target.MethodNames.Length == 0)
+            {
+                var fd = new FailureDetail
+                {
+                    FilePath = target.FilePath,
+                    Reason   = "MethodNames must be specified for convert_to_async_bridge",
+                    Outcome  = "failed",
+                };
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = fd.Reason });
+                if (failures.Count < 15) { failures.Add(fd); }
+                failed++;
+                continue;
+            }
+
+            foreach (var methodName in target.MethodNames)
+            {
+                if (processed >= input.MaxItems)
+                {
+                    break;
+                }
+
+                processed++;
+
+                if (input.DryRun)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = target.FilePath,
+                        MethodName = methodName,
+                        Outcome    = "skipped",
+                        Reason     = "dry_run",
+                    });
+                    succeeded++;
+                    continue;
+                }
+
+                try
+                {
+                    var updatedSource = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                        target.FilePath, methodName);
+
+                    if (propagateCancellationTokens)
+                    {
+                        var asyncMethod = methodName + "Async";
+                        var (propagated, _) = await _asyncOptimizationEngine
+                            .PropagateCancellationTokenInMethodAsync(target.FilePath, asyncMethod, cancellationToken);
+                        if (!string.IsNullOrEmpty(propagated))
+                        {
+                            updatedSource = propagated;
+                        }
+                    }
+
+                    await _workspaceManager.ApplyProposedChangesAsync(
+                        new Dictionary<string, string> { { target.FilePath, updatedSource } });
+
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = target.FilePath,
+                        MethodName = methodName,
+                        Outcome    = "succeeded",
+                    });
+                    succeeded++;
+                }
+                catch (Exception ex)
+                {
+                    var reason = ex.Message;
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = target.FilePath,
+                        MethodName = methodName,
+                        Outcome    = "failed",
+                        Reason     = reason,
+                    });
+                    if (failures.Count < 15)
+                    {
+                        failures.Add(new FailureDetail
+                        {
+                            FilePath   = target.FilePath,
+                            MethodName = methodName,
+                            Reason     = reason,
+                            Outcome    = "failed",
+                        });
+                    }
+                    failed++;
+                    _logger.LogWarning(
+                        "ConvertToAsyncBridge batch: {Method} in {File} failed: {Reason}",
+                        methodName, target.FilePath, reason);
+                }
+            }
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "convert_to_async_bridge", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status   = _workspaceManager.GetBreakerStatus();
+
+        return new BatchResultSummary
+        {
+            ChangeId    = changeId,
+            BlobName    = blobName,
+            Succeeded   = succeeded,
+            Failed      = failed,
+            Skipped     = 0,
+            RolledBack  = 0,
+            Attempted   = succeeded + failed,
+            Failures    = failures,
+            Severity    = status.Severity,
+            Directive   = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
+    [McpServerTool]
+    [Description("""
+        Batch-first addition of CancellationToken parameters to async methods across multiple
+        files. Supersedes add_cancellation_token_to_method and apply_cancellation_token_to_file.
+        Checks the circuit breaker; records outcome; writes a forensic blob.
+
+        input.Targets  — list of { FilePath, MethodNames? }. null MethodNames = all eligible async
+                         methods in the file. MethodNames filter = only those specific methods.
+        input.DryRun   — when true, computes without writing files.
+        input.MaxItems — max files to process (default 100).
+
+        Files are processed independently (no cross-file dependency). Each file's changes are
+        collected then applied atomically. Returns BatchResultSummary.
+        Use get_operation_detail(changeId) for per-file details.
+        """)]
+    public async Task<BatchResultSummary> AddCancellationToken(
+        BatchTargetInput  input,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        int succeeded  = 0;
+        int failed     = 0;
+        int skipped    = 0;
+        var items      = new List<OperationItemRecord>();
+        var failures   = new List<FailureDetail>();
+        int processed  = 0;
+
+        foreach (var target in input.Targets)
+        {
+            if (processed >= input.MaxItems)
+            {
+                skipped++;
+                continue;
+            }
+
+            processed++;
+
+            try
+            {
+                var (updatedSource, modified, skippedMethods) =
+                    await _asyncOptimizationEngine.ApplyCancellationTokenToFileAsync(
+                        target.FilePath, target.MethodNames, cancellationToken);
+
+                if (updatedSource.StartsWith("// Error:"))
+                {
+                    var reason = updatedSource;
+                    items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = reason });
+                    if (failures.Count < 15)
+                    {
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = "failed" });
+                    }
+                    failed++;
+                }
+                else if (modified.Count == 0)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath = target.FilePath,
+                        Outcome  = "skipped",
+                        Reason   = "no eligible async methods",
+                    });
+                    skipped++;
+                }
+                else
+                {
+                    if (!input.DryRun)
+                    {
+                        allChanges[target.FilePath] = updatedSource;
+                    }
+
+                    foreach (var m in modified)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath   = target.FilePath,
+                            MethodName = m,
+                            Outcome    = input.DryRun ? "skipped" : "succeeded",
+                            Reason     = input.DryRun ? "dry_run" : null,
+                        });
+                    }
+
+                    succeeded++;
+                }
+            }
+            catch (Exception ex)
+            {
+                var reason = ex.Message;
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = reason });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = "failed" });
+                }
+                failed++;
+                _logger.LogWarning("AddCancellationToken batch: {File} failed: {Reason}", target.FilePath, reason);
+            }
+        }
+
+        if (allChanges.Count > 0)
+        {
+            await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "add_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status   = _workspaceManager.GetBreakerStatus();
+
+        return new BatchResultSummary
+        {
+            ChangeId    = changeId,
+            BlobName    = blobName,
+            Succeeded   = succeeded,
+            Failed      = failed,
+            Skipped     = skipped,
+            RolledBack  = 0,
+            Attempted   = succeeded + failed + skipped,
+            Failures    = failures,
+            Severity    = status.Severity,
+            Directive   = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
+    [McpServerTool]
+    [Description("""
+        Batch-first caller uplift — uplifts callers of Asyncify-bridge sync wrappers to use
+        their async overloads directly. Supersedes run_uplift_batch and run_uplift_batch_multi.
+        Checks the circuit breaker; records outcome; writes a forensic blob.
+
+        input.Targets                    — list of { BridgedMethodName, ProjectName? }.
+        input.DryRun                     — when true, reports without writing files.
+        input.MaxCallersPerMethod        — max callers per bridged method (default 10).
+        input.PropagateCancellationTokens — when true (default), propagates CT in new async overloads.
+
+        Returns BatchResultSummary where Succeeded = total callers uplifted, Failed = total callers
+        skipped (flagged NeedsManualReview). Use get_operation_detail(changeId) for details.
+        """)]
+    public async Task<BatchResultSummary> RunUplift(
+        RunUpliftInput    input,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        var multiInput = new UpliftBatchMultiInput
+        {
+            Targets = input.Targets.Select(t => new UpliftBatchMultiTarget
+            {
+                BridgedMethodName = t.BridgedMethodName,
+                ProjectName       = t.ProjectName,
+            }).ToList(),
+            MaxCallersPerMethod          = input.MaxCallersPerMethod,
+            DryRun                       = input.DryRun,
+            PropagateCancellationTokens  = input.PropagateCancellationTokens,
+        };
+
+        UpliftBatchMultiResult result;
+        try
+        {
+            result = await _asyncBatchEngine.RunUpliftBatchMultiAsync(multiInput, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RunUplift batch unexpected exception");
+            throw new InvalidOperationException(
+                $"RunUplift failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        int succeeded = result.TotalUplifted;
+        int failed    = result.TotalSkipped;
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var items    = new List<OperationItemRecord>();
+        foreach (var pm in result.PerMethod)
+        {
+            foreach (var u in pm.Result.Uplifted)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath   = u.FilePath,
+                    MethodName = u.CallerMethod,
+                    Outcome    = "succeeded",
+                });
+            }
+            foreach (var s in pm.Result.Skipped)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath   = s.FilePath,
+                    MethodName = s.CallerMethod,
+                    Outcome    = "failed",
+                    Reason     = s.Reason,
+                });
+            }
+            if (pm.Error != null)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = pm.BridgedMethodName,
+                    Outcome  = "failed",
+                    Reason   = pm.Error,
+                });
+            }
+        }
+
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "run_uplift", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status   = _workspaceManager.GetBreakerStatus();
+        var failures = result.PerMethod
+            .SelectMany(pm => pm.Result.Skipped.Select(s => new FailureDetail
+            {
+                FilePath   = s.FilePath,
+                MethodName = s.CallerMethod,
+                Reason     = s.Reason,
+                Outcome    = "failed",
+            }))
+            .Take(15)
+            .ToList();
+
+        return new BatchResultSummary
+        {
+            ChangeId    = changeId,
+            BlobName    = blobName,
+            Succeeded   = succeeded,
+            Failed      = failed,
+            Skipped     = 0,
+            RolledBack  = 0,
+            Attempted   = succeeded + failed,
+            Failures    = failures,
+            Severity    = status.Severity,
+            Directive   = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
+    [McpServerTool]
+    [Description("""
+        Batch-first migration-candidate flagging. Supersedes flag_migration_candidate (single),
+        flag_migration_candidates_batch, and flag_migration_candidates_in_project.
+        Checks the circuit breaker; records outcome; writes a forensic blob.
+
+        input.Scope="targets" (default): flags an explicit list of methods.
+          input.Targets — list of { FilePath, MethodName, Pattern, Score?, Reason? }.
+        input.Scope="project": autonomous scan; scores and flags qualifying methods.
+          input.ProjectName — restrict to one project; null = entire solution.
+          input.Pattern     — migration pattern to apply (default "AsyncBridgeCandidate").
+          input.MinScore    — minimum score to flag (default 50).
+          input.DryRun      — when true, reports what would be flagged without writing files.
+          input.ForceRescan — when true, ignores existing [MigrationCandidate] attributes.
+
+        Returns BatchResultSummary where Succeeded = methods flagged, Skipped = below-minScore
+        or already-flagged, Failed = errors. Use get_operation_detail(changeId) for details.
+        """)]
+    public async Task<BatchResultSummary> FlagMigrationCandidates(
+        FlagCandidatesInput input,
+        CancellationToken   cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        int succeeded = 0;
+        int failed    = 0;
+        int skipped   = 0;
+        var items     = new List<OperationItemRecord>();
+        var failures  = new List<FailureDetail>();
+        var changeId  = Guid.NewGuid().ToString("N")[..8];
+
+        try
+        {
+            if (input.Scope == "project")
+            {
+                var engineResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
+                    input.ProjectName, input.Pattern, input.MinScore, input.DryRun, input.ForceRescan);
+
+                if (!input.DryRun && engineResult.Changes.Count > 0)
+                {
+                    await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+                }
+
+                foreach (var f in engineResult.Flagged)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = f.FilePath,
+                        MethodName = f.MethodName,
+                        Outcome    = input.DryRun ? "skipped" : "succeeded",
+                        Reason     = input.DryRun ? "dry_run" : null,
+                    });
+                    succeeded++;
+                }
+                foreach (var s in engineResult.Skipped)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = s.FilePath,
+                        MethodName = s.MethodName,
+                        Outcome    = "skipped",
+                        Reason     = $"score {s.Score} below minScore {input.MinScore}",
+                    });
+                    skipped++;
+                }
+                foreach (var a in engineResult.AlreadyFlagged)
+                {
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = a.FilePath,
+                        MethodName = a.MethodName,
+                        Outcome    = "skipped",
+                        Reason     = "already flagged",
+                    });
+                    skipped++;
+                }
+            }
+            else
+            {
+                // scope="targets" — explicit list
+                var targets = input.Targets ?? new List<FlagCandidateTarget>();
+                var tuples  = targets.Select(t =>
+                    (FilePath: t.FilePath, MethodName: t.MethodName,
+                     Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
+                    .ToList();
+
+                var (results, errors) = await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
+
+                var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                for (int i = 0; i < results.Count; i++)
+                {
+                    var r    = results[i];
+                    var tgt  = targets[i];
+                    if (r.Line == -1)
+                    {
+                        continue;
+                    }
+
+                    foreach (var kv in r.Changes)
+                    {
+                        allChanges[kv.Key] = kv.Value;
+                    }
+
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = tgt.FilePath,
+                        MethodName = tgt.MethodName,
+                        Outcome    = "succeeded",
+                    });
+                    succeeded++;
+                }
+
+                foreach (var (idx, err) in errors)
+                {
+                    var tgt = targets[idx];
+                    items.Add(new OperationItemRecord
+                    {
+                        FilePath   = tgt.FilePath,
+                        MethodName = tgt.MethodName,
+                        Outcome    = "failed",
+                        Reason     = err,
+                    });
+                    if (failures.Count < 15)
+                    {
+                        failures.Add(new FailureDetail
+                        {
+                            FilePath   = tgt.FilePath,
+                            MethodName = tgt.MethodName,
+                            Reason     = err,
+                            Outcome    = "failed",
+                        });
+                    }
+                    failed++;
+                }
+
+                if (allChanges.Count > 0 && !input.DryRun)
+                {
+                    await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "FlagMigrationCandidates batch unexpected exception");
+            throw new InvalidOperationException(
+                $"FlagMigrationCandidates failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
+
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "flag_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status   = _workspaceManager.GetBreakerStatus();
+
+        return new BatchResultSummary
+        {
+            ChangeId    = changeId,
+            BlobName    = blobName,
+            Succeeded   = succeeded,
+            Failed      = failed,
+            Skipped     = skipped,
+            RolledBack  = 0,
+            Attempted   = succeeded + failed + skipped,
+            Failures    = failures,
+            Severity    = status.Severity,
+            Directive   = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+}
