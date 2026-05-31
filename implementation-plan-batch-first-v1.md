@@ -102,17 +102,21 @@ Each unified tool: check breaker → execute → `RecordBatchOutcome` → write 
 
 ---
 
-## Phase 6 — asyncify Macro Workflow
+## Phase 6 — asyncify Macro Workflow ✅ DONE — commit `cba4e3a`
 *Depends on all Phase 4 tools.*
 
 22. **`asyncify(targets, exclusions?, dryRun, propagateCancellationTokens=true)`** — fixed internal sequence: scan → flag → convert_to_async_bridge → run_uplift → propagate_cancellation_token. Server owns the sequence; agent only selects targets/params. One blob per run. Returns `BatchResultSummary`.
 
+**Implemented:** `AsyncifyInput` type in `BatchTypes.cs`; `Asyncify` tool in `SentinelQualityTools.cs` — 4 phases (Flag, Bridge, UpliftMulti, PropagateCtAsync), handles both autonomous discovery (project scan) and explicit `MethodTargets`. Breaker-checked, blob-persisted.
+
 ---
 
-## Phase 7 — Tool Naming Rename Pass
+## Phase 7 — Tool Naming Rename Pass ✅ DONE — commit `cba4e3a`
 *Coordinate with Phase 4's compatibility break — one hit.*
 
 23. Apply §12.2 prefix test to every `find_*`/`detect_*` tool → `scan_*` or `get_*`. Add old names as aliases with deprecation note. Update `DefaultRateLimits` for renamed keys. Update documentation.
+
+**Implemented:** ~97 methods renamed across `SentinelQualityTools.cs`, `SentinelIntelligenceTools.cs`, `SentinelModernizationTools.cs`. Legacy thin-alias methods appended to each file (correct return types, `[McpServerTool]` + `[Description("Deprecated: use scan_*/get_* instead...")]`). Rename helper script at `scripts/phase7_rename.ps1`.
 
 ---
 
