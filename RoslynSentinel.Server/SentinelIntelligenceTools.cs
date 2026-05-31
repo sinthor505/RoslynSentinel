@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
@@ -90,7 +90,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all methods in the solution that return a specific type.")]
-    public async Task<List<SearchResult>> FindMethodsByReturnType(string returnType)
+    public async Task<List<SearchResult>> ScanMethodsByReturnType(string returnType)
         => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(returnType);
 
     [McpServerTool]
@@ -103,32 +103,32 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all unused private members in a class.")]
-    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembers(string filePath, string className)
+    public async Task<List<DeadCodeReport>> ScanUnusedPrivateMembers(string filePath, string className)
         => await _deadCodeEngine.FindUnusedPrivateMembersAsync(filePath, className);
 
     [McpServerTool]
     [Description("Detects private fields that are never read or written in the file.")]
-    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFields(string filePath)
+    public async Task<List<DeadCodeReport>> ScanUnusedPrivateFields(string filePath)
         => await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(filePath);
 
     [McpServerTool]
     [Description("Identifies local variables that are declared but never used within their scope.")]
-    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariables(string filePath)
+    public async Task<List<DeadCodeReport>> ScanUnusedLocalVariables(string filePath)
         => await _deadCodeEngine.DetectUnusedLocalVariablesAsync(filePath);
 
     [McpServerTool]
     [Description("Detects methods with too many parameters and suggests a Parameter Object, optionally filtered by project.")]
-    public async Task<List<string>> DetectLongParameterLists(int threshold = 5, string? projectName = null)
+    public async Task<List<string>> ScanLongParameterLists(int threshold = 5, string? projectName = null)
         => await _analysisEngine.DetectLongParameterListsAsync(threshold, projectName);
 
     [McpServerTool]
     [Description("Identifies classes that are never instantiated across the entire solution or a specific project.")]
-    public async Task<List<string>> FindUninstantiatedTypes(string? projectName = null)
+    public async Task<List<string>> ScanUninstantiatedTypes(string? projectName = null)
         => await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
 
     [McpServerTool]
     [Description("Identifies circular project references (A -> B -> A).")]
-    public async Task<List<string>> FindCircularDependencies()
+    public async Task<List<string>> ScanCircularDependencies()
         => await _analysisEngine.FindCircularDependenciesAsync();
 
     [McpServerTool]
@@ -148,7 +148,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Identifies NuGet package references in a project that are not being used.")]
-    public async Task<List<string>> FindUnusedReferences(string projectName)
+    public async Task<List<string>> ScanUnusedReferences(string projectName)
         => await _dependencyEngine.FindUnusedReferencesAsync(projectName);
 
     [McpServerTool]
@@ -158,21 +158,21 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Identifies interfaces that are declared but never implemented in the solution or a specific project.")]
-    public async Task<List<string>> FindUnusedInterfaces(string? projectName = null)
+    public async Task<List<string>> ScanUnusedInterfaces(string? projectName = null)
         => await _analysisEngine.FindUnusedInterfacesAsync(projectName);
 
     [McpServerTool]
     [Description("Identifies internal classes that are only used in a single file and could be made private, optionally filtered by project.")]
-    public async Task<List<string>> FindInternalClassesThatCouldBePrivate(string? projectName = null)
+    public async Task<List<string>> ScanInternalClassesThatCouldBePrivate(string? projectName = null)
         => await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
 
     [McpServerTool]
     [Description("Finds switch statements with a large number of cases that may need refactoring, optionally filtered by project.")]
-    public async Task<List<string>> FindLargeSwitchStatements(int threshold = 10, string? projectName = null)
+    public async Task<List<string>> ScanLargeSwitchStatements(int threshold = 10, string? projectName = null)
         => await _analysisEngine.FindLargeSwitchStatementsAsync(threshold, projectName);
     [McpServerTool]
     [Description("Scans the solution for structural issues with granular filtering. typeFilter options: All, MultiType, NameMismatch.")]
-    public async Task<List<string>> FindStructuralSmells(
+    public async Task<List<string>> ScanStructuralSmells(
         ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All,
         string? projectName = null,
         string? filePath = null)
@@ -182,7 +182,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Identifies constructors that are never called in the entire solution.")]
-    public async Task<List<DeadCodeReport>> FindUnusedConstructors(string filePath)
+    public async Task<List<DeadCodeReport>> ScanUnusedConstructors(string filePath)
     {
         try
         {
@@ -207,17 +207,17 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all types that implement an interface or derive from a class, returning file path and line for each. Optionally scoped to a single project.")]
-    public async Task<List<ImplementationInfo>> FindAllImplementations(string typeName, string? projectName = null)
+    public async Task<List<ImplementationInfo>> GetAllImplementations(string typeName, string? projectName = null)
         => await _symbolNavigationEngine.FindAllImplementationsAsync(typeName, projectName);
 
     [McpServerTool]
     [Description("Finds private, non-readonly fields that are only ever assigned inside constructors and could safely be marked readonly.")]
-    public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidates(string filePath)
+    public async Task<List<ReadonlyFieldCandidate>> ScanReadonlyFieldCandidates(string filePath)
         => await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(filePath);
 
     [McpServerTool]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a specific project/file. Returns service type, implementation type, lifetime, and source location for each registration. Use lifetimeFilter to narrow results ('Singleton', 'Scoped', 'Transient').")]
-    public async Task<List<DiRegistration>> FindDiRegistrations(
+    public async Task<List<DiRegistration>> GetDiRegistrations(
         string? projectName = null,
         string? filePath = null,
         string? lifetimeFilter = null)
@@ -237,7 +237,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all extension methods whose receiver type matches the given type (or its base types / interfaces). Returns method name, full signature, defining class, namespace, file path, and line.")]
-    public async Task<List<ExtensionMethodInfo>> FindExtensionMethods(
+    public async Task<List<ExtensionMethodInfo>> GetExtensionMethods(
         string targetTypeName, string? projectName = null)
         => await _symbolNavigationEngine.FindExtensionMethodsAsync(targetTypeName, projectName);
 
@@ -248,7 +248,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
-    public async Task<List<CircularDependencyChain>> FindCircularDependencies(string? projectName = null)
+    public async Task<List<CircularDependencyChain>> ScanCircularDependencies(string? projectName = null)
         => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
 
     [McpServerTool]
@@ -301,7 +301,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all throw sites (throw statements and throw expressions) across the solution, optionally filtered by exception type, file, or project. Returns file path, line, column, the exception type being thrown, the containing method name, whether the throw is inside a catch block (rethrow patterns), and any extracted message literal from the first argument. Set sortByFrequency=true to rank results by how often each exception type is thrown (most frequent first) — useful for auditing dominant error patterns.")]
-    public async Task<List<ThrowSiteInfo>> FindAllThrowSites(
+    public async Task<List<ThrowSiteInfo>> ScanAllThrowSites(
         string? exceptionType = null,
         string? filePath = null,
         string? projectName = null,
@@ -310,7 +310,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Finds all object creation sites (new T(...) and implicit new(...)) for a given type name substring match, optionally scoped to a file or project. Returns file path, line, column, resolved type name, containing method, and argument count. Set sortByFrequency=true to rank results by how often each resolved type is instantiated — useful when the typeName is broad (e.g. 'Exception') and you want the most-created types first. Supports both explicit 'new Foo()' and implicit 'new()' syntax with type inference from context.")]
-    public async Task<List<ObjectCreationSite>> FindObjectCreationSites(
+    public async Task<List<ObjectCreationSite>> GetObjectCreationSites(
         string typeName,
         string? filePath = null,
         string? projectName = null,
@@ -328,18 +328,18 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Scans all constructor parameters in the solution (or a specific project) and identifies injected service types that appear to be missing from the DI container registrations. Detects interfaces (IFoo pattern) and common service-like types (ending in Service, Repository, Manager, Factory, Provider, Handler, Validator, Dispatcher). Framework-provided types (ILogger, IOptions, IConfiguration, etc.) are excluded. Returns consumer class name, file, line, the missing type, and the parameter name. Use to catch unregistered dependencies before runtime failures.")]
-    public async Task<List<UnregisteredServiceFinding>> FindServicesNotRegistered(
+    public async Task<List<UnregisteredServiceFinding>> ScanServicesNotRegistered(
         string? projectName = null)
         => await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
 
     [McpServerTool]
     [Description("Returns the best 1-based line number where a new member of the given kind should be inserted in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
-    public async Task<BestInsertionResult> FindBestInsertionPoint(string filePath, string containerName, string memberKind)
+    public async Task<BestInsertionResult> GetBestInsertionPoint(string filePath, string containerName, string memberKind)
         => await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind);
 
     [McpServerTool]
     [Description("Scans for TODO, FIXME, HACK, REVIEW, NOTE, BUG comments (case-insensitive) in a file, project, or entire solution. Sorted by severity: BUG/FIXME > HACK > TODO > REVIEW > NOTE.")]
-    public async Task<List<TodoCommentFinding>> FindTodoFixmeComments(string? filePath = null, string? projectName = null)
+    public async Task<List<TodoCommentFinding>> ScanTodoFixmeComments(string? filePath = null, string? projectName = null)
         => await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
 
     [McpServerTool]
@@ -357,7 +357,7 @@ public class SentinelIntelligenceTools
         Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns CallerMethod, CallerType, FilePath, Line, and CodeSnippet for each call site.
         """)]
-    public async Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+    public async Task<List<CallerInfo>> GetCallers(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
         => await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
@@ -398,7 +398,7 @@ public class SentinelIntelligenceTools
         Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns TypeName, FilePath, Line, and Kind for each implementing symbol.
         """)]
-    public async Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+    public async Task<List<ImplementationInfo>> GetImplementations(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
         => await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
 
     [McpServerTool]
@@ -420,7 +420,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Compares a previously captured API surface (baseline) against the current code and reports breaking changes: removed types, removed/renamed members, and signature changes. Workflow: (1) call get_public_api_surface_snapshot to capture the baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName or filePath as in step 1.")]
-    public async Task<List<BreakingChange>> DetectBreakingChanges(
+    public async Task<List<BreakingChange>> ScanBreakingChanges(
         List<PublicApiMember> baseline,
         string? projectName = null,
         string? filePath = null)
@@ -428,44 +428,44 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Detects namespace-level layer architecture violations (e.g. Controllers importing from Data/Repositories directly, Domain models depending on infrastructure layers). Operates on using directives — fast, no compilation required. Returns violation type, description, source layer, forbidden dependency namespace, file path, and line. Scope with projectName or filePath, or omit for the entire solution.")]
-    public async Task<List<ArchitecturalEngine.LayerViolation>> DetectLayerViolations(
+    public async Task<List<ArchitecturalEngine.LayerViolation>> ScanLayerViolations(
         string? projectName = null,
         string? filePath = null)
         => await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
 
     [McpServerTool]
     [Description("Finds types (classes, structs, records, interfaces) exceeding a line count threshold across the solution or a specific project. Returns TypeName, FilePath, and LineCount. Use before modifying a large class — anything over 500 lines is a prime extract-class candidate. Default threshold is 500 lines.")]
-    public async Task<List<LargeTypeReport>> FindLargeTypes(int maxLines = 500, string? projectName = null)
+    public async Task<List<LargeTypeReport>> ScanLargeTypes(int maxLines = 500, string? projectName = null)
         => await _analysisEngine.FindLargeTypesAsync(maxLines, projectName);
 
     [McpServerTool]
     [Description("Finds methods exceeding a line count threshold across the solution or a specific project. Returns MethodName, TypeName, FilePath, and LineCount. Methods over 50 lines are too large to modify safely without reading in full — they are also prime extract-method candidates. Default threshold is 50 lines.")]
-    public async Task<List<LargeMethodReport>> FindLargeMethods(int maxLines = 50, string? projectName = null)
+    public async Task<List<LargeMethodReport>> ScanLargeMethods(int maxLines = 50, string? projectName = null)
         => await _analysisEngine.FindLargeMethodsAsync(maxLines, projectName);
 
     [McpServerTool]
     [Description("Finds structurally duplicate method implementations across the solution: methods that share the same statement structure and control flow even if identifiers differ (hash-based). Returns groups of duplicate methods with their file paths and type names. Use to find copy-paste code that should be consolidated into a shared helper. Increase minStatements (default 5) to reduce false positives on short utility methods.")]
-    public async Task<List<DuplicateMethodGroup>> FindDuplicateMethods(int minStatements = 5, string? projectName = null)
+    public async Task<List<DuplicateMethodGroup>> ScanDuplicateMethods(int minStatements = 5, string? projectName = null)
         => await _analysisEngine.FindDuplicateMethodsAsync(minStatements, projectName);
 
     [McpServerTool]
     [Description("Finds public classes with 3+ public methods but no corresponding interface. Returns ClassName, FilePath, and the list of public method names. These are prime candidates for interface extraction — a prerequisite for testability (Moq/NSubstitute) and adding a second implementation. Increase minPublicMethods (default 3) for stricter filtering.")]
-    public async Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
+    public async Task<List<InterfaceCandidateReport>> ScanInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
         => await _analysisEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods, projectName);
 
     [McpServerTool]
     [Description("Finds circular constructor-injection dependencies among user-defined types: type A's constructor depends on type B, and B's constructor (transitively) depends on A. This is the exact cycle that causes .NET's DI container to throw at startup. Complements find_services_not_registered — use both before adding new service registrations. Optionally scoped to a project.")]
-    public async Task<List<string>> FindCircularTypeReferences(string? projectName = null)
+    public async Task<List<string>> ScanCircularTypeReferences(string? projectName = null)
         => await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
 
     [McpServerTool]
     [Description("Finds generic methods with type parameters used in ways that require constraints but have none declared: (1) 'new T()' instantiation without 'where T : new()', (2) 'param == null' comparison without 'where T : class' (always false for value types). Returns file path, line number, method name, and a description of the specific violation. Scope by file or project, or scan the entire solution.")]
-    public async Task<List<string>> FindMissingGenericConstraints(string? projectName = null, string? filePath = null)
+    public async Task<List<string>> ScanMissingGenericConstraints(string? projectName = null, string? filePath = null)
         => await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
 
     [McpServerTool]
     [Description("Finds all TYPES (classes, interfaces, records, structs, enums) decorated with a specific attribute using the semantic model for accuracy. Unlike find_attribute_usages (which returns all targets including methods and properties), this returns only type-level decoration. Useful for: 'find all [ApiController] classes', 'find all [TestClass] types', 'find all [Serializable] types'. Returns TypeName, FilePath, and Line.")]
-    public async Task<List<SearchResult>> FindTypesByAttribute(string attributeName)
+    public async Task<List<SearchResult>> ScanTypesByAttribute(string attributeName)
         => await _semanticSearchEngine.FindTypesByAttributeAsync(attributeName);
 
     [McpServerTool]
@@ -502,7 +502,7 @@ public class SentinelIntelligenceTools
           • Obsolete API detection: "find_attribute_usages [Obsolete]" to find every member
             still marked deprecated.
         """)]
-    public async Task<List<AttributeUsageSite>> FindAttributeUsages(
+    public async Task<List<AttributeUsageSite>> GetAttributeUsages(
         string attributeName,
         string? projectName = null,
         string? filePath = null)
@@ -527,7 +527,7 @@ public class SentinelIntelligenceTools
         duplication spreads. Set minStatements lower (e.g. 3) for aggressive detection,
         higher (e.g. 6) for only substantial clones.
         """)]
-    public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClass(
+    public async Task<List<DuplicateBlockGroup>> ScanDuplicateBlocksInClass(
         string filePath,
         string className,
         int minStatements = 4)
@@ -551,9 +551,197 @@ public class SentinelIntelligenceTools
         projectName: optional filter to limit the search scope.
         minStatements: minimum window size (default 4).
         """)]
-    public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchy(
+    public async Task<List<DuplicateBlockGroup>> ScanDuplicateBlocksInHierarchy(
         string typeName,
         string? projectName = null,
         int minStatements = 4)
         => await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(typeName, projectName, minStatements);
+
+    // ── Legacy aliases (deprecated — use scan_*/get_* names) ─────────────────────
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_methods_by_return_type instead. This alias will be removed in a future release.")]
+    public Task<List<SearchResult>> FindMethodsByReturnType(string returnType)
+        => ScanMethodsByReturnType(returnType);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_private_members instead. This alias will be removed in a future release.")]
+    public Task<List<DeadCodeReport>> FindUnusedPrivateMembers(string filePath, string className)
+        => ScanUnusedPrivateMembers(filePath, className);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_private_fields instead. This alias will be removed in a future release.")]
+    public Task<List<DeadCodeReport>> DetectUnusedPrivateFields(string filePath)
+        => ScanUnusedPrivateFields(filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_local_variables instead. This alias will be removed in a future release.")]
+    public Task<List<DeadCodeReport>> DetectUnusedLocalVariables(string filePath)
+        => ScanUnusedLocalVariables(filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_long_parameter_lists instead. This alias will be removed in a future release.")]
+    public Task<List<string>> DetectLongParameterLists(int threshold = 5, string? projectName = null)
+        => ScanLongParameterLists(threshold, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_uninstantiated_types instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindUninstantiatedTypes(string? projectName = null)
+        => ScanUninstantiatedTypes(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_circular_dependencies instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindCircularDependencies()
+        => ScanCircularDependencies();
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_circular_dependencies instead. This alias will be removed in a future release.")]
+    public Task<List<CircularDependencyChain>> FindCircularDependencies(string? projectName = null)
+        => ScanCircularDependencies(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_references instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindUnusedReferences(string projectName)
+        => ScanUnusedReferences(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_interfaces instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindUnusedInterfaces(string? projectName = null)
+        => ScanUnusedInterfaces(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_internal_classes_that_could_be_private instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindInternalClassesThatCouldBePrivate(string? projectName = null)
+        => ScanInternalClassesThatCouldBePrivate(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_large_switch_statements instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindLargeSwitchStatements(int threshold = 10, string? projectName = null)
+        => ScanLargeSwitchStatements(threshold, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_structural_smells instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindStructuralSmells(ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All, string? projectName = null, string? filePath = null)
+        => ScanStructuralSmells(typeFilter, projectName, filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_unused_constructors instead. This alias will be removed in a future release.")]
+    public Task<List<DeadCodeReport>> FindUnusedConstructors(string filePath)
+        => ScanUnusedConstructors(filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_all_implementations instead. This alias will be removed in a future release.")]
+    public Task<List<ImplementationInfo>> FindAllImplementations(string typeName, string? projectName = null)
+        => GetAllImplementations(typeName, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_readonly_field_candidates instead. This alias will be removed in a future release.")]
+    public Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidates(string filePath)
+        => ScanReadonlyFieldCandidates(filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_di_registrations instead. This alias will be removed in a future release.")]
+    public Task<List<DiRegistration>> FindDiRegistrations(string? projectName = null, string? filePath = null, string? lifetimeFilter = null)
+        => GetDiRegistrations(projectName, filePath, lifetimeFilter);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_extension_methods instead. This alias will be removed in a future release.")]
+    public Task<List<ExtensionMethodInfo>> FindExtensionMethods(string targetTypeName, string? projectName = null)
+        => GetExtensionMethods(targetTypeName, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_all_throw_sites instead. This alias will be removed in a future release.")]
+    public Task<List<ThrowSiteInfo>> FindAllThrowSites(string? exceptionType = null, string? filePath = null, string? projectName = null, bool sortByFrequency = false)
+        => ScanAllThrowSites(exceptionType, filePath, projectName, sortByFrequency);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_object_creation_sites instead. This alias will be removed in a future release.")]
+    public Task<List<ObjectCreationSite>> FindObjectCreationSites(string typeName, string? filePath = null, string? projectName = null, bool sortByFrequency = false)
+        => GetObjectCreationSites(typeName, filePath, projectName, sortByFrequency);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_services_not_registered instead. This alias will be removed in a future release.")]
+    public Task<List<UnregisteredServiceFinding>> FindServicesNotRegistered(string? projectName = null)
+        => ScanServicesNotRegistered(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_best_insertion_point instead. This alias will be removed in a future release.")]
+    public Task<BestInsertionResult> FindBestInsertionPoint(string filePath, string containerName, string memberKind)
+        => GetBestInsertionPoint(filePath, containerName, memberKind);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_todo_fixme_comments instead. This alias will be removed in a future release.")]
+    public Task<List<TodoCommentFinding>> FindTodoFixmeComments(string? filePath = null, string? projectName = null)
+        => ScanTodoFixmeComments(filePath, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_callers instead. This alias will be removed in a future release.")]
+    public Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => GetCallers(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_implementations instead. This alias will be removed in a future release.")]
+    public Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+        => GetImplementations(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_breaking_changes instead. This alias will be removed in a future release.")]
+    public Task<List<BreakingChange>> DetectBreakingChanges(List<PublicApiMember> baseline, string? projectName = null, string? filePath = null)
+        => ScanBreakingChanges(baseline, projectName, filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_layer_violations instead. This alias will be removed in a future release.")]
+    public Task<List<ArchitecturalEngine.LayerViolation>> DetectLayerViolations(string? projectName = null, string? filePath = null)
+        => ScanLayerViolations(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_large_types instead. This alias will be removed in a future release.")]
+    public Task<List<LargeTypeReport>> FindLargeTypes(int maxLines = 500, string? projectName = null)
+        => ScanLargeTypes(maxLines, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_large_methods instead. This alias will be removed in a future release.")]
+    public Task<List<LargeMethodReport>> FindLargeMethods(int maxLines = 50, string? projectName = null)
+        => ScanLargeMethods(maxLines, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_duplicate_methods instead. This alias will be removed in a future release.")]
+    public Task<List<DuplicateMethodGroup>> FindDuplicateMethods(int minStatements = 5, string? projectName = null)
+        => ScanDuplicateMethods(minStatements, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_interface_extraction_candidates instead. This alias will be removed in a future release.")]
+    public Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
+        => ScanInterfaceExtractionCandidates(minPublicMethods, projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_circular_type_references instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindCircularTypeReferences(string? projectName = null)
+        => ScanCircularTypeReferences(projectName);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_missing_generic_constraints instead. This alias will be removed in a future release.")]
+    public Task<List<string>> FindMissingGenericConstraints(string? projectName = null, string? filePath = null)
+        => ScanMissingGenericConstraints(projectName, filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_types_by_attribute instead. This alias will be removed in a future release.")]
+    public Task<List<SearchResult>> FindTypesByAttribute(string attributeName)
+        => ScanTypesByAttribute(attributeName);
+
+    [McpServerTool]
+    [Description("Deprecated: use get_attribute_usages instead. This alias will be removed in a future release.")]
+    public Task<List<AttributeUsageSite>> FindAttributeUsages(string attributeName, string? projectName = null, string? filePath = null)
+        => GetAttributeUsages(attributeName, projectName, filePath);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_duplicate_blocks_in_class instead. This alias will be removed in a future release.")]
+    public Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClass(string filePath, string className, int minStatements = 4)
+        => ScanDuplicateBlocksInClass(filePath, className, minStatements);
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_duplicate_blocks_in_hierarchy instead. This alias will be removed in a future release.")]
+    public Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchy(string typeName, string? projectName = null, int minStatements = 4)
+        => ScanDuplicateBlocksInHierarchy(typeName, projectName, minStatements);
+
 }

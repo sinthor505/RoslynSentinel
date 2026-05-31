@@ -116,3 +116,45 @@ public class FlagCandidatesInput
     /// <summary>When true, re-evaluates every method even if already flagged (Scope="project" only).</summary>
     public bool                      ForceRescan { get; set; } = false;
 }
+
+// ── Phase 6 — asyncify macro input ────────────────────────────────────────────
+
+/// <summary>Canonical input for the <c>asyncify</c> macro-workflow tool.</summary>
+public class AsyncifyInput
+{
+    /// <summary>
+    /// Project to asyncify. null = entire solution.
+    /// Used for autonomous candidate discovery when no explicit MethodTargets are supplied.
+    /// </summary>
+    public string? ProjectName                   { get; set; }
+
+    /// <summary>
+    /// Optional explicit list of methods to asyncify. When set, skips the autonomous
+    /// flag-scan phase and starts directly at the bridge-conversion phase.
+    /// </summary>
+    public List<FlagCandidateTarget>? MethodTargets { get; set; }
+
+    /// <summary>Method names to skip in every phase.</summary>
+    public List<string>? Exclusions              { get; set; }
+
+    /// <summary>When true, reports what would change without writing any files.</summary>
+    public bool          DryRun                  { get; set; } = false;
+
+    /// <summary>
+    /// When true (default), propagates CancellationToken to inner async callees in
+    /// both the bridge and uplift phases, and runs a final CT-propagation sweep.
+    /// </summary>
+    public bool          PropagateCancellationTokens { get; set; } = true;
+
+    /// <summary>Max methods to convert in the bridge phase per run. Default 50.</summary>
+    public int           MaxMethods              { get; set; } = 50;
+
+    /// <summary>Max callers to uplift per bridged method. Default 10.</summary>
+    public int           MaxCallersPerMethod     { get; set; } = 10;
+
+    /// <summary>Minimum score to flag a method in the discovery phase. Default 50.</summary>
+    public int           MinScore                { get; set; } = 50;
+
+    /// <summary>Score threshold for bridge conversion (score ≤ threshold eligible). Default 60.</summary>
+    public int           ScoreThreshold          { get; set; } = 60;
+}

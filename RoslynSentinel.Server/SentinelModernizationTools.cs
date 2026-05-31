@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -553,7 +553,7 @@ public class SentinelModernizationTools
 
     [McpServerTool]
     [Description("Finds private static readonly Dictionary<> and HashSet<> fields initialized inline. Suggests using FrozenDictionary/FrozenSet (System.Collections.Frozen) for better read performance.")]
-    public async Task<List<AntiPatternFinding>> FindUseFrozenCollections(string? filePath = null, string? projectName = null)
+    public async Task<List<AntiPatternFinding>> ScanUseFrozenCollections(string? filePath = null, string? projectName = null)
         => await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
 
     [McpServerTool]
@@ -570,4 +570,12 @@ public class SentinelModernizationTools
 
         return result;
     }
+
+    // ── Legacy aliases (deprecated — use scan_*/get_* names) ─────────────────────
+
+    [McpServerTool]
+    [Description("Deprecated: use scan_use_frozen_collections instead. This alias will be removed in a future release.")]
+    public Task<List<AntiPatternFinding>> FindUseFrozenCollections(string? filePath = null, string? projectName = null)
+        => ScanUseFrozenCollections(filePath, projectName);
+
 }
