@@ -29,7 +29,7 @@ public class SentinelGenerationTools
 
     [McpServerTool]
     [Description("Generates C# classes from a JSON string.")]
-    public GenerationResult GenerateClassesFromJson(string json, string rootClassName, string @namespace) 
+    public GenerationResult GenerateClassesFromJson(string json, string rootClassName, string @namespace)
         => _codeGenerationEngine.GenerateClassesFromJson(json, rootClassName, @namespace);
 
     [McpServerTool]

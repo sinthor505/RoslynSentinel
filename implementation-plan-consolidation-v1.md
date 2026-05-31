@@ -1,8 +1,8 @@
 # RoslynSentinel Tool Consolidation — Implementation Plan
 <!-- v1 — generated 2026-05-31 -->
 
-**Target:** Reduce ~318 active tools to ≤90 tools across 8 existing tool container classes.  
-**Approach:** Incremental, phase-by-phase. Each phase leaves the build green; commit before moving to the next.  
+**Target:** Reduce ~318 active tools to ≤90 tools across 8 existing tool container classes.
+**Approach:** Incremental, phase-by-phase. Each phase leaves the build green; commit before moving to the next.
 **Spec:** [roslyn-sentinel-consolidation-impl-spec-v1.md](roslyn-sentinel-consolidation-impl-spec-v1.md)
 
 ## Architecture
@@ -100,7 +100,7 @@ All in existing classes; no new files. Add one merged method, then delete the fo
 
 ### 3.1 — Build static detector registry
 
-Nested `private static class DetectorRegistry` with `Dictionary<string, DetectorInfo>`.  
+Nested `private static class DetectorRegistry` with `Dictionary<string, DetectorInfo>`.
 `DetectorInfo` fields: `Id`, `Domain`, `Description` (from folded tool's [Description] first line), `ValidScopes`.
 
 Prefix-stripping rules (verified: no id collisions after stripping):
@@ -136,7 +136,7 @@ Reads from DetectorRegistry. No-args = all entries; domain only = filter; detect
 
 ### 3.4 — `analyze_method(filePath, methodName, aspect)`
 
-aspect: `controlFlow | dataFlow | pathCoverage | unreachableCode`  
+aspect: `controlFlow | dataFlow | pathCoverage | unreachableCode`
 Folds: `analyze_control_flow`, `analyze_data_flow`, `analyze_path_coverage`, `scan_unreachable_code`
 
 ### 3.5 — Register SentinelScanTools in ServiceRegistrationExtensions.cs
@@ -157,12 +157,12 @@ Both in `SentinelWorkspaceTools.cs`.
 
 ### 4.1 — `staged_change(action, changeId?)`
 
-action: `apply | get | validate | discard`  
+action: `apply | get | validate | discard`
 Folds: `apply_staged_changes`, `get_staged_changes`, `validate_staged_changes`, `discard_staged_changes`
 
 ### 4.2 — `proposed_change(format, action, payload)`
 
-format: `files | diff`; action: `apply | validate`  
+format: `files | diff`; action: `apply | validate`
 Folds: `apply_proposed_changes`, `validate_proposed_changes`, `apply_proposed_diff`, `validate_proposed_diff`
 
 **Build + commit.**
@@ -197,7 +197,7 @@ After `introduce` is live, also delete `ExtractLocalVariable` (deferred A2 twin 
 
 ### 6.1 — `apply_file_codemod(filePath, transform)` in SentinelModernizationTools.cs
 
-25 transforms. `switch(transform)` dispatches to existing engine method calls.  
+25 transforms. `switch(transform)` dispatches to existing engine method calls.
 Folds tools from SentinelModernizationTools.cs and SentinelQualityTools.cs.
 
 Transform values: `addBraces`, `convertToNullCoalescing`, `convertToPattern`, `convertToSwitch`, `simplifyBooleanExpressions`, `simplifyMemberAccess`, `simplifyVerbosity`, `sortAndDeduplicateUsings`, `useFieldBackedProperties`, `useIndexFromEnd`, `useTimeProvider`, `upgradePatternMatching`, `upgradeToFileScopedNamespace`, `upgradeToModernGuards`, `upgradeThreadSafety`, `cleanupImplicitSpans`, `optimizeTaskWait`, `addConfigureAwaitFalse`, `removeConfigureAwaitFalse`, `fixThreadSleep`, `generateXmlDocumentationStubs`, `previewAddMissingUsings`, `formatDocumentSafe`, `formatDocumentPreview`, `fixMismatchedNamespaces`
@@ -224,24 +224,24 @@ Transform values: `addBraces`, `convertToNullCoalescing`, `convertToPattern`, `c
 
 ### 7.1 — `project_doc(action, docType, name?, content?)` in DocumentationTools.cs
 
-Folds all 11 doc tools.  
-docType: `plan | handoff | completed | documentation | currentState`; action: `read | write | append | list`  
+Folds all 11 doc tools.
+docType: `plan | handoff | completed | documentation | currentState`; action: `read | write | append | list`
 Valid combos enforced server-side (`append` valid only for `completed`; `list` ignores docType).
 
 ### 7.2 — `features(action, names?, enabled?)` in SentinelWorkspaceTools.cs
 
-action: `get | list | update`  
+action: `get | list | update`
 Folds: `get_feature_status`, `list_features`, `update_features`
 
 ### 7.3 — `move_all_types_to_files(scope, scopeName?)` in SentinelWorkspaceTools.cs
 
-scope: `file | project | solution`  
+scope: `file | project | solution`
 Folds: `move_all_types_to_files`, `move_all_types_to_files_in_project`, `move_all_types_to_files_in_solution`
 
 ### 7.4 — `async_migrate(operation, input)` in SentinelQualityTools.cs
 
-operation: `asyncify | addCancellationToken | propagateCancellationToken | convertToAsyncBridge | runUplift | flagMigrationCandidates`  
-`input` uses `JsonElement` and is deserialized per-operation.  
+operation: `asyncify | addCancellationToken | propagateCancellationToken | convertToAsyncBridge | runUplift | flagMigrationCandidates`
+`input` uses `JsonElement` and is deserialized per-operation.
 **Explicitly reversible:** split back to 6 tools if model misfills.
 
 **Build + commit.**

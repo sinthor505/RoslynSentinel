@@ -51,21 +51,33 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Lists all available analysis/refactoring features and their current enabled status.")]
-    public List<KeyValuePair<string, bool>> ListFeatures() => _config.GetFeatureStatuses();
+    [Description("""
+        Query or update analysis/refactoring feature flags.
+        action="list"   — returns all features and their current enabled status. names and enabled are ignored.
+        action="get"    — returns enabled status of specific features by name. Requires names.
+        action="update" — batch-updates the enabled status of one or more features. Requires enabled
+                          as a list of { Key: featureName, Value: true|false } pairs.
+        """)]
+    public object Features(
+        string action,
+        List<string>?                  names   = null,
+        List<KeyValuePair<string,bool>>? enabled = null)
+    {
+        return action switch
+        {
+            "list"   => (object)_config.GetFeatureStatuses(),
+            "get"    => _config.GetFeatureStatuses(names),
+            "update" => (object)UpdateFeaturesInternal(enabled ?? []),
+            _ => throw new ArgumentException(
+                $"Unknown action '{action}'. Valid: list, get, update.", nameof(action))
+        };
+    }
 
-    [McpServerTool]
-    [Description("Batch updates the enabled status of one or more features.")]
-    public string UpdateFeatures(List<KeyValuePair<string, bool>> updates)
+    private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates)
     {
         _config.BatchUpdateFeatureStatus(updates);
         return $"Updated {updates.Count} features.";
     }
-
-    [McpServerTool]
-    [Description("Gets the enabled status of specific features by name.")]
-    public List<KeyValuePair<string, bool>> GetFeatureStatus(List<string> featureNames)
-        => _config.GetFeatureStatuses(featureNames);
 
     [McpServerTool]
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]

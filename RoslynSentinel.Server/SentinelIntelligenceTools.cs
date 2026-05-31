@@ -94,13 +94,6 @@ public class SentinelIntelligenceTools
     public async Task<CodeInventoryReport> GetCodeInventory(string filePath) => await _inventoryEngine.GetCodeInventoryAsync(filePath);
 
     [McpServerTool]
-    [Description("Finds all unused private members in a class.")]
-    public async Task<List<DeadCodeReport>> ScanUnusedPrivateMembers(string filePath, string className)
-        => await _deadCodeEngine.FindUnusedPrivateMembersAsync(filePath, className);
-
-
-
-    [McpServerTool]
     [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation — returns SymbolHoverInfo) or blastRadius (all call sites and affected projects if the symbol is changed — returns ImpactReport). Provide contextSnippet: a verbatim substring identifying the symbol. Provide lineBefore/lineAfter to disambiguate.")]
     public async Task<object> InspectSymbol(
         string filePath,
@@ -129,11 +122,6 @@ public class SentinelIntelligenceTools
         string? lifetimeFilter = null)
         => await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter);
 
-
-    [McpServerTool]
-    [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
-    public async Task<List<CircularDependencyChain>> ScanCircularTypeDependencies(string? projectName = null)
-        => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
 
     [McpServerTool]
     [Description("Builds a call graph for a method. direction: forward (what the method calls, returns CallGraphNode tree), reverse (who calls this method, returns ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth: traversal depth (default 3).")]

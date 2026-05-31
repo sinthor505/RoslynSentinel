@@ -158,3 +158,73 @@ public class AsyncifyInput
     /// <summary>Score threshold for bridge conversion (score ≤ threshold eligible). Default 60.</summary>
     public int           ScoreThreshold          { get; set; } = 60;
 }
+
+// ── Phase 7 — async_migrate combined input ────────────────────────────────────
+
+/// <summary>
+/// Combined input for <c>async_migrate</c>. Only populate the fields relevant to
+/// the chosen <c>operation</c>; all others are ignored.
+/// </summary>
+public class AsyncMigrateInput
+{
+    // ── Shared ────────────────────────────────────────────────────────────────
+
+    /// <summary>When true, reports what would change without writing any files.</summary>
+    public bool DryRun { get; set; } = false;
+
+    // ── BatchTargetInput ops: propagate_cancellation_token, convert_to_async_bridge, add_cancellation_token ─
+
+    /// <summary>
+    /// File/method targets. Each entry has FilePath and optional MethodNames array.
+    /// Used by: propagate_cancellation_token, convert_to_async_bridge, add_cancellation_token.
+    /// </summary>
+    public List<BatchTarget>? Targets { get; set; }
+
+    /// <summary>Max files/items to process (default 100). propagate_cancellation_token and add_cancellation_token.</summary>
+    public int MaxItems { get; set; } = 100;
+
+    /// <summary>Propagate CancellationToken in new async overloads (default true). convert_to_async_bridge and run_uplift.</summary>
+    public bool PropagateCancellationTokens { get; set; } = true;
+
+    // ── run_uplift ─────────────────────────────────────────────────────────────
+
+    /// <summary>Bridge method targets to uplift. Each has BridgedMethodName and optional ProjectName. run_uplift only.</summary>
+    public List<UpliftTarget>? UpliftTargets { get; set; }
+
+    /// <summary>Max callers per bridged method (default 10). run_uplift and asyncify.</summary>
+    public int MaxCallersPerMethod { get; set; } = 10;
+
+    // ── flag_migration_candidates ──────────────────────────────────────────────
+
+    /// <summary>"targets" (default) or "project". flag_migration_candidates only.</summary>
+    public string FlagScope { get; set; } = "targets";
+
+    /// <summary>Explicit methods to flag (FlagScope="targets"). flag_migration_candidates only.</summary>
+    public List<FlagCandidateTarget>? FlagTargets { get; set; }
+
+    /// <summary>Restrict scan to one project; null = entire solution. flag_migration_candidates (scope=project) and asyncify.</summary>
+    public string? ProjectName { get; set; }
+
+    /// <summary>Migration pattern (default "AsyncBridgeCandidate"). flag_migration_candidates and asyncify.</summary>
+    public string Pattern { get; set; } = "AsyncBridgeCandidate";
+
+    /// <summary>Minimum score to flag (default 50). flag_migration_candidates and asyncify.</summary>
+    public int MinScore { get; set; } = 50;
+
+    /// <summary>Re-evaluate already-flagged methods (flag_migration_candidates scope=project only).</summary>
+    public bool ForceRescan { get; set; } = false;
+
+    // ── asyncify ───────────────────────────────────────────────────────────────
+
+    /// <summary>Explicit (FilePath, MethodName) targets; skips the flag-discovery phase. asyncify only.</summary>
+    public List<FlagCandidateTarget>? MethodTargets { get; set; }
+
+    /// <summary>Method names to skip in all asyncify phases. asyncify only.</summary>
+    public List<string>? Exclusions { get; set; }
+
+    /// <summary>Max methods to convert in the bridge phase (default 50). asyncify only.</summary>
+    public int MaxMethods { get; set; } = 50;
+
+    /// <summary>Max score eligible for bridge conversion (default 60). asyncify only.</summary>
+    public int ScoreThreshold { get; set; } = 60;
+}

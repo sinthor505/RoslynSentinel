@@ -117,256 +117,122 @@ public class DocumentationTools
         };
     }
 
-    // ── list_project_documentation ───────────────────────────────────────────
+    // ── project_doc ──────────────────────────────────────────────────────────
 
     [McpServerTool]
-    [Description(
-        "Lists all files in the solution's docs/ directory tree. Returns relative paths within docs/ only. " +
-        "Cannot enumerate source files or directories outside docs/.")]
-    public DocListResult ListProjectDocumentation()
+    [Description("""
+        Unified documentation accessor for all project doc files stored under docs/.
+
+        action  : read | write | append | list
+        docType : plan | handoff | completed_work | documentation | state
+
+        Routing table:
+          list   × documentation   — lists all files in docs/ (name is ignored).
+          read   × plan            — reads docs/plans/<name>.
+          write  × plan            — writes docs/plans/<name> with content.
+          read   × handoff         — reads docs/handoffs/<name>.
+          write  × handoff         — writes docs/handoffs/<name> with content.
+          read   × completed_work  — reads docs/completed/<name>.
+          append × completed_work  — appends content to docs/completed/<name> (audit trail, no overwrite).
+          read   × documentation   — reads docs/documentation/<name>.
+          write  × documentation   — writes docs/documentation/<name> with content.
+          read   × state           — reads docs/migration-state.yaml (name is ignored).
+          write  × state           — writes docs/migration-state.yaml with content (name is ignored).
+
+        name    : required for all file-scoped operations except state.
+        content : required for write and append.
+        """)]
+    public object ProjectDoc(
+        string  action,
+        string  docType,
+        string? name    = null,
+        string? content = null)
     {
-        var rateLimitError = _workspaceManager.CheckRateLimit("list_project_documentation", 20);
+        var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
         if (rateLimitError is not null)
-            return new DocListResult { Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocListResult { Error = error };
-
-        if (!Directory.Exists(docsRoot))
-            return new DocListResult { Files = [], Count = 0 };
-
-        var files = Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
-            .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
-            .OrderBy(f => f)
-            .ToList();
-
-        return new DocListResult { Files = files, Count = files.Count };
-    }
-
-    // ── read_project_documentation ───────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Reads a project documentation file from the solution's docs/documentation/ directory. " +
-        "The filename parameter is treated as a bare filename — any path components are stripped and rejected. " +
-        "Only documentation file types (.md, .yaml, .yml, .json, .txt) are permitted. " +
-        "Cannot read source files or files outside the docs directory.")]
-    public DocReadResult ReadProjectDocumentation(string filename)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("read_project_documentation", 30);
-        if (rateLimitError is not null)
-            return new DocReadResult { Found = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocReadResult { Found = false, Filename = filename, Error = error };
-
-        return ReadFile(Path.Combine(docsRoot, "documentation"), filename);
-    }
-
-    // ── update_project_documentation ─────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Writes (creates or overwrites) a project documentation file in the solution's docs/documentation/ directory. " +
-        "Filename is treated as bare — path components are stripped and rejected. " +
-        "Only documentation file types permitted. Content size capped at 512 KB. " +
-        "Cannot write source files or files outside the docs directory.")]
-    public DocWriteResult UpdateProjectDocumentation(string filename, string content)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("update_project_documentation", 10);
-        if (rateLimitError is not null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = error };
-
-        return WriteFile(Path.Combine(docsRoot, "documentation"), filename, content);
-    }
-
-    // ── read_plan ────────────────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Reads a migration or refactor plan file from the solution's docs/plans/ directory. " +
-        "Only bare filenames are accepted; only documentation extensions are permitted.")]
-    public DocReadResult ReadPlan(string filename)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("read_plan", 30);
-        if (rateLimitError is not null)
-            return new DocReadResult { Found = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocReadResult { Found = false, Filename = filename, Error = error };
-
-        return ReadFile(Path.Combine(docsRoot, "plans"), filename);
-    }
-
-    // ── update_plan ──────────────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Writes (creates or overwrites) a plan file in the solution's docs/plans/ directory. " +
-        "Only bare filenames and documentation extensions are accepted. Content size capped at 512 KB.")]
-    public DocWriteResult UpdatePlan(string filename, string content)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("update_plan", 10);
-        if (rateLimitError is not null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = error };
-
-        return WriteFile(Path.Combine(docsRoot, "plans"), filename, content);
-    }
-
-    // ── read_handoff ─────────────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Reads a session handoff document from the solution's docs/handoffs/ directory. " +
-        "Only bare filenames and documentation extensions are accepted.")]
-    public DocReadResult ReadHandoff(string filename)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("read_handoff", 30);
-        if (rateLimitError is not null)
-            return new DocReadResult { Found = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocReadResult { Found = false, Filename = filename, Error = error };
-
-        return ReadFile(Path.Combine(docsRoot, "handoffs"), filename);
-    }
-
-    // ── write_handoff ────────────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Writes (creates or overwrites) a session handoff document in the solution's docs/handoffs/ directory. " +
-        "Only bare filenames and documentation extensions are accepted. Content size capped at 512 KB.")]
-    public DocWriteResult WriteHandoff(string filename, string content)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("write_handoff", 10);
-        if (rateLimitError is not null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = error };
-
-        return WriteFile(Path.Combine(docsRoot, "handoffs"), filename, content);
-    }
-
-    // ── read_completed_work ──────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Reads a completed-work log file from the solution's docs/completed/ directory. " +
-        "Only bare filenames and documentation extensions are accepted.")]
-    public DocReadResult ReadCompletedWork(string filename)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("read_completed_work", 30);
-        if (rateLimitError is not null)
-            return new DocReadResult { Found = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocReadResult { Found = false, Filename = filename, Error = error };
-
-        return ReadFile(Path.Combine(docsRoot, "completed"), filename);
-    }
-
-    // ── append_completed_work ────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Appends an entry to a completed-work log in docs/completed/. " +
-        "Append-only — existing content cannot be overwritten or deleted. " +
-        "Use to record finished work as an immutable audit trail. " +
-        "Only bare filenames and documentation extensions are accepted. Entry size capped at 512 KB.")]
-    public DocWriteResult AppendCompletedWork(string filename, string entry)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("append_completed_work", 15);
-        if (rateLimitError is not null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = rateLimitError };
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-            return new DocWriteResult { Success = false, Filename = filename, Error = error };
-
-        return WriteFile(Path.Combine(docsRoot, "completed"), filename, entry, append: true);
-    }
-
-    // ── read_current_state ───────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description(
-        "Reads the migration state file (docs/migration-state.yaml). " +
-        "Takes no parameters — there is exactly one state file.")]
-    public DocReadResult ReadCurrentState()
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("read_current_state", 30);
-        if (rateLimitError is not null)
-            return new DocReadResult { Found = false, Filename = "migration-state.yaml", Error = rateLimitError };
-
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        if (solutionRoot is null)
-            return new DocReadResult { Found = false, Filename = "migration-state.yaml", Error = "No solution is loaded. Call load_solution first." };
-
-        var fullPath = Path.Combine(solutionRoot, "docs", "migration-state.yaml");
-        if (!File.Exists(fullPath))
-            return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
-
-        return new DocReadResult
         {
-            Found    = true,
-            Filename = "migration-state.yaml",
-            Content  = File.ReadAllText(fullPath)
-        };
-    }
+            return action is "read" or "list"
+                ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
+                : new DocWriteResult { Success = false, Filename = name ?? "", Error = rateLimitError };
+        }
 
-    // ── update_current_state ─────────────────────────────────────────────────
+        var docsRoot = TryGetDocsRoot(out var error);
+        if (docsRoot is null)
+        {
+            return action is "read" or "list"
+                ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
+                : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
+        }
 
-    [McpServerTool]
-    [Description(
-        "Writes the migration state file (docs/migration-state.yaml). " +
-        "Takes no filename parameter — there is exactly one state file. " +
-        "Content size capped at 512 KB.")]
-    public DocWriteResult UpdateCurrentState(string content)
-    {
-        var rateLimitError = _workspaceManager.CheckRateLimit("update_current_state", 5);
-        if (rateLimitError is not null)
-            return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = rateLimitError };
+        // ── list ─────────────────────────────────────────────────────────────
+        if (action == "list")
+        {
+            if (!Directory.Exists(docsRoot))
+                return new DocListResult { Files = [], Count = 0 };
 
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        if (solutionRoot is null)
-            return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "No solution is loaded. Call load_solution first." };
+            var files = Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
+                .OrderBy(f => f)
+                .ToList();
+            return new DocListResult { Files = files, Count = files.Count };
+        }
 
-        int bytes = Encoding.UTF8.GetByteCount(content);
-        if (bytes > MaxDocBytes)
-            return new DocWriteResult
+        // ── state (special: fixed path, no filename) ─────────────────────────
+        if (docType == "state")
+        {
+            if (action == "read")
             {
-                Success  = false,
-                Filename = "migration-state.yaml",
-                Error    = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
-            };
+                var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
+                if (!File.Exists(fullPath))
+                    return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
+                return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
+            }
+            if (action == "write")
+            {
+                if (content is null)
+                    return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "content is required for action=write." };
+                int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
+                if (bytes > MaxDocBytes)
+                    return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
+                var stateDir  = Path.Combine(docsRoot);
+                var statePath = Path.Combine(stateDir, "migration-state.yaml");
+                Directory.CreateDirectory(stateDir);
+                File.WriteAllText(statePath, content);
+                return new DocWriteResult { Success = true, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
+            }
+            return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
+        }
 
-        var docsDir  = Path.Combine(solutionRoot, "docs");
-        var fullPath = Path.Combine(docsDir, "migration-state.yaml");
-        Directory.CreateDirectory(docsDir);
-        File.WriteAllText(fullPath, content);
+        // ── file-based doc types ──────────────────────────────────────────────
+        if (name is null)
+            return action is "read"
+                ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
+                : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
 
-        return new DocWriteResult
+        var subdir = docType switch
         {
-            Success      = true,
-            Filename     = "migration-state.yaml",
-            FullPath     = fullPath,
-            BytesWritten = bytes
+            "plan"           => Path.Combine(docsRoot, "plans"),
+            "handoff"        => Path.Combine(docsRoot, "handoffs"),
+            "completed_work" => Path.Combine(docsRoot, "completed"),
+            "documentation"  => Path.Combine(docsRoot, "documentation"),
+            _ => null
+        };
+
+        if (subdir is null)
+            return action is "read"
+                ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
+                : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
+
+        return action switch
+        {
+            "read"   => (object)ReadFile(subdir, name),
+            "write"  => WriteFile(subdir, name, content
+                ?? throw new ArgumentException("content is required for action=write.", nameof(content))),
+            "append" => docType == "completed_work"
+                ? WriteFile(subdir, name, content
+                    ?? throw new ArgumentException("content is required for action=append.", nameof(content)), append: true)
+                : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
+            _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unknown action '{action}'. Valid: read, write, append, list." }
         };
     }
 }

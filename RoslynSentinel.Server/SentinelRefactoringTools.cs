@@ -110,7 +110,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Reorders parameters in a method signature and updates all call sites globally.")]
-    public async Task<object> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true) 
+    public async Task<object> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true)
     {
         var changes = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, newParameterOrder);
         if (autoStage)
@@ -149,85 +149,93 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Generates a mapping method between two types.")]
-    public async Task<string> GenerateMapping(string filePath, string fromType, string toType) 
+    public async Task<string> GenerateMapping(string filePath, string fromType, string toType)
         => await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType);
 
     [McpServerTool]
     [Description("Converts an anonymous object creation to a formal named class.")]
-    public async Task<Dictionary<string, string>> ConvertAnonymousToNamed(string filePath, string newClassName) 
+    public async Task<Dictionary<string, string>> ConvertAnonymousToNamed(string filePath, string newClassName)
         => await _advancedTypeEngine.ConvertAnonymousToNamedAsync(filePath, newClassName);
 
     [McpServerTool]
     [Description("Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. Automatically updates ALL type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution, renaming them to the target class. Returns a dictionary of filePath→updatedContent for every affected file.")]
-    public async Task<Dictionary<string, string>> InlineClass(string sourceFilePath, string targetFilePath, string className) 
+    public async Task<Dictionary<string, string>> InlineClass(string sourceFilePath, string targetFilePath, string className)
         => await _advancedStructuralEngine.InlineClassAsync(sourceFilePath, targetFilePath, className);
 
 
 
     [McpServerTool]
-    [Description("Atomically moves all secondary types in a file to their own files. Returns a ChangeId for ApplyStagedChanges plus first-15-line previews of each affected file's new content.")]
-    public async Task<object> MoveAllTypesToFiles(string filePath, bool autoStage = true)
+    [Description("""
+        Atomically moves all secondary types to their own files.
+        scope="file"     — moves types in a single file. Requires scopeName (the file path).
+                           Returns a ChangeId plus first-15-line content previews.
+        scope="project"  — moves types in every file in a project. Requires scopeName (project name).
+                           Returns a ChangeId and the list of affected files.
+        scope="solution" — moves types in every file across the entire solution. scopeName is ignored.
+                           Returns a ChangeId and the list of affected files.
+        autoStage=false  — returns the raw changes dictionary without staging.
+        """)]
+    public async Task<object> MoveAllTypesToFiles(
+        string scope,
+        string? scopeName   = null,
+        bool   autoStage    = true)
     {
-        var changes = await _refactoringEngine.MoveAllTypesToFilesAsync(filePath);
-        if (!autoStage)
+        return scope switch
         {
-            return changes;
-        }
+            "file" => await MoveAllTypesToFilesCore(
+                await _refactoringEngine.MoveAllTypesToFilesAsync(
+                    scopeName ?? throw new ArgumentException("scopeName (file path) is required for scope=file.", nameof(scopeName))),
+                autoStage,
+                $"Move all types to files in '{Path.GetFileName(scopeName)}'",
+                previewFiles: true),
 
-        if (changes.Count == 0)
-        {
-            return "No secondary types found to move.";
-        }
+            "project" => await MoveAllTypesToFilesCore(
+                await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(
+                    scopeName ?? throw new ArgumentException("scopeName (project name) is required for scope=project.", nameof(scopeName))),
+                autoStage,
+                $"Move all types to files in project '{scopeName}'",
+                previewFiles: false),
 
-        var id = _workspaceManager.StageChanges(changes, $"Move all types to files in '{Path.GetFileName(filePath)}'");
-        return new
-        {
-            ChangeId = id,
-            Description = $"Moves all secondary types in '{Path.GetFileName(filePath)}' to their own files. Call ApplyStagedChanges(\"{id}\") to apply.",
-            AffectedFiles = changes.Keys.Select(Path.GetFileName).ToList(),
-            ContentPreviews = changes.ToDictionary(
-                kvp => Path.GetFileName(kvp.Key)!,
-                kvp => PreviewFileContent(kvp.Value)
-            )
+            "solution" => await MoveAllTypesToFilesCore(
+                await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync(),
+                autoStage,
+                "Move all types to files in solution",
+                previewFiles: false),
+
+            _ => throw new ArgumentException(
+                $"Unknown scope '{scope}'. Valid: file, project, solution.", nameof(scope))
         };
     }
 
-    [McpServerTool]
-    [Description("Atomically moves all secondary types in every file in a project to their own files. If autoStage is true, returns a ChangeId.")]
-    public async Task<object> MoveAllTypesToFilesInProject(string projectName, bool autoStage = true)
+    private Task<object> MoveAllTypesToFilesCore(
+        Dictionary<string, string> changes,
+        bool autoStage,
+        string description,
+        bool previewFiles)
     {
-        var changes = await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(projectName);
         if (!autoStage)
-        {
-            return changes;
-        }
+            return Task.FromResult<object>(changes);
 
         if (changes.Count == 0)
+            return Task.FromResult<object>("No secondary types found to move.");
+
+        var id = _workspaceManager.StageChanges(changes, description);
+
+        if (previewFiles)
         {
-            return $"No secondary types found in project '{projectName}'.";
+            return Task.FromResult<object>(new
+            {
+                ChangeId = id,
+                Description = $"{description}. Call ApplyStagedChanges(\"{id}\") to apply.",
+                AffectedFiles = changes.Keys.Select(Path.GetFileName).ToList(),
+                ContentPreviews = changes.ToDictionary(
+                    kvp => Path.GetFileName(kvp.Key)!,
+                    kvp => PreviewFileContent(kvp.Value))
+            });
         }
 
-        var id = _workspaceManager.StageChanges(changes, $"Move all types to files in project '{projectName}'");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Moves all secondary types in project '{projectName}' to their own files.");
-    }
-
-    [McpServerTool]
-    [Description("Atomically moves all secondary types in every file across the entire solution to their own files. If autoStage is true, returns a ChangeId.")]
-    public async Task<object> MoveAllTypesToFilesInSolution(bool autoStage = true)
-    {
-        var changes = await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync();
-        if (!autoStage)
-        {
-            return changes;
-        }
-
-        if (changes.Count == 0)
-        {
-            return "No secondary types found in solution.";
-        }
-
-        var id = _workspaceManager.StageChanges(changes, "Move all types to files in solution");
-        return new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), "Moves all secondary types across the entire solution to their own files.");
+        return Task.FromResult<object>(
+            new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), description));
     }
 
     [McpServerTool]
@@ -247,13 +255,13 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Removes a specific member from a class or interface by name.")]
-    public async Task<string> RemoveMember(string filePath, string memberName) 
+    public async Task<string> RemoveMember(string filePath, string memberName)
         => await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
 
     [McpServerTool]
     [Description("""
         Adds a using directive to a file if not already present.
-        
+
         Pass just the namespace name (e.g. "System.Linq", "Microsoft.Extensions.DependencyInjection").
         For static usings, prefix with "static " (e.g. "static System.Math").
         If the directive already exists, the file is returned unchanged.
@@ -275,7 +283,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("""
         Adds a new value to an existing enum declaration.
-        
+
         Specify the enum name and the new value name. Optionally provide an explicit integer value
         (e.g. enumName="Status", valueName="Archived", explicitValue=99 produces 'Archived = 99').
         If the enum is not found in the file, the file is returned unchanged.
@@ -305,11 +313,11 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("""
         Pulls a member (method or property) up from a derived class to its base class.
-        
+
         Removes the 'override' modifier and adds 'virtual' (if not already abstract/virtual),
         then moves the declaration from the derived class into the base class. Returns a two-file
         change dict: derived class file (with member removed) + base class file (with member added).
-        
+
         Requires: the source class has a base class with accessible source code in the solution.
         If autoStage is true (default), returns a ChangeId for use with ApplyStagedChanges.
         """)]
@@ -333,7 +341,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("""
         Changes the accessibility modifier of a type or member.
-        
+
         targetName is the class/method/property/field name to modify.
         accessibility must be one of: "public", "private", "internal", "protected",
         "protected internal", or "private protected".
@@ -355,7 +363,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("""
         Adds or replaces a /// <summary>...</summary> XML doc comment on a type or member.
-        
+
         targetName is the class/method/property name to document.
         summaryText is the text content of the summary (single line).
         If a summary already exists it will be replaced.
@@ -378,7 +386,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("""
         Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment.
-        
+
         className is the target class; paramName and paramType define the parameter.
         fieldName overrides the derived field name (defaults to _camelCase of paramName).
         If the class has no constructor one is created. Expression-bodied constructors are converted to block bodies.
@@ -426,7 +434,7 @@ public class SentinelRefactoringTools
         Converts patterns like:
         - 'return x + y;' → 'var sum = x + y; return sum;'
         - 'var result = getValue();' → Extracts getValue() to a variable
-        
+
         contextSnippet: a verbatim substring containing or surrounding the expression to extract.
         variableName: the name for the new variable.
         Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
