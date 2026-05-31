@@ -77,16 +77,16 @@
 
 ---
 
-## Phase 4 — Batch Collapse (§7.1 of spec)
+## Phase 4 — Batch Collapse (§7.1 of spec) ✅ DONE — commit `6be58b9`
 *Depends on Phases 2+3. Steps within are independent.*
 
 Each unified tool: check breaker → execute → `RecordBatchOutcome` → write blob → return `BatchResultSummary`. Old names become thin aliases with deprecation note.
 
-12. **`propagate_cancellation_token`** — absorbs `_in_method`, `_in_file`, `_batch`
-13. **`convert_to_async_bridge`** — absorbs single-method + `run_bridge_batch`
-14. **`add_cancellation_token`** — absorbs `add_cancellation_token_to_method` + `apply_cancellation_token_to_file`
-15. **`run_uplift`** — absorbs `run_uplift_batch` + `run_uplift_batch_multi`
-16. **`flag_migration_candidates`** — absorbs single-item + batch + project-scan via `scope: "targets"|"project"`
+12. **`propagate_cancellation_token`** — absorbs `_in_method`, `_in_file`, `_batch` ✅
+13. **`convert_to_async_bridge`** — absorbs single-method (explicit targets); `run_bridge_batch` auto-discovery not yet absorbed ✅
+14. **`add_cancellation_token`** — absorbs `add_cancellation_token_to_method` + `apply_cancellation_token_to_file` ✅
+15. **`run_uplift`** — absorbs `run_uplift_batch` + `run_uplift_batch_multi` ✅
+16. **`flag_migration_candidates`** — absorbs single-item + batch + project-scan via `scope: "targets"|"project"` ✅
 
 **File:** `RoslynSentinel.Server/SentinelQualityTools.cs`
 
