@@ -63,27 +63,6 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
-    [Description("""
-        Generates a public override ToString() for a class based on its public properties.
-        
-        SECURITY: Sensitive properties are automatically excluded from the output to prevent
-        credential leakage in logs. Properties whose names contain any of these substrings
-        (case-insensitive) are excluded by default: password, passwd, secret, apikey, token,
-        hash, salt, pin, cvv, ssn, creditcard, connectionstring, privatekey, clientsecret.
-        
-        Use excludeProperties to additionally exclude specific property names by exact name.
-        
-        Returns: UpdatedContent (the new file source), IncludedProperties, ExcludedProperties,
-        and an optional Warning listing which properties were excluded and why.
-        Skips generation if a ToString() override already exists.
-        """)]
-    public async Task<CodeGenerationEngine.GenerateToStringResult> GenerateToString(
-        string filePath,
-        string className,
-        string[]? excludeProperties = null)
-        => await _codeGenerationEngine.GenerateToStringAsync(filePath, className, excludeProperties);
-
-    [McpServerTool]
     [Description("Extracts an interface from a concrete class. Returns: the interface source code ready to paste into a new file, a DI registration snippet (services.AddScoped<IFoo, Foo>()), and a Moq mock setup snippet for use in unit tests.")]
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterface(string filePath, string className)
         => await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(filePath, className);

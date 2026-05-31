@@ -156,51 +156,6 @@ public class SentinelAugmentTools
         return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
     }
 
-    // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
-
-    [McpServerTool]
-    [Description("""
-        Converts a string.Format() call to an interpolated string.
-
-        FIXES standard 'convert_to_interpolated_string' LIMITATION: The standard tool
-        fails with "First argument must be a string literal" when the format string is a
-        named constant or static field, e.g.:
-          string.Format(CacheKeyFmt, userId, date)
-          string.Format(ErrorMessages.NotFound, id)
-
-        This tool uses the semantic model to resolve the constant value at compile time,
-        then builds the interpolated string from the resolved format pattern.
-
-        Supported format string sources:
-          • Inline string literal:   string.Format("User {0}", id)
-          • const field/property:    string.Format(MyConst, id)
-          • Static readonly string:  string.Format(Templates.Key, id) (if const)
-
-        Supports format specifiers:   string.Format("{0:yyyy-MM-dd}", date) → $"{date:yyyy-MM-dd}"
-
-        Parameters:
-          filePath       - Absolute path to the .cs file.
-          contextSnippet - A verbatim substring from the string.Format call, e.g.
-                           "string.Format(CacheKeyFmt" or "Format(MyErrorTemplate,".
-          lineBefore/lineAfter - Verbatim text from the line above/below the target to
-                           disambiguate when the snippet matches multiple locations.
-
-        Returns: UpdatedContent with the interpolated string, or Error if the format
-        string could not be resolved to a compile-time constant.
-        """)]
-    public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmart(
-        string filePath,
-        string contextSnippet,
-        string? lineBefore = null,
-        string? lineAfter = null)
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("ConvertStringFormatToInterpolatedSmart in {File}", filePath);
-        }
-        return await _engine.ConvertStringFormatToInterpolatedSmartAsync(filePath, contextSnippet, lineBefore, lineAfter);
-    }
-
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────
 
     [McpServerTool]

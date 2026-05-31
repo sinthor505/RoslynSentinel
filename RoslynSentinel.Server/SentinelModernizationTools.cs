@@ -570,12 +570,4 @@ public class SentinelModernizationTools
 
         return result;
     }
-
-    // ── Legacy aliases (deprecated — use scan_*/get_* names) ─────────────────────
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_use_frozen_collections instead. This alias will be removed in a future release.")]
-    public Task<List<AntiPatternFinding>> FindUseFrozenCollections(string? filePath = null, string? projectName = null)
-        => ScanUseFrozenCollections(filePath, projectName);
-
 }

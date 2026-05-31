@@ -121,19 +121,6 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Safe deletes a symbol only if it has zero usages in the entire codebase. Provide contextSnippet: a verbatim substring from the symbol's declaration line. Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. If autoStage is true, returns a ChangeId.")]
-    public async Task<object> SafeDeleteSymbol(string filePath, string contextSnippet, bool autoStage = true, string? lineBefore = null, string? lineAfter = null) 
-    {
-        var changes = await _refactoringEngine.SafeDeleteSymbolAsync(filePath, contextSnippet, lineBefore, lineAfter);
-        if (autoStage)
-        {
-            return _workspaceManager.StageChanges(changes, $"Safe delete symbol in '{Path.GetFileName(filePath)}'.");
-        }
-
-        return changes;
-    }
-
-    [McpServerTool]
     [Description("Inlines a method solution-wide: replaces ALL call sites (across all files in the solution) with the method's expression, then removes the method declaration. Supported: expression-body methods (=> expr) and single-return-statement methods. Methods with multiple statements are rejected. Returns a dictionary of filePath→updatedContent for every file that was modified.")]
     public async Task<Dictionary<string, string>> InlineMethod(string filePath, string methodName)
     {
@@ -160,12 +147,6 @@ public class SentinelRefactoringTools
 
         return changes;
     }
-
-    [McpServerTool]
-    [Description("Extracts a block of statements into a new private method. Provide startLine and endLine (1-based, line range only — no column precision needed), the exact physical text of those two lines (used to detect stale files before modifying), and a name for the new method. Data flow analysis automatically determines parameters and return type. Returns BeforeSnippet/CallSiteReplacement/ExtractedMethodText previews plus UpdatedSourceContent for staging.")]
-    public async Task<ExtractMethodResult> ExtractMethod(
-        string filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName)
-        => await _refactoringEngine.ExtractMethodAsync(filePath, startLine, startLineText, endLine, endLineText, newMethodName);
 
     [McpServerTool]
     [Description("Introduces a new private readonly field from an expression. Provide contextSnippet: a verbatim substring from the expression (e.g., the expression text itself or the surrounding assignment). Provide lineBefore and/or lineAfter when the snippet could match multiple locations. The expression type is inferred from semantics.")]
@@ -931,26 +912,6 @@ public class SentinelRefactoringTools
             throw new InvalidOperationException(
                 $"ConvertExpressionBody failed for '{memberName}' ({direction}) in '{filePath}': " +
                 "file not found in workspace, member not found, or context snippet did not match. Ensure the solution is loaded.");
-        }
-
-        return result;
-    }
-
-    [McpServerTool]
-    [Description("Extracts a literal expression to a named constant in the containing type. " +
-                 "contextSnippet: a verbatim substring containing or surrounding the literal (e.g., '= 42;' or '\"hello world\"'). " +
-                 "constantName: the name for the new constant. " +
-                 "visibility: 'private' (default), 'protected', 'internal', or 'public'. " +
-                 "Provide lineBefore and/or lineAfter when the snippet could match multiple locations. " +
-                 "Returns the updated file content.")]
-    public async Task<string> ExtractConstant(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null)
-    {
-        var result = await _refactoringEngine.ExtractConstantAsync(filePath, contextSnippet, constantName, visibility, lineBefore, lineAfter);
-        if (string.IsNullOrEmpty(result))
-        {
-            throw new InvalidOperationException(
-                $"ExtractConstant failed for constant '{constantName}' in '{filePath}': " +
-                "file not found in workspace or context snippet did not match any literal. Ensure the solution is loaded.");
         }
 
         return result;

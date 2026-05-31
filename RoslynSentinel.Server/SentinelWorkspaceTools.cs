@@ -284,11 +284,6 @@ public class SentinelWorkspaceTools
         => await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
 
     [McpServerTool]
-    [Description("Synchronizes the filename to match the primary type declared within it.")]
-    public async Task<string> SyncTypeAndFilename(string filePath)
-        => await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-
-    [McpServerTool]
     [Description("Creates a new project and adds it to the current solution.")]
     public async Task<string> CreateProject(string projectName, string projectType = "console")
         => await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);

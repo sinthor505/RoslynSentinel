@@ -117,18 +117,13 @@ public class SentinelIntelligenceTools
         => await _deadCodeEngine.DetectUnusedLocalVariablesAsync(filePath);
 
     [McpServerTool]
-    [Description("Detects methods with too many parameters and suggests a Parameter Object, optionally filtered by project.")]
-    public async Task<List<string>> ScanLongParameterLists(int threshold = 5, string? projectName = null)
-        => await _analysisEngine.DetectLongParameterListsAsync(threshold, projectName);
-
-    [McpServerTool]
     [Description("Identifies classes that are never instantiated across the entire solution or a specific project.")]
     public async Task<List<string>> ScanUninstantiatedTypes(string? projectName = null)
         => await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
 
     [McpServerTool]
     [Description("Identifies circular project references (A -> B -> A).")]
-    public async Task<List<string>> ScanCircularDependencies()
+    public async Task<List<string>> ScanCircularProjectDependencies()
         => await _analysisEngine.FindCircularDependenciesAsync();
 
     [McpServerTool]
@@ -248,7 +243,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("Detects circular type dependencies within a project. Returns each cycle as an ordered list of type names (last == first) plus file paths. CycleType is 'Direct' for A→B→A cycles or 'Transitive' for longer chains. Scoped to projectName if provided.")]
-    public async Task<List<CircularDependencyChain>> ScanCircularDependencies(string? projectName = null)
+    public async Task<List<CircularDependencyChain>> ScanCircularTypeDependencies(string? projectName = null)
         => await _architecturalEngine.FindCircularDependenciesAsync(projectName);
 
     [McpServerTool]
@@ -556,192 +551,4 @@ public class SentinelIntelligenceTools
         string? projectName = null,
         int minStatements = 4)
         => await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(typeName, projectName, minStatements);
-
-    // ── Legacy aliases (deprecated — use scan_*/get_* names) ─────────────────────
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_methods_by_return_type instead. This alias will be removed in a future release.")]
-    public Task<List<SearchResult>> FindMethodsByReturnType(string returnType)
-        => ScanMethodsByReturnType(returnType);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_private_members instead. This alias will be removed in a future release.")]
-    public Task<List<DeadCodeReport>> FindUnusedPrivateMembers(string filePath, string className)
-        => ScanUnusedPrivateMembers(filePath, className);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_private_fields instead. This alias will be removed in a future release.")]
-    public Task<List<DeadCodeReport>> DetectUnusedPrivateFields(string filePath)
-        => ScanUnusedPrivateFields(filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_local_variables instead. This alias will be removed in a future release.")]
-    public Task<List<DeadCodeReport>> DetectUnusedLocalVariables(string filePath)
-        => ScanUnusedLocalVariables(filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_long_parameter_lists instead. This alias will be removed in a future release.")]
-    public Task<List<string>> DetectLongParameterLists(int threshold = 5, string? projectName = null)
-        => ScanLongParameterLists(threshold, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_uninstantiated_types instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindUninstantiatedTypes(string? projectName = null)
-        => ScanUninstantiatedTypes(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_circular_dependencies instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindCircularDependencies()
-        => ScanCircularDependencies();
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_circular_dependencies instead. This alias will be removed in a future release.")]
-    public Task<List<CircularDependencyChain>> FindCircularDependencies(string? projectName = null)
-        => ScanCircularDependencies(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_references instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindUnusedReferences(string projectName)
-        => ScanUnusedReferences(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_interfaces instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindUnusedInterfaces(string? projectName = null)
-        => ScanUnusedInterfaces(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_internal_classes_that_could_be_private instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindInternalClassesThatCouldBePrivate(string? projectName = null)
-        => ScanInternalClassesThatCouldBePrivate(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_large_switch_statements instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindLargeSwitchStatements(int threshold = 10, string? projectName = null)
-        => ScanLargeSwitchStatements(threshold, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_structural_smells instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindStructuralSmells(ProjectStructureEngine.StructuralSmellType typeFilter = ProjectStructureEngine.StructuralSmellType.All, string? projectName = null, string? filePath = null)
-        => ScanStructuralSmells(typeFilter, projectName, filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_unused_constructors instead. This alias will be removed in a future release.")]
-    public Task<List<DeadCodeReport>> FindUnusedConstructors(string filePath)
-        => ScanUnusedConstructors(filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_all_implementations instead. This alias will be removed in a future release.")]
-    public Task<List<ImplementationInfo>> FindAllImplementations(string typeName, string? projectName = null)
-        => GetAllImplementations(typeName, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_readonly_field_candidates instead. This alias will be removed in a future release.")]
-    public Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidates(string filePath)
-        => ScanReadonlyFieldCandidates(filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_di_registrations instead. This alias will be removed in a future release.")]
-    public Task<List<DiRegistration>> FindDiRegistrations(string? projectName = null, string? filePath = null, string? lifetimeFilter = null)
-        => GetDiRegistrations(projectName, filePath, lifetimeFilter);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_extension_methods instead. This alias will be removed in a future release.")]
-    public Task<List<ExtensionMethodInfo>> FindExtensionMethods(string targetTypeName, string? projectName = null)
-        => GetExtensionMethods(targetTypeName, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_all_throw_sites instead. This alias will be removed in a future release.")]
-    public Task<List<ThrowSiteInfo>> FindAllThrowSites(string? exceptionType = null, string? filePath = null, string? projectName = null, bool sortByFrequency = false)
-        => ScanAllThrowSites(exceptionType, filePath, projectName, sortByFrequency);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_object_creation_sites instead. This alias will be removed in a future release.")]
-    public Task<List<ObjectCreationSite>> FindObjectCreationSites(string typeName, string? filePath = null, string? projectName = null, bool sortByFrequency = false)
-        => GetObjectCreationSites(typeName, filePath, projectName, sortByFrequency);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_services_not_registered instead. This alias will be removed in a future release.")]
-    public Task<List<UnregisteredServiceFinding>> FindServicesNotRegistered(string? projectName = null)
-        => ScanServicesNotRegistered(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_best_insertion_point instead. This alias will be removed in a future release.")]
-    public Task<BestInsertionResult> FindBestInsertionPoint(string filePath, string containerName, string memberKind)
-        => GetBestInsertionPoint(filePath, containerName, memberKind);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_todo_fixme_comments instead. This alias will be removed in a future release.")]
-    public Task<List<TodoCommentFinding>> FindTodoFixmeComments(string? filePath = null, string? projectName = null)
-        => ScanTodoFixmeComments(filePath, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_callers instead. This alias will be removed in a future release.")]
-    public Task<List<CallerInfo>> FindCallersSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => GetCallers(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_implementations instead. This alias will be removed in a future release.")]
-    public Task<List<ImplementationInfo>> FindImplementationsSafe(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
-        => GetImplementations(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_breaking_changes instead. This alias will be removed in a future release.")]
-    public Task<List<BreakingChange>> DetectBreakingChanges(List<PublicApiMember> baseline, string? projectName = null, string? filePath = null)
-        => ScanBreakingChanges(baseline, projectName, filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_layer_violations instead. This alias will be removed in a future release.")]
-    public Task<List<ArchitecturalEngine.LayerViolation>> DetectLayerViolations(string? projectName = null, string? filePath = null)
-        => ScanLayerViolations(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_large_types instead. This alias will be removed in a future release.")]
-    public Task<List<LargeTypeReport>> FindLargeTypes(int maxLines = 500, string? projectName = null)
-        => ScanLargeTypes(maxLines, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_large_methods instead. This alias will be removed in a future release.")]
-    public Task<List<LargeMethodReport>> FindLargeMethods(int maxLines = 50, string? projectName = null)
-        => ScanLargeMethods(maxLines, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_duplicate_methods instead. This alias will be removed in a future release.")]
-    public Task<List<DuplicateMethodGroup>> FindDuplicateMethods(int minStatements = 5, string? projectName = null)
-        => ScanDuplicateMethods(minStatements, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_interface_extraction_candidates instead. This alias will be removed in a future release.")]
-    public Task<List<InterfaceCandidateReport>> FindInterfaceExtractionCandidates(int minPublicMethods = 3, string? projectName = null)
-        => ScanInterfaceExtractionCandidates(minPublicMethods, projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_circular_type_references instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindCircularTypeReferences(string? projectName = null)
-        => ScanCircularTypeReferences(projectName);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_missing_generic_constraints instead. This alias will be removed in a future release.")]
-    public Task<List<string>> FindMissingGenericConstraints(string? projectName = null, string? filePath = null)
-        => ScanMissingGenericConstraints(projectName, filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_types_by_attribute instead. This alias will be removed in a future release.")]
-    public Task<List<SearchResult>> FindTypesByAttribute(string attributeName)
-        => ScanTypesByAttribute(attributeName);
-
-    [McpServerTool]
-    [Description("Deprecated: use get_attribute_usages instead. This alias will be removed in a future release.")]
-    public Task<List<AttributeUsageSite>> FindAttributeUsages(string attributeName, string? projectName = null, string? filePath = null)
-        => GetAttributeUsages(attributeName, projectName, filePath);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_duplicate_blocks_in_class instead. This alias will be removed in a future release.")]
-    public Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClass(string filePath, string className, int minStatements = 4)
-        => ScanDuplicateBlocksInClass(filePath, className, minStatements);
-
-    [McpServerTool]
-    [Description("Deprecated: use scan_duplicate_blocks_in_hierarchy instead. This alias will be removed in a future release.")]
-    public Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchy(string typeName, string? projectName = null, int minStatements = 4)
-        => ScanDuplicateBlocksInHierarchy(typeName, projectName, minStatements);
-
 }
