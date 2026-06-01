@@ -112,43 +112,18 @@ public class SentinelCodemodTools
     [McpServerTool]
     [Description("""
         Applies a file-wide code transformation. Most transforms return the updated file content
-        as a string; pass the result to apply_proposed_changes to write to disk. Exceptions are
-        noted below.
+        as a string; pass the result to apply_proposed_changes to write to disk.
 
-        transform values:
-          add_braces                        Adds braces to all brace-less control statements.
-          cleanup_implicit_spans            Removes redundant implicit Span<T>→Span<byte> casts.
-          convert_to_null_coalescing        Replaces null-conditional chains with ?? operators.
-          convert_to_pattern                Converts is/as type-check+cast pairs to pattern matching.
-          convert_to_switch                 Converts if-else chains to switch expressions.
-          fix_mismatched_namespaces         Corrects namespace declarations to match folder structure.
-          fix_thread_sleep                  Replaces Thread.Sleep with await Task.Delay in async methods.
-          format_document_preview           Returns a FormatPreviewResult diff without writing.
-          format_document_safe              Formats the document. preview=false (default) writes to disk
-                                            and updates the workspace; preview=true returns content only.
-          generate_xml_documentation_stubs  Generates XML doc stubs for all undocumented public methods.
-          optimize_task_wait                Converts blocking Task.Wait/Result to async/await.
-          preview_add_missing_usings        Returns AddUsingsPreview listing missing usings (read-only).
-          add_configure_await_false         Adds .ConfigureAwait(false) to all awaits. libraryMode=true
-                                            (default) processes all awaits. Returns SourceTransformResult.
-          remove_configure_await_false      Removes all .ConfigureAwait(x) calls. Returns SourceTransformResult.
-          simplify_boolean_expressions      Simplifies redundant boolean expressions (x == true → x).
-          simplify_member_access            Removes unnecessary this./base. qualifiers.
-          simplify_verbosity                Removes redundant type names and default parameter values.
-          sort_and_deduplicate_usings       Sorts and deduplicates using directives. preview=false (default)
-                                            writes to disk; preview=true returns content without writing.
-                                            Returns UsingsCleanupResult.
-          upgrade_pattern_matching          Upgrades is/as casts to C# pattern-matching syntax.
-          upgrade_thread_safety             Fixes dangerous double-checked locking patterns.
-          upgrade_to_file_scoped_namespace  Converts block-scoped namespace to file-scoped.
-          upgrade_to_modern_guards          Converts null-check guards to ArgumentNullException.ThrowIfNull.
-          use_field_backed_properties       Converts auto-properties with backing fields to field-backed (C# 13).
-          use_index_from_end                Converts array[array.Length - N] to array[^N].
-          use_time_provider                 Replaces DateTime.Now/UtcNow with ITimeProvider calls.
-
+        filePath:  the .cs file to transform.
+        transform: the codemod to apply — call describe_tool_options("apply_file_codemod") for
+                   valid values and per-transform notes.
         libraryMode: for add_configure_await_false — true (default) adds .ConfigureAwait(false) to all awaits.
         preview: for format_document_safe and sort_and_deduplicate_usings — false (default) writes to disk;
                  true returns updated content without writing.
+
+        Returns the updated file content as a string, or a type-specific result for some transforms
+        (SourceTransformResult, UsingsCleanupResult, FormatPreviewResult, AddUsingsPreview).
+        Throws InvalidOperationException when the file is not found or no changes are needed.
         """)]
     public async Task<object> ApplyFileCodemod(
         string filePath,
@@ -340,38 +315,18 @@ public class SentinelCodemodTools
     [Description("""
         Applies a method-scoped code transformation. Most transforms return the updated file
         content as a string; pass the result to apply_proposed_changes to write to disk.
-        Transforms that return SourceTransformResult are noted.
 
-        transform values:
-          add_guard_clauses              Adds ArgumentNullException.ThrowIfNull guards for reference params.
-                                         Returns SourceTransformResult.
-          convert_expression_body        Converts between block body and expression body. direction: "ToExpression"
-                                         or "ToBlock". contextSnippet/lineBefore/lineAfter to disambiguate.
-          convert_lock_to_semaphore_slim Converts lock statements to async SemaphoreSlim pattern.
-                                         Returns SourceTransformResult.
-          convert_method_to_indexer      Converts a single-parameter get/set method pair to an indexer.
-          convert_out_params_to_value_tuple  Converts out-parameter methods to ValueTuple returns.
-                                         Returns OutParamConversionResult.
-          convert_static_to_extension    Converts a static method to an extension method.
-          convert_switch_to_expression   Converts a switch statement to a switch expression.
-          convert_to_async_enumerable    Converts a Task<List<T>>-returning method to IAsyncEnumerable<T>.
-                                         Returns SourceTransformResult.
-          extension_to_static            Converts an extension method back to a static method.
-          generate_async_overload        Generates an async overload of a synchronous method via Task.Run.
-          make_method_static             Removes implicit instance state and makes the method static.
-          make_method_thread_safe        Adds a lock field and wraps the method body in a lock statement.
-                                         lockFieldName: name for the lock object (default "_lock").
-                                         Returns SourceTransformResult.
-          optimize_independent_awaits    Batches sequential independent awaits into Task.WhenAll.
-          optimize_to_value_task         Converts Task/Task<T> return type to ValueTask/ValueTask<T>.
-          reduce_block_depth             Inverts conditions and uses early returns to reduce nesting depth.
-          update_xml_docs_from_signature Regenerates XML <param> and <returns> tags from the method signature.
-          use_exception_expressions      Replaces throw new ArgumentNullException(nameof(x)) with
-                                         ArgumentNullException.ThrowIfNull(x), etc.
-
+        filePath:   the .cs file containing the method.
+        methodName: the method to transform.
+        transform:  the codemod to apply — call describe_tool_options("apply_method_codemod") for
+                    valid values and per-transform notes.
         direction: required for convert_expression_body — "ToExpression" or "ToBlock".
         contextSnippet/lineBefore/lineAfter: for convert_expression_body disambiguation.
         lockFieldName: for make_method_thread_safe — name for the lock field (default "_lock").
+
+        Returns the updated file content as a string, or a type-specific result for some transforms
+        (SourceTransformResult, OutParamConversionResult).
+        Throws InvalidOperationException when the file or method is not found.
         """)]
     public async Task<object> ApplyMethodCodemod(
         string filePath,
@@ -537,29 +492,16 @@ public class SentinelCodemodTools
         Applies a class-scoped code transformation and returns the updated file content as a string.
         Pass the result to apply_proposed_changes to write to disk.
 
-        transform values:
-          add_validation_to_poco          Adds [Required] and [StringLength(100)] to all string properties.
-          class_to_record                 Converts a class to a record type.
-          convert_abstract_to_interface   Converts an abstract class to an interface.
-          convert_property_safe           Converts a property between auto-property and full property.
-                                          propertyName: the property to convert.
-                                          direction: "ToFullProperty" or "ToAutoProperty".
-                                          contextSnippet/lineBefore/lineAfter to disambiguate.
-          convert_property_to_methods     Converts a property to a getter/setter method pair.
-                                          propertyName: the property name (pass via className parameter).
-          convert_to_background_service   Adds BackgroundService base class and generates ExecuteAsync override.
-          convert_to_source_generated_logging  Converts ILogger calls to source-generated logging.
-          document_poco_fields            Adds [Description] XML comments to all fields in a POCO class.
-          make_class_immutable            Converts mutable properties to init-only and adds a With method.
-          record_to_class                 Converts a record type to a class.
-          replace_constructor_with_factory  Replaces a constructor with a static factory method.
-          sort_members                    Sorts members by convention (fields, ctors, props, methods).
-          upgrade_to_primary_constructor  Converts a simple assignment-only constructor to a C# 12 primary constructor.
-
-        propertyName: for convert_property_safe and convert_property_to_methods — the property name
-                      (pass the property name as the className parameter, or use this dedicated parameter).
+        filePath:  the .cs file containing the class.
+        className: the target class name.
+        transform: the codemod to apply — call describe_tool_options("apply_class_codemod") for
+                   valid values and per-transform notes.
+        propertyName: for convert_property_safe and convert_property_to_methods — the property name.
         direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty".
         contextSnippet/lineBefore/lineAfter: for convert_property_safe disambiguation.
+
+        Returns the updated file content as a string.
+        Throws InvalidOperationException when the file or class is not found.
         """)]
     public async Task<object> ApplyClassCodemod(
         string filePath,
@@ -700,42 +642,14 @@ public class SentinelCodemodTools
 
     [McpServerTool]
     [Description("""
-        Generates new code for a type or method. Returns a type-specific result object.
+        Generates new code for a type or method. Returns a kind-specific result object.
 
-        kind values:
-          add_benchmark_stub           Adds a BenchmarkDotNet stub class for a method.
-                                       Requires filePath, className, methodName.
-                                       Returns SourceTransformResult.
-          generate_constructor         Generates a constructor from private/readonly fields.
-                                       Returns the updated file content as a string.
-          generate_decorator_class     Generates a Decorator pattern class for an interface.
-                                       Pass the interface name as className (filePath not required).
-                                       decoratorPrefix: prefix for the decorator class (default "Logging").
-                                       projectName: optional project scope.
-                                       Returns DecoratorResult.
-          generate_equality_overrides  Generates Equals and GetHashCode overrides.
-                                       Returns the updated file content as a string.
-          generate_fluent_builder      Generates a fluent builder class with With{Property}() methods.
-                                       Returns FluentBuilderResult.
-          generate_path_driven_tests   Generates test stubs for each execution path in a method.
-                                       Requires filePath, methodName.
-                                       framework: "NUnit" (default), "xunit", or "mstest".
-                                       disambiguateLine: line number to resolve overloaded methods.
-                                       Returns PathDrivenTestReport.
-          generate_repository_interface  Extracts an interface from a class with DI and Moq snippets.
-                                       Returns RepositoryInterfaceResult.
-          generate_test_scaffold       Generates an xUnit+Moq test scaffold with mock fields and test stubs.
-                                       Returns TestScaffoldResult.
-          generate_test_skeleton       Generates a test class skeleton with one test stub per public method.
-                                       Returns TestSkeletonReport.
-          generate_to_string_safe      Generates a ToString() override with correctly escaped interpolated strings.
-                                       members: optional comma-separated list of property/field names.
-                                       Returns MsAugmentResult.
-
-        filePath: required for all kinds except generate_decorator_class.
-        className: the target class name; for generate_decorator_class, pass the interface name here.
+        kind:      the artefact to generate — call describe_tool_options("generate") for valid
+                   values, required parameters per kind, and return types.
+        filePath:  required for all kinds except generate_decorator_class.
+        className: target class name; for generate_decorator_class, pass the interface name.
         methodName: required for add_benchmark_stub and generate_path_driven_tests.
-        members: for generate_to_string_safe — optional comma-separated member list.
+        members:   for generate_to_string_safe — optional comma-separated member list.
         decoratorPrefix: for generate_decorator_class (default "Logging").
         projectName: for generate_decorator_class — optional project scope.
         framework: for generate_path_driven_tests — "NUnit" (default), "xunit", or "mstest".

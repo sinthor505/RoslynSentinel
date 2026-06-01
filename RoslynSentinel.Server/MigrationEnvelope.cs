@@ -91,3 +91,22 @@ public record MigrationScanSummary(
     Dictionary<string, int>             ByScoreBucket,
     List<MigrationCandidateFinding>?    TopCandidates = null
 );
+
+// ── Tool options (describe_tool_options return type) ─────────────────────────
+
+/// <summary>
+/// Return type for <c>describe_tool_options</c>. Contains the reference enumeration
+/// (valid values, field tables, transform catalogues) that was removed from tool
+/// descriptions to reduce per-session schema token cost.
+/// </summary>
+public sealed class ToolOptionsResult
+{
+    /// <summary>Human-readable reference table (operation×field lists, transform names, etc.).</summary>
+    public string? Description { get; set; }
+
+    /// <summary>Machine-readable map of option key → field-list or value list.</summary>
+    public Dictionary<string, object>? StructuredOptions { get; set; }
+
+    /// <summary>Non-null when the requested tool name is not recognised.</summary>
+    public ResultError? Error { get; set; }
+}

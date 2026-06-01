@@ -90,50 +90,16 @@ public class SentinelScanTools
     [Description("""
         Dispatches a named detector across a file, project, or entire solution.
 
-        detector  — one of 94 bare ids (see describe_scan_detectors for full descriptions):
-          concurrency: async_in_constructor, async_over_sync, async_void_without_try_catch,
-            cancellation_token_not_forwarded, cas_loop_without_backoff,
-            check_then_act_on_dictionary, concurrent_collection_opportunities,
-            configure_await_missing, double_checked_locking, inconsistent_async_suffix,
-            mismatched_await, missing_cancellation_tokens, possible_deadlocks,
-            semaphore_usage, sequential_independent_awaits, task_delay_usage,
-            task_delay_zero_usage, task_run_in, task_void_usage, task_when_all_usage,
-            task_yield_usage, unawaited_fire_and_forget, unobserved_task_in_field,
-            unsafe_lazy_init, unsafe_lazy_init_thread, value_task_misuse
-          config: json_anti_patterns, package_inconsistency, project_consistency
-          convention: mutable_public_collection_properties, mutable_public_properties,
-            naming_violations, readonly_field_candidates, string_magic_values,
-            todo_fixme_comments
-          correctness: all_throw_sites, empty_catch_blocks, exception_handling,
-            memory_leaks, misbound_overload_chains, missing_generic_constraints,
-            multiple_out_parameter_methods, non_exhaustive_enum_switches,
-            possible_infinite_loops, redundant_cast, resource_disposal,
-            services_not_registered, stack_overflow_risks, unawaked_dispose,
-            unbounded_recursion, unbounded_static_collections, value_type_mutation_intent
-          dead-code: obsolete_callers, uninstantiated_types, unused_constructors,
-            unused_event_subscriptions, unused_interfaces, unused_local_variables,
-            unused_private_fields, unused_references
-          misc: anti_patterns, blocking_calls_in, finalizer_on_disposable
-          performance: boxing_allocations, implicit_nullable_boxing,
-            inefficient_string_comparisons, linq_n1_patterns, linq_redundant_where,
-            multiple_enumeration, performance, re_do_s_patterns, regex_new_in_loop,
-            string_format_in_loops, use_frozen_collections
-          security: hardcoded_paths, reflection_usage, security, sql_injection,
-            unvalidated_regex_source
-          structure: circular_dependencies, circular_type_references,
-            duplicate_blocks_in_hierarchy, duplicate_methods,
-            interface_extraction_candidates, internal_classes_that_could_be_private,
-            large_methods, large_switch_statements, large_types, layer_violations,
-            long_parameter_list, namespace_path_mismatches, primitive_obsession,
-            structural_smells, type_cohesion
-
-        scope     — "file" | "project" | "solution"
-        scopeName — filePath when scope=file; projectName when scope=project; omit for solution.
-                    For duplicate_blocks_in_hierarchy, scopeName is the root type name.
+        detector:  one of 94 detector IDs \u2014 call describe_tool_options("scan") for the full
+                   list grouped by domain (concurrency, config, convention, correctness,
+                   dead-code, misc, performance, security, structure).
+        scope:     "file" | "project" | "solution"
+        scopeName: filePath when scope=file; projectName when scope=project; omit for solution.
+                   For duplicate_blocks_in_hierarchy, scopeName is the root type name.
 
         File-scope-only detectors require scope="file" and a valid scopeName (filePath).
         unused_references requires scope="project".
-        Call describe_scan_detectors to see the scope hint for each detector.
+        Call describe_scan_detectors for per-detector scope hints and descriptions.
         """)]
     public async Task<object> Scan(
         string detector,

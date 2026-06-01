@@ -225,42 +225,22 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Returns all methods in the solution (or scoped to a file/project) that carry a
-        [MigrationCandidate] attribute added by flag_migration_candidate.
+        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate.
+        Uses syntax-level analysis — no compilation needed.
 
-        filePath:    restrict to a single file (full or partial path suffix).
-        projectName: restrict to a single project (case-insensitive name).
-        pattern:     restrict to one pattern — "AsyncBridgeCandidate", "HandlerExtract",
-                     "HandlerToAsync", "AsyncCallerUplift", etc. Omit to return all patterns.
-        summarize:   when true, returns MigrationScanSummary (counts by pattern/class/score
-                     bucket) instead of the raw finding list.
-        limit:       max findings to return per page (default 50, ignored when summarize=true).
-        offset:      zero-based page offset (default 0, ignored when summarize=true).
-        topN:        when summarize=true, also return the top N candidates by score in
-                     TopCandidates (ignored when summarize=false). e.g. topN=10, minScore=70
-                     returns the 10 highest-scoring candidates alongside the summary counts
-                     in a single call.
-        minScore:    when summarize=true, filter TopCandidates to candidates at or above this
-                     score threshold (ignored when summarize=false).
+        filePath:    restrict to one file (full or partial path suffix).
+        projectName: restrict to one project (case-insensitive).
+        pattern:     restrict to one pattern — call describe_tool_options("scan_migration_candidates")
+                     for valid pattern values.
+        summarize:   when true, return counts only (always inline-safe). Add topN/minScore to include
+                     top actionable targets alongside counts.
+        topN:        when summarize=true, include this many top-scored candidates in TopCandidates.
+        minScore:    when summarize=true, filter TopCandidates to score >= minScore.
+        limit/offset: page the full candidate list (summarize=false only).
 
-        MigrationScanSummary fields:
-          ByPattern     — candidate count keyed by pattern name.
-          ByClass       — List<ClassCandidateSummary> sorted descending by Count. Each entry
-                          has ClassName, ProjectName (.csproj name), FilePath, Count.
-          ByScoreBucket — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
-                          The '<0' bucket is valid but rare; it applies to methods that were
-                          flagged manually with a negative score (the auto-flagging path
-                          applies a virtual/override penalty of -20 but discards sub-zero
-                          results before writing the attribute).
-          TopCandidates — populated when topN or minScore is set; null otherwise.
-
-        Uses syntax-level analysis — no compilation needed — so results are accurate even
-        immediately after flag_migration_candidate without a solution reload.
-
-        Returns MigrationResult<MigrationScanSummary> when summarize=true, otherwise
-        MigrationResult<List<MigrationCandidateFinding>>. Checks HasMore/TotalRecords for paging.
-        When the serialized payload exceeds 256 KB the result is written to disk and
-        LargeResult.OperationId can be passed to get_scan_result to page through it.
+        Returns MigrationResult<List<MigrationCandidateFinding>> or MigrationResult<MigrationScanSummary>.
+        A method flagged for two patterns appears twice. Each finding includes a Summary field.
+        When payload exceeds 256 KB the result is written to disk; use get_scan_result to page through it.
         """)]
     public async Task<object> ScanMigrationCandidates(
         string? filePath    = null,
@@ -1589,46 +1569,16 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Unified dispatcher for the six async-migration operations.
+        Unified dispatcher for six async-migration operations. Dispatches to the appropriate
+        engine based on the operation string; all operations check the circuit breaker first
+        and return BatchResultSummary.
 
-        operation values and required input fields:
-          "propagate_cancellation_token"
-              input.Targets         — list of { FilePath, MethodNames? }
-              input.DryRun          — optional, default false
-              input.MaxItems        — optional, default 100
-          "convert_to_async_bridge"
-              input.Targets         — list of { FilePath, MethodNames } (MethodNames required)
-              input.DryRun          — optional, default false
-              input.PropagateCancellationTokens — optional, default true
-          "add_cancellation_token"
-              input.Targets         — list of { FilePath, MethodNames? }
-              input.DryRun          — optional, default false
-              input.MaxItems        — optional, default 100
-          "run_uplift"
-              input.UpliftTargets   — list of { BridgedMethodName, ProjectName? }
-              input.DryRun          — optional, default false
-              input.MaxCallersPerMethod       — optional, default 10
-              input.PropagateCancellationTokens — optional, default true
-          "flag_migration_candidates"
-              input.FlagScope       — "targets" (default) or "project"
-              input.FlagTargets     — list of { FilePath, MethodName, Pattern, Score?, Reason? } (scope=targets)
-              input.ProjectName     — project name (scope=project); null = entire solution
-              input.Pattern         — optional, default "AsyncBridgeCandidate"
-              input.MinScore        — optional, default 50
-              input.DryRun          — optional, default false
-              input.ForceRescan     — optional, default false
-          "asyncify"
-              input.ProjectName     — project; null = entire solution
-              input.MethodTargets   — explicit method targets (skips discovery phase)
-              input.Exclusions      — method names to skip
-              input.DryRun          — optional, default false
-              input.PropagateCancellationTokens — optional, default true
-              input.MaxMethods      — optional, default 50
-              input.MaxCallersPerMethod       — optional, default 10
-              input.MinScore        — optional, default 50
-              input.ScoreThreshold  — optional, default 60
+        operation: one of six values — call describe_tool_options("async_migrate") for valid
+                   values and required input fields per operation.
+        input:     AsyncMigrateInput — fields vary by operation; see describe_tool_options.
 
         Returns BatchResultSummary. Use get_operation_detail(changeId) for per-item details.
+        Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
         """)]
     public async Task<BatchResultSummary> AsyncMigrate(
         string            operation,
@@ -1710,4 +1660,485 @@ public class SentinelQualityTools
                 nameof(operation))
         };
     }
+
+    // ── describe_tool_options ─────────────────────────────────────────────────
+
+    [McpServerTool]
+    [Description("""
+        Returns reference documentation for a named tool: valid operation values, required input
+        fields per operation, valid transform/kind/detector names, and parameter defaults. Call
+        this once at the start of a session when you need to know what values a tool accepts.
+
+        toolName: the MCP tool name (e.g. "async_migrate", "scan", "apply_file_codemod").
+
+        Returns a ToolOptionsResult with a Description string (human-readable reference table) and
+        a StructuredOptions object (machine-readable key→field-list map). Returns ErrorCode =
+        "UnknownTool" if the tool name is not recognised.
+        """)]
+    public ToolOptionsResult DescribeToolOptions(string toolName)
+    {
+        return toolName switch
+        {
+            "async_migrate"                         => AsyncMigrateOptions(),
+            "scan"                                  => ScanOptions(),
+            "scan_migration_candidates"             => ScanMigrationCandidatesOptions(),
+            "apply_file_codemod"                    => ApplyFileCodemodOptions(),
+            "apply_method_codemod"                  => ApplyMethodCodemodOptions(),
+            "apply_class_codemod"                   => ApplyClassCodemodOptions(),
+            "generate"                              => GenerateOptions(),
+            "convert_switch_to_pattern_safe"        => ConvertSwitchOptions(),
+            "analyze_switch_for_pattern_conversion" => AnalyzeSwitchOptions(),
+            "analyze_foreach_for_linq_conversion"   => AnalyzeForeachOptions(),
+            _ => new ToolOptionsResult
+            {
+                Description = $"Unknown tool '{toolName}'.",
+                Error       = new ResultError("UnknownTool", $"No options registered for '{toolName}'.")
+            }
+        };
+    }
+
+    private static ToolOptionsResult AsyncMigrateOptions() => new()
+    {
+        Description = """
+            async_migrate — operation values and required input fields:
+
+              "propagate_cancellation_token"
+                  input.Targets         — list of { FilePath, MethodNames? }
+                  input.DryRun          — optional, default false
+                  input.MaxItems        — optional, default 100
+
+              "convert_to_async_bridge"
+                  input.Targets         — list of { FilePath, MethodNames } (MethodNames required)
+                  input.DryRun          — optional, default false
+                  input.PropagateCancellationTokens — optional, default true
+
+              "add_cancellation_token"
+                  input.Targets         — list of { FilePath, MethodNames? }
+                  input.DryRun          — optional, default false
+                  input.MaxItems        — optional, default 100
+
+              "run_uplift"
+                  input.UpliftTargets   — list of { BridgedMethodName, ProjectName? }
+                  input.DryRun          — optional, default false
+                  input.MaxCallersPerMethod       — optional, default 10
+                  input.PropagateCancellationTokens — optional, default true
+
+              "flag_migration_candidates"
+                  input.FlagScope       — "targets" (default) or "project"
+                  input.FlagTargets     — list of { FilePath, MethodName, Pattern, Score?, Reason? } (scope=targets)
+                  input.ProjectName     — project name (scope=project); null = entire solution
+                  input.Pattern         — optional, default "AsyncBridgeCandidate"
+                  input.MinScore        — optional, default 50
+                  input.DryRun          — optional, default false
+                  input.ForceRescan     — optional, default false
+
+              "asyncify"
+                  input.ProjectName     — project; null = entire solution
+                  input.MethodTargets   — explicit method targets (skips discovery phase)
+                  input.Exclusions      — method names to skip
+                  input.DryRun          — optional, default false
+                  input.PropagateCancellationTokens — optional, default true
+                  input.MaxMethods      — optional, default 50
+                  input.MaxCallersPerMethod       — optional, default 10
+                  input.MinScore        — optional, default 50
+                  input.ScoreThreshold  — optional, default 60
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["propagate_cancellation_token"] = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
+            ["convert_to_async_bridge"]      = new { Targets = "list of {FilePath, MethodNames}", DryRun = false, PropagateCancellationTokens = true },
+            ["add_cancellation_token"]       = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
+            ["run_uplift"]                   = new { UpliftTargets = "list of {BridgedMethodName, ProjectName?}", DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
+            ["flag_migration_candidates"]    = new { FlagScope = "targets|project", DryRun = false, MinScore = 50, ForceRescan = false },
+            ["asyncify"]                     = new { DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
+        }
+    };
+
+    private static ToolOptionsResult ScanMigrationCandidatesOptions() => new()
+    {
+        Description = """
+            scan_migration_candidates — valid pattern values:
+              AsyncBridgeCandidate   — method is a sync wrapper suitable for async-bridge conversion
+              HandlerExtract         — method body can be extracted into a separate handler class
+              HandlerToAsync         — handler method that should be made async
+              AsyncCallerUplift      — sync caller of an already-bridged async method
+
+            MigrationScanSummary fields (when summarize=true):
+              ByPattern     — candidate count keyed by pattern name.
+              ByClass       — List<ClassCandidateSummary> sorted descending by Count. Each entry
+                              has ClassName, ProjectName (.csproj name), FilePath, Count.
+              ByScoreBucket — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
+                              The '<0' bucket is valid but rare; it applies to methods flagged
+                              manually with a negative score (auto-flagging discards sub-zero
+                              results before writing the attribute).
+              TopCandidates — populated when topN or minScore is set; null otherwise.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["patterns"] = new[] { "AsyncBridgeCandidate", "HandlerExtract", "HandlerToAsync", "AsyncCallerUplift" },
+            ["scoreBuckets"] = new[] { "<0", "0-25", "26-50", "51-75", "76plus" },
+        }
+    };
+
+    private static ToolOptionsResult ApplyFileCodemodOptions() => new()
+    {
+        Description = """
+            apply_file_codemod — valid transform values:
+              add_braces                        Adds braces to all brace-less control statements.
+              cleanup_implicit_spans            Removes redundant implicit Span<T>→Span<byte> casts.
+              convert_to_null_coalescing        Replaces null-conditional chains with ?? operators.
+              convert_to_pattern                Converts is/as type-check+cast pairs to pattern matching.
+              convert_to_switch                 Converts if-else chains to switch expressions.
+              fix_mismatched_namespaces         Corrects namespace declarations to match folder structure.
+              fix_thread_sleep                  Replaces Thread.Sleep with await Task.Delay in async methods.
+              format_document_preview           Returns a FormatPreviewResult diff without writing.
+              format_document_safe              Formats the document. preview=false writes to disk; preview=true returns content only.
+              generate_xml_documentation_stubs  Generates XML doc stubs for all undocumented public methods.
+              optimize_task_wait                Converts blocking Task.Wait/Result to async/await.
+              preview_add_missing_usings        Returns AddUsingsPreview listing missing usings (read-only).
+              add_configure_await_false         Adds .ConfigureAwait(false) to all awaits. libraryMode=true (default).
+                                                Returns SourceTransformResult.
+              remove_configure_await_false      Removes all .ConfigureAwait(x) calls. Returns SourceTransformResult.
+              simplify_boolean_expressions      Simplifies redundant boolean expressions (x == true → x).
+              simplify_member_access            Removes unnecessary this./base. qualifiers.
+              simplify_verbosity                Removes redundant type names and default parameter values.
+              sort_and_deduplicate_usings       Sorts and deduplicates using directives. preview=false writes to disk.
+                                                Returns UsingsCleanupResult.
+              upgrade_pattern_matching          Upgrades is/as casts to C# pattern-matching syntax.
+              upgrade_thread_safety             Fixes dangerous double-checked locking patterns.
+              upgrade_to_file_scoped_namespace  Converts block-scoped namespace to file-scoped.
+              upgrade_to_modern_guards          Converts null-check guards to ArgumentNullException.ThrowIfNull.
+              use_field_backed_properties       Converts auto-properties with backing fields to field-backed (C# 13).
+              use_index_from_end                Converts array[array.Length - N] to array[^N].
+              use_time_provider                 Replaces DateTime.Now/UtcNow with ITimeProvider calls.
+
+            Additional parameters:
+              libraryMode: for add_configure_await_false — true (default) adds .ConfigureAwait(false) to all awaits.
+              preview: for format_document_safe and sort_and_deduplicate_usings — false (default) writes to disk.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["transforms"] = new[] {
+                "add_braces", "cleanup_implicit_spans", "convert_to_null_coalescing", "convert_to_pattern",
+                "convert_to_switch", "fix_mismatched_namespaces", "fix_thread_sleep", "format_document_preview",
+                "format_document_safe", "generate_xml_documentation_stubs", "optimize_task_wait",
+                "preview_add_missing_usings", "add_configure_await_false", "remove_configure_await_false",
+                "simplify_boolean_expressions", "simplify_member_access", "simplify_verbosity",
+                "sort_and_deduplicate_usings", "upgrade_pattern_matching", "upgrade_thread_safety",
+                "upgrade_to_file_scoped_namespace", "upgrade_to_modern_guards", "use_field_backed_properties",
+                "use_index_from_end", "use_time_provider"
+            }
+        }
+    };
+
+    private static ToolOptionsResult ApplyMethodCodemodOptions() => new()
+    {
+        Description = """
+            apply_method_codemod — valid transform values:
+              add_guard_clauses              Adds ArgumentNullException.ThrowIfNull guards for reference params.
+                                             Returns SourceTransformResult.
+              convert_expression_body        Converts between block body and expression body.
+                                             direction: "ToExpression" or "ToBlock".
+                                             contextSnippet/lineBefore/lineAfter to disambiguate.
+              convert_lock_to_semaphore_slim Converts lock statements to async SemaphoreSlim pattern.
+                                             Returns SourceTransformResult.
+              convert_method_to_indexer      Converts a single-parameter get/set method pair to an indexer.
+              convert_out_params_to_value_tuple  Converts out-parameter methods to ValueTuple returns.
+                                             Returns OutParamConversionResult.
+              convert_static_to_extension    Converts a static method to an extension method.
+              convert_switch_to_expression   Converts a switch statement to a switch expression.
+              convert_to_async_enumerable    Converts a Task<List<T>>-returning method to IAsyncEnumerable<T>.
+                                             Returns SourceTransformResult.
+              extension_to_static            Converts an extension method back to a static method.
+              generate_async_overload        Generates an async overload of a synchronous method via Task.Run.
+              make_method_static             Removes implicit instance state and makes the method static.
+              make_method_thread_safe        Adds a lock field and wraps the method body in a lock statement.
+                                             lockFieldName: name for the lock object (default "_lock").
+                                             Returns SourceTransformResult.
+              optimize_independent_awaits    Batches sequential independent awaits into Task.WhenAll.
+              optimize_to_value_task         Converts Task/Task<T> return type to ValueTask/ValueTask<T>.
+              reduce_block_depth             Inverts conditions and uses early returns to reduce nesting depth.
+              update_xml_docs_from_signature Regenerates XML <param> and <returns> tags from the method signature.
+              use_exception_expressions      Replaces throw new ArgumentNullException(nameof(x)) with
+                                             ArgumentNullException.ThrowIfNull(x), etc.
+
+            Additional parameters:
+              direction: required for convert_expression_body — "ToExpression" or "ToBlock".
+              contextSnippet/lineBefore/lineAfter: for convert_expression_body disambiguation.
+              lockFieldName: for make_method_thread_safe — name for the lock field (default "_lock").
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["transforms"] = new[] {
+                "add_guard_clauses", "convert_expression_body", "convert_lock_to_semaphore_slim",
+                "convert_method_to_indexer", "convert_out_params_to_value_tuple", "convert_static_to_extension",
+                "convert_switch_to_expression", "convert_to_async_enumerable", "extension_to_static",
+                "generate_async_overload", "make_method_static", "make_method_thread_safe",
+                "optimize_independent_awaits", "optimize_to_value_task", "reduce_block_depth",
+                "update_xml_docs_from_signature", "use_exception_expressions"
+            }
+        }
+    };
+
+    private static ToolOptionsResult ApplyClassCodemodOptions() => new()
+    {
+        Description = """
+            apply_class_codemod — valid transform values:
+              add_validation_to_poco          Adds [Required] and [StringLength(100)] to all string properties.
+              class_to_record                 Converts a class to a record type.
+              convert_abstract_to_interface   Converts an abstract class to an interface.
+              convert_property_safe           Converts a property between auto-property and full property.
+                                              propertyName: the property to convert.
+                                              direction: "ToFullProperty" or "ToAutoProperty".
+                                              contextSnippet/lineBefore/lineAfter to disambiguate.
+              convert_property_to_methods     Converts a property to a getter/setter method pair.
+                                              propertyName: pass the property name via className or propertyName.
+              convert_to_background_service   Adds BackgroundService base class and generates ExecuteAsync override.
+              convert_to_source_generated_logging  Converts ILogger calls to source-generated logging.
+              document_poco_fields            Adds [Description] XML comments to all fields in a POCO class.
+              make_class_immutable            Converts mutable properties to init-only and adds a With method.
+              record_to_class                 Converts a record type to a class.
+              replace_constructor_with_factory  Replaces a constructor with a static factory method.
+              sort_members                    Sorts members by convention (fields, ctors, props, methods).
+              upgrade_to_primary_constructor  Converts a simple assignment-only constructor to a C# 12 primary constructor.
+
+            Additional parameters:
+              propertyName: for convert_property_safe and convert_property_to_methods.
+              direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty".
+              contextSnippet/lineBefore/lineAfter: for convert_property_safe disambiguation.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["transforms"] = new[] {
+                "add_validation_to_poco", "class_to_record", "convert_abstract_to_interface",
+                "convert_property_safe", "convert_property_to_methods", "convert_to_background_service",
+                "convert_to_source_generated_logging", "document_poco_fields", "make_class_immutable",
+                "record_to_class", "replace_constructor_with_factory", "sort_members",
+                "upgrade_to_primary_constructor"
+            }
+        }
+    };
+
+    private static ToolOptionsResult GenerateOptions() => new()
+    {
+        Description = """
+            generate — valid kind values:
+              add_benchmark_stub           Adds a BenchmarkDotNet stub class for a method.
+                                           Requires filePath, className, methodName.
+                                           Returns SourceTransformResult.
+              generate_constructor         Generates a constructor from private/readonly fields.
+                                           Returns updated file content as a string.
+              generate_decorator_class     Generates a Decorator pattern class for an interface.
+                                           Pass the interface name as className (filePath not required).
+                                           decoratorPrefix: prefix for the decorator class (default "Logging").
+                                           projectName: optional project scope.
+                                           Returns DecoratorResult.
+              generate_equality_overrides  Generates Equals and GetHashCode overrides.
+                                           Returns updated file content as a string.
+              generate_fluent_builder      Generates a fluent builder class with With{Property}() methods.
+                                           Returns FluentBuilderResult.
+              generate_path_driven_tests   Generates test stubs for each execution path in a method.
+                                           Requires filePath, methodName.
+                                           framework: "NUnit" (default), "xunit", or "mstest".
+                                           disambiguateLine: line number to resolve overloaded methods.
+                                           Returns PathDrivenTestReport.
+              generate_repository_interface  Extracts an interface from a class with DI and Moq snippets.
+                                           Returns RepositoryInterfaceResult.
+              generate_test_scaffold       Generates an xUnit+Moq test scaffold with mock fields and test stubs.
+                                           Returns TestScaffoldResult.
+              generate_test_skeleton       Generates a test class skeleton with one test stub per public method.
+                                           Returns TestSkeletonReport.
+              generate_to_string_safe      Generates a ToString() override with correctly escaped interpolated strings.
+                                           members: optional comma-separated list of property/field names.
+                                           Returns MsAugmentResult.
+
+            Additional parameters:
+              filePath: required for all kinds except generate_decorator_class.
+              className: target class name; for generate_decorator_class pass the interface name.
+              methodName: required for add_benchmark_stub and generate_path_driven_tests.
+              members: for generate_to_string_safe — optional comma-separated member list.
+              decoratorPrefix: for generate_decorator_class (default "Logging").
+              projectName: for generate_decorator_class — optional project scope.
+              framework: for generate_path_driven_tests — "NUnit" (default), "xunit", or "mstest".
+              disambiguateLine: for generate_path_driven_tests — disambiguates overloaded methods.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["kinds"] = new[] {
+                "add_benchmark_stub", "generate_constructor", "generate_decorator_class",
+                "generate_equality_overrides", "generate_fluent_builder", "generate_path_driven_tests",
+                "generate_repository_interface", "generate_test_scaffold", "generate_test_skeleton",
+                "generate_to_string_safe"
+            }
+        }
+    };
+
+    private static ToolOptionsResult ConvertSwitchOptions() => new()
+    {
+        Description = """
+            convert_switch_to_pattern_safe — supported switch forms and rejection rules:
+
+            SUPPORTED forms:
+              1. All cases assign to the SAME variable:
+                   case "g": factor = 1.0; break;
+                   → factor = unit switch { "g" => 1.0, ... };
+              2. All cases are return statements:
+                   case "g": return 1.0;
+                   → return unit switch { "g" => 1.0, ... };
+              3. All cases are throw statements (or mixed with return).
+
+            REJECTED (returned as error, not silently dropped):
+              • Cases assigning to MULTIPLE different variables per case
+              • Cases assigning to different variables across cases
+              • Cases with complex multi-statement bodies
+
+            Parameters:
+              filePath       — absolute path to the .cs file.
+              contextSnippet — verbatim substring from the switch keyword line, e.g. "switch (unit)".
+              lineBefore/lineAfter — disambiguate when the snippet matches multiple locations.
+
+            Run analyze_switch_for_pattern_conversion first if you are unsure whether conversion is safe.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["supportedForms"] = new[] { "single-variable assignment", "return statements", "throw statements" },
+            ["rejectedForms"]  = new[] { "multiple-variable assignment per case", "different variables across cases", "complex multi-statement bodies" }
+        }
+    };
+
+    private static ToolOptionsResult AnalyzeSwitchOptions() => new()
+    {
+        Description = """
+            analyze_switch_for_pattern_conversion — pre-flight analysis output fields:
+
+            Returns SwitchConversionAnalysis with:
+              IsSafeToConvert     — true when the standard tool or convert_switch_to_pattern_safe will produce correct output.
+              CaseCount           — total number of cases analysed.
+              Cases[]             — per-case detail: CaseLabel, AssignmentCount, VariablesAssigned[], IsSafe, BlockingReason.
+              BlockingReason      — human-readable reason why IsSafeToConvert is false (null when safe).
+              Recommendation      — suggested next step.
+
+            WHY THIS TOOL EXISTS: The standard 'convert_to_pattern_matching' tool silently drops
+            variable assignments in switch cases that assign to more than one variable, producing
+            broken code without any warning. This tool detects that condition before conversion.
+
+            Parameters:
+              filePath       — absolute path to the .cs file.
+              contextSnippet — verbatim substring from the switch keyword line.
+              lineBefore/lineAfter — optional disambiguation.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["outputFields"] = new[] { "IsSafeToConvert", "CaseCount", "Cases", "BlockingReason", "Recommendation" }
+        }
+    };
+
+    private static ToolOptionsResult AnalyzeForeachOptions() => new()
+    {
+        Description = """
+            analyze_foreach_for_linq_conversion — pre-flight analysis output fields:
+
+            Returns ForeachLinqAnalysis with:
+              IsSafeToConvert          — true when convert_foreach_linq will produce correct output.
+              CollectionVariableName   — the collection variable being built by the foreach.
+              StatementsBeforeForeach  — list of statements that modify the collection BEFORE the loop
+                                         (these would be discarded by the standard tool if present).
+              BlockingReason           — human-readable reason when IsSafeToConvert is false.
+              Recommendation           — suggested next step.
+
+            WHY THIS TOOL EXISTS: The standard 'convert_foreach_linq' tool silently destroys data.
+            When a collection is modified before the foreach (e.g., results.Add("header")), the
+            standard tool re-initialises the variable with 'new List<T>()', discarding those
+            pre-loop additions WITHOUT any warning.
+
+            ALWAYS call this before convert_foreach_linq. Only proceed if IsSafeToConvert=true.
+
+            Parameters:
+              filePath        — absolute path to the .cs file.
+              contextSnippet  — short snippet of the foreach statement (e.g., "foreach (var item in").
+              lineBefore/lineAfter — optional disambiguation.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["outputFields"] = new[] { "IsSafeToConvert", "CollectionVariableName", "StatementsBeforeForeach", "BlockingReason", "Recommendation" }
+        }
+    };
+
+    private static ToolOptionsResult ScanOptions() => new()
+    {
+        Description = """
+            scan — valid detector IDs grouped by domain (94 total):
+
+            concurrency (26):
+              async_in_constructor, async_over_sync, async_void_without_try_catch,
+              cancellation_token_not_forwarded, cas_loop_without_backoff,
+              check_then_act_on_dictionary, concurrent_collection_opportunities,
+              configure_await_missing, double_checked_locking, inconsistent_async_suffix,
+              mismatched_await, missing_cancellation_tokens, possible_deadlocks,
+              semaphore_usage, sequential_independent_awaits, task_delay_usage,
+              task_delay_zero_usage, task_run_in, task_void_usage, task_when_all_usage,
+              task_yield_usage, unawaited_fire_and_forget, unobserved_task_in_field,
+              unsafe_lazy_init, unsafe_lazy_init_thread, value_task_misuse
+
+            config (3):
+              json_anti_patterns, package_inconsistency, project_consistency
+
+            convention (6):
+              mutable_public_collection_properties, mutable_public_properties,
+              naming_violations, readonly_field_candidates, string_magic_values,
+              todo_fixme_comments
+
+            correctness (18):
+              all_throw_sites, empty_catch_blocks, exception_handling,
+              memory_leaks, misbound_overload_chains, missing_generic_constraints,
+              multiple_out_parameter_methods, non_exhaustive_enum_switches,
+              possible_infinite_loops, redundant_cast, resource_disposal,
+              services_not_registered, stack_overflow_risks, unawaked_dispose,
+              unbounded_recursion, unbounded_static_collections, value_type_mutation_intent
+
+            dead-code (8):
+              obsolete_callers, uninstantiated_types, unused_constructors,
+              unused_event_subscriptions, unused_interfaces, unused_local_variables,
+              unused_private_fields, unused_references
+
+            misc (3):
+              anti_patterns, blocking_calls_in, finalizer_on_disposable
+
+            performance (11):
+              boxing_allocations, implicit_nullable_boxing,
+              inefficient_string_comparisons, linq_n1_patterns, linq_redundant_where,
+              multiple_enumeration, performance, re_do_s_patterns, regex_new_in_loop,
+              string_format_in_loops, use_frozen_collections
+
+            security (5):
+              hardcoded_paths, reflection_usage, security, sql_injection,
+              unvalidated_regex_source
+
+            structure (14):
+              circular_dependencies, circular_type_references,
+              duplicate_blocks_in_hierarchy, duplicate_methods,
+              interface_extraction_candidates, internal_classes_that_could_be_private,
+              large_methods, large_switch_statements, large_types, layer_violations,
+              long_parameter_list, namespace_path_mismatches, primitive_obsession,
+              structural_smells, type_cohesion
+
+            scope values: "file" | "project" | "solution"
+            scopeName: filePath for scope=file; projectName for scope=project; omit for solution.
+              For duplicate_blocks_in_hierarchy, scopeName is the root type name.
+            File-scope-only detectors require scope="file". unused_references requires scope="project".
+            Call describe_scan_detectors for per-detector scope hints and descriptions.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["concurrency"]  = new[] { "async_in_constructor", "async_over_sync", "async_void_without_try_catch", "cancellation_token_not_forwarded", "cas_loop_without_backoff", "check_then_act_on_dictionary", "concurrent_collection_opportunities", "configure_await_missing", "double_checked_locking", "inconsistent_async_suffix", "mismatched_await", "missing_cancellation_tokens", "possible_deadlocks", "semaphore_usage", "sequential_independent_awaits", "task_delay_usage", "task_delay_zero_usage", "task_run_in", "task_void_usage", "task_when_all_usage", "task_yield_usage", "unawaited_fire_and_forget", "unobserved_task_in_field", "unsafe_lazy_init", "unsafe_lazy_init_thread", "value_task_misuse" },
+            ["config"]       = new[] { "json_anti_patterns", "package_inconsistency", "project_consistency" },
+            ["convention"]   = new[] { "mutable_public_collection_properties", "mutable_public_properties", "naming_violations", "readonly_field_candidates", "string_magic_values", "todo_fixme_comments" },
+            ["correctness"]  = new[] { "all_throw_sites", "empty_catch_blocks", "exception_handling", "memory_leaks", "misbound_overload_chains", "missing_generic_constraints", "multiple_out_parameter_methods", "non_exhaustive_enum_switches", "possible_infinite_loops", "redundant_cast", "resource_disposal", "services_not_registered", "stack_overflow_risks", "unawaked_dispose", "unbounded_recursion", "unbounded_static_collections", "value_type_mutation_intent" },
+            ["dead-code"]    = new[] { "obsolete_callers", "uninstantiated_types", "unused_constructors", "unused_event_subscriptions", "unused_interfaces", "unused_local_variables", "unused_private_fields", "unused_references" },
+            ["misc"]         = new[] { "anti_patterns", "blocking_calls_in", "finalizer_on_disposable" },
+            ["performance"]  = new[] { "boxing_allocations", "implicit_nullable_boxing", "inefficient_string_comparisons", "linq_n1_patterns", "linq_redundant_where", "multiple_enumeration", "performance", "re_do_s_patterns", "regex_new_in_loop", "string_format_in_loops", "use_frozen_collections" },
+            ["security"]     = new[] { "hardcoded_paths", "reflection_usage", "security", "sql_injection", "unvalidated_regex_source" },
+            ["structure"]    = new[] { "circular_dependencies", "circular_type_references", "duplicate_blocks_in_hierarchy", "duplicate_methods", "interface_extraction_candidates", "internal_classes_that_could_be_private", "large_methods", "large_switch_statements", "large_types", "layer_violations", "long_parameter_list", "namespace_path_mismatches", "primitive_obsession", "structural_smells", "type_cohesion" },
+        }
+    };
 }

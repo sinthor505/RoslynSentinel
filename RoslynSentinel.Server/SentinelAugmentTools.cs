@@ -71,25 +71,15 @@ public class SentinelAugmentTools
         switch expression using the standard 'convert_to_pattern_matching' tool.
 
         WHY YOU NEED THIS: The standard tool silently drops variable assignments in switch
-        cases that assign to multiple variables. For example:
-          case "g":
-            totalOz   = rawValue / 28.3495m;   // ← DROPPED by standard tool
-            totalGrams = rawValue;               // ← only this survives
-            break;
-        This produces broken, data-loss code with no warning.
-
-        This tool returns a full case-by-case analysis, tells you which cases have multiple
-        assignments, and gives a clear blocking reason when conversion is unsafe.
+        cases that assign to multiple variables, producing broken code without any warning.
 
         If IsSafeToConvert is true, the standard tool (or ConvertSwitchToPatternSafe) will
-        produce correct output.
+        produce correct output. Call describe_tool_options("analyze_switch_for_pattern_conversion")
+        for the full output field reference and case-by-case safety rules.
 
-        Parameters:
-          filePath       - Absolute path to the .cs file.
-          contextSnippet - A verbatim substring from the switch keyword or governing
-                           expression line, e.g. "switch (unit)" or "switch (rawUnit)".
-          lineBefore/lineAfter - Verbatim text from the line above/below the target to
-                           disambiguate when the snippet matches multiple locations.
+        filePath:      absolute path to the .cs file.
+        contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
+        lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
         """)]
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversion(
         string filePath,
@@ -110,38 +100,20 @@ public class SentinelAugmentTools
     [Description("""
         Converts a switch statement to a switch expression safely.
 
-        FIXES standard 'convert_to_pattern_matching' BUG: The standard tool silently
-        drops variable assignments for cases that set more than one variable, generating
-        incorrect code. This tool rejects those cases with a clear error message instead
-        of producing broken output.
+        FIXES standard 'convert_to_pattern_matching' BUG: The standard tool silently drops
+        variable assignments for cases that set more than one variable, generating incorrect
+        code. This tool rejects those cases with a clear error message instead.
 
-        Supports three switch forms:
-          1. All cases are assignments to the SAME variable:
-               case "g": factor = 1.0; break;
-               → factor = unit switch { "g" => 1.0, ... };
+        Call describe_tool_options("convert_switch_to_pattern_safe") for the supported switch
+        forms, rejection rules, and usage guidance.
+        Run analyze_switch_for_pattern_conversion first if you are unsure.
 
-          2. All cases are return statements:
-               case "g": return 1.0;
-               → return unit switch { "g" => 1.0, ... };
+        filePath:      absolute path to the .cs file.
+        contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
+        lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
 
-          3. All cases are throw statements (or mixed with return).
-
-        Rejects (with a clear error):
-          • Cases assigning to MULTIPLE different variables per case
-          • Cases assigning to different variables across cases
-          • Cases with complex multi-statement bodies
-
-        Run AnalyzeSwitchForPatternConversion first if you are unsure.
-
-        Parameters:
-          filePath       - Absolute path to the .cs file.
-          contextSnippet - A verbatim substring from the switch keyword or governing
-                           expression, e.g. "switch (unit)".
-          lineBefore/lineAfter - Verbatim text from the line above/below the target to
-                           disambiguate when the snippet matches multiple locations.
-
-        Returns: UpdatedContent on success, or Error describing exactly why conversion
-        was rejected.
+        Returns MsAugmentResult with UpdatedContent on success, or Error describing why
+        conversion was rejected.
         """)]
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafe(
         string filePath,
@@ -163,24 +135,18 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        ANALYZE_FOREACH_FOR_LINQ_CONVERSION — Pre-flight safety analysis for convert_foreach_linq.
+        Pre-flight safety analysis for convert_foreach_linq.
 
-        FIXES MS BUG: The standard convert_foreach_linq tool silently destroys data.
-        When a collection is modified BEFORE the foreach (e.g., results.Add("header") before
-        the loop), the standard tool re-initializes the variable with 'new List<T>()',
-        discarding those pre-loop additions WITHOUT any warning.
+        FIXES MS BUG: The standard convert_foreach_linq tool silently destroys data when a
+        collection is modified before the foreach. ALWAYS call this before convert_foreach_linq;
+        only proceed if IsSafeToConvert=true.
 
-        ALWAYS call this tool before using convert_foreach_linq.
-        Only proceed with conversion if IsSafeToConvert=true.
+        Call describe_tool_options("analyze_foreach_for_linq_conversion") for the full output
+        field reference and safety rules.
 
-        Parameters:
-          filePath        — absolute path to the .cs file
-          contextSnippet  — a short snippet of the foreach statement (e.g., "foreach (var item in")
-          lineBefore      — optional: the line of code immediately before contextSnippet
-          lineAfter       — optional: the line of code immediately after contextSnippet
-
-        Returns: IsSafeToConvert, CollectionVariableName, StatementsBeforeForeach, BlockingReason,
-                 and a Recommendation.
+        filePath:       absolute path to the .cs file.
+        contextSnippet: short snippet of the foreach statement (e.g., "foreach (var item in").
+        lineBefore/lineAfter: optional disambiguation.
         """)]
     public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversion(
         string filePath, string contextSnippet,
