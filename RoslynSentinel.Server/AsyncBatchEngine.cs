@@ -20,7 +20,15 @@ public record BridgeAppliedInfo(
     string FilePath,
     string MethodName,
     string AsyncMethodName
-);
+)
+{
+    /// <summary>
+    /// Full source text of the file immediately before this operation was written to disk.
+    /// Populated by RunBridgeBatchAsync to enable undo_last_apply via BeforeSource on
+    /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
+    /// </summary>
+    public string? BeforeSource { get; init; }
+}
 
 /// <summary>
 /// Describes a method that could not be bridged during a <c>run_bridge_batch</c> operation.
@@ -78,7 +86,15 @@ public record UpliftCallerInfo(
     string FilePath,
     string CallerMethod,
     string CallerAsyncMethod
-);
+)
+{
+    /// <summary>
+    /// Full source text of the file immediately before this uplift was written to disk.
+    /// Populated by RunUpliftBatchAsync to enable undo_last_apply via BeforeSource on
+    /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
+    /// </summary>
+    public string? BeforeSource { get; init; }
+}
 
 /// <summary>
 /// Describes a caller that could not be uplifted during a <c>run_uplift_batch</c> operation.
@@ -217,6 +233,13 @@ public class PropagateCtFileResult
     public int                      TotalSkipped      { get; set; }
     public int                      MethodsProcessed  { get; set; }
     public int                      MethodsSkipped    { get; set; }
+    /// <summary>
+    /// Full source text of the file immediately before this operation was written to disk.
+    /// Populated by PropagateCancellationTokenBatchAsync to enable undo_last_apply via
+    /// BeforeSource on OperationItemRecord. Null when pre-image capture fails or the file
+    /// did not previously exist.
+    /// </summary>
+    public string?                  BeforeSource      { get; set; }
 }
 
 /// <summary>Specifies a file (with optional method filter) for batch CT propagation.</summary>
@@ -476,11 +499,18 @@ public class AsyncBatchEngine
             }
 
             // Step D: write to disk and refresh workspace.
+            string? bridgeBeforeSource = File.Exists(candidate.FilePath)
+                ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken)
+                : null;
+
             await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<string, string> { { candidate.FilePath, sourceToValidate } });
 
             applied.Add(new BridgeAppliedInfo(
-                candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async"));
+                candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async")
+            {
+                BeforeSource = bridgeBeforeSource,
+            });
         }
 
         // Determine why the batch stopped.
@@ -706,10 +736,17 @@ public class AsyncBatchEngine
             }
 
             // Step E: write to disk and refresh workspace.
+            string? upliftBeforeSource = File.Exists(callerFilePath)
+                ? await File.ReadAllTextAsync(callerFilePath, cancellationToken)
+                : null;
+
             await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<string, string> { { callerFilePath, sourceToValidate } });
 
-            uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, callerMethodName + "Async"));
+            uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, callerMethodName + "Async")
+            {
+                BeforeSource = upliftBeforeSource,
+            });
         }
 
         // Determine stop reason.
@@ -997,9 +1034,14 @@ public class AsyncBatchEngine
             }
 
             // Write to disk
+            string? ctBeforeSource = File.Exists(target.FilePath)
+                ? await File.ReadAllTextAsync(target.FilePath, cancellationToken)
+                : null;
+
             await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<string, string> { { target.FilePath, updatedSource } });
 
+            fileResult.BeforeSource = ctBeforeSource;
             batchResult.Applied.Add(fileResult);
             batchResult.TotalForwarded += fileResult.TotalForwarded;
             batchResult.TotalSkipped += fileResult.TotalSkipped;
