@@ -772,14 +772,18 @@ public class SentinelQualityTools
                         }
                     }
 
-                    await _workspaceManager.ApplyProposedChangesAsync(
+                    var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                         new Dictionary<string, string> { { target.FilePath, updatedSource } });
+
+                    string? beforeSource782 = null;
+                    applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
 
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = target.FilePath,
-                        MethodName = methodName,
-                        Outcome    = "succeeded",
+                        FilePath     = target.FilePath,
+                        MethodName   = methodName,
+                        Outcome      = "succeeded",
+                        BeforeSource = beforeSource782,
                     });
                     succeeded++;
                 }
@@ -938,7 +942,19 @@ public class SentinelQualityTools
 
         if (allChanges.Count > 0)
         {
-            await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+            var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+            // Backfill BeforeSource on succeeded records now that PreImages are available.
+            if (applyResult941.PreImages != null)
+            {
+                foreach (var item in items)
+                {
+                    if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                    {
+                        applyResult941.PreImages.TryGetValue(item.FilePath, out var pre);
+                        item.BeforeSource = pre;
+                    }
+                }
+            }
         }
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
@@ -1123,19 +1139,37 @@ public class SentinelQualityTools
 
                 if (!input.DryRun && engineResult.Changes.Count > 0)
                 {
-                    await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
-                }
+                    var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+                    _ = applyResult1126; // PreImages available below via closure; stored for backfill after loop.
 
-                foreach (var f in engineResult.Flagged)
-                {
-                    items.Add(new OperationItemRecord
+                    foreach (var f in engineResult.Flagged)
                     {
-                        FilePath   = f.FilePath,
-                        MethodName = f.MethodName,
-                        Outcome    = input.DryRun ? "skipped" : "succeeded",
-                        Reason     = input.DryRun ? "dry_run" : null,
-                    });
-                    succeeded++;
+                        string? beforeSource1135 = null;
+                        applyResult1126.PreImages?.TryGetValue(f.FilePath, out beforeSource1135);
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath     = f.FilePath,
+                            MethodName   = f.MethodName,
+                            Outcome      = "succeeded",
+                            Reason       = null,
+                            BeforeSource = beforeSource1135,
+                        });
+                        succeeded++;
+                    }
+                }
+                else
+                {
+                    foreach (var f in engineResult.Flagged)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath   = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome    = input.DryRun ? "skipped" : "succeeded",
+                            Reason     = input.DryRun ? "dry_run" : null,
+                        });
+                        succeeded++;
+                    }
                 }
                 foreach (var s in engineResult.Skipped)
                 {
@@ -1220,7 +1254,19 @@ public class SentinelQualityTools
 
                 if (allChanges.Count > 0 && !input.DryRun)
                 {
-                    await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                    var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                    // Backfill BeforeSource on succeeded records now that PreImages are available.
+                    if (applyResult1223.PreImages != null)
+                    {
+                        foreach (var item in items)
+                        {
+                            if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                            {
+                                applyResult1223.PreImages.TryGetValue(item.FilePath, out var pre);
+                                item.BeforeSource = pre;
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1314,33 +1360,62 @@ public class SentinelQualityTools
 
                 if (!input.DryRun && flagResult.Changes.Count > 0)
                 {
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
-                }
+                    var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
 
-                foreach (var f in flagResult.Flagged)
-                {
-                    if (input.Exclusions?.Contains(f.MethodName) == true)
+                    foreach (var f in flagResult.Flagged)
                     {
+                        if (input.Exclusions?.Contains(f.MethodName) == true)
+                        {
+                            items.Add(new OperationItemRecord
+                            {
+                                FilePath   = f.FilePath,
+                                MethodName = f.MethodName,
+                                Outcome    = "skipped",
+                                Reason     = "excluded",
+                            });
+                            skipped++;
+                            continue;
+                        }
+
+                        string? beforeSource1339 = null;
+                        applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath     = f.FilePath,
+                            MethodName   = f.MethodName,
+                            Outcome      = "succeeded",
+                            Reason       = "phase:flag",
+                            BeforeSource = beforeSource1339,
+                        });
+                        succeeded++;
+                    }
+                }
+                else
+                {
+                    foreach (var f in flagResult.Flagged)
+                    {
+                        if (input.Exclusions?.Contains(f.MethodName) == true)
+                        {
+                            items.Add(new OperationItemRecord
+                            {
+                                FilePath   = f.FilePath,
+                                MethodName = f.MethodName,
+                                Outcome    = "skipped",
+                                Reason     = "excluded",
+                            });
+                            skipped++;
+                            continue;
+                        }
+
                         items.Add(new OperationItemRecord
                         {
                             FilePath   = f.FilePath,
                             MethodName = f.MethodName,
                             Outcome    = "skipped",
-                            Reason     = "excluded",
+                            Reason     = "dry_run:flag",
                         });
                         skipped++;
-                        continue;
                     }
-
-                    items.Add(new OperationItemRecord
-                    {
-                        FilePath   = f.FilePath,
-                        MethodName = f.MethodName,
-                        Outcome    = input.DryRun ? "skipped" : "succeeded",
-                        Reason     = input.DryRun ? "dry_run:flag" : "phase:flag",
-                    });
-                    if (!input.DryRun) { succeeded++; }
-                    else               { skipped++;   }
                 }
                 foreach (var s in flagResult.Skipped)
                 {
@@ -1418,7 +1493,19 @@ public class SentinelQualityTools
                     }
                     if (!input.DryRun && allChanges.Count > 0)
                     {
-                        await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                        var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                        // Backfill BeforeSource on succeeded records now that PreImages are available.
+                        if (applyResult1421.PreImages != null)
+                        {
+                            foreach (var item in items)
+                            {
+                                if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                                {
+                                    applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
+                                    item.BeforeSource = pre;
+                                }
+                            }
+                        }
                     }
                 }
             }
