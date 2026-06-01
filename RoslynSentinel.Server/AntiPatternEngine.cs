@@ -2678,12 +2678,36 @@ public class AntiPatternEngine
                                 .FirstOrDefault();
                             var callerMethodName = callerMethod?.Identifier.Text ?? "<top-level>";
 
-                            var refSemanticModel = compilation.GetSemanticModel(
-                                await location.Document.GetSyntaxTreeAsync(cancellationToken)
-                                    .ConfigureAwait(false) ?? syntaxTree);
+                            // Resolve the semantic model for the caller's document.
+                            // The reference may be in a different project's compilation (cross-project
+                            // reference), so we must not call compilation.GetSemanticModel() on a
+                            // SyntaxTree that does not belong to this compilation.
+                            var refSyntaxTree = await location.Document.GetSyntaxTreeAsync(cancellationToken)
+                                .ConfigureAwait(false);
+
+                            SemanticModel? refSemanticModel = null;
+                            if (refSyntaxTree != null)
+                            {
+                                if (compilation.ContainsSyntaxTree(refSyntaxTree))
+                                {
+                                    refSemanticModel = compilation.GetSemanticModel(refSyntaxTree);
+                                }
+                                else
+                                {
+                                    // Cross-project reference: look up the owning project's compilation.
+                                    var refProject = solution.GetDocument(location.Document.Id)?.Project;
+                                    if (refProject != null)
+                                    {
+                                        var refCompilation = await refProject
+                                            .GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+                                        if (refCompilation != null && refCompilation.ContainsSyntaxTree(refSyntaxTree))
+                                            refSemanticModel = refCompilation.GetSemanticModel(refSyntaxTree);
+                                    }
+                                }
+                            }
 
                             string callerTypeName = "<unknown>";
-                            if (callerMethod != null)
+                            if (callerMethod != null && refSemanticModel != null)
                             {
                                 var callerSymbol = refSemanticModel.GetDeclaredSymbol(callerMethod, cancellationToken);
                                 callerTypeName = callerSymbol?.ContainingType?.ToDisplayString() ?? "<unknown>";

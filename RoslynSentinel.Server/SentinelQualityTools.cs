@@ -331,6 +331,12 @@ public class SentinelQualityTools
                 .OrderByDescending(c => c.Count)
                 .ToList();
 
+            // Truncate byClass to keep summarize=true results unconditionally inline-safe.
+            const int MaxByClass = 20;
+            bool byClassTruncated = byClass.Count > MaxByClass;
+            if (byClassTruncated)
+                byClass = byClass.Take(MaxByClass).ToList();
+
             List<MigrationCandidateFinding>? topCandidates = topN.HasValue
                 ? aggregateFindings.OrderByDescending(f => f.Score).Take(topN.Value).ToList()
                 : null;
@@ -339,11 +345,12 @@ public class SentinelQualityTools
             {
                 Success = true,
                 Data    = new MigrationScanSummary(
-                    TotalCandidates: aggregateFindings.Count,
-                    ByPattern:       byPattern,
-                    ByClass:         byClass,
-                    ByScoreBucket:   buckets,
-                    TopCandidates:   topCandidates)
+                    TotalCandidates:  aggregateFindings.Count,
+                    ByPattern:        byPattern,
+                    ByClass:          byClass,
+                    ByScoreBucket:    buckets,
+                    TopCandidates:    topCandidates,
+                    ByClassTruncated: byClassTruncated)
             };
         }
 
@@ -381,8 +388,8 @@ public class SentinelQualityTools
         var page = allFindings.Skip(offset).Take(limit).ToList();
         bool hasMore = (offset + limit) < totalCount;
 
-        // ── size threshold: 256 KB ────────────────────────────────────────
-        const int ThresholdBytes = 256 * 1024;
+        // ── size threshold: 30 KB (stay below VS Code's inline interception limit) ──
+        const int ThresholdBytes = 30 * 1024;
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(page);
 
         if (jsonBytes.Length > ThresholdBytes)

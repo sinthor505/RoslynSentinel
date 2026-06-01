@@ -90,7 +90,8 @@ public record MigrationScanSummary(
     Dictionary<string, int>             ByPattern,
     List<ClassCandidateSummary>         ByClass,
     Dictionary<string, int>             ByScoreBucket,
-    List<MigrationCandidateFinding>?    TopCandidates = null
+    List<MigrationCandidateFinding>?    TopCandidates    = null,
+    bool                                ByClassTruncated = false
 );
 
 // ── Tool options (describe_tool_options return type) ─────────────────────────
