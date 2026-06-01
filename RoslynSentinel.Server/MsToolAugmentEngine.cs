@@ -53,7 +53,7 @@ public record ForeachLinqAnalysis(
 public record WorkspaceHealthReport(
     bool IsOperational,
     bool HasLoadedSolution,
-    string? SolutionPath,
+    string? LoadedSolutionPath,
     int ProjectCount,
     int DocumentCount,
     List<string> LoadErrors,
@@ -858,7 +858,7 @@ public class MsToolAugmentEngine
             return Task.FromResult(new WorkspaceHealthReport(
                 IsOperational: false,
                 HasLoadedSolution: false,
-                SolutionPath: null,
+                LoadedSolutionPath: null,
                 ProjectCount: 0,
                 DocumentCount: 0,
                 LoadErrors: [$"Workspace exception: {ex.Message}"],
@@ -873,7 +873,7 @@ public class MsToolAugmentEngine
             return Task.FromResult(new WorkspaceHealthReport(
                 IsOperational: true,
                 HasLoadedSolution: false,
-                SolutionPath: null,
+                LoadedSolutionPath: null,
                 ProjectCount: 0,
                 DocumentCount: 0,
                 LoadErrors: loadErrors,
@@ -888,7 +888,7 @@ public class MsToolAugmentEngine
         return Task.FromResult(new WorkspaceHealthReport(
             IsOperational: true,
             HasLoadedSolution: true,
-            SolutionPath: solutionPath,
+            LoadedSolutionPath: solutionPath,
             ProjectCount: projectCount,
             DocumentCount: documentCount,
             LoadErrors: loadErrors,

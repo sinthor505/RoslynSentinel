@@ -111,7 +111,8 @@ public record MigrationCandidateFinding(
     int     Score,
     string? Reason,
     string? FlaggedDate,
-    int     Line
+    int     Line,
+    string  ProjectName = ""
 )
 {
     /// <summary>
@@ -231,10 +232,27 @@ public class SentinelQualityTools
         projectName: restrict to a single project (case-insensitive name).
         pattern:     restrict to one pattern — "AsyncBridgeCandidate", "HandlerExtract",
                      "HandlerToAsync", "AsyncCallerUplift", etc. Omit to return all patterns.
-        summarize:   when true, returns MigrationScanSummary (counts by pattern/project/score
+        summarize:   when true, returns MigrationScanSummary (counts by pattern/class/score
                      bucket) instead of the raw finding list.
         limit:       max findings to return per page (default 50, ignored when summarize=true).
         offset:      zero-based page offset (default 0, ignored when summarize=true).
+        topN:        when summarize=true, also return the top N candidates by score in
+                     TopCandidates (ignored when summarize=false). e.g. topN=10, minScore=70
+                     returns the 10 highest-scoring candidates alongside the summary counts
+                     in a single call.
+        minScore:    when summarize=true, filter TopCandidates to candidates at or above this
+                     score threshold (ignored when summarize=false).
+
+        MigrationScanSummary fields:
+          ByPattern     — candidate count keyed by pattern name.
+          ByClass       — List<ClassCandidateSummary> sorted descending by Count. Each entry
+                          has ClassName, ProjectName (.csproj name), FilePath, Count.
+          ByScoreBucket — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
+                          The '<0' bucket is valid but rare; it applies to methods that were
+                          flagged manually with a negative score (the auto-flagging path
+                          applies a virtual/override penalty of -20 but discards sub-zero
+                          results before writing the attribute).
+          TopCandidates — populated when topN or minScore is set; null otherwise.
 
         Uses syntax-level analysis — no compilation needed — so results are accurate even
         immediately after flag_migration_candidate without a solution reload.
@@ -250,7 +268,9 @@ public class SentinelQualityTools
         string? pattern     = null,
         bool    summarize   = false,
         int     limit       = 50,
-        int     offset      = 0)
+        int     offset      = 0,
+        int?    topN        = null,
+        int?    minScore    = null)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -291,11 +311,11 @@ public class SentinelQualityTools
         {
             var buckets = new Dictionary<string, int>
             {
-                ["<0"]    = 0,
-                ["0-25"]  = 0,
-                ["26-50"] = 0,
-                ["51-75"] = 0,
-                ["76+"]   = 0,
+                ["<0"]     = 0,
+                ["0-25"]   = 0,
+                ["26-50"]  = 0,
+                ["51-75"]  = 0,
+                ["76plus"] = 0,
             };
             foreach (var f in allFindings)
             {
@@ -303,7 +323,7 @@ public class SentinelQualityTools
                         : f.Score <= 25 ? "0-25"
                         : f.Score <= 50 ? "26-50"
                         : f.Score <= 75 ? "51-75"
-                        : "76+";
+                        : "76plus";
                 buckets[key]++;
             }
 
@@ -311,9 +331,30 @@ public class SentinelQualityTools
                 .GroupBy(f => f.Pattern)
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            var byProject = allFindings
-                .GroupBy(f => System.IO.Path.GetFileNameWithoutExtension(f.FilePath) ?? "Unknown")
-                .ToDictionary(g => g.Key, g => g.Count());
+            var byClass = allFindings
+                .GroupBy(f => (f.ClassName, f.FilePath))
+                .Select(g => new ClassCandidateSummary
+                {
+                    ClassName   = g.Key.ClassName,
+                    ProjectName = g.First().ProjectName,
+                    FilePath    = g.Key.FilePath,
+                    Count       = g.Count()
+                })
+                .OrderByDescending(c => c.Count)
+                .ToList();
+
+            // ── topN / minScore ───────────────────────────────────────────
+            List<MigrationCandidateFinding>? topCandidates = null;
+            if (topN.HasValue || minScore.HasValue)
+            {
+                var filtered = allFindings.AsEnumerable();
+                if (minScore.HasValue)
+                    filtered = filtered.Where(f => f.Score >= minScore.Value);
+                filtered = filtered.OrderByDescending(f => f.Score);
+                if (topN.HasValue)
+                    filtered = filtered.Take(topN.Value);
+                topCandidates = filtered.ToList();
+            }
 
             return new MigrationResult<MigrationScanSummary>
             {
@@ -321,8 +362,9 @@ public class SentinelQualityTools
                 Data    = new MigrationScanSummary(
                     TotalCandidates: allFindings.Count,
                     ByPattern:       byPattern,
-                    ByProject:       byProject,
-                    ByScoreBucket:   buckets)
+                    ByClass:         byClass,
+                    ByScoreBucket:   buckets,
+                    TopCandidates:   topCandidates)
             };
         }
 

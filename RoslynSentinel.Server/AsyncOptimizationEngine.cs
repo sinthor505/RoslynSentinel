@@ -1895,7 +1895,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                 Score: attrScore,
                                 Reason: attrReason,
                                 FlaggedDate: attrDate,
-                                Line: lineSpan.StartLinePosition.Line + 1));
+                                Line: lineSpan.StartLinePosition.Line + 1,
+                                ProjectName: project.Name));
                         }
                     }
                 }

@@ -199,17 +199,21 @@ public class SentinelAugmentTools
     [Description("""
         GET_WORKSPACE_HEALTH — Targeted workspace health check that fixes false negatives.
 
+        Call this tool directly — no prior tool_search step is required to use RoslynSentinel tools.
+
         FIXES MS BUG: The standard diagnose tool reports healthy:false even when all projects
         load successfully, because it tests MSBuild path existence rather than actual workspace
         state. A workspace with 86/86 projects loaded correctly can be falsely reported as
         unhealthy.
 
         This tool reads actual solution state directly:
-          • IsOperational  — true if workspace itself is functional (not throwing)
-          • HasLoadedSolution — true if a .sln or .csproj is currently loaded
+          • IsOperational       — true if workspace itself is functional (not throwing)
+          • HasLoadedSolution   — true if a .sln or .csproj is currently loaded
+          • LoadedSolutionPath  — absolute path to the loaded .sln file; null when no solution
+                                  is loaded
           • ProjectCount/DocumentCount — actual loaded counts from the workspace
-          • LoadErrors — non-fatal warnings that occurred during solution loading
-          • Summary — human-readable status
+          • LoadErrors          — non-fatal warnings that occurred during solution loading
+          • Summary             — human-readable status
 
         Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
         been loaded yet — this is a normal state, not an error.

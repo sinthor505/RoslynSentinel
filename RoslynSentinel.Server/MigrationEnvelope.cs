@@ -69,12 +69,25 @@ public record LargeResultInfo(
 // ── Scan summary ─────────────────────────────────────────────────────────────
 
 /// <summary>
+/// Per-class row in <see cref="MigrationScanSummary.ByClass"/>.
+/// Groups all candidates that share the same class and source file.
+/// </summary>
+public sealed class ClassCandidateSummary
+{
+    public string ClassName   { get; set; } = string.Empty;
+    public string ProjectName { get; set; } = string.Empty;  // .csproj name, not full path
+    public string FilePath    { get; set; } = string.Empty;  // absolute path to the source file
+    public int    Count       { get; set; }
+}
+
+/// <summary>
 /// Aggregate summary produced when <c>scan_migration_candidates</c> is called with
 /// <c>summarize=true</c>.
 /// </summary>
 public record MigrationScanSummary(
     int                                 TotalCandidates,
     Dictionary<string, int>             ByPattern,
-    Dictionary<string, int>             ByProject,
-    Dictionary<string, int>             ByScoreBucket
+    List<ClassCandidateSummary>         ByClass,
+    Dictionary<string, int>             ByScoreBucket,
+    List<MigrationCandidateFinding>?    TopCandidates = null
 );

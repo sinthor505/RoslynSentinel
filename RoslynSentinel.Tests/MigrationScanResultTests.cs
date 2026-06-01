@@ -164,7 +164,7 @@ public class Svc
         Assert.That(summary.TotalCandidates, Is.EqualTo(5));
 
         // All 5 score buckets must be present in the dictionary.
-        var expectedBuckets = new[] { "<0", "0-25", "26-50", "51-75", "76+" };
+        var expectedBuckets = new[] { "<0", "0-25", "26-50", "51-75", "76plus" };
         foreach (var bucket in expectedBuckets)
         {
             Assert.That(summary.ByScoreBucket.ContainsKey(bucket), Is.True,
@@ -172,15 +172,24 @@ public class Svc
         }
 
         // Verify bucket assignments (scores: -5, 10, 30, 60, 80).
-        Assert.That(summary.ByScoreBucket["<0"],    Is.EqualTo(1), "Score -5 → bucket '<0'");
-        Assert.That(summary.ByScoreBucket["0-25"],  Is.EqualTo(1), "Score 10 → bucket '0-25'");
-        Assert.That(summary.ByScoreBucket["26-50"], Is.EqualTo(1), "Score 30 → bucket '26-50'");
-        Assert.That(summary.ByScoreBucket["51-75"], Is.EqualTo(1), "Score 60 → bucket '51-75'");
-        Assert.That(summary.ByScoreBucket["76+"],   Is.EqualTo(1), "Score 80 → bucket '76+'");
+        Assert.That(summary.ByScoreBucket["<0"],     Is.EqualTo(1), "Score -5 → bucket '<0'");
+        Assert.That(summary.ByScoreBucket["0-25"],   Is.EqualTo(1), "Score 10 → bucket '0-25'");
+        Assert.That(summary.ByScoreBucket["26-50"],  Is.EqualTo(1), "Score 30 → bucket '26-50'");
+        Assert.That(summary.ByScoreBucket["51-75"],  Is.EqualTo(1), "Score 60 → bucket '51-75'");
+        Assert.That(summary.ByScoreBucket["76plus"], Is.EqualTo(1), "Score 80 → bucket '76plus'");
 
         // By-pattern counts.
         Assert.That(summary.ByPattern["AsyncBridgeCandidate"], Is.EqualTo(3));
         Assert.That(summary.ByPattern["HandlerExtract"],       Is.EqualTo(2));
+
+        // ByClass: all 5 methods are in the same class "Svc" in the same file.
+        Assert.That(summary.ByClass, Is.Not.Null);
+        Assert.That(summary.ByClass.Count, Is.EqualTo(1), "All methods are in the same class.");
+        var classEntry = summary.ByClass[0];
+        Assert.That(classEntry.ClassName,   Is.EqualTo("Svc"));
+        Assert.That(classEntry.ProjectName, Is.Not.Null.And.Not.Empty);
+        Assert.That(classEntry.FilePath,    Is.Not.Null.And.Not.Empty);
+        Assert.That(classEntry.Count,       Is.EqualTo(5));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -404,5 +413,91 @@ public class Svc
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.Exception));
         Assert.That(result.Error.Detail, Is.Not.Null.And.Not.Empty,
             "Detail must carry the exception message.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T10 – summarize=true, topN=5, minScore=70 → TopCandidates ≤5, score≥70, counts populated
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T10_Summarize_TopN_MinScore_PopulatesTopCandidates()
+    {
+        // 10 methods with scores spread across the range.
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("public class Svc {");
+        for (int i = 0; i < 10; i++)
+        {
+            int score = (i + 1) * 10; // 10, 20, 30, 40, 50, 60, 70, 80, 90, 100
+            sb.AppendLine($@"    [MigrationCandidate(""AsyncBridgeCandidate"", Score = {score}, FlaggedDate = ""2026-01-01"")]");
+            sb.AppendLine($"    public int Method{i}(int x) => x;");
+        }
+        sb.AppendLine("}");
+        sb.AppendLine(AttrStub);
+        SetSource(sb.ToString());
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, topN: 5, minScore: 70);
+        var result = rawResult as MigrationResult<MigrationScanSummary>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Success, Is.True);
+        var summary = result.Data!;
+
+        // Normal summary counts are still populated.
+        Assert.That(summary.TotalCandidates, Is.EqualTo(10));
+        Assert.That(summary.ByPattern.ContainsKey("AsyncBridgeCandidate"), Is.True);
+
+        // TopCandidates: at most 5 items, all with score >= 70.
+        Assert.That(summary.TopCandidates, Is.Not.Null, "TopCandidates must be populated when topN is set.");
+        Assert.That(summary.TopCandidates!.Count, Is.LessThanOrEqualTo(5));
+        Assert.That(summary.TopCandidates.All(c => c.Score >= 70), Is.True,
+            "All TopCandidates must satisfy minScore=70.");
+        // Results should be in descending score order.
+        var scores = summary.TopCandidates.Select(c => c.Score).ToList();
+        Assert.That(scores, Is.EqualTo(scores.OrderByDescending(s => s).ToList()),
+            "TopCandidates must be sorted descending by score.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T11 – summarize=true without topN/minScore → TopCandidates == null
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T11_Summarize_NoTopN_TopCandidatesNull()
+    {
+        SetSource($@"
+public class Svc
+{{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 80, FlaggedDate = ""2026-01-01"")]
+    public int MethodA(int x) => x;
+}}
+{AttrStub}");
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
+        var result = rawResult as MigrationResult<MigrationScanSummary>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Success, Is.True);
+        Assert.That(result.Data!.TopCandidates, Is.Null,
+            "TopCandidates must be null when neither topN nor minScore is set.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T12 – get_workspace_health after SetTestSolution → LoadedSolutionPath non-null
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T12_GetWorkspaceHealth_AfterLoadSolution_LoadedSolutionPathNonNull()
+    {
+        SetSource("public class C {}", "Test.cs");
+
+        var msEngine = new MsToolAugmentEngine(_workspaceManager);
+        var report = await msEngine.GetWorkspaceHealthAsync();
+
+        Assert.That(report.HasLoadedSolution, Is.True);
+        Assert.That(report.LoadedSolutionPath, Is.Not.Null,
+            "LoadedSolutionPath must be non-null when a solution is loaded.");
+        // In the test setup, SolutionPath is set to a fake .sln path.
+        Assert.That(report.LoadedSolutionPath, Does.EndWith(".sln"),
+            "LoadedSolutionPath should end with '.sln'.");
     }
 }

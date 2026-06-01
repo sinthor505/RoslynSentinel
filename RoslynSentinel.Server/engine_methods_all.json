@@ -3287,6 +3287,38 @@
       "Name": "Deconstruct"
     }
   ],
+  "LargeResultInfo": [
+    {
+      "ReturnType": "String",
+      "Signature": "public String ToString()",
+      "Name": "ToString"
+    },
+    {
+      "ReturnType": "Int32",
+      "Signature": "public Int32 GetHashCode()",
+      "Name": "GetHashCode"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(Object obj)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(LargeResultInfo other)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "LargeResultInfo",
+      "Signature": "public LargeResultInfo \u003CClone\u003E$()",
+      "Name": "\u003CClone\u003E$"
+    },
+    {
+      "ReturnType": "void",
+      "Signature": "public Void Deconstruct(Boolean\u0026 WrittenToFile, String\u0026 FilePath, String\u0026 OperationId, Int64\u0026 SizeBytes, Int32\u0026 TotalRecords)",
+      "Name": "Deconstruct"
+    }
+  ],
   "LargeTypeReport": [
     {
       "ReturnType": "String",
@@ -3561,6 +3593,38 @@
     {
       "ReturnType": "void",
       "Signature": "public Void Deconstruct(String\u0026 FilePath, String\u0026 MethodName, String\u0026 ClassName, String\u0026 Pattern, Int32\u0026 Score, String\u0026 Reason, String\u0026 FlaggedDate, Int32\u0026 Line)",
+      "Name": "Deconstruct"
+    }
+  ],
+  "MigrationScanSummary": [
+    {
+      "ReturnType": "String",
+      "Signature": "public String ToString()",
+      "Name": "ToString"
+    },
+    {
+      "ReturnType": "Int32",
+      "Signature": "public Int32 GetHashCode()",
+      "Name": "GetHashCode"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(Object obj)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(MigrationScanSummary other)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "MigrationScanSummary",
+      "Signature": "public MigrationScanSummary \u003CClone\u003E$()",
+      "Name": "\u003CClone\u003E$"
+    },
+    {
+      "ReturnType": "void",
+      "Signature": "public Void Deconstruct(Int32\u0026 TotalCandidates, Dictionary\u00602\u0026 ByPattern, Dictionary\u00602\u0026 ByProject, Dictionary\u00602\u0026 ByScoreBucket)",
       "Name": "Deconstruct"
     }
   ],
@@ -4967,6 +5031,38 @@
       "Name": "Deconstruct"
     }
   ],
+  "ResultError": [
+    {
+      "ReturnType": "String",
+      "Signature": "public String ToString()",
+      "Name": "ToString"
+    },
+    {
+      "ReturnType": "Int32",
+      "Signature": "public Int32 GetHashCode()",
+      "Name": "GetHashCode"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(Object obj)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "Boolean",
+      "Signature": "public Boolean Equals(ResultError other)",
+      "Name": "Equals"
+    },
+    {
+      "ReturnType": "ResultError",
+      "Signature": "public ResultError \u003CClone\u003E$()",
+      "Name": "\u003CClone\u003E$"
+    },
+    {
+      "ReturnType": "void",
+      "Signature": "public Void Deconstruct(String\u0026 ErrorCode, String\u0026 Message, String\u0026 Detail)",
+      "Name": "Deconstruct"
+    }
+  ],
   "ReturnRewriter": [
     {
       "ReturnType": "SyntaxNode",
@@ -5421,8 +5517,8 @@
       "Name": "GetTestCoverageMap"
     },
     {
-      "ReturnType": "List\u003CMigrationCandidateFinding\u003E",
-      "Signature": "public async Task\u003CList\u003CMigrationCandidateFinding\u003E\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null)",
+      "ReturnType": "Object",
+      "Signature": "public async Task\u003CObject\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null, Boolean summarize = false, Int32 limit = 50, Int32 offset = 0)",
       "Name": "ScanMigrationCandidates"
     },
     {
@@ -5431,8 +5527,13 @@
       "Name": "GetMethodComplexity"
     },
     {
-      "ReturnType": "AsyncMigrationProgressReport",
-      "Signature": "public async Task\u003CAsyncMigrationProgressReport\u003E GetAsyncMigrationProgress(String projectName = null, CancellationToken cancellationToken = null)",
+      "ReturnType": "MigrationResult\u003CList\u003CMigrationCandidateFinding\u003E\u003E",
+      "Signature": "public async Task\u003CMigrationResult\u003CList\u003CMigrationCandidateFinding\u003E\u003E\u003E GetScanResult(String changeId = null, String filePath = null, Int32 limit = 50, Int32 offset = 0)",
+      "Name": "GetScanResult"
+    },
+    {
+      "ReturnType": "MigrationResult\u003CAsyncMigrationProgressReport\u003E",
+      "Signature": "public async Task\u003CMigrationResult\u003CAsyncMigrationProgressReport\u003E\u003E GetAsyncMigrationProgress(String projectName = null, CancellationToken cancellationToken = null)",
       "Name": "GetAsyncMigrationProgress"
     },
     {
