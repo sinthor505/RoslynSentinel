@@ -235,7 +235,8 @@ public class SentinelQualityTools
         summarize:   when true, return counts only (always inline-safe). Add topN/minScore to include
                      top actionable targets alongside counts.
         topN:        when summarize=true, include this many top-scored candidates in TopCandidates.
-        minScore:    when summarize=true, filter TopCandidates to score >= minScore.
+        minScore:    filters candidates in both paged and summary modes. TotalRecords reflects
+                     the post-filter count. Ignored when not supplied.
         limit/offset: page the full candidate list (summarize=false only). Ignored when summarize=true.
 
         Returns MigrationResult<List<MigrationCandidateFinding>> or MigrationResult<MigrationScanSummary>.
@@ -291,6 +292,11 @@ public class SentinelQualityTools
                 };
             }
 
+            // B7: apply minScore before aggregation — TotalCandidates reflects post-filter count
+            var aggregateFindings = minScore.HasValue
+                ? summaryFindings.Where(f => f.Score >= minScore.Value).ToList()
+                : summaryFindings;
+
             var buckets = new Dictionary<string, int>
             {
                 ["<0"]     = 0,
@@ -299,7 +305,7 @@ public class SentinelQualityTools
                 ["51-75"]  = 0,
                 ["76plus"] = 0,
             };
-            foreach (var f in summaryFindings)
+            foreach (var f in aggregateFindings)
             {
                 var key = f.Score < 0   ? "<0"
                         : f.Score <= 25 ? "0-25"
@@ -309,11 +315,11 @@ public class SentinelQualityTools
                 buckets[key]++;
             }
 
-            var byPattern = summaryFindings
+            var byPattern = aggregateFindings
                 .GroupBy(f => f.Pattern)
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            var byClass = summaryFindings
+            var byClass = aggregateFindings
                 .GroupBy(f => (f.ClassName, f.FilePath))
                 .Select(g => new ClassCandidateSummary
                 {
@@ -325,23 +331,15 @@ public class SentinelQualityTools
                 .OrderByDescending(c => c.Count)
                 .ToList();
 
-            List<MigrationCandidateFinding>? topCandidates = null;
-            if (topN.HasValue || minScore.HasValue)
-            {
-                var filtered = summaryFindings.AsEnumerable();
-                if (minScore.HasValue)
-                    filtered = filtered.Where(f => f.Score >= minScore.Value);
-                filtered = filtered.OrderByDescending(f => f.Score);
-                if (topN.HasValue)
-                    filtered = filtered.Take(topN.Value);
-                topCandidates = filtered.ToList();
-            }
+            List<MigrationCandidateFinding>? topCandidates = topN.HasValue
+                ? aggregateFindings.OrderByDescending(f => f.Score).Take(topN.Value).ToList()
+                : null;
 
             return new MigrationResult<MigrationScanSummary>
             {
                 Success = true,
                 Data    = new MigrationScanSummary(
-                    TotalCandidates: summaryFindings.Count,
+                    TotalCandidates: aggregateFindings.Count,
                     ByPattern:       byPattern,
                     ByClass:         byClass,
                     ByScoreBucket:   buckets,
@@ -375,6 +373,10 @@ public class SentinelQualityTools
         }
 
         // ── paginate ──────────────────────────────────────────────────────
+        // B7b: apply minScore before pagination — TotalRecords reflects post-filter count
+        if (minScore.HasValue)
+            allFindings = allFindings.Where(f => f.Score >= minScore.Value).ToList();
+
         int totalCount = allFindings.Count;
         var page = allFindings.Skip(offset).Take(limit).ToList();
         bool hasMore = (offset + limit) < totalCount;

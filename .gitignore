@@ -10,3 +10,4 @@ publish/
 /RoslynSentinel.Server/all_methods_all.csv
 /RoslynSentinel.Server/all_methods_workspace.csv
 RoslynSentinel.Server/engine_methods_all.json
+RoslynSentinel.Server/engine_methods_workspace.json

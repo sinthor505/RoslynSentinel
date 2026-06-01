@@ -442,8 +442,8 @@ public class Svc
         Assert.That(result!.Success, Is.True);
         var summary = result.Data!;
 
-        // Normal summary counts are still populated.
-        Assert.That(summary.TotalCandidates, Is.EqualTo(10));
+        // Normal summary counts reflect post-minScore filter (B7).
+        Assert.That(summary.TotalCandidates, Is.EqualTo(4)); // minScore=70: scores 70,80,90,100
         Assert.That(summary.ByPattern.ContainsKey("AsyncBridgeCandidate"), Is.True);
 
         // TopCandidates: at most 5 items, all with score >= 70.
@@ -656,5 +656,101 @@ public class Svc
             "Message must not reference the non-existent read_file tool.");
         Assert.That(largeResult.Message, Does.Contain(largeResult.OperationId),
             "Message must embed the OperationId so the agent can copy it directly.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T20 – summarize=true, minScore=80 → TotalCandidates = filtered count
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T20_Summarize_MinScore_TotalCandidatesReflectsFilteredCount()
+    {
+        // 5 methods: scores 50, 60, 70, 80, 90. minScore=80 → only 80 and 90 qualify (count=2).
+        SetSource($@"
+public class Svc
+{{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 50, FlaggedDate = ""2026-01-01"")]
+    public int MethodA(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 60, FlaggedDate = ""2026-01-01"")]
+    public int MethodB(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 70, FlaggedDate = ""2026-01-01"")]
+    public int MethodC(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 80, FlaggedDate = ""2026-01-01"")]
+    public int MethodD(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 90, FlaggedDate = ""2026-01-01"")]
+    public int MethodE(int x) => x;
+}}
+{AttrStub}");
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, minScore: 80);
+        var result = rawResult as MigrationResult<MigrationScanSummary>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Success, Is.True);
+        var summary = result.Data!;
+
+        // TotalCandidates must equal only the count of candidates with Score >= 80.
+        Assert.That(summary.TotalCandidates, Is.EqualTo(2),
+            "TotalCandidates must reflect the post-minScore filter, not the full candidate count.");
+
+        // ByPattern counts must sum to TotalCandidates.
+        var patternTotal = summary.ByPattern.Values.Sum();
+        Assert.That(patternTotal, Is.EqualTo(summary.TotalCandidates),
+            "Sum of ByPattern counts must equal TotalCandidates.");
+
+        // Result must be inline (no offload).
+        Assert.That(result.LargeResult, Is.Null,
+            "summarize=true result must always be inline.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T21 – summarize=false, minScore=85 → all records have Score>=85, TotalRecords=filtered count
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T21_Paged_MinScore_AllRecordsAboveThreshold_TotalRecordsFiltered()
+    {
+        // 6 methods: scores 55, 60, 80, 85, 90, 95. minScore=85 → 3 qualify (85, 90, 95).
+        SetSource($@"
+public class Svc
+{{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 55, FlaggedDate = ""2026-01-01"")]
+    public int MethodA(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 60, FlaggedDate = ""2026-01-01"")]
+    public int MethodB(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 80, FlaggedDate = ""2026-01-01"")]
+    public int MethodC(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 85, FlaggedDate = ""2026-01-01"")]
+    public int MethodD(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 90, FlaggedDate = ""2026-01-01"")]
+    public int MethodE(int x) => x;
+
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 95, FlaggedDate = ""2026-01-01"")]
+    public int MethodF(int x) => x;
+}}
+{AttrStub}");
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates(minScore: 85, limit: 20);
+        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Success, Is.True);
+        Assert.That(result.Data, Is.Not.Null);
+
+        // All returned candidates must satisfy minScore=85.
+        Assert.That(result.Data!.All(c => c.Score >= 85), Is.True,
+            "All returned candidates must have Score >= 85.");
+
+        // TotalRecords must reflect the filtered count, not the total (6) candidates.
+        Assert.That(result.TotalRecords, Is.EqualTo(3),
+            "TotalRecords must equal the count of candidates with Score >= 85.");
     }
 }

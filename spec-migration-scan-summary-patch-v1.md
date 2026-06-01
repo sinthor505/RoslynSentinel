@@ -1,15 +1,16 @@
 # Spec — Migration Scan Summary Patch (post-v2)
-<!-- spec-migration-scan-summary-patch-v1.md / v2 -->
+<!-- spec-migration-scan-summary-patch-v1.md / v5 -->
 **Target server:** RoslynSentinel (rhale78)
 **Date:** 2026-05-31
-**Supersedes:** spec-migration-scan-summary-patch-v1.md / v1
+**Supersedes:** spec-migration-scan-summary-patch-v1.md / v4
 **Depends on:** spec-migration-scan-result-handling-v2.md fully implemented and passing
-**Motivated by:** Three MCP tool usage feedback sessions (May 31, 2026):
+**Motivated by:** Four MCP tool usage feedback sessions (May 31, 2026):
 - Session 1 (post-v2): naming confusion, missing actionable detail in summary, two missing fields → §P1–P5
 - Session 2 (post-patch): summarize ordering bug, SyntaxTree compilation error, unjustified
   solution-load gate, inconsistent score reason format, opaque async_migrate errors → §B1–B6
 - Session 3 (post-B fixes): B2 root cause refined (designer files), minScore ignored in summarize
   path → B2 updated, §B7 added
+- Session 4: VS Code offload distinction clarified; minScore also ignored in paged mode → §B7b added
 
 ---
 
@@ -20,8 +21,8 @@ This document has two sections:
 **§P1–P5 — Summary enhancements** (from session 1): five independent changes, implement in any
 order.
 
-**§B1–B7 — Bug fixes** (from sessions 2–3): B1 and B2 are critical path and should be
-implemented first. B3–B7 are independent of each other and of B1/B2.
+**§B1–B7b — Bug fixes** (from sessions 2–4): B1 and B2 are critical path and should be
+implemented first. B3–B7b are independent of each other and of B1/B2.
 
 **Cross-references to other specs:**
 - `get_scan_result` tool (the paging tool for offloaded results) is fully specced in
@@ -597,6 +598,60 @@ alongside a filtered summary, that is a separate feature request — do not add 
 
 ---
 
+## B7b — `minScore` filter ignored in paged (non-summary) mode
+
+**File:** `RoslynSentinel.Server/AsyncOptimizationEngine.cs` — `FindMigrationCandidatesAsync`
+
+### Problem
+When `summarize=false` and `minScore` is supplied, the filter is silently ignored — candidates
+below the threshold are returned in the paged result. Session 4 confirmed candidates scored 55,
+60, and 80 were returned when `minScore=85` was set. The `minScore` parameter is only wired into
+the `TopCandidates` slice in the summarize path; it is never applied to the main candidate list
+in the paged path.
+
+This is a separate bug from B7 — different code path, different fix location.
+
+### Fix
+Apply `minScore` to the candidate list in `FindMigrationCandidatesAsync` **after** filtering by
+`filePath`/`projectName`/`pattern` and **before** applying `Skip(offset).Take(limit)` pagination:
+
+```csharp
+// existing filters (filePath, projectName, pattern) applied first
+var filtered = candidates;
+
+if (minScore.HasValue)
+{
+    filtered = filtered.Where(c => c.Score >= minScore.Value).ToList();
+}
+
+var totalCount = filtered.Count;
+var page = filtered
+    .OrderByDescending(c => c.Score)
+    .Skip(offset)
+    .Take(limit)
+    .ToList();
+```
+
+`TotalRecords` in the response must reflect the post-`minScore` count, not the pre-filter total.
+Pagination (`Skip`/`Take`) applies to the filtered list, not the full list.
+
+### Description update
+Update the `[Description]` on `scan_migration_candidates` to state explicitly:
+
+```
+minScore: filters candidates in both paged and summary modes. TotalRecords reflects the
+post-filter count. Ignored when not supplied.
+```
+
+Remove or correct any existing description text that implies `minScore` only applies to
+`TopCandidates` in summary mode.
+
+### Test
+- New T21: `summarize=false, minScore=85, limit=20` on AvaalExpress → all returned candidates
+  have `Score >= 85`; `TotalRecords` equals the count of candidates with `Score >= 85` (not 986)
+
+---
+
 ## Test summary — all cases
 
 | # | Section | Case | Key assertion |
@@ -613,6 +668,7 @@ alongside a filtered summary, that is a separate feature request — do not add 
 | T18 | B5 | `async_migrate`, no solution | `ErrorCode = "SolutionNotLoaded"` |
 | T19 | B6 | Large-result offload message | Contains `"get_scan_result"` and `OperationId`; no `"read_file"` |
 | T20 | B7 | `summarize=true, minScore=80` | `TotalCandidates` = filtered count; result inline |
+| T21 | B7b | `summarize=false, minScore=85, limit=20` | All records have `Score >= 85`; `TotalRecords` = filtered count (not 986) |
 
 Existing tests T8, T9 from `spec-migration-scan-result-handling-v2.md §6` remain load-bearing —
 confirm they still pass after B2 and B5 changes.
@@ -625,8 +681,12 @@ confirm they still pass after B2 and B5 changes.
   implement from that document.
 - Re-speccing `describe_tool_options` — fully specced in
   `spec-tool-description-compression-v1.md §1`; implement from that document.
+- VS Code infrastructure-level response offload (where VS Code intercepts a large inline response
+  and writes it to a resource file outside `.roslynsentinel/`). This is not fixable server-side.
+  The correct mitigation is B1 — keep `summarize=true` responses small enough that VS Code never
+  triggers its offload.
 - Combined health snapshot tool — deferred (carried from §P out-of-scope).
 - Any changes to the circuit-breaker logic or `BatchResultSummary` shape beyond the envelope wrap
   in B5.
 
-<!-- v4 -->
+<!-- v5 -->

@@ -2751,7 +2751,10 @@ public class AntiPatternEngine
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
-                if (syntaxTree == null) continue;
+                if (syntaxTree == null || !compilation.ContainsSyntaxTree(syntaxTree))
+                {
+                    continue; // generated file or excluded document — skip
+                }
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
                 var semanticModel = compilation.GetSemanticModel(syntaxTree);
