@@ -83,43 +83,8 @@ public class SentinelWorkspaceTools
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
     public async Task<object> List(string kind, string? projectName = null)
     {
-        if (kind == "projects")
-        {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
-            return solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList();
-        }
-        if (kind == "files")
-        {
-            if (string.IsNullOrEmpty(projectName))
-            {
-                throw new ArgumentException("projectName is required when kind=files.");
-            }
-            try
-            {
-                var solution = await _workspaceManager.GetBranchedSolutionAsync();
-                var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-                if (project == null)
-                {
-                    throw new InvalidOperationException($"Project '{projectName}' not found.");
-                }
-                return project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>();
-            }
-            catch (InvalidOperationException) { throw; }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                throw new InvalidOperationException($"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
-            }
-        }
-        if (kind == "dependencies")
-        {
-            if (string.IsNullOrEmpty(projectName))
-            {
-                throw new ArgumentException("projectName is required when kind=dependencies.");
-            }
-            return await _dependencyEngine.GetProjectDependenciesAsync(projectName);
-        }
-        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: projects, files, dependencies.");
+        //await _dependencyEngine.ListAsync(kind, projectName);
+        return await this.List(kind, projectName);
     }
 
     [McpServerTool]
@@ -134,51 +99,7 @@ public class SentinelWorkspaceTools
     [Description("Checks the health of the Roslyn MCP server environment and workspace status.")]
     public async Task<HealthReport> Diagnose(string? solutionPath = null, bool verbose = false)
     {
-        try
-        {
-            if (!string.IsNullOrEmpty(solutionPath))
-            {
-                await _workspaceManager.LoadSolutionAsync(solutionPath);
-            }
-
-            var components = _workspaceManager.GetHealthComponents();
-            var workspace = _workspaceManager.GetWorkspaceStatus();
-            var errors = new List<HealthIssue>();
-            var warnings = new List<HealthIssue>();
-
-            if (!components.MsBuildFound)
-            {
-                warnings.Add(new HealthIssue("W5001", "MSBuild not found. If the workspace loaded successfully, this can be ignored.", null, "Install Visual Studio, Build Tools, or .NET SDK for full MSBuild support."));
-            }
-
-            if (workspace.SolutionLoaded && workspace.ProjectCount == 0)
-            {
-                var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
-                foreach (var error in loadErrors)
-                {
-                    errors.Add(new HealthIssue("5005", "Workspace load error", error, "Check project file for syntax errors, missing NuGet packages, or SDK version mismatches."));
-                }
-
-                if (loadErrors.Count == 0)
-                {
-                    warnings.Add(new HealthIssue("4001", "Solution loaded but no projects found. Check for unsupported project types."));
-                }
-            }
-
-            return new HealthReport(
-                Healthy: errors.Count == 0,
-                Components: components,
-                Workspace: workspace,
-                Capabilities: new List<string> { "diagnose", "load_solution", "refactor", "intelligence" },
-                Errors: errors,
-                Warnings: warnings
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Diagnose unexpected exception");
-            throw new InvalidOperationException($"Diagnose failed: {ex.GetType().Name}: {ex.Message}", ex);
-        }
+        return await Task.FromResult(_workspaceManager.GetHealthComponents());
     }
 
     [McpServerTool]

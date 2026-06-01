@@ -255,7 +255,7 @@ public class SentinelIntelligenceTools
         {
             return await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
         }
-        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: callers, implementations.");
+        return ($"Unknown kind '{kind}'. Valid values: callers, implementations.");
     }
 
     [McpServerTool]
@@ -303,7 +303,7 @@ public class SentinelIntelligenceTools
         {
             return new { Hierarchy = hierarchy, Members = members };
         }
-        throw new ArgumentException($"Unknown include '{include}'. Valid values: hierarchy, members, both.");
+        return ($"Unknown include '{include}'. Valid values: hierarchy, members, both.");
     }
 
 
@@ -320,9 +320,6 @@ public class SentinelIntelligenceTools
         string? projectName = null,
         string? filePath = null)
         => await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath);
-
-
-
 
     [McpServerTool]
     [Description("""

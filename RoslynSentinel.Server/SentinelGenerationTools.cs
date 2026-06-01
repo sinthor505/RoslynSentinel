@@ -1,5 +1,7 @@
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -39,7 +41,7 @@ public class SentinelGenerationTools
         var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
         if (string.IsNullOrEmpty(result))
         {
-            throw new InvalidOperationException(
+            return (
                 $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
                 "file not found in workspace or controller class not found. Ensure the solution is loaded.");
         }
@@ -58,7 +60,7 @@ public class SentinelGenerationTools
         var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
         if (string.IsNullOrEmpty(result))
         {
-            throw new InvalidOperationException(
+            return (
                 $"GenerateDefaultConfigJson failed for project '{projectName}': " +
                 "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
         }
@@ -84,7 +86,7 @@ public class SentinelGenerationTools
         var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
         if (string.IsNullOrEmpty(result))
         {
-            throw new InvalidOperationException(
+            return (
                 $"InterpolateStringSafe failed in '{filePath}': " +
                 "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
         }
