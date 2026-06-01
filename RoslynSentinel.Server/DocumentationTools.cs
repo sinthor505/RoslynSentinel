@@ -61,7 +61,7 @@ public class DocumentationTools
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is null)
         {
-            error = "No solution is loaded. Call load_solution first.";
+            error = "No solution path configured. Call load_solution first.";
             return null;
         }
 

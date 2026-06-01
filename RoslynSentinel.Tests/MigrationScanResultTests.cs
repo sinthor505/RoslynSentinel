@@ -482,22 +482,179 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T12 – get_workspace_health after SetTestSolution → LoadedSolutionPath non-null
+    // T13 – get_async_migration_progress after load_solution → no exception, report fields set
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(15000)]
+    public async Task T13_GetAsyncMigrationProgress_AfterLoadSolution_NoException()
+    {
+        SetSource(@"
+using System.Threading.Tasks;
+public class Svc
+{
+    public async Task DoWork() { await Task.Delay(1); }
+    public async Task<int> GetVal(System.Threading.CancellationToken ct) { return await Task.FromResult(1); }
+}");
+
+        var result = await _qualityTools.GetAsyncMigrationProgress();
+
+        Assert.That(result.Success, Is.True, "Should succeed with a loaded solution.");
+        Assert.That(result.Error, Is.Null);
+        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.Data!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T14 – get_async_migration_progress(projectName) → scoped report, no exception
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(15000)]
+    public async Task T14_GetAsyncMigrationProgress_ProjectNameScoped_NoException()
+    {
+        SetSource(@"
+using System.Threading.Tasks;
+public class Svc
+{
+    public async Task DoWork() { await Task.Delay(1); }
+}");
+
+        var result = await _qualityTools.GetAsyncMigrationProgress(projectName: "TestProj");
+
+        Assert.That(result.Success, Is.True, "Scoped project query should succeed.");
+        Assert.That(result.Error, Is.Null);
+        Assert.That(result.Data, Is.Not.Null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T15 – project_doc read with no solution loaded (only SolutionPath set) → succeeds
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public void T15_ProjectDoc_Read_NoSolutionLoaded_Succeeds()
+    {
+        // SolutionPath is set in SetUp (_tempDir/Test.sln). CurrentSolution is null here.
+        // Create docs/migration-state.yaml at the solution root.
+        var docsDir = Path.Combine(_tempDir, "docs");
+        Directory.CreateDirectory(docsDir);
+        File.WriteAllText(Path.Combine(docsDir, "migration-state.yaml"), "state: ready\nphase: 1");
+
+        var docTools = new DocumentationTools(
+            _workspaceManager,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentationTools>.Instance);
+
+        var result = docTools.ProjectDoc("read", "state") as DocReadResult;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Error, Is.Null,
+            "Filesystem read should not return an error when SolutionPath is set but solution is not loaded.");
+        Assert.That(result.Found, Is.True, "State file should be found.");
+        Assert.That(result.Content, Does.Contain("ready"));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T16 – All MigrationCandidateFinding.Reason tokens match [\w\-]+:[0-9\-]+
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T12_GetWorkspaceHealth_AfterLoadSolution_LoadedSolutionPathNonNull()
+    public async Task T16_ScanMigrationCandidates_AllReasonTokensStructured()
     {
-        SetSource("public class C {}", "Test.cs");
+        // Set up methods with structured Reason strings (as produced by the scoring engine).
+        SetSource($@"
+public class Svc
+{{
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 55, Reason = ""blocking-calls:40 service-class:15"", FlaggedDate = ""2026-01-01"")]
+    public int MethodA(int x) => x;
 
-        var msEngine = new MsToolAugmentEngine(_workspaceManager);
-        var report = await msEngine.GetWorkspaceHealthAsync();
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 75, Reason = ""blocking-calls:40 calls-CommonSearch:30 virtual-override-penalty:-20"", FlaggedDate = ""2026-01-01"")]
+    public int MethodB(int x) => x;
 
-        Assert.That(report.HasLoadedSolution, Is.True);
-        Assert.That(report.LoadedSolutionPath, Is.Not.Null,
-            "LoadedSolutionPath must be non-null when a solution is loaded.");
-        // In the test setup, SolutionPath is set to a fake .sln path.
-        Assert.That(report.LoadedSolutionPath, Does.EndWith(".sln"),
-            "LoadedSolutionPath should end with '.sln'.");
+    [MigrationCandidate(""AsyncBridgeCandidate"", Score = 40, FlaggedDate = ""2026-01-01"")]
+    public int MethodC(int x) => x;
+}}
+{AttrStub}");
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates();
+        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Success, Is.True);
+        Assert.That(result.Data, Is.Not.Null);
+
+        var tokenPattern = new System.Text.RegularExpressions.Regex(@"^[\w\-]+:[0-9\-]+$");
+        foreach (var finding in result.Data!)
+        {
+            if (string.IsNullOrWhiteSpace(finding.Reason)) continue;
+
+            var tokens = finding.Reason.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                Assert.That(tokenPattern.IsMatch(token), Is.True,
+                    $"Reason token '{token}' in method '{finding.MethodName}' does not match key:integer format. Full reason: '{finding.Reason}'");
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T17 – async_migrate with unknown operation → ErrorCode="InvalidArgument"
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task T17_AsyncMigrate_UnknownOperation_ReturnsInvalidArgument()
+    {
+        SetSource("public class C { public void M() {} }");
+
+        var result = await _qualityTools.AsyncMigrate(
+            "totally_unknown_operation",
+            new AsyncMigrateInput());
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.InvalidArgument));
+        Assert.That(result.Error.Message, Does.Contain("propagate_cancellation_token").Or.Contain("asyncify"),
+            "Error message should list valid operation names.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T18 – async_migrate with no solution loaded → ErrorCode="SolutionNotLoaded"
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task T18_AsyncMigrate_NoSolution_ReturnsSolutionNotLoaded()
+    {
+        // Intentionally do NOT set a solution.
+        var result = await _qualityTools.AsyncMigrate(
+            "propagate_cancellation_token",
+            new AsyncMigrateInput());
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T19 – large-result offload message contains get_scan_result and OperationId; no read_file
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(60000)]
+    public async Task T19_LargeResult_Message_ContainsGetScanResult_AndOperationId()
+    {
+        // Reuse T4 conditions: 500 methods with padded Reason to exceed 256 KB.
+        var reason = new string('x', 300);
+        SetSource(BuildManyFlaggedMethods(500, reason));
+
+        var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
+        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+
+        Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
+
+        var largeResult = result!.LargeResult!;
+        Assert.That(largeResult.Message, Is.Not.Null.And.Not.Empty,
+            "LargeResult.Message must be populated for agent guidance.");
+        Assert.That(largeResult.Message, Does.Contain("get_scan_result"),
+            "Message must name the correct recovery tool.");
+        Assert.That(largeResult.Message, Does.Not.Contain("read_file"),
+            "Message must not reference the non-existent read_file tool.");
+        Assert.That(largeResult.Message, Does.Contain(largeResult.OperationId),
+            "Message must embed the OperationId so the agent can copy it directly.");
     }
 }

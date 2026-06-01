@@ -63,7 +63,8 @@ public record LargeResultInfo(
     string  FilePath,
     string  OperationId,
     long    SizeBytes,
-    int     TotalRecords
+    int     TotalRecords,
+    string? Message = null
 );
 
 // ── Scan summary ─────────────────────────────────────────────────────────────

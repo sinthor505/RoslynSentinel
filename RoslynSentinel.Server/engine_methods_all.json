@@ -3592,7 +3592,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(String\u0026 FilePath, String\u0026 MethodName, String\u0026 ClassName, String\u0026 Pattern, Int32\u0026 Score, String\u0026 Reason, String\u0026 FlaggedDate, Int32\u0026 Line)",
+      "Signature": "public Void Deconstruct(String\u0026 FilePath, String\u0026 MethodName, String\u0026 ClassName, String\u0026 Pattern, Int32\u0026 Score, String\u0026 Reason, String\u0026 FlaggedDate, Int32\u0026 Line, String\u0026 ProjectName)",
       "Name": "Deconstruct"
     }
   ],
@@ -3624,7 +3624,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(Int32\u0026 TotalCandidates, Dictionary\u00602\u0026 ByPattern, Dictionary\u00602\u0026 ByProject, Dictionary\u00602\u0026 ByScoreBucket)",
+      "Signature": "public Void Deconstruct(Int32\u0026 TotalCandidates, Dictionary\u00602\u0026 ByPattern, List\u00601\u0026 ByClass, Dictionary\u00602\u0026 ByScoreBucket, List\u00601\u0026 TopCandidates)",
       "Name": "Deconstruct"
     }
   ],
@@ -5518,7 +5518,7 @@
     },
     {
       "ReturnType": "Object",
-      "Signature": "public async Task\u003CObject\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null, Boolean summarize = false, Int32 limit = 50, Int32 offset = 0)",
+      "Signature": "public async Task\u003CObject\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null, Boolean summarize = false, Int32 limit = 50, Int32 offset = 0, Nullable\u003CInt32\u003E topN = null, Nullable\u003CInt32\u003E minScore = null)",
       "Name": "ScanMigrationCandidates"
     },
     {
@@ -5540,6 +5540,11 @@
       "ReturnType": "BatchResultSummary",
       "Signature": "public async Task\u003CBatchResultSummary\u003E AsyncMigrate(String operation, AsyncMigrateInput input, CancellationToken cancellationToken = null)",
       "Name": "AsyncMigrate"
+    },
+    {
+      "ReturnType": "ToolOptionsResult",
+      "Signature": "public ToolOptionsResult DescribeToolOptions(String toolName)",
+      "Name": "DescribeToolOptions"
     }
   ],
   "SentinelRefactoringTools": [
@@ -6987,7 +6992,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(Boolean\u0026 IsOperational, Boolean\u0026 HasLoadedSolution, String\u0026 SolutionPath, Int32\u0026 ProjectCount, Int32\u0026 DocumentCount, List\u00601\u0026 LoadErrors, String\u0026 Summary)",
+      "Signature": "public Void Deconstruct(Boolean\u0026 IsOperational, Boolean\u0026 HasLoadedSolution, String\u0026 LoadedSolutionPath, Int32\u0026 ProjectCount, Int32\u0026 DocumentCount, List\u00601\u0026 LoadErrors, String\u0026 Summary)",
       "Name": "Deconstruct"
     }
   ],

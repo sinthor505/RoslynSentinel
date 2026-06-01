@@ -236,21 +236,23 @@ public class SentinelQualityTools
                      top actionable targets alongside counts.
         topN:        when summarize=true, include this many top-scored candidates in TopCandidates.
         minScore:    when summarize=true, filter TopCandidates to score >= minScore.
-        limit/offset: page the full candidate list (summarize=false only).
+        limit/offset: page the full candidate list (summarize=false only). Ignored when summarize=true.
 
         Returns MigrationResult<List<MigrationCandidateFinding>> or MigrationResult<MigrationScanSummary>.
         A method flagged for two patterns appears twice. Each finding includes a Summary field.
         When payload exceeds 256 KB the result is written to disk; use get_scan_result to page through it.
+        When results exceed the inline threshold, LargeResultInfo is populated instead of Data —
+        call get_scan_result(changeId) to read back the offloaded result in pages.
         """)]
     public async Task<object> ScanMigrationCandidates(
         string? filePath    = null,
         string? projectName = null,
         string? pattern     = null,
         bool    summarize   = false,
-        int     limit       = 50,
-        int     offset      = 0,
         int?    topN        = null,
-        int?    minScore    = null)
+        int?    minScore    = null,
+        int     limit       = 50,
+        int     offset      = 0)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -262,6 +264,92 @@ public class SentinelQualityTools
             };
         }
 
+        // ── summarize=true path: always inline, never touches threshold ───
+        if (summarize)
+        {
+            List<MigrationCandidateFinding> summaryFindings;
+            try
+            {
+                summaryFindings = await _asyncOptimizationEngine
+                    .FindMigrationCandidatesAsync(filePath, projectName, pattern);
+            }
+            catch (ArgumentException ex)
+            {
+                return new MigrationResult<object>
+                {
+                    Success = false,
+                    Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+                };
+            }
+            catch (Exception ex)
+            {
+                return new MigrationResult<object>
+                {
+                    Success = false,
+                    Error   = new ResultError(MigrationErrorCode.Exception,
+                                  "An unexpected error occurred.", ex.Message)
+                };
+            }
+
+            var buckets = new Dictionary<string, int>
+            {
+                ["<0"]     = 0,
+                ["0-25"]   = 0,
+                ["26-50"]  = 0,
+                ["51-75"]  = 0,
+                ["76plus"] = 0,
+            };
+            foreach (var f in summaryFindings)
+            {
+                var key = f.Score < 0   ? "<0"
+                        : f.Score <= 25 ? "0-25"
+                        : f.Score <= 50 ? "26-50"
+                        : f.Score <= 75 ? "51-75"
+                        : "76plus";
+                buckets[key]++;
+            }
+
+            var byPattern = summaryFindings
+                .GroupBy(f => f.Pattern)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var byClass = summaryFindings
+                .GroupBy(f => (f.ClassName, f.FilePath))
+                .Select(g => new ClassCandidateSummary
+                {
+                    ClassName   = g.Key.ClassName,
+                    ProjectName = g.First().ProjectName,
+                    FilePath    = g.Key.FilePath,
+                    Count       = g.Count()
+                })
+                .OrderByDescending(c => c.Count)
+                .ToList();
+
+            List<MigrationCandidateFinding>? topCandidates = null;
+            if (topN.HasValue || minScore.HasValue)
+            {
+                var filtered = summaryFindings.AsEnumerable();
+                if (minScore.HasValue)
+                    filtered = filtered.Where(f => f.Score >= minScore.Value);
+                filtered = filtered.OrderByDescending(f => f.Score);
+                if (topN.HasValue)
+                    filtered = filtered.Take(topN.Value);
+                topCandidates = filtered.ToList();
+            }
+
+            return new MigrationResult<MigrationScanSummary>
+            {
+                Success = true,
+                Data    = new MigrationScanSummary(
+                    TotalCandidates: summaryFindings.Count,
+                    ByPattern:       byPattern,
+                    ByClass:         byClass,
+                    ByScoreBucket:   buckets,
+                    TopCandidates:   topCandidates)
+            };
+        }
+
+        // ── candidates path: threshold logic follows ──────────────────────
         List<MigrationCandidateFinding> allFindings;
         try
         {
@@ -283,68 +371,6 @@ public class SentinelQualityTools
                 Success = false,
                 Error   = new ResultError(MigrationErrorCode.Exception,
                               "An unexpected error occurred.", ex.Message)
-            };
-        }
-
-        // ── summarize=true path ───────────────────────────────────────────
-        if (summarize)
-        {
-            var buckets = new Dictionary<string, int>
-            {
-                ["<0"]     = 0,
-                ["0-25"]   = 0,
-                ["26-50"]  = 0,
-                ["51-75"]  = 0,
-                ["76plus"] = 0,
-            };
-            foreach (var f in allFindings)
-            {
-                var key = f.Score < 0  ? "<0"
-                        : f.Score <= 25 ? "0-25"
-                        : f.Score <= 50 ? "26-50"
-                        : f.Score <= 75 ? "51-75"
-                        : "76plus";
-                buckets[key]++;
-            }
-
-            var byPattern = allFindings
-                .GroupBy(f => f.Pattern)
-                .ToDictionary(g => g.Key, g => g.Count());
-
-            var byClass = allFindings
-                .GroupBy(f => (f.ClassName, f.FilePath))
-                .Select(g => new ClassCandidateSummary
-                {
-                    ClassName   = g.Key.ClassName,
-                    ProjectName = g.First().ProjectName,
-                    FilePath    = g.Key.FilePath,
-                    Count       = g.Count()
-                })
-                .OrderByDescending(c => c.Count)
-                .ToList();
-
-            // ── topN / minScore ───────────────────────────────────────────
-            List<MigrationCandidateFinding>? topCandidates = null;
-            if (topN.HasValue || minScore.HasValue)
-            {
-                var filtered = allFindings.AsEnumerable();
-                if (minScore.HasValue)
-                    filtered = filtered.Where(f => f.Score >= minScore.Value);
-                filtered = filtered.OrderByDescending(f => f.Score);
-                if (topN.HasValue)
-                    filtered = filtered.Take(topN.Value);
-                topCandidates = filtered.ToList();
-            }
-
-            return new MigrationResult<MigrationScanSummary>
-            {
-                Success = true,
-                Data    = new MigrationScanSummary(
-                    TotalCandidates: allFindings.Count,
-                    ByPattern:       byPattern,
-                    ByClass:         byClass,
-                    ByScoreBucket:   buckets,
-                    TopCandidates:   topCandidates)
             };
         }
 
@@ -391,7 +417,10 @@ public class SentinelQualityTools
                     FilePath:      scanFilePath,
                     OperationId:   operationId,
                     SizeBytes:     jsonBytes.Length,
-                    TotalRecords:  totalCount)
+                    TotalRecords:  totalCount,
+                    Message:       $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
+                                   $"Use get_scan_result(changeId: \"{operationId}\") to page through results. " +
+                                   "Pass limit and offset to control page size (default limit: 50).")
             };
         }
 
@@ -1577,87 +1606,126 @@ public class SentinelQualityTools
                    values and required input fields per operation.
         input:     AsyncMigrateInput — fields vary by operation; see describe_tool_options.
 
-        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-item details.
+        Returns MigrationResult<BatchResultSummary>. Use get_operation_detail(changeId) for per-item details.
         Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
+        ErrorCode="SolutionNotLoaded" — no solution is loaded; call load_solution first.
+        ErrorCode="InvalidArgument" — unknown operation name; see Message for valid values.
         """)]
-    public async Task<BatchResultSummary> AsyncMigrate(
+    public async Task<MigrationResult<BatchResultSummary>> AsyncMigrate(
         string            operation,
         AsyncMigrateInput input,
         CancellationToken cancellationToken = default)
     {
-        return operation switch
+        if (_workspaceManager.CurrentSolution == null)
         {
-            "propagate_cancellation_token" => await PropagateCancellationToken(
-                new BatchTargetInput
-                {
-                    Targets  = input.Targets ?? [],
-                    DryRun   = input.DryRun,
-                    MaxItems = input.MaxItems,
-                },
-                cancellationToken),
+            return new MigrationResult<BatchResultSummary>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
 
-            "convert_to_async_bridge" => await ConvertToAsyncBridge(
-                new BatchTargetInput
-                {
-                    Targets  = input.Targets ?? [],
-                    DryRun   = input.DryRun,
-                    MaxItems = input.MaxItems,
-                },
-                input.PropagateCancellationTokens,
-                cancellationToken),
+        BatchResultSummary result;
+        try
+        {
+            result = operation switch
+            {
+                "propagate_cancellation_token" => await PropagateCancellationToken(
+                    new BatchTargetInput
+                    {
+                        Targets  = input.Targets ?? [],
+                        DryRun   = input.DryRun,
+                        MaxItems = input.MaxItems,
+                    },
+                    cancellationToken),
 
-            "add_cancellation_token" => await AddCancellationToken(
-                new BatchTargetInput
-                {
-                    Targets  = input.Targets ?? [],
-                    DryRun   = input.DryRun,
-                    MaxItems = input.MaxItems,
-                },
-                cancellationToken),
+                "convert_to_async_bridge" => await ConvertToAsyncBridge(
+                    new BatchTargetInput
+                    {
+                        Targets  = input.Targets ?? [],
+                        DryRun   = input.DryRun,
+                        MaxItems = input.MaxItems,
+                    },
+                    input.PropagateCancellationTokens,
+                    cancellationToken),
 
-            "run_uplift" => await RunUplift(
-                new RunUpliftInput
-                {
-                    Targets                    = input.UpliftTargets ?? [],
-                    DryRun                     = input.DryRun,
-                    MaxCallersPerMethod        = input.MaxCallersPerMethod,
-                    PropagateCancellationTokens = input.PropagateCancellationTokens,
-                },
-                cancellationToken),
+                "add_cancellation_token" => await AddCancellationToken(
+                    new BatchTargetInput
+                    {
+                        Targets  = input.Targets ?? [],
+                        DryRun   = input.DryRun,
+                        MaxItems = input.MaxItems,
+                    },
+                    cancellationToken),
 
-            "flag_migration_candidates" => await FlagMigrationCandidates(
-                new FlagCandidatesInput
-                {
-                    Scope       = input.FlagScope,
-                    Targets     = input.FlagTargets,
-                    ProjectName = input.ProjectName,
-                    Pattern     = input.Pattern,
-                    MinScore    = input.MinScore,
-                    DryRun      = input.DryRun,
-                    ForceRescan = input.ForceRescan,
-                },
-                cancellationToken),
+                "run_uplift" => await RunUplift(
+                    new RunUpliftInput
+                    {
+                        Targets                    = input.UpliftTargets ?? [],
+                        DryRun                     = input.DryRun,
+                        MaxCallersPerMethod        = input.MaxCallersPerMethod,
+                        PropagateCancellationTokens = input.PropagateCancellationTokens,
+                    },
+                    cancellationToken),
 
-            "asyncify" => await Asyncify(
-                new AsyncifyInput
-                {
-                    ProjectName                  = input.ProjectName,
-                    MethodTargets                = input.MethodTargets,
-                    Exclusions                   = input.Exclusions,
-                    DryRun                       = input.DryRun,
-                    PropagateCancellationTokens  = input.PropagateCancellationTokens,
-                    MaxMethods                   = input.MaxMethods,
-                    MaxCallersPerMethod          = input.MaxCallersPerMethod,
-                    MinScore                     = input.MinScore,
-                    ScoreThreshold               = input.ScoreThreshold,
-                },
-                cancellationToken),
+                "flag_migration_candidates" => await FlagMigrationCandidates(
+                    new FlagCandidatesInput
+                    {
+                        Scope       = input.FlagScope,
+                        Targets     = input.FlagTargets,
+                        ProjectName = input.ProjectName,
+                        Pattern     = input.Pattern,
+                        MinScore    = input.MinScore,
+                        DryRun      = input.DryRun,
+                        ForceRescan = input.ForceRescan,
+                    },
+                    cancellationToken),
 
-            _ => throw new ArgumentException(
-                $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +
-                "convert_to_async_bridge, add_cancellation_token, run_uplift, " +
-                "flag_migration_candidates, asyncify.",
-                nameof(operation))
+                "asyncify" => await Asyncify(
+                    new AsyncifyInput
+                    {
+                        ProjectName                  = input.ProjectName,
+                        MethodTargets                = input.MethodTargets,
+                        Exclusions                   = input.Exclusions,
+                        DryRun                       = input.DryRun,
+                        PropagateCancellationTokens  = input.PropagateCancellationTokens,
+                        MaxMethods                   = input.MaxMethods,
+                        MaxCallersPerMethod          = input.MaxCallersPerMethod,
+                        MinScore                     = input.MinScore,
+                        ScoreThreshold               = input.ScoreThreshold,
+                    },
+                    cancellationToken),
+
+                _ => throw new ArgumentException(
+                    $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +
+                    "convert_to_async_bridge, add_cancellation_token, run_uplift, " +
+                    "flag_migration_candidates, asyncify.",
+                    nameof(operation))
+            };
+        }
+        catch (ArgumentException ex)
+        {
+            return new MigrationResult<BatchResultSummary>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+            };
+        }
+        catch (Exception ex)
+        {
+            return new MigrationResult<BatchResultSummary>
+            {
+                Success = false,
+                Error   = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+
+        return new MigrationResult<BatchResultSummary>
+        {
+            Success = true,
+            Data    = result
         };
     }
 

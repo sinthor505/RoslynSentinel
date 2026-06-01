@@ -2387,7 +2387,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         if (method.Modifiers.Any(SyntaxKind.VirtualKeyword) ||
             method.Modifiers.Any(SyntaxKind.OverrideKeyword))
         {
-            score -= 20; reasons.Append("virtual/override-penalty:-20 ");
+            score -= 20; reasons.Append("virtual-override-penalty:-20 ");
         }
 
         // Event-handler bonus — (object sender, XxxEventArgs e) signatures can be converted

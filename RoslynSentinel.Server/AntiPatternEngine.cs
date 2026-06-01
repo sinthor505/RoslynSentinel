@@ -2724,7 +2724,8 @@ public class AntiPatternEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = _workspaceManager.CurrentSolution
+            ?? throw new InvalidOperationException("No solution is loaded.");
 
         int totalAsync = 0;
         int withCt = 0;
@@ -2745,9 +2746,12 @@ public class AntiPatternEngine
                 continue;
             }
 
-            foreach (var syntaxTree in compilation.SyntaxTrees)
+            foreach (var document in project.Documents)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
+                if (syntaxTree == null) continue;
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
                 var semanticModel = compilation.GetSemanticModel(syntaxTree);
