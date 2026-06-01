@@ -1,11 +1,15 @@
 # Spec — Migration Scan Result Handling & Error Surfacing
-<!-- spec-migration-scan-result-handling-v2.md / v2 -->
+<!-- spec-migration-scan-result-handling-v2.md / v3 -->
 **Target server:** RoslynSentinel (rhale78)
 **Date:** 2026-05-31
-**Supersedes:** spec-migration-scan-result-handling-v1.md
+**Supersedes:** spec-migration-scan-result-handling-v2.md / v2
 **Motivated by:** MCP tool usage feedback session (May 31, 2026) — agent could not consume
 `scan_migration_candidates` results that spilled to file, and `get_async_migration_progress`
 failed silently.
+**§2.3 threshold updated (session 5):** Threshold lowered from 256KB to 30KB. Rationale: VS Code
+intercepts inline responses above ~64KB and writes them to a session-resources path the agent
+cannot reach via `get_scan_result`. The server-side threshold must fire below that intercept point.
+30KB (`30 * 1024`) is the correct value.
 
 ---
 
@@ -188,12 +192,16 @@ Implementation rules:
 3. If serialized size > threshold: write JSON to
    `.roslynsentinel/operations/scan_{timestamp}_{guid}.json`, populate `LargeResultInfo`
    (`FilePath`, `OperationId = guid`, `SizeBytes`, `TotalRecords`), set `Data = null`.
-4. Set threshold to a value comfortably above a typical 50-item page. Do not set it at or near
-   9KB — that was the client's spill point, not a property of this server. A starting value of
-   ~256KB is reasonable; make it configurable via server options if feasible.
-5. The T3 regression (§6): a ~9KB result (~50–60 typical candidates) must stay inline under this
-   threshold. If it does not, the measurement in step 1 is wrong — fix the measurement, not the
-   threshold value.
+4. **Threshold value: 30KB (`30 * 1024` bytes).** This must be set below VS Code's own inline
+   response intercept threshold (~64KB). When VS Code intercepts a large inline response it
+   writes it to a session-resources temp file outside `.roslynsentinel/` — the agent cannot
+   reach it via `get_scan_result`. Setting the server threshold at 30KB ensures the Roslyn
+   Sentinel offload path fires first, so `get_scan_result(changeId)` is always the recovery
+   path. Do not set this at or near 256KB — that value predates the VS Code intercept
+   constraint and is incorrect.
+5. The T3 regression (§6): a ~9KB result (~50–60 typical candidates) must stay inline under
+   this threshold. If it does not, the measurement in step 1 is wrong — fix the measurement,
+   not the threshold value.
 
 ### 2.4 Update wrapper and return type
 

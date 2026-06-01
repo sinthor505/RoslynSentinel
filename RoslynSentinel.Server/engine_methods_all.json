@@ -3624,7 +3624,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(Int32\u0026 TotalCandidates, Dictionary\u00602\u0026 ByPattern, List\u00601\u0026 ByClass, Dictionary\u00602\u0026 ByScoreBucket, List\u00601\u0026 TopCandidates)",
+      "Signature": "public Void Deconstruct(Int32\u0026 TotalCandidates, Dictionary\u00602\u0026 ByPattern, List\u00601\u0026 ByClass, Dictionary\u00602\u0026 ByScoreBucket, List\u00601\u0026 TopCandidates, Boolean\u0026 ByClassTruncated)",
       "Name": "Deconstruct"
     }
   ],
