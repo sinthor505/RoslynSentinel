@@ -4,10 +4,12 @@
 **Date:** 2026-05-31
 **Supersedes:** spec-migration-scan-summary-patch-v1.md / v1
 **Depends on:** spec-migration-scan-result-handling-v2.md fully implemented and passing
-**Motivated by:** Two MCP tool usage feedback sessions (May 31, 2026):
+**Motivated by:** Three MCP tool usage feedback sessions (May 31, 2026):
 - Session 1 (post-v2): naming confusion, missing actionable detail in summary, two missing fields → §P1–P5
 - Session 2 (post-patch): summarize ordering bug, SyntaxTree compilation error, unjustified
-  solution-load gate, inconsistent score reason format, opaque async_migrate errors → §B1–B5
+  solution-load gate, inconsistent score reason format, opaque async_migrate errors → §B1–B6
+- Session 3 (post-B fixes): B2 root cause refined (designer files), minScore ignored in summarize
+  path → B2 updated, §B7 added
 
 ---
 
@@ -18,14 +20,19 @@ This document has two sections:
 **§P1–P5 — Summary enhancements** (from session 1): five independent changes, implement in any
 order.
 
-**§B1–B5 — Bug fixes** (from session 2): five bugs; B1 and B2 are critical path and should be
-implemented first. B3–B5 are independent of each other and of B1/B2.
+**§B1–B7 — Bug fixes** (from sessions 2–3): B1 and B2 are critical path and should be
+implemented first. B3–B7 are independent of each other and of B1/B2.
 
 **Cross-references to other specs:**
 - `get_scan_result` tool (the paging tool for offloaded results) is fully specced in
   `spec-migration-scan-result-handling-v2.md §3`. It is not re-specced here. If it is not yet
   implemented, implement it from that spec alongside B1 — B1's summarize fix and `get_scan_result`
   together close the two critical gaps from session 2.
+- `describe_tool_options` tool is fully specced in `spec-tool-description-compression-v1.md §1`.
+  It is not re-specced here. If it is not yet implemented, implement it from that spec. Do not
+  add references to `describe_tool_options` in tool descriptions until the tool itself is
+  implemented and available — agents in sessions without it will hit a dead end. Sequence:
+  implement the tool first, then add description cross-references.
 - `async_migrate` opaque error (§B5) uses the same `MigrationResult<T>` envelope and error code
   pattern specced in `spec-migration-scan-result-handling-v2.md §1`. Read that section before
   implementing B5.
@@ -60,6 +67,9 @@ implemented first. B3–B5 are independent of each other and of B1/B2.
 - **B4 (score reason format):** Standardize to structured format only. Do not add a free-text
   fallback — if a reason cannot be expressed as key:points pairs, that is a gap in the scoring
   model to fix, not a reason to preserve mixed formats.
+
+- **B7 (minScore filter):** The fix is a one-line filter addition in `BuildScanSummaryAsync`
+  before aggregation. Do not restructure the summarize path. See §B7.
 
 ---
 
@@ -318,59 +328,65 @@ After fix: `summarize=true` with any `topN`/`minScore` combination returns an in
 
 ### Problem
 After a successful `load_solution`, `get_async_migration_progress` throws:
-`"SyntaxTree is not part of the compilation."`
+`"SyntaxTree is not part of the compilation (Parameter 'syntaxTree')"`
+This is consistent across null scope, project scope, and all tested configurations.
 
-### Diagnosis
-This error fires when a `SyntaxTree` or `Document` captured from a prior workspace version is
-used against a `Compilation` built from a later version. Roslyn compilations are immutable
-snapshots — a tree from workspace version N is not part of compilation version N+1. The method
-is almost certainly holding a cached document reference or SyntaxTree that was obtained before
-`load_solution` completed (or from a previous partial state) and then attempting to use it
-against the freshly-loaded compilation.
+### Diagnosis (refined — session 3)
+The crash is caused by **generated files** — `.Designer.cs` files, DataSet designer files, and
+other auto-generated source files that exist in the workspace file system and are loaded into the
+Roslyn workspace document tree, but are **excluded from the Roslyn compilation**. When
+`GetAsyncMigrationProgressAsync` iterates `project.Documents` and calls
+`compilation.GetSemanticModel(tree)` for each, it hits a tree from a generated file that was
+never added to the compilation. Roslyn throws because the tree is not part of that compilation
+snapshot.
 
-### Fix pattern
-Inside `GetAsyncMigrationProgressAsync`, do not use any `SyntaxTree`, `Document`, or
-`SemanticModel` reference obtained before this method call. Re-fetch all documents from the
-current workspace state at the start of the method:
+This is not a stale-reference problem — the trees are freshly obtained from the current workspace.
+The issue is that `project.Documents` includes files the compiler excludes.
+
+### Fix
+Before calling `compilation.GetSemanticModel(tree)`, guard with
+`compilation.ContainsSyntaxTree(tree)`. Skip any document whose tree is not in the compilation:
 
 ```csharp
-// Wrong — uses a cached/stale tree reference
-var tree = _cachedTree; // or any field/closure captured before this call
-var compilation = await project.GetCompilationAsync();
-compilation.GetSemanticModel(tree); // throws — tree not in this compilation
-
-// Correct — fetch from current workspace
-var project = _workspaceManager.CurrentSolution.GetProject(projectId);
 var compilation = await project.GetCompilationAsync(cancellationToken);
 foreach (var document in project.Documents)
 {
     var tree = await document.GetSyntaxTreeAsync(cancellationToken);
-    var model = compilation.GetSemanticModel(tree); // safe — tree came from this compilation
+    if (tree == null || !compilation.ContainsSyntaxTree(tree))
+    {
+        continue; // generated file or excluded document — skip
+    }
+    var model = compilation.GetSemanticModel(tree); // safe
+    // ... analysis
 }
 ```
 
-Specifically: find every `SyntaxTree` or `Document` reference used in
-`GetAsyncMigrationProgressAsync` and trace where it was obtained. Any reference not obtained
-from `_workspaceManager.CurrentSolution` in the current call must be replaced.
+Apply this guard to every location in `GetAsyncMigrationProgressAsync` (and any helper methods
+it calls) that obtains a `SemanticModel` from a document tree. Do not assume all documents in
+`project.Documents` are part of the compilation.
+
+Do **not** add a workaround that re-loads the solution. Do **not** filter by filename pattern
+(`.Designer.cs` etc.) — use `compilation.ContainsSyntaxTree(tree)` as the authoritative check,
+since the set of excluded files is determined by the project configuration, not by naming
+convention.
 
 ### Additional: add `projectName` scope parameter
-The agent also suggested a `projectName` scope parameter as a workaround, and it has independent
-value regardless of the root cause fix: a project-scoped compilation is cheaper and allows
-progress reporting when solution-wide compilation is slow. Add it:
+Independent of the root cause fix — a project-scoped compilation is cheaper and allows progress
+reporting when solution-wide compilation is slow. Add it:
 
 ```csharp
 public async Task<MigrationResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
-    string? projectName       = null,
-    CancellationToken ct      = default)
+    string? projectName  = null,
+    CancellationToken ct = default)
 ```
 
 When `projectName` is supplied, restrict analysis to that project's compilation only. When null,
-analyze the full solution. This is additive — implement after the root cause fix, not instead of.
+analyze the full solution. Implement after the root cause fix, not instead of.
 
 ### Test
 - T8 (existing): `get_async_migration_progress` with no solution → `ErrorCode = "SolutionNotLoaded"`
-- New T13: `get_async_migration_progress` after successful `load_solution` → no exception, returns
-  `AsyncMigrationProgressReport` with non-null fields
+- New T13: `get_async_migration_progress` after successful `load_solution` on a solution containing
+  `.Designer.cs` files → no exception, returns `AsyncMigrationProgressReport` with non-null fields
 - New T14: `get_async_migration_progress(projectName: "AvaalExpress")` → scoped report, no
   exception
 
@@ -529,6 +545,58 @@ exists, rather than discovering it only after hitting the offload case.
 
 ---
 
+## B7 — `minScore` filter ignored in `summarize=true` path
+
+**File:** `RoslynSentinel.Server/AsyncOptimizationEngine.cs` — `BuildScanSummaryAsync`
+(or wherever summarize aggregation is performed)
+
+### Problem
+When `summarize=true` and `minScore` is supplied, the filter has no effect on payload size.
+The full candidate set is being aggregated (and serialized) before the `minScore` filter is
+applied — or the filter is only wired into the `TopCandidates` slice and not applied to the
+aggregation input.
+
+### Fix
+Apply `minScore` to the full candidate list **before** any aggregation or serialization in the
+summarize path. The filtered list is the input to all summary fields — `TotalCandidates`,
+`ByPattern`, `ByClass`, `ByScoreBucket`, and `TopCandidates`:
+
+```csharp
+private async Task<MigrationScanSummary> BuildScanSummaryAsync(
+    string? filePath, string? projectName, string? pattern,
+    int? topN, int? minScore)
+{
+    var allCandidates = await GetAllCandidatesAsync(filePath, projectName, pattern);
+
+    // Apply minScore before aggregation — not after
+    var candidates = minScore.HasValue
+        ? allCandidates.Where(c => c.Score >= minScore.Value).ToList()
+        : allCandidates;
+
+    return new MigrationScanSummary
+    {
+        TotalCandidates = candidates.Count,
+        ByPattern       = candidates.GroupBy(c => c.Pattern)
+                                    .ToDictionary(g => g.Key, g => g.Count()),
+        ByClass         = BuildByClass(candidates),
+        ByScoreBucket   = BuildByScoreBucket(candidates),
+        TopCandidates   = topN.HasValue
+                            ? candidates.OrderByDescending(c => c.Score).Take(topN.Value).ToList()
+                            : null,
+    };
+}
+```
+
+`TotalCandidates` reflects the post-filter count. If the caller needs the unfiltered total
+alongside a filtered summary, that is a separate feature request — do not add it here.
+
+### Test
+- New T20: `summarize=true, minScore=80` on a project with known candidates below and above 80
+  → `TotalCandidates` equals only the count of candidates with `Score >= 80`; `ByPattern` counts
+  sum to `TotalCandidates`; result is inline
+
+---
+
 ## Test summary — all cases
 
 | # | Section | Case | Key assertion |
@@ -537,13 +605,14 @@ exists, rather than discovering it only after hitting the offload case.
 | T10 | P4 | `summarize=true, topN=5, minScore=70` | `TopCandidates` ≤ 5, all Score ≥ 70 |
 | T11 | P4 | `summarize=true`, no topN/minScore | `TopCandidates == null` |
 | T12 | P5 | `get_workspace_health` after load | `LoadedSolutionPath` non-null, ends with `.sln` |
-| T13 | B2 | `get_async_migration_progress` after load | No exception; report fields non-null |
+| T13 | B2 | `get_async_migration_progress` after load (solution with `.Designer.cs`) | No exception; report fields non-null |
 | T14 | B2 | `get_async_migration_progress(projectName:...)` | Scoped report; no exception |
 | T15 | B3 | `project_doc` read, no solution loaded | Succeeds; no `SolutionNotLoaded` error |
 | T16 | B4 | All `MigrationCandidateFinding.Reason` fields | Every token matches `[\w\-]+:[0-9\-]+` |
 | T17 | B5 | `async_migrate`, unknown operation | `ErrorCode = "InvalidArgument"` |
 | T18 | B5 | `async_migrate`, no solution | `ErrorCode = "SolutionNotLoaded"` |
 | T19 | B6 | Large-result offload message | Contains `"get_scan_result"` and `OperationId`; no `"read_file"` |
+| T20 | B7 | `summarize=true, minScore=80` | `TotalCandidates` = filtered count; result inline |
 
 Existing tests T8, T9 from `spec-migration-scan-result-handling-v2.md §6` remain load-bearing —
 confirm they still pass after B2 and B5 changes.
@@ -554,8 +623,10 @@ confirm they still pass after B2 and B5 changes.
 
 - Re-speccing `get_scan_result` — fully specced in `spec-migration-scan-result-handling-v2.md §3`;
   implement from that document.
+- Re-speccing `describe_tool_options` — fully specced in
+  `spec-tool-description-compression-v1.md §1`; implement from that document.
 - Combined health snapshot tool — deferred (carried from §P out-of-scope).
 - Any changes to the circuit-breaker logic or `BatchResultSummary` shape beyond the envelope wrap
   in B5.
 
-<!-- v3 -->
+<!-- v4 -->

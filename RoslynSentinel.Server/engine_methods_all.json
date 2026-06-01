@@ -3315,7 +3315,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(Boolean\u0026 WrittenToFile, String\u0026 FilePath, String\u0026 OperationId, Int64\u0026 SizeBytes, Int32\u0026 TotalRecords)",
+      "Signature": "public Void Deconstruct(Boolean\u0026 WrittenToFile, String\u0026 FilePath, String\u0026 OperationId, Int64\u0026 SizeBytes, Int32\u0026 TotalRecords, String\u0026 Message)",
       "Name": "Deconstruct"
     }
   ],
@@ -5518,7 +5518,7 @@
     },
     {
       "ReturnType": "Object",
-      "Signature": "public async Task\u003CObject\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null, Boolean summarize = false, Int32 limit = 50, Int32 offset = 0, Nullable\u003CInt32\u003E topN = null, Nullable\u003CInt32\u003E minScore = null)",
+      "Signature": "public async Task\u003CObject\u003E ScanMigrationCandidates(String filePath = null, String projectName = null, String pattern = null, Boolean summarize = false, Nullable\u003CInt32\u003E topN = null, Nullable\u003CInt32\u003E minScore = null, Int32 limit = 50, Int32 offset = 0)",
       "Name": "ScanMigrationCandidates"
     },
     {
@@ -5537,8 +5537,8 @@
       "Name": "GetAsyncMigrationProgress"
     },
     {
-      "ReturnType": "BatchResultSummary",
-      "Signature": "public async Task\u003CBatchResultSummary\u003E AsyncMigrate(String operation, AsyncMigrateInput input, CancellationToken cancellationToken = null)",
+      "ReturnType": "MigrationResult\u003CBatchResultSummary\u003E",
+      "Signature": "public async Task\u003CMigrationResult\u003CBatchResultSummary\u003E\u003E AsyncMigrate(String operation, AsyncMigrateInput input, CancellationToken cancellationToken = null)",
       "Name": "AsyncMigrate"
     },
     {
