@@ -7,3 +7,5 @@
 *.suo
 server_stdout.txt
 publish/
+/RoslynSentinel.Server/all_methods_all.csv
+/RoslynSentinel.Server/all_methods_workspace.csv
