@@ -553,6 +553,9 @@ public class PersistentWorkspaceManager : IDisposable
     /// <para><see cref="WorkspaceInSync"/> indicates whether the in-memory workspace was
     /// successfully refreshed after the write. If <c>false</c>, call <c>load_solution</c>
     /// to resync before making further semantic queries.</para>
+    /// <para><see cref="PreImages"/> maps each file path to its content immediately before
+    /// the write (null if the file did not exist). Callers use this to populate
+    /// <see cref="OperationItemRecord.BeforeSource"/> in forensic blobs, enabling undo.</para>
     /// </summary>
     public record ApplyChangesResult(
         bool Success,
@@ -560,11 +563,14 @@ public class PersistentWorkspaceManager : IDisposable
         Dictionary<string, string> FailedFiles,
         string Summary,
         bool WorkspaceInSync = false,
-        int WorkspaceVersion = 0
+        int WorkspaceVersion = 0,
+        IReadOnlyDictionary<string, string?>? PreImages = null
     );
 
     /// <summary>
     /// Writes proposed file changes to disk and updates the in-memory workspace.
+    /// Captures a pre-image of every file before writing so callers can populate
+    /// BeforeSource on OperationItemRecords for undo support.
     /// Retries on IOExceptions (e.g. file locks).
     /// </summary>
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<string, string> changes, int retryCount = 3)
@@ -584,6 +590,29 @@ public class PersistentWorkspaceManager : IDisposable
             if (CurrentSolution == null)
             {
                 throw new InvalidOperationException("Solution not loaded.");
+            }
+
+            // ── Pre-image capture ─────────────────────────────────────────────
+            // Read every file BEFORE writing. null means the file did not previously
+            // exist (undo should delete it rather than restore content).
+            // Must run inside the lock and before the first write.
+            var preImages = new Dictionary<string, string?>();
+            foreach (var key in changes.Keys)
+            {
+                try
+                {
+                    preImages[key] = File.Exists(key) ? await File.ReadAllTextAsync(key) : null;
+                }
+                catch (Exception ex)
+                {
+                    // Cannot read pre-image — log and record null so the caller knows undo
+                    // for this specific file is unavailable, but do not abort the whole batch.
+                    preImages[key] = null;
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning("Pre-image capture failed for {FilePath}: {Message}", key, ex.Message);
+                    }
+                }
             }
 
             foreach (var change in changes)
@@ -669,7 +698,8 @@ public class PersistentWorkspaceManager : IDisposable
             }
 
             var summary = $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
-            return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary, workspaceInSync, _workspaceVersion);
+            return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
+                workspaceInSync, _workspaceVersion, preImages);
         }
         finally
         {

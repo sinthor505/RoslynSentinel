@@ -528,7 +528,7 @@
     },
     {
       "ReturnType": "void",
-      "Signature": "public Void Deconstruct(Boolean\u0026 Success, List\u00601\u0026 SucceededFiles, Dictionary\u00602\u0026 FailedFiles, String\u0026 Summary, Boolean\u0026 WorkspaceInSync, Int32\u0026 WorkspaceVersion)",
+      "Signature": "public Void Deconstruct(Boolean\u0026 Success, List\u00601\u0026 SucceededFiles, Dictionary\u00602\u0026 FailedFiles, String\u0026 Summary, Boolean\u0026 WorkspaceInSync, Int32\u0026 WorkspaceVersion, IReadOnlyDictionary\u00602\u0026 PreImages)",
       "Name": "Deconstruct"
     }
   ],
@@ -5744,7 +5744,7 @@
     },
     {
       "ReturnType": "Object",
-      "Signature": "public async Task\u003CObject\u003E ProposedChange(String format, String action, Dictionary\u003CString, String\u003E changes = null, String filePath = null, String unifiedDiff = null, Int32 retryCount = 3)",
+      "Signature": "public async Task\u003CObject\u003E ProposedChange(String format, String action, Dictionary\u003CString, String\u003E changes = null, String filePath = null, String unifiedDiff = null, Int32 retryCount = 3, Boolean validateOnApply = true)",
       "Name": "ProposedChange"
     },
     {
@@ -5754,7 +5754,7 @@
     },
     {
       "ReturnType": "Object",
-      "Signature": "public async Task\u003CObject\u003E StagedChange(String action, String changeId, Int32 retryCount = 3)",
+      "Signature": "public async Task\u003CObject\u003E StagedChange(String action, String changeId, Int32 retryCount = 3, Boolean validateOnApply = true)",
       "Name": "StagedChange"
     },
     {

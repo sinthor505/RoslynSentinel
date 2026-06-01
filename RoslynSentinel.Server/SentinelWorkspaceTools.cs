@@ -60,13 +60,13 @@ public class SentinelWorkspaceTools
         """)]
     public object Features(
         string action,
-        List<string>?                  names   = null,
-        List<KeyValuePair<string,bool>>? enabled = null)
+        List<string>? names = null,
+        List<KeyValuePair<string, bool>>? enabled = null)
     {
         return action switch
         {
-            "list"   => (object)_config.GetFeatureStatuses(),
-            "get"    => _config.GetFeatureStatuses(names),
+            "list" => (object)_config.GetFeatureStatuses(),
+            "get" => _config.GetFeatureStatuses(names),
             "update" => (object)UpdateFeaturesInternal(enabled ?? []),
             _ => throw new ArgumentException(
                 $"Unknown action '{action}'. Valid: list, get, update.", nameof(action))
@@ -126,16 +126,8 @@ public class SentinelWorkspaceTools
     [Description("Loads a .NET solution into memory for persistent analysis.")]
     public async Task<string> LoadSolution(string solutionPath)
     {
-        try
-        {
-            await _workspaceManager.LoadSolutionAsync(solutionPath);
-            return $"Solution loaded successfully: {solutionPath}";
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load solution.");
-            return $"Error: {ex.Message}";
-        }
+        await _workspaceManager.LoadSolutionAsync(solutionPath);
+        return $"Solution loaded: {solutionPath}";
     }
 
     [McpServerTool]
@@ -204,6 +196,10 @@ public class SentinelWorkspaceTools
         action: apply (write to disk) or validate (dry-run compiler diagnostics).
         For format=files: supply the changes dict. retryCount controls retry on file locks (apply only, default 3).
         For format=diff: supply filePath and unifiedDiff.
+        validateOnApply: when true (default), runs a delta compile before writing and returns validation
+        errors without touching disk if new errors are introduced. Set false only for intentional
+        intermediate-broken-state edits that are part of a multi-step refactor.
+        On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
         """)]
     public async Task<object> ProposedChange(
         string format,
@@ -211,7 +207,8 @@ public class SentinelWorkspaceTools
         Dictionary<string, string>? changes = null,
         string? filePath = null,
         string? unifiedDiff = null,
-        int retryCount = 3)
+        int retryCount = 3,
+        bool validateOnApply = true)
     {
         if (format == "files")
         {
@@ -221,7 +218,31 @@ public class SentinelWorkspaceTools
             }
             if (action == "apply")
             {
-                return await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
+                // ── Validate-on-apply gate ────────────────────────────────────
+                // Runs a delta compile (introduced errors only) before writing.
+                // Returns the DiagnosticReport without touching disk if new errors found.
+                if (validateOnApply)
+                {
+                    DiagnosticReport validation;
+                    try
+                    {
+                        validation = await _validationEngine.ValidateChangesAsync(changes);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
+                        throw new InvalidOperationException($"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                    }
+
+                    if (!validation.Success)
+                    {
+                        return validation;
+                    }
+                }
+
+                var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
+                await WriteBlobForApplyAsync("proposed_change", result);
+                return result;
             }
             if (action == "validate")
             {
@@ -256,8 +277,21 @@ public class SentinelWorkspaceTools
                     var oldText = await document.GetTextAsync();
                     var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
                     var targetPath = document.FilePath ?? filePath;
-                    return await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<string, string> { [targetPath] = newContent });
+                    var diffChanges = new Dictionary<string, string> { [targetPath] = newContent };
+
+                    // ── Validate-on-apply gate (diff path) ───────────────────
+                    if (validateOnApply)
+                    {
+                        var validation = await _validationEngine.ValidateChangesAsync(diffChanges);
+                        if (!validation.Success)
+                        {
+                            return validation;
+                        }
+                    }
+
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges);
+                    await WriteBlobForApplyAsync("proposed_change", result);
+                    return result;
                 }
                 catch (InvalidOperationException) { throw; }
                 catch (Exception ex)
@@ -287,12 +321,40 @@ public class SentinelWorkspaceTools
         action: apply (write to disk), get (return file contents dict), validate (dry-run compiler diagnostics), discard (remove without applying).
         changeId: the id returned by the refactoring tool that staged the changes.
         retryCount: only used for action=apply (default 3).
+        validateOnApply: when true (default), runs a delta compile before writing and returns validation
+        errors without touching disk if new errors are introduced. Set false only for intentional
+        intermediate-broken-state edits that are part of a multi-step refactor.
+        On successful apply, the same changeId can be passed to undo_last_apply to revert.
         """)]
-    public async Task<object> StagedChange(string action, string changeId, int retryCount = 3)
+    public async Task<object> StagedChange(string action, string changeId, int retryCount = 3, bool validateOnApply = true)
     {
         if (action == "apply")
         {
-            return await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
+            // ── Validate-on-apply gate ────────────────────────────────────────
+            if (validateOnApply)
+            {
+                var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
+                DiagnosticReport validation;
+                try
+                {
+                    validation = await _validationEngine.ValidateChangesAsync(stagingChanges);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
+                    throw new InvalidOperationException($"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                }
+
+                if (!validation.Success)
+                {
+                    return validation;
+                }
+            }
+
+            var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
+            // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
+            await WriteBlobForApplyAsync("staged_change", result, changeId);
+            return result;
         }
         if (action == "get")
         {
@@ -309,6 +371,52 @@ public class SentinelWorkspaceTools
             return success ? $"Staged change '{changeId}' discarded." : $"Staged change '{changeId}' not found.";
         }
         throw new ArgumentException($"Unknown action '{action}'. Valid values: apply, get, validate, discard.");
+    }
+
+    /// <summary>
+    /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.
+    /// Uses pre-images from ApplyChangesResult.PreImages (populated by ApplyProposedChangesAsync).
+    /// blobChangeId: if provided, uses this id for the blob filename (staged_change reuses its
+    /// staged id); if null, mints a fresh id (proposed_change path).
+    /// Logs a warning but does not throw on blob write failure — apply already succeeded.
+    /// </summary>
+    private async Task WriteBlobForApplyAsync(
+        string toolName,
+        PersistentWorkspaceManager.ApplyChangesResult result,
+        string? blobChangeId = null)
+    {
+        if (result.SucceededFiles.Count == 0)
+        {
+            return;
+        }
+
+        var changeId = blobChangeId ?? Guid.NewGuid().ToString("n")[..8];
+
+        var items = result.SucceededFiles.Select(f =>
+        {
+            string? before = null;
+            result.PreImages?.TryGetValue(f, out before);
+            return new OperationItemRecord
+            {
+                FilePath = f,
+                Outcome = "succeeded",
+                BeforeSource = before,
+            };
+        }).ToList();
+
+        var blobName = await OperationBlobWriter.WriteAsync(toolName, changeId, items,
+            _workspaceManager.GetSolutionRoot());
+
+        // OperationBlobWriter returns a diagnostic string (not an exception) on failure.
+        if (blobName.StartsWith('('))
+        {
+            _logger.LogWarning("Blob write failed for {ToolName}/{ChangeId}: {Reason}. " +
+                "undo_last_apply will not be available for this apply.", toolName, changeId, blobName);
+        }
+        else if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Forensic blob written: {BlobName} (changeId={ChangeId})", blobName, changeId);
+        }
     }
 
     [McpServerTool]
@@ -404,7 +512,7 @@ public class SentinelWorkspaceTools
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match when names are overloaded.")]
     public async Task<string> GetMethodSource(string filePath, string methodName)
     {
-        var solution       = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
 
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
@@ -443,7 +551,7 @@ public class SentinelWorkspaceTools
     [Description("Returns a structural outline of a file: namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Does not include member bodies.")]
     public async Task<List<OutlineItem>> GetFileOutline(string filePath)
     {
-        var solution       = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
 
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
@@ -469,8 +577,8 @@ public class SentinelWorkspaceTools
 
         foreach (var node in root.DescendantNodes())
         {
-            string? kind      = null;
-            string? name      = null;
+            string? kind = null;
+            string? name = null;
             string? container = null;
 
             switch (node)
@@ -481,28 +589,28 @@ public class SentinelWorkspaceTools
                     break;
 
                 case ClassDeclarationSyntax cls:
-                    kind      = "class";
-                    name      = cls.Identifier.Text;
+                    kind = "class";
+                    name = cls.Identifier.Text;
                     container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
                              ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                     break;
 
                 case InterfaceDeclarationSyntax iface:
-                    kind      = "interface";
-                    name      = iface.Identifier.Text;
+                    kind = "interface";
+                    name = iface.Identifier.Text;
                     container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
                              ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                     break;
 
                 case MethodDeclarationSyntax method:
-                    kind      = "method";
-                    name      = method.Identifier.Text;
+                    kind = "method";
+                    name = method.Identifier.Text;
                     container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                     break;
 
                 case PropertyDeclarationSyntax prop:
-                    kind      = "property";
-                    name      = prop.Identifier.Text;
+                    kind = "property";
+                    name = prop.Identifier.Text;
                     container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                     break;
             }
@@ -514,11 +622,11 @@ public class SentinelWorkspaceTools
 
             var span = node.GetLocation().GetLineSpan();
             items.Add(new OutlineItem(
-                Kind:      kind,
-                Name:      name,
+                Kind: kind,
+                Name: name,
                 Container: container,
                 StartLine: span.StartLinePosition.Line + 1,
-                EndLine:   span.EndLinePosition.Line + 1));
+                EndLine: span.EndLinePosition.Line + 1));
         }
 
         return items;
@@ -527,13 +635,13 @@ public class SentinelWorkspaceTools
     [McpServerTool]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. Solution-scoped grep. maxResults caps total matches.")]
     public async Task<List<TextSearchMatch>> SearchSolutionText(
-        string  pattern,
-        bool    isRegex    = false,
-        string? fileGlob   = null,
-        int     maxResults = 200)
+        string pattern,
+        bool isRegex = false,
+        string? fileGlob = null,
+        int maxResults = 200)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var results  = new List<TextSearchMatch>();
+        var results = new List<TextSearchMatch>();
 
         Regex? regex = null;
         if (isRegex)
@@ -558,12 +666,12 @@ public class SentinelWorkspaceTools
                 }
 
                 var sourceText = (await document.GetTextAsync()).ToString();
-                var lines      = sourceText.Split('\n');
+                var lines = sourceText.Split('\n');
 
                 for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
                 {
                     var line = lines[i];
-                    int col  = -1;
+                    int col = -1;
 
                     if (isRegex && regex != null)
                     {
@@ -604,7 +712,7 @@ public class SentinelWorkspaceTools
 
     private static bool GlobMatchesFileName(string filePath, string glob)
     {
-        var fileName     = Path.GetFileName(filePath);
+        var fileName = Path.GetFileName(filePath);
         var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
         return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
     }
@@ -614,28 +722,28 @@ public class SentinelWorkspaceTools
     [McpServerTool]
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: 'failures', 'skipped', 'rolledback', 'file:<path>', or null for all items. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<OperationDetailResult> GetOperationDetail(
-        string  changeId,
-        string? filter   = null,
-        int     maxItems = 50)
+        string changeId,
+        string? filter = null,
+        int maxItems = 50)
     {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
-        var blobPath     = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+        var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
         if (blobPath == null)
         {
             return new OperationDetailResult
             {
-                ChangeId      = changeId,
-                BlobName      = "",
-                TotalItems    = 0,
+                ChangeId = changeId,
+                BlobName = "",
+                TotalItems = 0,
                 ReturnedItems = 0,
-                Filter        = filter,
-                Items         = new List<OperationItemRecord>(),
+                Filter = filter,
+                Items = new List<OperationItemRecord>(),
             };
         }
 
-        var json     = await File.ReadAllTextAsync(blobPath);
-        var doc      = JsonSerializer.Deserialize<JsonElement>(json);
+        var json = await File.ReadAllTextAsync(blobPath);
+        var doc = JsonSerializer.Deserialize<JsonElement>(json);
         var allItems = doc.GetProperty("items")
                          .EnumerateArray()
                          .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
@@ -654,10 +762,10 @@ public class SentinelWorkspaceTools
             {
                 filtered = filter.ToLowerInvariant() switch
                 {
-                    "failures"   => allItems.Where(r => r.Outcome == "failed"),
-                    "skipped"    => allItems.Where(r => r.Outcome == "skipped"),
+                    "failures" => allItems.Where(r => r.Outcome == "failed"),
+                    "skipped" => allItems.Where(r => r.Outcome == "skipped"),
                     "rolledback" => allItems.Where(r => r.Outcome == "rolledback"),
-                    _            => allItems,
+                    _ => allItems,
                 };
             }
         }
@@ -666,30 +774,30 @@ public class SentinelWorkspaceTools
 
         return new OperationDetailResult
         {
-            ChangeId      = changeId,
-            BlobName      = Path.GetFileName(blobPath),
-            TotalItems    = allItems.Count,
+            ChangeId = changeId,
+            BlobName = Path.GetFileName(blobPath),
+            TotalItems = allItems.Count,
             ReturnedItems = slice.Count,
-            Filter        = filter,
-            Items         = slice,
+            Filter = filter,
+            Items = slice,
         };
     }
 
     [McpServerTool]
-    [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Only available for operations written by batch-first tools (Phase 4+).")]
+    [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Available for all apply operations (proposed_change, staged_change, and batch-first tools).")]
     public async Task<string> UndoLastApply(string changeId)
     {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
-        var blobPath     = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+        var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
         if (blobPath == null)
         {
             return $"No operation blob found for changeId '{changeId}'. " +
-                   "undo_last_apply is only available for operations written by batch-first tools.";
+                   "Ensure the apply completed successfully and a solution is loaded.";
         }
 
-        var json       = await File.ReadAllTextAsync(blobPath);
-        var doc        = JsonSerializer.Deserialize<JsonElement>(json);
+        var json = await File.ReadAllTextAsync(blobPath);
+        var doc = JsonSerializer.Deserialize<JsonElement>(json);
         var revertable = doc.GetProperty("items")
                            .EnumerateArray()
                            .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
@@ -703,7 +811,7 @@ public class SentinelWorkspaceTools
         }
 
         var reverted = new List<string>();
-        var failed   = new List<string>();
+        var failed = new List<string>();
 
         foreach (var item in revertable)
         {
