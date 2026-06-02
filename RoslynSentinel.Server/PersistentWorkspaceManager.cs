@@ -81,7 +81,9 @@ public class PersistentWorkspaceManager : IDisposable
         if (!MSBuildLocator.IsRegistered)
         {
             _logger.LogInformation("Registering MSBuild defaults...");
-            MSBuildLocator.RegisterDefaults();
+            var instance = MSBuildLocator.RegisterDefaults();
+            Console.WriteLine($"MSBuild: {instance.MSBuildPath}");
+            Console.WriteLine($"Version: {instance.Version}");
         }
     }
 

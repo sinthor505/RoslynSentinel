@@ -1,8 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-
 using RoslynSentinel.Server;
 
 using Serilog;
@@ -90,8 +85,8 @@ var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Ros
 app.Services.WarmupAndAutoLoad(solutionPath, logger);
 
 // Startup tool dump (internal diagnostic — not an MCP tool)
-SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+// SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+// SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
 if (logger.IsEnabled(LogLevel.Information))
     logger.LogInformation(
