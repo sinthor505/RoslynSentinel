@@ -1908,7 +1908,7 @@ public class SentinelQualityTools
     apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe,
     analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion.
 
-    toolName: the MCP tool name. Returns ErrorCode = "UnknownTool" if the tool is not in the
+    toolName: the MCP tool name. Returns ErrorCode = "NoFurtherDocumentation" if the tool is not in the
     covered set — this does not mean the tool is invalid, only that its valid values are fully
     described by its parameter schema and no separate reference table is needed.
     """)]
