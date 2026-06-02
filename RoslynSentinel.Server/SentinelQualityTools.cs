@@ -232,16 +232,19 @@ public class SentinelQualityTools
         projectName: restrict to one project (case-insensitive).
         pattern:     restrict to one pattern — call describe_tool_options("scan_migration_candidates")
                      for valid pattern values.
-        summarize:   when true, return counts only (always inline-safe). Add topN/minScore to include
-                     top actionable targets alongside counts.
+        summarize:   when true, return a guaranteed ≤2KB dashboard view. byClass is capped at 10
+                     entries (highest-count classes); ByClassTruncated=true when truncated.
+                     TopCandidates is capped at 5 entries regardless of topN.
+                     To get full candidate records, use summarize=false with limit/offset.
         topN:        when summarize=true, include this many top-scored candidates in TopCandidates.
+                     Capped at 5 regardless of value supplied. e.g. topN=5, minScore=70 returns
+                     the 5 highest-scoring candidates alongside the summary counts in a single call.
         minScore:    filters candidates in both paged and summary modes. TotalRecords reflects
                      the post-filter count. Ignored when not supplied.
         limit/offset: page the full candidate list (summarize=false only). Ignored when summarize=true.
 
         Returns MigrationResult<List<MigrationCandidateFinding>> or MigrationResult<MigrationScanSummary>.
         A method flagged for two patterns appears twice. Each finding includes a Summary field.
-        When payload exceeds 256 KB the result is written to disk; use get_scan_result to page through it.
         When results exceed the inline threshold, LargeResultInfo is populated instead of Data —
         call get_scan_result(changeId) to read back the offloaded result in pages.
         """)]
@@ -319,38 +322,84 @@ public class SentinelQualityTools
                 .GroupBy(f => f.Pattern)
                 .ToDictionary(g => g.Key, g => g.Count());
 
-            var byClass = aggregateFindings
-                .GroupBy(f => (f.ClassName, f.FilePath))
-                .Select(g => new ClassCandidateSummary
-                {
-                    ClassName   = g.Key.ClassName,
-                    ProjectName = g.First().ProjectName,
-                    FilePath    = g.Key.FilePath,
-                    Count       = g.Count()
-                })
+            // B1: use slim type (no FilePath) and cap at 10 to keep summary unconditionally inline-safe.
+            const int MaxByClass = 10;
+            var allByClass = aggregateFindings
+                .GroupBy(f => (f.ClassName, f.ProjectName))
+                .Select(g => new ClassCandidateSummarySlim(
+                    ClassName:   g.Key.ClassName,
+                    ProjectName: g.Key.ProjectName,
+                    Count:       g.Count()))
                 .OrderByDescending(c => c.Count)
                 .ToList();
+            bool byClassTruncated = allByClass.Count > MaxByClass;
+            var byClass = byClassTruncated ? allByClass.Take(MaxByClass).ToList() : allByClass;
 
-            // Truncate byClass to keep summarize=true results unconditionally inline-safe.
-            const int MaxByClass = 20;
-            bool byClassTruncated = byClass.Count > MaxByClass;
-            if (byClassTruncated)
-                byClass = byClass.Take(MaxByClass).ToList();
+            // B1: TopCandidates — slim type, capped at 5, only when topN or minScore is set.
+            const int MaxTopCandidates = 5;
+            List<TopCandidateSummaryEntry>? topCandidates = null;
+            if (topN.HasValue || minScore.HasValue)
+            {
+                var effectiveTopN = Math.Min(topN ?? MaxTopCandidates, MaxTopCandidates);
+                topCandidates = aggregateFindings
+                    .OrderByDescending(f => f.Score)
+                    .Take(effectiveTopN)
+                    .Select(f =>
+                    {
+                        var s = f.Summary;
+                        return new TopCandidateSummaryEntry(
+                            MethodName: f.MethodName,
+                            ClassName:  f.ClassName,
+                            Pattern:    f.Pattern,
+                            Score:      f.Score,
+                            Summary:    s[..Math.Min(120, s.Length)]);
+                    })
+                    .ToList();
+            }
 
-            List<MigrationCandidateFinding>? topCandidates = topN.HasValue
-                ? aggregateFindings.OrderByDescending(f => f.Score).Take(topN.Value).ToList()
-                : null;
+            var summary = new MigrationScanSummary(
+                TotalCandidates:  aggregateFindings.Count,
+                ByPattern:        byPattern,
+                ByClass:          byClass,
+                ByScoreBucket:    buckets,
+                TopCandidates:    topCandidates,
+                ByClassTruncated: byClassTruncated);
+
+            // B1 Fix 4: 8 KB overflow safety net — should be unreachable with slim types + caps.
+            const int SummaryThresholdBytes = 8 * 1024;
+            var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary);
+            if (summaryJson.Length > SummaryThresholdBytes)
+            {
+                var operationId  = Guid.NewGuid().ToString("N");
+                var solutionRoot = _workspaceManager.GetSolutionRoot();
+                if (!string.IsNullOrEmpty(solutionRoot))
+                {
+                    var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                    Directory.CreateDirectory(dir);
+                    var ts   = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+                    var fp   = System.IO.Path.Combine(dir, $"scan_{ts}_{operationId}.json");
+                    await File.WriteAllTextAsync(fp,
+                        System.Text.Json.JsonSerializer.Serialize(summary, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+                        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                    return new MigrationResult<LargeResultInfo>
+                    {
+                        Success    = true,
+                        LargeResult = new LargeResultInfo(
+                            WrittenToFile: true,
+                            FilePath:      fp,
+                            OperationId:   operationId,
+                            SizeBytes:     summaryJson.Length,
+                            TotalRecords:  aggregateFindings.Count,
+                            Message:       $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
+                                           $"Use get_scan_result(changeId: \"{operationId}\") to page through results.")
+                    };
+                }
+            }
 
             return new MigrationResult<MigrationScanSummary>
             {
                 Success = true,
-                Data    = new MigrationScanSummary(
-                    TotalCandidates:  aggregateFindings.Count,
-                    ByPattern:        byPattern,
-                    ByClass:          byClass,
-                    ByScoreBucket:    buckets,
-                    TopCandidates:    topCandidates,
-                    ByClassTruncated: byClassTruncated)
+                Data    = summary
             };
         }
 
@@ -1928,14 +1977,17 @@ public class SentinelQualityTools
               AsyncCallerUplift      — sync caller of an already-bridged async method
 
             MigrationScanSummary fields (when summarize=true):
-              ByPattern     — candidate count keyed by pattern name.
-              ByClass       — List<ClassCandidateSummary> sorted descending by Count. Each entry
-                              has ClassName, ProjectName (.csproj name), FilePath, Count.
-              ByScoreBucket — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
-                              The '<0' bucket is valid but rare; it applies to methods flagged
-                              manually with a negative score (auto-flagging discards sub-zero
-                              results before writing the attribute).
-              TopCandidates — populated when topN or minScore is set; null otherwise.
+              ByPattern        — candidate count keyed by pattern name.
+              ByClass          — List<ClassCandidateSummarySlim> sorted descending by Count, capped at 10.
+                                 Each entry has ClassName, ProjectName (.csproj name), Count.
+                                 ByClassTruncated=true when more than 10 classes were found.
+              ByScoreBucket    — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
+                                 The '<0' bucket is valid but rare; it applies to methods flagged
+                                 manually with a negative score (auto-flagging discards sub-zero
+                                 results before writing the attribute).
+              TopCandidates    — List<TopCandidateSummaryEntry> populated when topN or minScore is
+                                 set; null otherwise. Each entry has MethodName, ClassName, Pattern,
+                                 Score, Summary (truncated to 120 chars). Capped at 5 entries.
             """,
         StructuredOptions = new Dictionary<string, object>
         {

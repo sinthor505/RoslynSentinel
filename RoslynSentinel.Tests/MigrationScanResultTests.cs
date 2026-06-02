@@ -188,7 +188,6 @@ public class Svc
         var classEntry = summary.ByClass[0];
         Assert.That(classEntry.ClassName,   Is.EqualTo("Svc"));
         Assert.That(classEntry.ProjectName, Is.Not.Null.And.Not.Empty);
-        Assert.That(classEntry.FilePath,    Is.Not.Null.And.Not.Empty);
         Assert.That(classEntry.Count,       Is.EqualTo(5));
     }
 
@@ -479,6 +478,26 @@ public class Svc
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data!.TopCandidates, Is.Null,
             "TopCandidates must be null when neither topN nor minScore is set.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T12 – get_workspace_health after load → LoadedSolutionPath non-null, ends with .sln
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(10000)]
+    public async Task T12_GetWorkspaceHealth_AfterLoadSolution_LoadedSolutionPathNonNull()
+    {
+        // SolutionPath is set in SetUp — a fake .sln path inside _tempDir.
+        SetSource("public class Svc { }");
+
+        var engine = new MsToolAugmentEngine(_workspaceManager);
+        var report = await engine.GetWorkspaceHealthAsync();
+
+        Assert.That(report.HasLoadedSolution, Is.True, "Solution should be loaded.");
+        Assert.That(report.LoadedSolutionPath, Is.Not.Null,
+            "LoadedSolutionPath must be populated when a solution is loaded.");
+        Assert.That(report.LoadedSolutionPath, Does.EndWith(".sln").Or.EndWith(".slnx"),
+            "LoadedSolutionPath must point to a solution file.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

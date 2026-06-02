@@ -70,7 +70,7 @@ public record LargeResultInfo(
 // ── Scan summary ─────────────────────────────────────────────────────────────
 
 /// <summary>
-/// Per-class row in <see cref="MigrationScanSummary.ByClass"/>.
+/// Per-class row in <see cref="MigrationScanSummary.ByClass"/> (paged/non-summary path).
 /// Groups all candidates that share the same class and source file.
 /// </summary>
 public sealed class ClassCandidateSummary
@@ -82,16 +82,36 @@ public sealed class ClassCandidateSummary
 }
 
 /// <summary>
+/// Slim per-class row used in <see cref="MigrationScanSummary.ByClass"/> (summarize=true path).
+/// Omits FilePath to keep the summary response small.
+/// </summary>
+public sealed record ClassCandidateSummarySlim(
+    string ClassName,
+    string ProjectName,
+    int    Count);
+
+/// <summary>
+/// Slim candidate entry used in <see cref="MigrationScanSummary.TopCandidates"/> (summarize=true path).
+/// Omits FilePath, FlaggedDate, Line, and full Reason breakdown to keep the summary small.
+/// </summary>
+public sealed record TopCandidateSummaryEntry(
+    string MethodName,
+    string ClassName,
+    string Pattern,
+    int    Score,
+    string Summary);  // truncated to 120 chars
+
+/// <summary>
 /// Aggregate summary produced when <c>scan_migration_candidates</c> is called with
 /// <c>summarize=true</c>.
 /// </summary>
 public record MigrationScanSummary(
-    int                                 TotalCandidates,
-    Dictionary<string, int>             ByPattern,
-    List<ClassCandidateSummary>         ByClass,
-    Dictionary<string, int>             ByScoreBucket,
-    List<MigrationCandidateFinding>?    TopCandidates    = null,
-    bool                                ByClassTruncated = false
+    int                                  TotalCandidates,
+    Dictionary<string, int>              ByPattern,
+    List<ClassCandidateSummarySlim>      ByClass,
+    Dictionary<string, int>              ByScoreBucket,
+    List<TopCandidateSummaryEntry>?      TopCandidates    = null,
+    bool                                 ByClassTruncated = false
 );
 
 // ── Tool options (describe_tool_options return type) ─────────────────────────
