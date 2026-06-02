@@ -86,6 +86,7 @@ public class BatteryThirtyThreeTests
             _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
             _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager),
             new CloneDetectionEngine(_workspaceManager),
+            _workspaceManager,
             _config, NullLogger<SentinelIntelligenceTools>.Instance);
 
         _performanceEngine = new PerformanceEngine(_workspaceManager);

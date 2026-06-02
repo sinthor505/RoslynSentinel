@@ -27,6 +27,7 @@ public class SentinelIntelligenceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly CloneDetectionEngine _cloneDetectionEngine;
+    private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -48,6 +49,7 @@ public class SentinelIntelligenceTools
         ProjectConsistencyEngine projectConsistencyEngine,
         BreakingChangeEngine breakingChangeEngine,
         CloneDetectionEngine cloneDetectionEngine,
+        PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
@@ -69,6 +71,7 @@ public class SentinelIntelligenceTools
         _projectConsistencyEngine = projectConsistencyEngine;
         _breakingChangeEngine = breakingChangeEngine;
         _cloneDetectionEngine = cloneDetectionEngine;
+        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 
@@ -114,7 +117,10 @@ public class SentinelIntelligenceTools
     {
         try
         {
-            return await _inventoryEngine.GetCodeInventoryAsync(filePath);
+            //return await _inventoryEngine.GetCodeInventoryAsync(filePath);
+            var results = await _inventoryEngine.GetCodeInventoryAsync(filePath);
+            var summary = await ScanResultOffloadHelper.TryOffloadAsync(results, _workspaceManager.SolutionPath);
+            return summary;
         }
         catch (Exception ex)
         {
@@ -297,7 +303,37 @@ public class SentinelIntelligenceTools
             {
                 return ("projectName is required when persistBaseline=false.");
             }
-            return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+
+            //return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+            var result = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+            var summaryResults = await ScanResultOffloadHelper.TryOffloadAsync(result, _workspaceManager.GetSolutionRoot());
+
+            if (summaryResults.offloaded)
+            {
+                return new MigrationResult<List<ApiSurfaceEntry>>
+                {
+                    Success = true,
+                    TotalRecords = result.Count,
+                    HasMore = false,
+                    LargeResult = new LargeResultInfo(
+                        WrittenToFile: true,
+                        FilePath: summaryResults.filePath,
+                        OperationId: summaryResults.operationId,
+                        SizeBytes: summaryResults.jsonBytes.Length,
+                        TotalRecords: result.Count,
+                        Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {result.Count} records). " +
+                                       $"Use get_scan_result(changeId: \"{summaryResults.operationId}\") to page through results. " +
+                                       "Pass limit and offset to control page size (default limit: 50).")
+                };
+            }
+
+            return new MigrationResult<List<ApiSurfaceEntry>>
+            {
+                Success = true,
+                Data = result,
+                TotalRecords = result.Count,
+                HasMore = false,
+            };
         }
         catch (Exception ex)
         {

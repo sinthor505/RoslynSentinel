@@ -377,8 +377,22 @@ public class SentinelQualityTools
             // B1 Fix 4: 8 KB overflow safety net — should be unreachable with slim types + caps.
             const int SummaryThresholdBytes = 8 * 1024;
             var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Summary JSON size: {SizeBytes} bytes", summaryJson.Length);
+            }
+
             if (summaryJson.Length > SummaryThresholdBytes)
             {
+                if (summaryJson.Length > 8 * 1024)
+                {
+                    _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
+                                       "This may indicate an issue with the summarization logic or unusually large data. " +
+                                       "Consider reviewing the summary generation and applying stricter caps if necessary.",
+                                       summaryJson.Length);
+                }
+
                 var operationId = Guid.NewGuid().ToString("N");
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
                 if (!string.IsNullOrEmpty(solutionRoot))

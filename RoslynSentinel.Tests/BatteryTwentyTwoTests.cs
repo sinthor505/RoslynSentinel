@@ -1,9 +1,8 @@
 // Battery #22 — SentinelIntelligenceTools
 // Tests all 45 public methods of SentinelIntelligenceTools in-memory via TestSolutionBuilder.
 
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -132,6 +131,7 @@ public class OrderService : IOrderService
             _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
             _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager),
             new CloneDetectionEngine(_workspaceManager),
+            _workspaceManager,
             _config, NullLogger<SentinelIntelligenceTools>.Instance);
     }
 
