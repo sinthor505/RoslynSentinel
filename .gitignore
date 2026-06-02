@@ -12,3 +12,4 @@ publish/
 RoslynSentinel.Server/engine_methods_all.json
 RoslynSentinel.Server/engine_methods_workspace.json
 /RoslynSentinel.Server/engine_methods_workspace.json
+/RoslynSentinel.Server/engine_methods_all.json
