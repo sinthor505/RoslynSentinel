@@ -1,16 +1,22 @@
 # Spec — Migration Scan Summary Patch (post-v2)
-<!-- spec-migration-scan-summary-patch-v1.md / v5 -->
+<!-- spec-migration-scan-summary-patch-v1.md / v7 -->
 **Target server:** RoslynSentinel (rhale78)
 **Date:** 2026-05-31
-**Supersedes:** spec-migration-scan-summary-patch-v1.md / v4
+**Supersedes:** spec-migration-scan-summary-patch-v1.md / v6
 **Depends on:** spec-migration-scan-result-handling-v2.md fully implemented and passing
-**Motivated by:** Four MCP tool usage feedback sessions (May 31, 2026):
+**Motivated by:** Six MCP tool usage feedback sessions (May 31, 2026):
 - Session 1 (post-v2): naming confusion, missing actionable detail in summary, two missing fields → §P1–P5
 - Session 2 (post-patch): summarize ordering bug, SyntaxTree compilation error, unjustified
   solution-load gate, inconsistent score reason format, opaque async_migrate errors → §B1–B6
-- Session 3 (post-B fixes): B2 root cause refined (designer files), minScore ignored in summarize
-  path → B2 updated, §B7 added
+- Session 3 (post-B fixes): B2 root cause refined (designer files — later superseded), minScore
+  ignored in summarize path → B2 updated, §B7 added
 - Session 4: VS Code offload distinction clarified; minScore also ignored in paged mode → §B7b added
+- Session 5: B1 root cause confirmed (byClass bloat + ordering), B2 root cause corrected
+  (cross-project compilation in FindObsoleteCallersAsync), Bug 3 threshold confirmed → B1/B2
+  updated; v2 spec §2.3 threshold updated to 30KB
+- Session 6: VS Code intercept threshold confirmed ~10KB (not ~64KB); fat TopCandidates
+  identified as third cause of B1; describe_tool_options registry incomplete; empty response
+  semantics gap → B1 rewritten with slim types + 5-fix structure; B8/B9 pending
 
 ---
 
@@ -61,9 +67,10 @@ implemented first. B3–B7b are independent of each other and of B1/B2.
 - **B1 (summarize ordering):** The fix is an ordering guard only — do not restructure the
   threshold or pagination logic. See §B1 for the exact insertion point.
 
-- **B2 (SyntaxTree error):** Do not add a workaround that re-loads the solution. The fix is to
-  re-fetch documents from current workspace state inside the method. See §B2 for the diagnosis
-  and fix pattern.
+- **B2 (SyntaxTree error):** Root cause is cross-project compilation mismatch in
+  `FindObsoleteCallersAsync` — always get the compilation from the **referencing document's
+  project**, not the declaring project. Do not look for designer files or generated files as the
+  cause. See §B2 for the fix pattern.
 
 - **B4 (score reason format):** Standardize to structured format only. Do not add a free-text
   fallback — if a reason cannot be expressed as key:points pairs, that is a gap in the scoring
@@ -267,127 +274,216 @@ B1 and B2 are critical path. B3, B4, B5 are independent of each other and of B1/
 
 ---
 
-## B1 — `summarize=true` threshold ordering bug (critical)
+## B1 — `summarize=true` not inline-safe: ordering bug + byClass bloat + fat TopCandidates (critical)
 
 **Files:** `RoslynSentinel.Server/SentinelQualityTools.cs`,
-`RoslynSentinel.Server/AsyncOptimizationEngine.cs`
+`RoslynSentinel.Server/AsyncOptimizationEngine.cs`,
+`RoslynSentinel.Server/MigrationEnvelope.cs`
 
 ### Problem
-`summarize=true` with `topN=5, minScore=15` produced a 79–83KB response offloaded to disk.
-A count aggregate must always be inline-safe. The threshold check is running before the summarize
-branch, serializing all candidates and measuring size before the aggregation path is taken.
+`summarize=true` consistently produces 11–82KB responses that VS Code intercepts and writes to
+a session-resources path the agent cannot reach. Three compounding causes confirmed across
+sessions 2–6:
 
-### Fix
-Add an early-return guard at the top of `ScanMigrationCandidates` (before any threshold logic)
-that handles the `summarize=true` path entirely and returns without ever reaching the
-inline-vs-file decision:
+1. **Ordering bug:** The threshold check ran before the summarize branch, serializing all
+   candidates before aggregation. The early-return guard (below) fixes this, but is not
+   sufficient alone — the summary itself can still exceed VS Code's ~10KB intercept threshold.
+2. **`byClass` bloat:** Unbounded `ClassCandidateSummary` entries (each with `FilePath`) inflate
+   the summary to 11KB+ on large projects regardless of `topN`. 20-entry cap was insufficient
+   because `FilePath` alone adds significant per-entry cost.
+3. **Fat `TopCandidates`:** Each `MigrationCandidateFinding` entry carries `FilePath`,
+   `FlaggedDate`, `Line`, full `Reason` breakdown, and caller lists. 10 full entries adds
+   several KB to the summary.
+
+The fix requires all three changes. Ordering guard alone is not enough.
+
+### Fix 1 — Ordering guard (SentinelQualityTools.cs)
+
+Add an early-return guard at the top of `ScanMigrationCandidates` before any threshold logic:
 
 ```csharp
-public async Task<object> ScanMigrationCandidates(
-    string? filePath    = null,
-    string? projectName = null,
-    string? pattern     = null,
-    bool    summarize   = false,
-    int?    topN        = null,
-    int?    minScore    = null,
-    int     limit       = 50,
-    int     offset      = 0)
+// summarize path: always inline, never touches threshold
+if (summarize)
 {
-    if (!_workspaceManager.HasLoadedSolution())
-    {
-        return new MigrationResult<MigrationScanSummary>
-        {
-            Success = false,
-            Error   = new ResultError { ErrorCode = "SolutionNotLoaded", Message = "Call load_solution first." }
-        };
-    }
+    var summary = await BuildScanSummaryAsync(filePath, projectName, pattern, topN, minScore);
+    return new MigrationResult<MigrationScanSummary> { Success = true, Data = summary };
+}
+// candidates path: threshold logic follows here
+```
 
-    // summarize path: always inline, never touches threshold
-    if (summarize)
-    {
-        var summary = await BuildScanSummaryAsync(filePath, projectName, pattern, topN, minScore);
-        return new MigrationResult<MigrationScanSummary> { Success = true, Data = summary };
-    }
+### Fix 2 — Slim types (MigrationEnvelope.cs)
 
-    // candidates path: threshold logic follows here
-    // ...
+Replace the full types in `MigrationScanSummary` with compact slim types that omit
+high-cost fields:
+
+**Add `ClassCandidateSummarySlim`** — replaces `ClassCandidateSummary` in summary context:
+
+```csharp
+public sealed record ClassCandidateSummarySlim(
+    string ClassName,
+    string ProjectName,
+    int    Count);
+// No FilePath — omitted to control size
+```
+
+**Add `TopCandidateSummaryEntry`** — replaces `MigrationCandidateFinding` in summary context:
+
+```csharp
+public sealed record TopCandidateSummaryEntry(
+    string MethodName,
+    string ClassName,
+    string Pattern,
+    int    Score,
+    string Summary);  // truncated to 120 chars; omits FilePath, FlaggedDate, Line, Reason
+```
+
+**Update `MigrationScanSummary`** to use the slim types:
+
+```csharp
+public sealed class MigrationScanSummary
+{
+    public int TotalCandidates { get; set; }
+    public Dictionary<string, int> ByPattern { get; set; }
+    public List<ClassCandidateSummarySlim> ByClass { get; set; }  // slim — no FilePath
+    public bool ByClassTruncated { get; set; }
+    public Dictionary<string, int> ByScoreBucket { get; set; }
+    public List<TopCandidateSummaryEntry> TopCandidates { get; set; } // slim — 120-char summary
 }
 ```
 
-The `summarize` branch must return before the candidates path begins. Do not merge the two paths
-and apply a size check to both — the summarize path bypasses threshold entirely by design.
+Do not modify `ClassCandidateSummary` or `MigrationCandidateFinding` — they are used in the
+paged (non-summary) path and must remain unchanged.
+
+### Fix 3 — Tighter caps (SentinelQualityTools.cs / BuildScanSummaryAsync)
+
+```csharp
+const int MaxByClass       = 10;  // reduced from 20; slim type makes each entry cheaper
+const int MaxTopCandidates =  5;  // hard cap; silently clamp topN > 5 to 5
+```
+
+Cap `ByClass` at 10 slim entries. Cap `TopCandidates` at 5 slim entries regardless of the
+`topN` parameter value — `topN` is a hint, not a contract, for the summary path. Callers
+requesting `topN > 5` get 5. Document this in the tool description.
+
+```csharp
+var allByClass = BuildByClass(candidates); // sorted descending by Count
+summary.ByClass          = allByClass.Take(MaxByClass).ToList();
+summary.ByClassTruncated = allByClass.Count > MaxByClass;
+
+var effectiveTopN = Math.Min(topN ?? MaxTopCandidates, MaxTopCandidates);
+summary.TopCandidates = candidates
+    .OrderByDescending(c => c.Score)
+    .Take(effectiveTopN)
+    .Select(c => new TopCandidateSummaryEntry(
+        c.MethodName,
+        c.ClassName,
+        c.Pattern,
+        c.Score,
+        (c.Summary ?? string.Empty)[..Math.Min(120, (c.Summary ?? string.Empty).Length)]))
+    .ToList();
+```
+
+### Fix 4 — 8KB overflow safety net (SentinelQualityTools.cs)
+
+After building `MigrationScanSummary`, serialize and check size. This should be unreachable
+with the slim types and caps above, but acts as a safety net:
+
+```csharp
+var summaryJson  = JsonSerializer.SerializeToUtf8Bytes(summary);
+if (summaryJson.Length > 8 * 1024)  // 8KB — use the SAME constant as the paged threshold
+{
+    // write to operations/ dir, return LargeResultInfo with OperationId
+    // same path as the paged candidates overflow
+}
+```
+
+**Use the same threshold constant as the paged path.** Do not introduce a second hardcoded
+value. If the paged threshold constant is named `ThresholdBytes`, use `ThresholdBytes` here
+(after updating it to 8KB per the threshold fix). Do not hardcode `8 * 1024` in two places.
+
+### Fix 5 — Description update (scan_migration_candidates [Description])
+
+Replace "always inline-safe" with:
+
+```
+summarize=true returns a guaranteed ≤2KB dashboard view. byClass is capped at 10 entries
+(highest-count classes); ByClassTruncated=true when truncated. TopCandidates is capped at 5
+entries regardless of topN. To get full candidate records, use summarize=false with limit/offset.
+```
 
 ### Verification
-After fix: `summarize=true` with any `topN`/`minScore` combination returns an inline
-`MigrationResult<MigrationScanSummary>` of 1–3KB maximum. T1, T10, T11 must all pass inline.
+- `summarize=true` on AvaalExpress (986 candidates) returns inline, well under VS Code's ~10KB
+  intercept threshold. Serialized byte size of the response must be ≤ 2,048 bytes.
+- T1, T10, T11 must all pass inline.
+- `summarize=false` paged results are unaffected — `ClassCandidateSummary` and
+  `MigrationCandidateFinding` in the paged path must not be modified.
 
 ---
 
 ## B2 — `get_async_migration_progress` SyntaxTree compilation error (critical)
 
-**File:** `RoslynSentinel.Server/AntiPatternEngine.cs`, line ~2723
+**File:** `RoslynSentinel.Server/AntiPatternEngine.cs` — `FindObsoleteCallersAsync`
 
 ### Problem
 After a successful `load_solution`, `get_async_migration_progress` throws:
 `"SyntaxTree is not part of the compilation (Parameter 'syntaxTree')"`
-This is consistent across null scope, project scope, and all tested configurations.
+Consistent across null scope and all project-scoped calls.
 
-### Diagnosis (refined — session 3)
-The crash is caused by **generated files** — `.Designer.cs` files, DataSet designer files, and
-other auto-generated source files that exist in the workspace file system and are loaded into the
-Roslyn workspace document tree, but are **excluded from the Roslyn compilation**. When
-`GetAsyncMigrationProgressAsync` iterates `project.Documents` and calls
-`compilation.GetSemanticModel(tree)` for each, it hits a tree from a generated file that was
-never added to the compilation. Roslyn throws because the tree is not part of that compilation
-snapshot.
+### Diagnosis (confirmed from source — session 5)
+The crash is in `FindObsoleteCallersAsync`. `SymbolFinder.FindReferencesAsync` returns reference
+locations that span **multiple projects** — a bridge method declared in `AvaalExpress` may be
+called from `DispatchBase`, `Avaal.Common`, etc. The code was calling
+`compilation.GetSemanticModel(refSyntaxTree)` using the **declaring project's compilation**
+for every reference location, including those in other projects. A syntax tree from project B
+is not part of project A's compilation — Roslyn throws.
 
-This is not a stale-reference problem — the trees are freshly obtained from the current workspace.
-The issue is that `project.Documents` includes files the compiler excludes.
+This is not a generated-file or designer-file issue. The trees are valid and current; the
+compilation object is simply wrong for cross-project references.
 
-### Fix
-Before calling `compilation.GetSemanticModel(tree)`, guard with
-`compilation.ContainsSyntaxTree(tree)`. Skip any document whose tree is not in the compilation:
+### Fix (implemented)
+In `FindObsoleteCallersAsync`, for each reference location: get the document containing the
+reference, look up **that document's project**, get that project's compilation, and guard with
+`ContainsSyntaxTree` at both the project level and the compilation level before calling
+`GetSemanticModel`:
 
 ```csharp
-var compilation = await project.GetCompilationAsync(cancellationToken);
-foreach (var document in project.Documents)
+foreach (var referencedSymbol in references)
 {
-    var tree = await document.GetSyntaxTreeAsync(cancellationToken);
-    if (tree == null || !compilation.ContainsSyntaxTree(tree))
+    foreach (var location in referencedSymbol.Locations)
     {
-        continue; // generated file or excluded document — skip
+        var refDocument = solution.GetDocument(location.Document.Id);
+        if (refDocument == null) { continue; }
+
+        // Get the compilation for the referencing document's project —
+        // NOT the declaring project's compilation
+        var refProject = refDocument.Project;
+        var refCompilation = await refProject.GetCompilationAsync(cancellationToken);
+        if (refCompilation == null) { continue; }
+
+        var refSyntaxTree = await refDocument.GetSyntaxTreeAsync(cancellationToken);
+        if (refSyntaxTree == null || !refCompilation.ContainsSyntaxTree(refSyntaxTree))
+        {
+            continue; // excluded document — skip
+        }
+
+        var model = refCompilation.GetSemanticModel(refSyntaxTree); // safe
+        // ... analysis
     }
-    var model = compilation.GetSemanticModel(tree); // safe
-    // ... analysis
 }
 ```
 
-Apply this guard to every location in `GetAsyncMigrationProgressAsync` (and any helper methods
-it calls) that obtains a `SemanticModel` from a document tree. Do not assume all documents in
-`project.Documents` are part of the compilation.
+The key invariant: **always get the compilation from the same project as the document**.
+`ContainsSyntaxTree` at both levels is the safety net for any edge cases (generated files,
+excluded documents) but the primary fix is the project lookup.
 
-Do **not** add a workaround that re-loads the solution. Do **not** filter by filename pattern
-(`.Designer.cs` etc.) — use `compilation.ContainsSyntaxTree(tree)` as the authoritative check,
-since the set of excluded files is determined by the project configuration, not by naming
-convention.
-
-### Additional: add `projectName` scope parameter
-Independent of the root cause fix — a project-scoped compilation is cheaper and allows progress
-reporting when solution-wide compilation is slow. Add it:
-
-```csharp
-public async Task<MigrationResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
-    string? projectName  = null,
-    CancellationToken ct = default)
-```
-
-When `projectName` is supplied, restrict analysis to that project's compilation only. When null,
-analyze the full solution. Implement after the root cause fix, not instead of.
+### Additional: `projectName` scope parameter
+Already implemented as part of this fix. When `projectName` is supplied, restrict analysis to
+that project only. When null, analyze the full solution.
 
 ### Test
 - T8 (existing): `get_async_migration_progress` with no solution → `ErrorCode = "SolutionNotLoaded"`
-- New T13: `get_async_migration_progress` after successful `load_solution` on a solution containing
-  `.Designer.cs` files → no exception, returns `AsyncMigrationProgressReport` with non-null fields
+- New T13: `get_async_migration_progress` after `load_solution` on a multi-project solution →
+  no exception, returns `AsyncMigrationProgressReport` with non-null fields
 - New T14: `get_async_migration_progress(projectName: "AvaalExpress")` → scoped report, no
   exception
 
