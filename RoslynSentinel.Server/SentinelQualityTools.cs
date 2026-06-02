@@ -219,16 +219,25 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
-    public async Task<object> GetTestCoverageMap(string filePath, string methodName)
+    public async Task<ToolResult<object>> GetTestCoverageMap(string filePath, string methodName)
     {
         try
         {
-            return await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
+            var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return $"GetTestCoverageMap failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"GetTestCoverageMap failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -252,12 +261,12 @@ public class SentinelQualityTools
                      the post-filter count. Ignored when not supplied.
         limit/offset: page the full candidate list (summarize=false only). Ignored when summarize=true.
 
-        Returns MigrationResult<List<MigrationCandidateFinding>> or MigrationResult<MigrationScanSummary>.
+        Returns ToolResult<List<MigrationCandidateFinding>> or ToolResult<MigrationScanSummary>.
         A method flagged for two patterns appears twice. Each finding includes a Summary field.
         When results exceed the inline threshold, LargeResultInfo is populated instead of Data —
         call get_scan_result(changeId) to read back the offloaded result in pages.
         """)]
-    public async Task<object> ScanMigrationCandidates(
+    public async Task<ToolResult<object>> ScanMigrationCandidates(
         string? filePath = null,
         string? projectName = null,
         string? pattern = null,
@@ -269,7 +278,7 @@ public class SentinelQualityTools
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new MigrationResult<object>
+            return new ToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -288,7 +297,7 @@ public class SentinelQualityTools
             }
             catch (ArgumentException ex)
             {
-                return new MigrationResult<object>
+                return new ToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
@@ -296,7 +305,7 @@ public class SentinelQualityTools
             }
             catch (Exception ex)
             {
-                return new MigrationResult<object>
+                return new ToolResult<object>
                 {
                     Success = false,
                     Error = new ResultError(MigrationErrorCode.Exception,
@@ -404,7 +413,7 @@ public class SentinelQualityTools
                     await File.WriteAllTextAsync(fp,
                         System.Text.Json.JsonSerializer.Serialize(summary, _jsonOptions),
                         new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                    return new MigrationResult<LargeResultInfo>
+                    return new ToolResult<object>
                     {
                         Success = true,
                         LargeResult = new LargeResultInfo(
@@ -419,7 +428,7 @@ public class SentinelQualityTools
                 }
             }
 
-            return new MigrationResult<MigrationScanSummary>
+            return new ToolResult<object>
             {
                 Success = true,
                 Data = summary
@@ -435,7 +444,7 @@ public class SentinelQualityTools
         }
         catch (ArgumentException ex)
         {
-            return new MigrationResult<object>
+            return new ToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
@@ -443,7 +452,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            return new MigrationResult<object>
+            return new ToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
@@ -488,7 +497,7 @@ public class SentinelQualityTools
                 scanFilePath = string.Empty;
             }
 
-            return new MigrationResult<List<MigrationCandidateFinding>>
+            return new ToolResult<object>
             {
                 Success = written,
                 TotalRecords = totalCount,
@@ -506,7 +515,7 @@ public class SentinelQualityTools
         }
 
         // ── inline result ─────────────────────────────────────────────────
-        return new MigrationResult<List<MigrationCandidateFinding>>
+        return new ToolResult<object>
         {
             Success = true,
             Data = page,
@@ -517,16 +526,25 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
-    public async Task<object> GetMethodComplexity(string filePath, string methodName)
+    public async Task<ToolResult<object>> GetMethodComplexity(string filePath, string methodName)
     {
         try
         {
-            return await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+            var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -544,9 +562,9 @@ public class SentinelQualityTools
         limit:    max findings per page (default 50).
         offset:   zero-based page offset (default 0).
 
-        Returns MigrationResult<List<MigrationCandidateFinding>> with TotalRecords and HasMore.
+        Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
-    public async Task<MigrationResult<List<MigrationCandidateFinding>>> GetScanResult(
+    public async Task<ToolResult<object>> GetScanResult(
         string? changeId = null,
         string? filePath = null,
         int limit = 50,
@@ -586,7 +604,7 @@ public class SentinelQualityTools
 
         if (resolvedPath == null)
         {
-            return new MigrationResult<List<MigrationCandidateFinding>>
+            return new ToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument,
@@ -605,7 +623,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            return new MigrationResult<List<MigrationCandidateFinding>>
+            return new ToolResult<object>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
@@ -616,7 +634,7 @@ public class SentinelQualityTools
         var page = all.Skip(offset).Take(limit).ToList();
         bool hasMore = (offset + limit) < all.Count;
 
-        return new MigrationResult<List<MigrationCandidateFinding>>
+        return new ToolResult<object>
         {
             Success = true,
             Data = page,
@@ -638,13 +656,13 @@ public class SentinelQualityTools
 
         projectName: restrict statistics to a single project; null = entire solution.
         """)]
-    public async Task<MigrationResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
+    public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new MigrationResult<AsyncMigrationProgressReport>
+            return new ToolResult<AsyncMigrationProgressReport>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -656,7 +674,7 @@ public class SentinelQualityTools
         {
             var report = await _antiPatternEngine
                 .GetAsyncMigrationProgressAsync(projectName, cancellationToken);
-            return new MigrationResult<AsyncMigrationProgressReport>
+            return new ToolResult<AsyncMigrationProgressReport>
             {
                 Success = true,
                 Data = report
@@ -664,7 +682,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            return new MigrationResult<AsyncMigrationProgressReport>
+            return new ToolResult<AsyncMigrationProgressReport>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
@@ -1786,19 +1804,19 @@ public class SentinelQualityTools
                    values and required input fields per operation.
         input:     AsyncMigrateInput — fields vary by operation; see describe_advanced_tool_options.
 
-        Returns MigrationResult<BatchResultSummary>. Use get_operation_detail(changeId) for per-item details.
+        Returns ToolResult<BatchResultSummary>. Use get_operation_detail(changeId) for per-item details.
         Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
         ErrorCode="SolutionNotLoaded" — no solution is loaded; call load_solution first.
         ErrorCode="InvalidArgument" — unknown operation name; see Message for valid values.
         """)]
-    public async Task<MigrationResult<BatchResultSummary>> AsyncMigrate(
+    public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
         string operation,
         AsyncMigrateInput input,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
-            return new MigrationResult<BatchResultSummary>
+            return new ToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
@@ -1886,7 +1904,7 @@ public class SentinelQualityTools
         }
         catch (ArgumentException ex)
         {
-            return new MigrationResult<BatchResultSummary>
+            return new ToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
@@ -1894,7 +1912,7 @@ public class SentinelQualityTools
         }
         catch (Exception ex)
         {
-            return new MigrationResult<BatchResultSummary>
+            return new ToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
@@ -1902,7 +1920,7 @@ public class SentinelQualityTools
             };
         }
 
-        return new MigrationResult<BatchResultSummary>
+        return new ToolResult<BatchResultSummary>
         {
             Success = true,
             Data = result

@@ -98,7 +98,7 @@ public class SentinelScanTools
         unused_references requires scope="project".
         Call describe_scan_detectors for per-detector scope hints and descriptions.
         """)]
-    public async Task<object> Scan(
+    public async Task<ToolResult<object>> Scan(
         string detector,
         string scope,
         string? scopeName = null,
@@ -112,240 +112,333 @@ public class SentinelScanTools
             switch (detector)
             {
                 // ── async ──────────────────────────────────────────────────────────
-
                 case "async_in_constructor":
-                    return (object)await _asyncSafetyEngine.FindAsyncInConstructorAsync(RequireFile(scope, scopeName));
+                    var result = await _asyncSafetyEngine.FindAsyncInConstructorAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result };
                 case "async_over_sync":
-                    return (object)await _asyncSafetyEngine.FindAsyncOverSyncAsync(RequireFile(scope, scopeName));
+                    var result2 = await _asyncSafetyEngine.FindAsyncOverSyncAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result2 };
                 case "async_void_without_try_catch":
-                    return (object)await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
+                    var result3 = await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result3 };
                 case "blocking_calls_in":
-                    return (object)await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
+                    var result4 = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result4 };
                 case "cancellation_token_not_forwarded":
-                    return (object)await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
+                    var result5 = await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result5 };
                 case "configure_await_missing":
-                    return (object)await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(RequireFile(scope, scopeName));
+                    var result6 = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result6 };
                 case "inconsistent_async_suffix":
-                    return (object)await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
+                    var result7 = await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result7 };
                 case "mismatched_await":
-                    return (object)await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
+                    var result8 = await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result8 };
                 case "missing_cancellation_tokens":
-                    return (object)await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
+                    var result9 = await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result9 };
                 case "sequential_independent_awaits":
-                    return (object)await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
+                    var result10 = await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result10 };
                 case "task_delay_usage":
-                    return (object)await _asyncSafetyEngine.FindTaskDelayUsageAsync(RequireFile(scope, scopeName));
+                    var result11 = await _asyncSafetyEngine.FindTaskDelayUsageAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result11 };
                 case "task_delay_zero_usage":
-                    return (object)await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(RequireFile(scope, scopeName));
+                    var result12 = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result12 };
                 case "task_run_in":
-                    return (object)await _asyncSafetyEngine.FindTaskRunInAsyncAsync(RequireFile(scope, scopeName));
+                    var result13 = await _asyncSafetyEngine.FindTaskRunInAsyncAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result13 };
                 case "task_void_usage":
-                    return (object)await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(RequireFile(scope, scopeName));
+                    var result14 = await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result14 };
                 case "task_when_all_usage":
-                    return (object)await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(RequireFile(scope, scopeName));
+                    var result15 = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result15 };
                 case "task_yield_usage":
-                    return (object)await _asyncSafetyEngine.FindTaskYieldUsageAsync(RequireFile(scope, scopeName));
+                    var result16 = await _asyncSafetyEngine.FindTaskYieldUsageAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result16 };
                 case "unawaited_fire_and_forget":
-                    return (object)await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
+                    var result17 = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result17 };
                 case "unawaked_dispose":
-                    return (object)await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
+                    var result18 = await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result18 };
                 case "unobserved_task_in_field":
-                    return (object)await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
+                    var result19 = await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result19 };
                 case "value_task_misuse":
-                    return (object)await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
+                    var result20 = await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result20 };
 
                 // ── concurrency ────────────────────────────────────────────────────
 
                 case "cas_loop_without_backoff":
-                    return (object)await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
+                    var result21 = await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result21 };
                 case "check_then_act_on_dictionary":
-                    return (object)await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
+                    var result22 = await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result22 };
                 case "concurrent_collection_opportunities":
-                    return (object)await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
+                    var result23 = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result23 };
                 case "double_checked_locking":
-                    return (object)await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
+                    var result24 = await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result24 };
                 case "possible_deadlocks":
-                    return (object)await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+                    var result25 = await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result25 };
                 case "semaphore_usage":
-                    return (object)await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
+                    var result26 = await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result26 };
                 case "unsafe_lazy_init":
-                    return (object)await _asyncSafetyEngine.FindUnsafeLazyInitAsync(RequireFile(scope, scopeName));
+                    var result27 = await _asyncSafetyEngine.FindUnsafeLazyInitAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result27 };
                 case "unsafe_lazy_init_thread":
-                    return (object)await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
+                    var result28 = await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result28 };
 
                 // ── config ─────────────────────────────────────────────────────────
 
                 case "json_anti_patterns":
-                    return (object)await _securityEngine.DetectJsonAntiPatternsAsync(RequireFile(scope, scopeName));
+                    var result29 = await _securityEngine.DetectJsonAntiPatternsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result29 };
                 case "package_inconsistency":
-                    return (object)await _dependencyEngine.CheckPackageInconsistencyAsync();
+                    var result30 = await _dependencyEngine.CheckPackageInconsistencyAsync();
+                    return new ToolResult<object>() { Success = true, Data = result30 };
                 case "project_consistency":
-                    return (object)await _projectConsistencyEngine.CheckConsistencyAsync();
+                    var result31 = await _projectConsistencyEngine.CheckConsistencyAsync();
+                    return new ToolResult<object>() { Success = true, Data = result31 };
 
                 // ── convention ─────────────────────────────────────────────────────
 
                 case "mutable_public_collection_properties":
-                    return (object)await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
+                    var result32 = await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result32 };
                 case "mutable_public_properties":
-                    return (object)await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
+                    var result33 = await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result33 };
                 case "naming_violations":
-                    return (object)await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
+                    var result34 = await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result34 };
                 case "readonly_field_candidates":
-                    return (object)await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(RequireFile(scope, scopeName));
+                    var result35 = await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result35 };
                 case "string_magic_values":
-                    return (object)await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, 3);
+                    var result36 = await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, 3);
+                    return new ToolResult<object>() { Success = true, Data = result36 };
                 case "todo_fixme_comments":
-                    return (object)await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
+                    var result37 = await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result37 };
 
                 // ── correctness ────────────────────────────────────────────────────
 
                 case "all_throw_sites":
-                    return (object)await _discoveryEngine.FindAllThrowSitesAsync(null, filePath, projectName, false);
+                    var result38 = await _discoveryEngine.FindAllThrowSitesAsync(null, filePath, projectName, false);
+                    return new ToolResult<object>() { Success = true, Data = result38 };
                 case "empty_catch_blocks":
-                    return (object)await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
+                    var result39 = await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result39 };
                 case "exception_handling":
-                    return (object)await _antiPatternEngine.AnalyzeExceptionHandlingAsync(RequireFile(scope, scopeName));
+                    var result40 = await _antiPatternEngine.AnalyzeExceptionHandlingAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result40 };
                 case "memory_leaks":
-                    return (object)await _analysisEngine.DetectMemoryLeaksAsync(RequireFile(scope, scopeName));
+                    var result41 = await _analysisEngine.DetectMemoryLeaksAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result41 };
                 case "misbound_overload_chains":
-                    return (object)await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
+                    var result42 = await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result42 };
                 case "missing_generic_constraints":
-                    return (object)await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
+                    var result43 = await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result43 };
                 case "multiple_out_parameter_methods":
-                    return (object)await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
+                    var result44 = await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result44 };
                 case "non_exhaustive_enum_switches":
-                    return (object)await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
+                    var result45 = await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result45 };
                 case "possible_infinite_loops":
-                    return (object)await _analysisEngine.FindPossibleInfiniteLoopsAsync(RequireFile(scope, scopeName));
+                    var result46 = await _analysisEngine.FindPossibleInfiniteLoopsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result46 };
                 case "redundant_cast":
-                    return (object)await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
+                    var result47 = await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result47 };
                 case "resource_disposal":
-                    return (object)await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
+                    var result48 = await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result48 };
                 case "services_not_registered":
-                    return (object)await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
+                    var result49 = await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result49 };
                 case "stack_overflow_risks":
-                    return (object)await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(RequireFile(scope, scopeName), false);
+                    var result50 = await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(RequireFile(scope, scopeName), false);
+                    return new ToolResult<object>() { Success = true, Data = result50 };
                 case "unbounded_recursion":
-                    return (object)await _analysisEngine.FindUnboundedRecursionAsync(projectName);
+                    var result51 = await _analysisEngine.FindUnboundedRecursionAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result51 };
                 case "unbounded_static_collections":
-                    return (object)await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
+                    var result52 = await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result52 };
                 case "value_type_mutation_intent":
-                    return (object)await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
+                    var result53 = await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result53 };
 
                 // ── dead-code ──────────────────────────────────────────────────────
 
                 case "obsolete_callers":
-                    return (object)await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken);
+                    var result54 = await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken);
+                    return new ToolResult<object>() { Success = true, Data = result54 };
                 case "uninstantiated_types":
-                    return (object)await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
+                    var result55 = await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result55 };
                 case "unused_constructors":
-                    return (object)await _deadCodeEngine.FindUnusedConstructorsAsync(RequireFile(scope, scopeName));
+                    var result56 = await _deadCodeEngine.FindUnusedConstructorsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result56 };
                 case "unused_event_subscriptions":
-                    return (object)(await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(RequireFile(scope, scopeName)) ?? new List<DeadCodeReport>());
+                    var result57 = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(RequireFile(scope, scopeName)) ?? new List<DeadCodeReport>();
+                    return new ToolResult<object>() { Success = true, Data = result57 };
                 case "unused_interfaces":
-                    return (object)await _analysisEngine.FindUnusedInterfacesAsync(projectName);
+                    var result58 = await _analysisEngine.FindUnusedInterfacesAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result58 };
                 case "unused_local_variables":
-                    return (object)await _deadCodeEngine.DetectUnusedLocalVariablesAsync(RequireFile(scope, scopeName));
+                    var result59 = await _deadCodeEngine.DetectUnusedLocalVariablesAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result59 };
                 case "unused_private_fields":
-                    return (object)await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(RequireFile(scope, scopeName));
+                    var result60 = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result60 };
                 case "unused_references":
-                    return (object)await _dependencyEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName));
+                    var result61 = await _dependencyEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result61 };
 
                 // ── misc ───────────────────────────────────────────────────────────
 
                 case "anti_patterns":
-                    return (object)await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, null);
+                    var result62 = await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, null);
+                    return new ToolResult<object>() { Success = true, Data = result62 };
                 case "finalizer_on_disposable":
-                    return (object)await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
+                    var result63 = await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result63 };
 
                 // ── performance ────────────────────────────────────────────────────
 
                 case "boxing_allocations":
-                    return (object)await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
+                    var result64 = await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result64 };
                 case "implicit_nullable_boxing":
-                    return (object)await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
+                    var result65 = await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result65 };
                 case "inefficient_string_comparisons":
-                    return (object)await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
+                    var result66 = await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result66 };
                 case "linq_n1_patterns":
-                    return (object)await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
+                    var result67 = await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result67 };
                 case "linq_redundant_where":
-                    return (object)await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
+                    var result68 = await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result68 };
                 case "multiple_enumeration":
-                    return (object)await _performanceEngine.FindMultipleEnumerationAsync(filePath);
+                    var result69 = await _performanceEngine.FindMultipleEnumerationAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result69 };
                 case "performance":
-                    return (object)await _performanceEngine.AnalyzePerformanceAsync(RequireFile(scope, scopeName));
+                    var result70 = await _performanceEngine.AnalyzePerformanceAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result70 };
                 case "re_do_s_patterns":
-                    return (object)await _securityEngine.FindReDoSPatternsAsync(RequireFile(scope, scopeName));
+                    var result71 = await _securityEngine.FindReDoSPatternsAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result71 };
                 case "regex_new_in_loop":
-                    return (object)await _securityEngine.FindRegexNewInLoopAsync(RequireFile(scope, scopeName));
+                    var result72 = await _securityEngine.FindRegexNewInLoopAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result72 };
                 case "string_format_in_loops":
-                    return (object)await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
+                    var result73 = await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
+                    return new ToolResult<object>() { Success = true, Data = result73 };
                 case "use_frozen_collections":
-                    return (object)await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
+                    var result74 = await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result74 };
 
                 // ── security ───────────────────────────────────────────────────────
 
                 case "hardcoded_paths":
-                    return (object)await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
+                    var result75 = await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result75 };
                 case "reflection_usage":
-                    return (object)await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
+                    var result76 = await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result76 };
                 case "security":
-                    return (object)await _securityEngine.AnalyzeSecurityAsync(RequireFile(scope, scopeName));
+                    var result77 = await _securityEngine.AnalyzeSecurityAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result77 };
                 case "sql_injection":
-                    return (object)await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
+                    var result78 = await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result78 };
                 case "unvalidated_regex_source":
-                    return (object)await _securityEngine.FindUnvalidatedRegexSourceAsync(RequireFile(scope, scopeName));
+                    var result79 = await _securityEngine.FindUnvalidatedRegexSourceAsync(RequireFile(scope, scopeName));
+                    return new ToolResult<object>() { Success = true, Data = result79 };
 
                 // ── structure ──────────────────────────────────────────────────────
 
                 case "circular_dependencies":
-                    return (object)await _analysisEngine.FindCircularDependenciesAsync();
+                    var result80 = await _analysisEngine.FindCircularDependenciesAsync();
+                    return new ToolResult<object>() { Success = true, Data = result80 };
                 case "circular_type_references":
-                    return (object)await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
+                    var result81 = await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result81 };
                 case "duplicate_blocks_in_hierarchy":
                     {
                         if (string.IsNullOrEmpty(scopeName))
                         {
-                            return "duplicate_blocks_in_hierarchy requires scopeName to be the root type name.";
+                            return new ToolResult<object>() { Success = false, Data = "duplicate_blocks_in_hierarchy requires scopeName to be the root type name." };
                         }
-                        return (object)await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4);
+                        var result82 = await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4);
+                        return new ToolResult<object>() { Success = true, Data = result82 };
                     }
                 case "duplicate_methods":
-                    return (object)await _analysisEngine.FindDuplicateMethodsAsync(5, projectName);
+                    var result83 = await _analysisEngine.FindDuplicateMethodsAsync(5, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result83 };
                 case "interface_extraction_candidates":
-                    return (object)await _analysisEngine.FindInterfaceExtractionCandidatesAsync(3, projectName);
+                    var result84 = await _analysisEngine.FindInterfaceExtractionCandidatesAsync(3, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result84 };
                 case "internal_classes_that_could_be_private":
-                    return (object)await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
+                    var result85 = await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
+                    return new ToolResult<object>() { Success = true, Data = result85 };
                 case "large_methods":
-                    return (object)await _analysisEngine.FindLargeMethodsAsync(50, projectName);
+                    var result86 = await _analysisEngine.FindLargeMethodsAsync(50, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result86 };
                 case "large_switch_statements":
-                    return (object)await _analysisEngine.FindLargeSwitchStatementsAsync(10, projectName);
+                    var result87 = await _analysisEngine.FindLargeSwitchStatementsAsync(10, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result87 };
                 case "large_types":
-                    return (object)await _analysisEngine.FindLargeTypesAsync(500, projectName);
+                    var result88 = await _analysisEngine.FindLargeTypesAsync(500, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result88 };
                 case "layer_violations":
-                    return (object)await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
+                    var result89 = await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result89 };
                 case "long_parameter_list":
-                    return (object)await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, 4);
+                    var result90 = await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, 4);
+                    return new ToolResult<object>() { Success = true, Data = result90 };
                 case "namespace_path_mismatches":
                     {
                         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-                        return (object)await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
+                        var result91 = await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
+                        return new ToolResult<object>() { Success = true, Data = result91 };
                     }
                 case "primitive_obsession":
-                    return (object)await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
+                    var result92 = await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
+                    return new ToolResult<object>() { Success = true, Data = result92 };
                 case "structural_smells":
-                    return (object)await _projectStructureEngine.FindStructuralSmellsAsync(ProjectStructureEngine.StructuralSmellType.All, projectName, filePath);
+                    var result93 = await _projectStructureEngine.FindStructuralSmellsAsync(ProjectStructureEngine.StructuralSmellType.All, projectName, filePath);
+                    return new ToolResult<object>() { Success = true, Data = result93 };
                 case "type_cohesion":
-                    return (object)await _metricsEngine.AnalyzeTypeCohesionAsync(RequireFile(scope, scopeName), null);
+                    var result94 = await _metricsEngine.AnalyzeTypeCohesionAsync(RequireFile(scope, scopeName), null);
+                    return new ToolResult<object>() { Success = true, Data = result94 };
 
                 default:
-                    return ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
+                    return new ToolResult<object>() { Success = false, Data = ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.") };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Scan ({Detector}) failed", detector);
-            return $"Scan ({detector}) failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Data = ($"Scan ({detector}) failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -360,7 +453,7 @@ public class SentinelScanTools
 
         Each entry has: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
         """)]
-    public Task<object> DescribeScanDetectors(string? domain = null, string? detector = null)
+    public Task<ToolResult<object>> DescribeScanDetectors(string? domain = null, string? detector = null)
     {
         try
         {
@@ -375,12 +468,12 @@ public class SentinelScanTools
                 string detectorFilter = detector;
                 entries = entries.Where(e => e.Id.Equals(detectorFilter, StringComparison.OrdinalIgnoreCase));
             }
-            return Task.FromResult<object>(entries.ToList());
+            return Task.FromResult(new ToolResult<object>() { Success = true, Data = entries.ToList() });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "DescribeScanDetectors failed");
-            return Task.FromResult<object>($"DescribeScanDetectors failed: {ex.GetType().Name}: {ex.Message}");
+            return Task.FromResult(new ToolResult<object>() { Success = false, Data = ($"DescribeScanDetectors failed: {ex.GetType().Name}: {ex.Message}") });
         }
     }
 
@@ -394,28 +487,32 @@ public class SentinelScanTools
           pathCoverage   — execution paths for test coverage analysis (returns PathCoverageReport)
           unreachableCode— statements after unconditional return/throw (returns List<string>)
         """)]
-    public async Task<object> AnalyzeMethod(string filePath, string methodName, string aspect)
+    public async Task<ToolResult<object>> AnalyzeMethod(string filePath, string methodName, string aspect)
     {
         try
         {
             switch (aspect)
             {
                 case "controlFlow":
-                    return (object)await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null);
+                    var resultControlFlow = await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null);
+                    return new ToolResult<object>() { Success = true, Data = resultControlFlow };
                 case "dataFlow":
-                    return (object)await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null);
+                    var resultDataFlow = await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null);
+                    return new ToolResult<object>() { Success = true, Data = resultDataFlow };
                 case "pathCoverage":
-                    return (object)await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
+                    var resultPathCoverage = await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
+                    return new ToolResult<object>() { Success = true, Data = resultPathCoverage };
                 case "unreachableCode":
-                    return (object)await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
+                    var resultUnreachableCode = await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
+                    return new ToolResult<object>() { Success = true, Data = resultUnreachableCode };
                 default:
-                    return ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
+                    return new ToolResult<object>() { Success = false, Data = ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.") };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePath}'", aspect, methodName, filePath);
-            return $"AnalyzeMethod failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Data = ($"AnalyzeMethod failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 

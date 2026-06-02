@@ -1,9 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Server;
@@ -28,10 +24,10 @@ namespace RoslynSentinel.Tests;
 public class MigrationScanResultTests
 {
     private PersistentWorkspaceManager _workspaceManager;
-    private AsyncOptimizationEngine   _asyncOptimizationEngine;
-    private AntiPatternEngine          _antiPatternEngine;
-    private SentinelQualityTools       _qualityTools;
-    private string                     _tempDir;
+    private AsyncOptimizationEngine _asyncOptimizationEngine;
+    private AntiPatternEngine _antiPatternEngine;
+    private SentinelQualityTools _qualityTools;
+    private string _tempDir;
 
     // ── attribute stub included in every source snippet ──────────────────────
     private const string AttrStub = """
@@ -47,9 +43,9 @@ public class MigrationScanResultTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager       = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _antiPatternEngine       = new AntiPatternEngine(_workspaceManager);
+        _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
 
         _qualityTools = new SentinelQualityTools(
             new PerformanceEngine(_workspaceManager),
@@ -155,8 +151,8 @@ public class Svc
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
 
-        var result = rawResult as MigrationResult<MigrationScanSummary>;
-        Assert.That(result, Is.Not.Null, "Should return MigrationResult<MigrationScanSummary> when summarize=true.");
+        var result = rawResult as MigrationEnvelope<MigrationScanSummary>;
+        Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
 
@@ -172,23 +168,23 @@ public class Svc
         }
 
         // Verify bucket assignments (scores: -5, 10, 30, 60, 80).
-        Assert.That(summary.ByScoreBucket["<0"],     Is.EqualTo(1), "Score -5 → bucket '<0'");
-        Assert.That(summary.ByScoreBucket["0-25"],   Is.EqualTo(1), "Score 10 → bucket '0-25'");
-        Assert.That(summary.ByScoreBucket["26-50"],  Is.EqualTo(1), "Score 30 → bucket '26-50'");
-        Assert.That(summary.ByScoreBucket["51-75"],  Is.EqualTo(1), "Score 60 → bucket '51-75'");
+        Assert.That(summary.ByScoreBucket["<0"], Is.EqualTo(1), "Score -5 → bucket '<0'");
+        Assert.That(summary.ByScoreBucket["0-25"], Is.EqualTo(1), "Score 10 → bucket '0-25'");
+        Assert.That(summary.ByScoreBucket["26-50"], Is.EqualTo(1), "Score 30 → bucket '26-50'");
+        Assert.That(summary.ByScoreBucket["51-75"], Is.EqualTo(1), "Score 60 → bucket '51-75'");
         Assert.That(summary.ByScoreBucket["76plus"], Is.EqualTo(1), "Score 80 → bucket '76plus'");
 
         // By-pattern counts.
         Assert.That(summary.ByPattern["AsyncBridgeCandidate"], Is.EqualTo(3));
-        Assert.That(summary.ByPattern["HandlerExtract"],       Is.EqualTo(2));
+        Assert.That(summary.ByPattern["HandlerExtract"], Is.EqualTo(2));
 
         // ByClass: all 5 methods are in the same class "Svc" in the same file.
         Assert.That(summary.ByClass, Is.Not.Null);
         Assert.That(summary.ByClass.Count, Is.EqualTo(1), "All methods are in the same class.");
         var classEntry = summary.ByClass[0];
-        Assert.That(classEntry.ClassName,   Is.EqualTo("Svc"));
+        Assert.That(classEntry.ClassName, Is.EqualTo("Svc"));
         Assert.That(classEntry.ProjectName, Is.Not.Null.And.Not.Empty);
-        Assert.That(classEntry.Count,       Is.EqualTo(5));
+        Assert.That(classEntry.Count, Is.EqualTo(5));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -206,8 +202,8 @@ public class Svc
         var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
-        Assert.That(result.Data, Is.Not.Null,     "Inline Data should be populated.");
-        Assert.That(result.LargeResult, Is.Null,  "LargeResult should be null for a small page.");
+        Assert.That(result.Data, Is.Not.Null, "Inline Data should be populated.");
+        Assert.That(result.LargeResult, Is.Null, "LargeResult should be null for a small page.");
         Assert.That(result.Data!.Count, Is.EqualTo(3), "Page should contain 3 items.");
         Assert.That(result.TotalRecords, Is.EqualTo(10), "TotalRecords should reflect all candidates.");
         Assert.That(result.HasMore, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
@@ -290,7 +286,7 @@ public class Svc
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
         var page1Result = await _qualityTools.GetScanResult(changeId: operationId, limit: 10, offset: 0);
         Assert.That(page1Result.Success, Is.True);
-        Assert.That(page1Result.Data,    Is.Not.Null);
+        Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
         Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
             "TotalRecords from get_scan_result must match TotalRecords from the original scan.");
@@ -301,7 +297,7 @@ public class Svc
         Assert.That(first.MethodName, Does.StartWith("Method"),
             "Findings must be deserialized as structured MigrationCandidateFinding records.");
         Assert.That(first.Pattern, Is.EqualTo("AsyncBridgeCandidate"));
-        Assert.That(first.Score,   Is.EqualTo(75));
+        Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
         var page2Result = await _qualityTools.GetScanResult(changeId: operationId, limit: 10, offset: 10);

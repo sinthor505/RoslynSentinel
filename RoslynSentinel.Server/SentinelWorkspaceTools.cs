@@ -88,67 +88,68 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
-    public async Task<object> List(string kind, string? projectName = null)
+    public async Task<ToolResult<object>> List(string kind, string? projectName = null)
     {
         try
         {
-        if (kind == "projects")
-        {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
-            return solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList();
-        }
-        if (kind == "files")
-        {
-            if (string.IsNullOrEmpty(projectName))
-            {
-                return "projectName is required when kind=files.";
-            }
-            try
+            if (kind == "projects")
             {
                 var solution = await _workspaceManager.GetBranchedSolutionAsync();
-                var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-                if (project == null)
+                return new ToolResult<object>() { Success = true, Data = solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList() };
+            }
+            if (kind == "files")
+            {
+                if (string.IsNullOrEmpty(projectName))
                 {
-                    return $"Project '{projectName}' not found.";
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "projectName is required when kind=files.") };
                 }
-                return project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>();
+                try
+                {
+                    var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                    var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+                    if (project == null)
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Project '{projectName}' not found.") };
+                    }
+                    return new ToolResult<object>() { Success = true, Data = project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>() };
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}") };
+                }
             }
-            catch (Exception ex)
+            if (kind == "dependencies")
             {
-                _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                return $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}";
+                if (string.IsNullOrEmpty(projectName))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "projectName is required when kind=dependencies.") };
+                }
+                var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName);
+                return new ToolResult<object>() { Success = true, Data = result };
             }
-        }
-        if (kind == "dependencies")
-        {
-            if (string.IsNullOrEmpty(projectName))
-            {
-                return "projectName is required when kind=dependencies.";
-            }
-            return await _dependencyEngine.GetProjectDependenciesAsync(projectName);
-        }
-        return $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "List ({Kind}) failed", kind);
-            return $"List failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"List failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Loads a .NET solution into memory for persistent analysis.")]
-    public async Task<object> LoadSolution(string solutionPath)
+    public async Task<ToolResult<object>> LoadSolution(string solutionPath)
     {
         try
         {
             await _workspaceManager.LoadSolutionAsync(solutionPath);
-            return $"Solution loaded: {solutionPath}";
+            return new ToolResult<object>() { Success = true, Data = $"Solution loaded: {solutionPath}" };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
-            return $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -230,7 +231,7 @@ public class SentinelWorkspaceTools
         intermediate-broken-state edits that are part of a multi-step refactor.
         On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
         """)]
-    public async Task<object> ProposedChange(
+    public async Task<ToolResult<object>> ProposedChange(
         string format,
         string action,
         Dictionary<string, string>? changes = null,
@@ -241,121 +242,123 @@ public class SentinelWorkspaceTools
     {
         try
         {
-        if (format == "files")
-        {
-            if (changes == null)
+            if (format == "files")
             {
-                return "changes is required when format=files.";
-            }
-            if (action == "apply")
-            {
-                // ── Validate-on-apply gate ────────────────────────────────────
-                // Runs a delta compile (introduced errors only) before writing.
-                // Returns the DiagnosticReport without touching disk if new errors found.
-                if (validateOnApply)
+                if (changes == null)
                 {
-                    DiagnosticReport validation;
-                    try
-                    {
-                        validation = await _validationEngine.ValidateChangesAsync(changes);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
-                        return $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}";
-                    }
-
-                    if (!validation.Success)
-                    {
-                        return validation;
-                    }
+                    return new ToolResult<object>() { Success = false, Data = "changes is required when format=files." };
                 }
-
-                var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
-                await WriteBlobForApplyAsync("proposed_change", result);
-                return result;
-            }
-            if (action == "validate")
-            {
-                try
+                if (action == "apply")
                 {
-                    return await _validationEngine.ValidateChangesAsync(changes);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "ProposedChange validate unexpected exception");
-                    return $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}";
-                }
-            }
-        }
-        else if (format == "diff")
-        {
-            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
-            {
-                return "filePath and unifiedDiff are required when format=diff.";
-            }
-            if (action == "apply")
-            {
-                try
-                {
-                    var solution = await _workspaceManager.GetBranchedSolutionAsync();
-                    var document = solution.Projects.SelectMany(p => p.Documents)
-                        .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-                    if (document == null)
-                    {
-                        return "File not found.";
-                    }
-                    var oldText = await document.GetTextAsync();
-                    var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
-                    var targetPath = document.FilePath ?? filePath;
-                    var diffChanges = new Dictionary<string, string> { [targetPath] = newContent };
-
-                    // ── Validate-on-apply gate (diff path) ───────────────────
+                    // ── Validate-on-apply gate ────────────────────────────────────
+                    // Runs a delta compile (introduced errors only) before writing.
+                    // Returns the DiagnosticReport without touching disk if new errors found.
                     if (validateOnApply)
                     {
-                        var validation = await _validationEngine.ValidateChangesAsync(diffChanges);
+                        DiagnosticReport validation;
+                        try
+                        {
+                            validation = await _validationEngine.ValidateChangesAsync(changes);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
+                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                        }
+
                         if (!validation.Success)
                         {
-                            return validation;
+                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {validation.Diagnostics}") };
                         }
                     }
 
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges);
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
                     await WriteBlobForApplyAsync("proposed_change", result);
-                    return result;
+                    return new ToolResult<object>() { Success = true, Data = result };
                 }
-                catch (Exception ex)
+                if (action == "validate")
                 {
-                    _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
-                    return $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
+                    try
+                    {
+                        var validationResult = await _validationEngine.ValidateChangesAsync(changes);
+                        return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange validate failed: {validationResult.Diagnostics}") };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "ProposedChange validate unexpected exception");
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}") };
+                    }
                 }
             }
-            if (action == "validate")
+            else if (format == "diff")
             {
-                return await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
+                if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "filePath and unifiedDiff are required when format=diff.") };
+                }
+                if (action == "apply")
+                {
+                    try
+                    {
+                        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                        var document = solution.Projects.SelectMany(p => p.Documents)
+                            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+                        if (document == null)
+                        {
+                            return new ToolResult<object>() { Success = false, Error = new ResultError("", "File not found.") };
+                        }
+                        var oldText = await document.GetTextAsync();
+                        var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
+                        var targetPath = document.FilePath ?? filePath;
+                        var diffChanges = new Dictionary<string, string> { [targetPath] = newContent };
+
+                        // ── Validate-on-apply gate (diff path) ───────────────────
+                        if (validateOnApply)
+                        {
+                            var validation = await _validationEngine.ValidateChangesAsync(diffChanges);
+                            if (!validation.Success)
+                            {
+                                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange diff validate failed: {validation.Diagnostics}") };
+                            }
+                        }
+
+                        var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges);
+                        await WriteBlobForApplyAsync("proposed_change", result);
+                        return new ToolResult<object>() { Success = true, Data = result };
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
+                    }
+                }
+                if (action == "validate")
+                {
+                    var validationResult = await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
+                    return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange diff validate failed: {validationResult}") };
+                }
             }
-        }
-        return $"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ProposedChange ({Format}/{Action}) failed", format, action);
-            return $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Retries committing previously failed file changes using server-side cached content. Token-efficient: no need to re-send file contents.")]
-    public async Task<object> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)
+    public async Task<ToolResult<object>> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)
     {
         try
         {
-            return await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount);
+            return new ToolResult<object>() { Success = true, Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount) };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "RetryFailedChanges failed");
-            return $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -370,58 +373,58 @@ public class SentinelWorkspaceTools
         intermediate-broken-state edits that are part of a multi-step refactor.
         On successful apply, the same changeId can be passed to undo_last_apply to revert.
         """)]
-    public async Task<object> StagedChange(string action, string changeId, int retryCount = 3, bool validateOnApply = true)
+    public async Task<ToolResult<object>> StagedChange(string action, string changeId, int retryCount = 3, bool validateOnApply = true)
     {
         try
         {
-        if (action == "apply")
-        {
-            // ── Validate-on-apply gate ────────────────────────────────────────
-            if (validateOnApply)
+            if (action == "apply")
+            {
+                // ── Validate-on-apply gate ────────────────────────────────────────
+                if (validateOnApply)
+                {
+                    var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
+                    DiagnosticReport validation;
+                    try
+                    {
+                        validation = await _validationEngine.ValidateChangesAsync(stagingChanges);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                    }
+
+                    if (!validation.Success)
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {validation.Diagnostics}") };
+                    }
+                }
+
+                var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
+                // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
+                await WriteBlobForApplyAsync("staged_change", result, changeId);
+                return new ToolResult<object>() { Success = true, Data = result };
+            }
+            if (action == "get")
+            {
+                return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetStagedChanges(changeId) };
+            }
+            if (action == "validate")
             {
                 var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
-                DiagnosticReport validation;
-                try
-                {
-                    validation = await _validationEngine.ValidateChangesAsync(stagingChanges);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
-                    return $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}";
-                }
-
-                if (!validation.Success)
-                {
-                    return validation;
-                }
+                return new ToolResult<object>() { Success = true, Data = await _validationEngine.ValidateChangesAsync(stagingChanges) };
             }
-
-            var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
-            // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
-            await WriteBlobForApplyAsync("staged_change", result, changeId);
-            return result;
-        }
-        if (action == "get")
-        {
-            return _workspaceManager.GetStagedChanges(changeId);
-        }
-        if (action == "validate")
-        {
-            var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
-            return await _validationEngine.ValidateChangesAsync(stagingChanges);
-        }
-        if (action == "discard")
-        {
-            var success = _workspaceManager.DiscardStagedChanges(changeId);
-            return success ? $"Staged change '{changeId}' discarded." : $"Staged change '{changeId}' not found.";
-        }
-        return $"Unknown action '{action}'. Valid values: apply, get, validate, discard.";
+            if (action == "discard")
+            {
+                var success = _workspaceManager.DiscardStagedChanges(changeId);
+                return success ? new ToolResult<object>() { Success = true, Data = $"Staged change '{changeId}' discarded." } : new ToolResult<object>() { Success = false, Error = new ResultError("", $"Staged change '{changeId}' not found.") };
+            }
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: apply, get, validate, discard.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "StagedChange ({Action}) failed for '{ChangeId}'", action, changeId);
-            return $"StagedChange failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -480,119 +483,126 @@ public class SentinelWorkspaceTools
         maxDetails: caps the raw detail list (default 50); error/warning counts are always full totals. Only used when summarize=false.
         topN: max groups to return sorted by count descending (default 20). Only used when summarize=true.
         """)]
-    public async Task<object> GetDiagnostics(string scope, string? scopeName = null, bool summarize = false, int maxDetails = 50, int topN = 20)
+    public async Task<ToolResult<object>> GetDiagnostics(string scope, string? scopeName = null, bool summarize = false, int maxDetails = 50, int topN = 20)
     {
         try
         {
-        DiagnosticSummary summary;
-        if (scope == "file")
-        {
-            if (string.IsNullOrEmpty(scopeName))
+            DiagnosticSummary summary;
+            if (scope == "file")
             {
-                return "scopeName (filePath) is required when scope=file.";
+                if (string.IsNullOrEmpty(scopeName))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (filePath) is required when scope=file.") };
+                }
+                summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
             }
-            summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
-        }
-        else if (scope == "project")
-        {
-            if (string.IsNullOrEmpty(scopeName))
+            else if (scope == "project")
             {
-                return "scopeName (projectName) is required when scope=project.";
+                if (string.IsNullOrEmpty(scopeName))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (projectName) is required when scope=project.") };
+                }
+                summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
             }
-            summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
-        }
-        else if (scope == "solution")
-        {
-            summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
-        }
-        else
-        {
-            return $"Unknown scope '{scope}'. Valid values: file, project, solution.";
-        }
-
-        if (!summarize)
-        {
-            return summary;
-        }
-
-        var relevant = summary.Details
-            .Where(d => d.Severity is "Error" or "Warning")
-            .ToList();
-
-        var groups = relevant
-            .GroupBy(d => d.Id)
-            .Select(g =>
+            else if (scope == "solution")
             {
-                var first = g.First();
-                var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
-                return new DiagnosticGroupSummary(
-                    DiagnosticId: g.Key,
-                    Severity: first.Severity,
-                    MessageTemplate: first.Message,
-                    Count: g.Count(),
-                    Locations: locations
-                );
-            })
-            .OrderByDescending(g => g.Count)
-            .Take(topN)
-            .ToList();
+                summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
+            }
+            else
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown scope '{scope}'. Valid values: file, project, solution.") };
+            }
 
-        return new DiagnosticsSummaryResult(
-            TotalIssues: relevant.Count,
-            Errors: summary.Errors,
-            Warnings: summary.Warnings,
-            TopIssues: groups
-        );
+            if (!summarize)
+            {
+                return new ToolResult<object>() { Success = true, Data = summary };
+            }
+
+            var relevant = summary.Details
+                .Where(d => d.Severity is "Error" or "Warning")
+                .ToList();
+
+            var groups = relevant
+                .GroupBy(d => d.Id)
+                .Select(g =>
+                {
+                    var first = g.First();
+                    var locations = g.Select(d => $"{d.FilePath}:{d.StartLine}").Distinct().Take(10).ToList();
+                    return new DiagnosticGroupSummary(
+                        DiagnosticId: g.Key,
+                        Severity: first.Severity,
+                        MessageTemplate: first.Message,
+                        Count: g.Count(),
+                        Locations: locations
+                    );
+                })
+                .OrderByDescending(g => g.Count)
+                .Take(topN)
+                .ToList();
+
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = new DiagnosticsSummaryResult(
+                TotalIssues: relevant.Count,
+                Errors: summary.Errors,
+                Warnings: summary.Warnings,
+                TopIssues: groups
+            )
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
-            return $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase.")]
-    public async Task<object> SafeDelete(string filePath, int line, int column)
+    public async Task<ToolResult<object>> SafeDelete(string filePath, int line, int column)
     {
         try
         {
-            return await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
+            return new ToolResult<object>() { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SafeDelete failed for '{FilePath}' at {Line}:{Column}", filePath, line, column);
-            return $"SafeDelete failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SafeDelete failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Creates a new project and adds it to the current solution.")]
-    public async Task<object> CreateProject(string projectName, string projectType = "console")
+    public async Task<ToolResult<object>> CreateProject(string projectName, string projectType = "console")
     {
         try
         {
-            return await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+            var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+            return new ToolResult<object>() { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
-            return $"CreateProject failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"CreateProject failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
-    public async Task<object> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
+    public async Task<ToolResult<object>> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
     {
         try
         {
-            return await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+            var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+            return new ToolResult<object>() { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
-            return $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -600,144 +610,143 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match when names are overloaded.")]
-    public async Task<string> GetMethodSource(string filePath, string methodName)
+    public async Task<ToolResult<object>> GetMethodSource(string filePath, string methodName)
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var normalizedPath = Path.GetFullPath(filePath);
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var normalizedPath = Path.GetFullPath(filePath);
 
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault()
-            ?? solution.Projects
-                       .SelectMany(p => p.Documents)
-                       .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
-                                                          StringComparison.OrdinalIgnoreCase));
+            var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
+                                   .Select(solution.GetDocument)
+                                   .FirstOrDefault()
+                ?? solution.Projects
+                           .SelectMany(p => p.Documents)
+                           .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
+                                                              StringComparison.OrdinalIgnoreCase));
 
-        if (document == null)
-        {
-            return $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).";
-        }
+            if (document == null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
+            }
 
-        var root = await document.GetSyntaxRootAsync();
-        if (root == null) return "Syntax root not found.";
+            var root = await document.GetSyntaxRootAsync();
+            if (root == null) return new ToolResult<object>() { Success = false, Error = new ResultError("", "Syntax root not found.") };
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                         .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
-                  ?? root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                         .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                             .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
+                      ?? root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                             .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
-        if (method == null)
-        {
-            return $"Method '{methodName}' not found in '{filePath}'.";
-        }
+            if (method == null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Method '{methodName}' not found in '{filePath}'.") };
+            }
 
-        return method.ToFullString();
+            return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Returns a structural outline of a file: namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Does not include member bodies.")]
-    public async Task<object> GetFileOutline(string filePath)
+    public async Task<ToolResult<object>> GetFileOutline(string filePath)
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var normalizedPath = Path.GetFullPath(filePath);
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var normalizedPath = Path.GetFullPath(filePath);
 
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault()
-            ?? solution.Projects
-                       .SelectMany(p => p.Documents)
-                       .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
-                                                          StringComparison.OrdinalIgnoreCase));
+            var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
+                                   .Select(solution.GetDocument)
+                                   .FirstOrDefault()
+                ?? solution.Projects
+                           .SelectMany(p => p.Documents)
+                           .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
+                                                              StringComparison.OrdinalIgnoreCase));
 
-        if (document == null)
-        {
-            return $"File not found in solution: {normalizedPath} " +
-                   $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).";
-        }
-
-        var root = await document.GetSyntaxRootAsync();
-        if (root == null) return "Syntax root not found.";
-
-        var items = new List<OutlineItem>();
-
-        foreach (var node in root.DescendantNodes())
-        {
-            string? kind = null;
-            string? name = null;
-            string? container = null;
-
-            switch (node)
+            if (document == null)
             {
-                case BaseNamespaceDeclarationSyntax ns:
-                    kind = "namespace";
-                    name = ns.Name.ToString();
-                    break;
-
-                case ClassDeclarationSyntax cls:
-                    kind = "class";
-                    name = cls.Identifier.Text;
-                    container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
-                             ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                    break;
-
-                case InterfaceDeclarationSyntax iface:
-                    kind = "interface";
-                    name = iface.Identifier.Text;
-                    container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
-                             ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                    break;
-
-                case MethodDeclarationSyntax method:
-                    kind = "method";
-                    name = method.Identifier.Text;
-                    container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                    break;
-
-                case PropertyDeclarationSyntax prop:
-                    kind = "property";
-                    name = prop.Identifier.Text;
-                    container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
-                    break;
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
             }
 
-            if (kind == null || name == null)
+            var root = await document.GetSyntaxRootAsync();
+            if (root == null) return new ToolResult<object>() { Success = false, Error = new ResultError("", "Syntax root not found.") };
+
+            var items = new List<OutlineItem>();
+
+            foreach (var node in root.DescendantNodes())
             {
-                continue;
+                string? kind = null;
+                string? name = null;
+                string? container = null;
+
+                switch (node)
+                {
+                    case BaseNamespaceDeclarationSyntax ns:
+                        kind = "namespace";
+                        name = ns.Name.ToString();
+                        break;
+
+                    case ClassDeclarationSyntax cls:
+                        kind = "class";
+                        name = cls.Identifier.Text;
+                        container = (cls.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
+                                 ?? (cls.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+
+                    case InterfaceDeclarationSyntax iface:
+                        kind = "interface";
+                        name = iface.Identifier.Text;
+                        container = (iface.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString()
+                                 ?? (iface.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+
+                    case MethodDeclarationSyntax method:
+                        kind = "method";
+                        name = method.Identifier.Text;
+                        container = (method.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+
+                    case PropertyDeclarationSyntax prop:
+                        kind = "property";
+                        name = prop.Identifier.Text;
+                        container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                }
+
+                if (kind == null || name == null)
+                {
+                    continue;
+                }
+
+                var span = node.GetLocation().GetLineSpan();
+                items.Add(new OutlineItem(
+                    Kind: kind,
+                    Name: name,
+                    Container: container,
+                    StartLine: span.StartLinePosition.Line + 1,
+                    EndLine: span.EndLinePosition.Line + 1));
             }
 
-            var span = node.GetLocation().GetLineSpan();
-            items.Add(new OutlineItem(
-                Kind: kind,
-                Name: name,
-                Container: container,
-                StartLine: span.StartLinePosition.Line + 1,
-                EndLine: span.EndLinePosition.Line + 1));
-        }
-
-        return items;
+            return new ToolResult<object>() { Success = true, Data = items };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetFileOutline failed for '{FilePath}'", filePath);
-            return $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. Solution-scoped grep. maxResults caps total matches.")]
-    public async Task<object> SearchSolutionText(
+    public async Task<ToolResult<object>> SearchSolutionText(
         string pattern,
         bool isRegex = false,
         string? fileGlob = null,
@@ -745,79 +754,79 @@ public class SentinelWorkspaceTools
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var results = new List<TextSearchMatch>();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var results = new List<TextSearchMatch>();
 
-        Regex? regex = null;
-        if (isRegex)
-        {
-            regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase,
-                              matchTimeout: TimeSpan.FromSeconds(5));
-        }
-
-        foreach (var project in solution.Projects)
-        {
-            foreach (var document in project.Documents)
+            Regex? regex = null;
+            if (isRegex)
             {
-                if (results.Count >= maxResults)
+                regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase,
+                                  matchTimeout: TimeSpan.FromSeconds(5));
+            }
+
+            foreach (var project in solution.Projects)
+            {
+                foreach (var document in project.Documents)
                 {
-                    break;
-                }
-
-                var docPath = document.FilePath ?? "";
-                if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
-                {
-                    continue;
-                }
-
-                var sourceText = (await document.GetTextAsync()).ToString();
-                var lines = sourceText.Split('\n');
-
-                for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
-                {
-                    var line = lines[i];
-                    int col = -1;
-
-                    if (isRegex && regex != null)
+                    if (results.Count >= maxResults)
                     {
-                        try
+                        break;
+                    }
+
+                    var docPath = document.FilePath ?? "";
+                    if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
+                    {
+                        continue;
+                    }
+
+                    var sourceText = (await document.GetTextAsync()).ToString();
+                    var lines = sourceText.Split('\n');
+
+                    for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
+                    {
+                        var line = lines[i];
+                        int col = -1;
+
+                        if (isRegex && regex != null)
                         {
-                            var m = regex.Match(line);
-                            if (m.Success)
+                            try
                             {
-                                col = m.Index;
+                                var m = regex.Match(line);
+                                if (m.Success)
+                                {
+                                    col = m.Index;
+                                }
+                            }
+                            catch (RegexMatchTimeoutException)
+                            {
+                                continue;
                             }
                         }
-                        catch (RegexMatchTimeoutException)
+                        else
                         {
-                            continue;
-                        }
-                    }
-                    else
-                    {
-                        col = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
-                    }
-
-                    if (col >= 0)
-                    {
-                        var preview = line.Trim();
-                        if (preview.Length > 120)
-                        {
-                            preview = preview[..120] + "\u2026";
+                            col = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
                         }
 
-                        results.Add(new TextSearchMatch(docPath, i + 1, col + 1, preview));
+                        if (col >= 0)
+                        {
+                            var preview = line.Trim();
+                            if (preview.Length > 120)
+                            {
+                                preview = preview[..120] + "\u2026";
+                            }
+
+                            results.Add(new TextSearchMatch(docPath, i + 1, col + 1, preview));
+                        }
                     }
                 }
             }
-        }
 
-        return results;
+            return new ToolResult<object>() { Success = true, Data = results };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
-            return $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -832,136 +841,143 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: 'failures', 'skipped', 'rolledback', 'file:<path>', or null for all items. maxItems caps the returned slice — never dumps the full document.")]
-    public async Task<object> GetOperationDetail(
+    public async Task<ToolResult<object>> GetOperationDetail(
         string changeId,
         string? filter = null,
         int maxItems = 50)
     {
         try
         {
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
-        if (blobPath == null)
-        {
-            return new OperationDetailResult
+            if (blobPath == null)
             {
-                ChangeId = changeId,
-                BlobName = "",
-                TotalItems = 0,
-                ReturnedItems = 0,
-                Filter = filter,
-                Items = new List<OperationItemRecord>(),
-            };
-        }
-
-        var json = await File.ReadAllTextAsync(blobPath);
-        var doc = JsonSerializer.Deserialize<JsonElement>(json);
-        var allItems = doc.GetProperty("items")
-                         .EnumerateArray()
-                         .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
-                         .ToList();
-
-        IEnumerable<OperationItemRecord> filtered = allItems;
-
-        if (!string.IsNullOrEmpty(filter))
-        {
-            if (filter.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
-            {
-                var pathFilter = filter[5..];
-                filtered = allItems.Where(r => r.FilePath.Contains(pathFilter, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                filtered = filter.ToLowerInvariant() switch
+                return new ToolResult<object>()
                 {
-                    "failures" => allItems.Where(r => r.Outcome == "failed"),
-                    "skipped" => allItems.Where(r => r.Outcome == "skipped"),
-                    "rolledback" => allItems.Where(r => r.Outcome == "rolledback"),
-                    _ => allItems,
+                    Success = true,
+                    Data = new OperationDetailResult
+                    {
+                        ChangeId = changeId,
+                        BlobName = "",
+                        TotalItems = 0,
+                        ReturnedItems = 0,
+                        Filter = filter,
+                        Items = new List<OperationItemRecord>(),
+                    }
                 };
             }
-        }
 
-        var slice = filtered.Take(maxItems).ToList();
+            var json = await File.ReadAllTextAsync(blobPath);
+            var doc = JsonSerializer.Deserialize<JsonElement>(json);
+            var allItems = doc.GetProperty("items")
+                             .EnumerateArray()
+                             .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+                             .ToList();
 
-        return new OperationDetailResult
-        {
-            ChangeId = changeId,
-            BlobName = Path.GetFileName(blobPath),
-            TotalItems = allItems.Count,
-            ReturnedItems = slice.Count,
-            Filter = filter,
-            Items = slice,
-        };
+            IEnumerable<OperationItemRecord> filtered = allItems;
+
+            if (!string.IsNullOrEmpty(filter))
+            {
+                if (filter.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var pathFilter = filter[5..];
+                    filtered = allItems.Where(r => r.FilePath.Contains(pathFilter, StringComparison.OrdinalIgnoreCase));
+                }
+                else
+                {
+                    filtered = filter.ToLowerInvariant() switch
+                    {
+                        "failures" => allItems.Where(r => r.Outcome == "failed"),
+                        "skipped" => allItems.Where(r => r.Outcome == "skipped"),
+                        "rolledback" => allItems.Where(r => r.Outcome == "rolledback"),
+                        _ => allItems,
+                    };
+                }
+            }
+
+            var slice = filtered.Take(maxItems).ToList();
+
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = new OperationDetailResult
+                {
+                    ChangeId = changeId,
+                    BlobName = Path.GetFileName(blobPath),
+                    TotalItems = allItems.Count,
+                    ReturnedItems = slice.Count,
+                    Filter = filter,
+                    Items = slice,
+                }
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
-            return $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
     [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Available for all apply operations (proposed_change, staged_change, and batch-first tools).")]
-    public async Task<string> UndoLastApply(string changeId)
+    public async Task<ToolResult<object>> UndoLastApply(string changeId)
     {
         try
         {
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-        var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
-        if (blobPath == null)
-        {
-            return $"No operation blob found for changeId '{changeId}'. " +
-                   "Ensure the apply completed successfully and a solution is loaded.";
-        }
-
-        var json = await File.ReadAllTextAsync(blobPath);
-        var doc = JsonSerializer.Deserialize<JsonElement>(json);
-        var revertable = doc.GetProperty("items")
-                           .EnumerateArray()
-                           .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
-                           .Where(r => r.Outcome == "succeeded" && r.BeforeSource != null)
-                           .ToList();
-
-        if (revertable.Count == 0)
-        {
-            return $"No reversible items in blob for changeId '{changeId}' " +
-                   "(need Outcome=succeeded with BeforeSource present).";
-        }
-
-        var reverted = new List<string>();
-        var failed = new List<string>();
-
-        foreach (var item in revertable)
-        {
-            // Security: only revert files under the solution root to prevent path traversal.
-            if (solutionRoot != null &&
-                !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
+            if (blobPath == null)
             {
-                failed.Add($"{item.FilePath}: outside solution root, skipped");
-                continue;
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"No operation blob found for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
+
             }
 
-            try
-            {
-                await File.WriteAllTextAsync(item.FilePath, item.BeforeSource!);
-                reverted.Add(item.FilePath);
-            }
-            catch (Exception ex)
-            {
-                failed.Add($"{item.FilePath}: {ex.Message}");
-            }
-        }
+            var json = await File.ReadAllTextAsync(blobPath);
+            var doc = JsonSerializer.Deserialize<JsonElement>(json);
+            var revertable = doc.GetProperty("items")
+                               .EnumerateArray()
+                               .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
+                               .Where(r => r.Outcome == "succeeded" && r.BeforeSource != null)
+                               .ToList();
 
-        var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
-        return $"Reverted {reverted.Count} files.{failedPart}";
+            if (revertable.Count == 0)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"No reversible items in blob for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
+            }
+
+            var reverted = new List<string>();
+            var failed = new List<string>();
+
+            foreach (var item in revertable)
+            {
+                // Security: only revert files under the solution root to prevent path traversal.
+                if (solutionRoot != null &&
+                    !item.FilePath.StartsWith(solutionRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    failed.Add($"{item.FilePath}: outside solution root, skipped");
+                    continue;
+                }
+
+                try
+                {
+                    await File.WriteAllTextAsync(item.FilePath, item.BeforeSource!);
+                    reverted.Add(item.FilePath);
+                }
+                catch (Exception ex)
+                {
+                    failed.Add($"{item.FilePath}: {ex.Message}");
+                }
+            }
+
+            var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
+            return new ToolResult<object>() { Success = true, Data = $"Reverted {reverted.Count} files.{failedPart}" };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
-            return $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -969,16 +985,16 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
-    public string ResetBreaker()
+    public ToolResult<object> ResetBreaker()
     {
         _workspaceManager.ResetBreaker();
-        return "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled.";
+        return new ToolResult<object>() { Success = true, Data = "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled." };
     }
 
     [McpServerTool]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
-    public PersistentWorkspaceManager.BreakerStatusReport GetBreakerStatus()
+    public ToolResult<object> GetBreakerStatus()
     {
-        return _workspaceManager.GetBreakerStatus();
+        return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetBreakerStatus() };
     }
 }

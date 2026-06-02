@@ -51,7 +51,7 @@ public class SentinelAugmentTools
 
         Returns: UpdatedContent with the corrected encapsulation applied.
         """)]
-    public async Task<ToolUpdateResult> EncapsulateFieldSafe(
+    public async Task<ToolResult<object>> EncapsulateFieldSafe(
         string filePath,
         string fieldName,
         string? overridePropertyName = null)
@@ -62,12 +62,22 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.EncapsulateFieldSafeAsync(filePath, fieldName, overridePropertyName);
+            var result = await _engine.EncapsulateFieldSafeAsync(filePath, fieldName, overridePropertyName);
+            return new ToolResult<object>
+            {
+                Success = result.Success,
+                Data = result.UpdatedContent,
+                Error = result.Error != null ? new ResultError("EncapsulateFieldSafeFailed", result.Error) : null
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "EncapsulateFieldSafe failed for '{Field}' in '{File}'", fieldName, filePath);
-            return $"EncapsulateFieldSafe failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"EncapsulateFieldSafe failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -89,7 +99,7 @@ public class SentinelAugmentTools
         contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
         lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
         """)]
-    public async Task<object> AnalyzeSwitchForPatternConversion(
+    public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
         string filePath,
         string contextSnippet,
         string? lineBefore = null,
@@ -101,12 +111,21 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
-            return $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -131,7 +150,7 @@ public class SentinelAugmentTools
         Returns MsAugmentResult with UpdatedContent on success, or Error describing why
         conversion was rejected.
         """)]
-    public async Task<object> ConvertSwitchToPatternSafe(
+    public async Task<ToolResult<object>> ConvertSwitchToPatternSafe(
         string filePath,
         string contextSnippet,
         string? lineBefore = null,
@@ -143,12 +162,21 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ConvertSwitchToPatternSafe failed in '{File}'", filePath);
-            return $"ConvertSwitchToPatternSafe failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"ConvertSwitchToPatternSafe failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -171,7 +199,7 @@ public class SentinelAugmentTools
         contextSnippet: short snippet of the foreach statement (e.g., "foreach (var item in").
         lineBefore/lineAfter: optional disambiguation.
         """)]
-    public async Task<object> AnalyzeForeachForLinqConversion(
+    public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
         string filePath, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
@@ -181,12 +209,21 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
-            return $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -215,7 +252,7 @@ public class SentinelAugmentTools
         Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
         been loaded yet — this is a normal state, not an error.
         """)]
-    public async Task<object> GetWorkspaceHealth()
+    public async Task<ToolResult<object>> GetWorkspaceHealth()
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -223,12 +260,21 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.GetWorkspaceHealthAsync();
+            var result = await _engine.GetWorkspaceHealthAsync();
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetWorkspaceHealth failed");
-            return $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
@@ -255,7 +301,7 @@ public class SentinelAugmentTools
         Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
                  or Success=false and Error with a human-readable explanation.
         """)]
-    public async Task<object> ExtractMethodSafe(
+    public async Task<ToolResult<object>> ExtractMethodSafe(
         string filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
@@ -265,13 +311,22 @@ public class SentinelAugmentTools
         }
         try
         {
-            return await _engine.ExtractMethodSafeAsync(
+            var result = await _engine.ExtractMethodSafeAsync(
                 filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePath}'", newMethodName, filePath);
-            return $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 }
