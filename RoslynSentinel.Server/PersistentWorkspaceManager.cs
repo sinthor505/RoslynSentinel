@@ -1,10 +1,10 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace RoslynSentinel.Server;
 
@@ -24,6 +24,10 @@ public class PersistentWorkspaceManager : IDisposable
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
+    private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     // Per-tool sliding-window rate limiter: maps tool name → timestamps of recent calls.
     private readonly ConcurrentDictionary<string, ConcurrentQueue<long>> _rateLimitWindows = new();
@@ -31,21 +35,21 @@ public class PersistentWorkspaceManager : IDisposable
 
     // ── Circuit breaker state ─────────────────────────────────────────────────
     // Thresholds — start generous; tighten on observed session data.
-    private const int    BreakerStreakThreshold           = 8;     // consecutive batches with zero successes
-    private const int    BreakerRateMinAttempts           = 20;    // min attempts before rate-trip fires
-    private const double BreakerRateThreshold             = 0.30;  // >30% failure rate → halt
-    private const int    BreakerRollbackScoreThreshold    = 20;    // weighted score (rollback=2, fail=1)
-    private const int    CautionStreakThreshold           = 4;
-    private const int    CautionRateMinAttempts           = 10;
-    private const double CautionRateThreshold             = 0.15;
-    private const int    CautionRollbackScoreThreshold    = 10;
+    private const int BreakerStreakThreshold = 8;     // consecutive batches with zero successes
+    private const int BreakerRateMinAttempts = 20;    // min attempts before rate-trip fires
+    private const double BreakerRateThreshold = 0.30;  // >30% failure rate → halt
+    private const int BreakerRollbackScoreThreshold = 20;    // weighted score (rollback=2, fail=1)
+    private const int CautionStreakThreshold = 4;
+    private const int CautionRateMinAttempts = 10;
+    private const double CautionRateThreshold = 0.15;
+    private const int CautionRollbackScoreThreshold = 10;
 
-    private readonly object _breakerLock              = new();
-    private bool             _breakerOpen;
-    private int              _consecutiveFailureStreak;
-    private int              _totalAttempts;
-    private int              _totalFailures;
-    private int              _weightedRollbackScore;
+    private readonly object _breakerLock = new();
+    private bool _breakerOpen;
+    private int _consecutiveFailureStreak;
+    private int _totalAttempts;
+    private int _totalFailures;
+    private int _weightedRollbackScore;
 
     public record StagedChangeSummary(
         string ChangeId,
@@ -55,18 +59,18 @@ public class PersistentWorkspaceManager : IDisposable
 
     /// <summary>Snapshot of circuit breaker state returned by get_breaker_status.</summary>
     public record BreakerStatusReport(
-        bool   Open,
+        bool Open,
         string Severity,
         string Directive,
-        int    ConsecutiveFailureStreak,
-        int    TotalAttempts,
-        int    TotalFailures,
+        int ConsecutiveFailureStreak,
+        int TotalAttempts,
+        int TotalFailures,
         double FailureRatePct,
-        int    WeightedRollbackScore,
-        int    StreakTripThreshold,
-        int    RollbackScoreTripThreshold,
+        int WeightedRollbackScore,
+        int StreakTripThreshold,
+        int RollbackScoreTripThreshold,
         double RateTripThresholdPct,
-        int    RateMinAttempts
+        int RateMinAttempts
     );
 
     public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
@@ -356,19 +360,19 @@ public class PersistentWorkspaceManager : IDisposable
         // Defaults from spec (calls per 60-second sliding window).
         var defaults = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
         {
-            ["list_project_documentation"]       = 20,
-            ["read_project_documentation"]       = 30,
-            ["update_project_documentation"]     = 10,
-            ["read_plan"]                         = 30,
-            ["update_plan"]                       = 10,
-            ["read_handoff"]                      = 30,
-            ["write_handoff"]                     = 10,
-            ["read_completed_work"]               = 30,
-            ["append_completed_work"]             = 15,
-            ["read_current_state"]                = 30,
-            ["update_current_state"]              = 5,
-            ["run_bridge_batch"]                  = 5,
-            ["run_uplift_batch"]                  = 5,
+            ["list_project_documentation"] = 20,
+            ["read_project_documentation"] = 30,
+            ["update_project_documentation"] = 10,
+            ["read_plan"] = 30,
+            ["update_plan"] = 10,
+            ["read_handoff"] = 30,
+            ["write_handoff"] = 10,
+            ["read_completed_work"] = 30,
+            ["append_completed_work"] = 15,
+            ["read_current_state"] = 30,
+            ["update_current_state"] = 5,
+            ["run_bridge_batch"] = 5,
+            ["run_uplift_batch"] = 5,
             ["propagate_cancellation_token_batch"] = 5,
         };
 
@@ -380,7 +384,7 @@ public class PersistentWorkspaceManager : IDisposable
             {
                 var json = File.ReadAllText(overridePath);
                 var overrides = JsonSerializer.Deserialize<Dictionary<string, int>>(json,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    _jsonOptions);
                 if (overrides is not null)
                 {
                     foreach (var (key, value) in overrides)
@@ -799,8 +803,8 @@ public class PersistentWorkspaceManager : IDisposable
     {
         lock (_breakerLock)
         {
-            _totalAttempts         += succeeded + failed + rolledBack + skipped;
-            _totalFailures         += failed + rolledBack;
+            _totalAttempts += succeeded + failed + rolledBack + skipped;
+            _totalFailures += failed + rolledBack;
             _weightedRollbackScore += (rolledBack * 2) + failed;
 
             if (succeeded > 0)
@@ -815,10 +819,10 @@ public class PersistentWorkspaceManager : IDisposable
 
             if (!_breakerOpen)
             {
-                double failureRate  = _totalAttempts > 0 ? (double)_totalFailures / _totalAttempts : 0;
-                bool   streakTrip   = _consecutiveFailureStreak >= BreakerStreakThreshold;
-                bool   rateTrip     = _totalAttempts >= BreakerRateMinAttempts && failureRate > BreakerRateThreshold;
-                bool   rollbackTrip = _weightedRollbackScore > BreakerRollbackScoreThreshold;
+                double failureRate = _totalAttempts > 0 ? (double)_totalFailures / _totalAttempts : 0;
+                bool streakTrip = _consecutiveFailureStreak >= BreakerStreakThreshold;
+                bool rateTrip = _totalAttempts >= BreakerRateMinAttempts && failureRate > BreakerRateThreshold;
+                bool rollbackTrip = _weightedRollbackScore > BreakerRollbackScoreThreshold;
 
                 if (streakTrip || rateTrip || rollbackTrip)
                 {
@@ -849,11 +853,11 @@ public class PersistentWorkspaceManager : IDisposable
 
             return new BatchResultSummary
             {
-                ChangeId    = "",
-                BlobName    = "",
-                Severity    = "halt",
+                ChangeId = "",
+                BlobName = "",
+                Severity = "halt",
                 BreakerOpen = true,
-                Directive   = $"Circuit breaker open. All mutating tools disabled until reset_breaker is called by the user. " +
+                Directive = $"Circuit breaker open. All mutating tools disabled until reset_breaker is called by the user. " +
                               $"(streak={_consecutiveFailureStreak}/{BreakerStreakThreshold}, " +
                               $"attempts={_totalAttempts}, " +
                               $"failureRate={failureRatePct:F1}%/{BreakerRateThreshold * 100:F0}%, " +
@@ -870,11 +874,11 @@ public class PersistentWorkspaceManager : IDisposable
     {
         lock (_breakerLock)
         {
-            _breakerOpen              = false;
+            _breakerOpen = false;
             _consecutiveFailureStreak = 0;
-            _totalAttempts            = 0;
-            _totalFailures            = 0;
-            _weightedRollbackScore    = 0;
+            _totalAttempts = 0;
+            _totalFailures = 0;
+            _weightedRollbackScore = 0;
         }
 
         _logger.LogInformation("Circuit breaker manually reset.");
@@ -905,22 +909,22 @@ public class PersistentWorkspaceManager : IDisposable
         lock (_breakerLock)
         {
             double failureRatePct = _totalAttempts > 0 ? (double)_totalFailures / _totalAttempts * 100 : 0;
-            string severity       = ComputeSeverityUnlocked();
-            string directive      = ComputeDirectiveUnlocked(severity, failureRatePct);
+            string severity = ComputeSeverityUnlocked();
+            string directive = ComputeDirectiveUnlocked(severity, failureRatePct);
 
             return new BreakerStatusReport(
-                Open:                       _breakerOpen,
-                Severity:                   severity,
-                Directive:                  directive,
-                ConsecutiveFailureStreak:   _consecutiveFailureStreak,
-                TotalAttempts:              _totalAttempts,
-                TotalFailures:              _totalFailures,
-                FailureRatePct:             Math.Round(failureRatePct, 1),
-                WeightedRollbackScore:      _weightedRollbackScore,
-                StreakTripThreshold:        BreakerStreakThreshold,
+                Open: _breakerOpen,
+                Severity: severity,
+                Directive: directive,
+                ConsecutiveFailureStreak: _consecutiveFailureStreak,
+                TotalAttempts: _totalAttempts,
+                TotalFailures: _totalFailures,
+                FailureRatePct: Math.Round(failureRatePct, 1),
+                WeightedRollbackScore: _weightedRollbackScore,
+                StreakTripThreshold: BreakerStreakThreshold,
                 RollbackScoreTripThreshold: BreakerRollbackScoreThreshold,
-                RateTripThresholdPct:       BreakerRateThreshold * 100,
-                RateMinAttempts:            BreakerRateMinAttempts
+                RateTripThresholdPct: BreakerRateThreshold * 100,
+                RateMinAttempts: BreakerRateMinAttempts
             );
         }
     }
@@ -933,7 +937,7 @@ public class PersistentWorkspaceManager : IDisposable
         }
 
         double failureRate = _totalAttempts > 0 ? (double)_totalFailures / _totalAttempts : 0;
-        bool   caution     = _consecutiveFailureStreak >= CautionStreakThreshold
+        bool caution = _consecutiveFailureStreak >= CautionStreakThreshold
                           || (_totalAttempts >= CautionRateMinAttempts && failureRate >= CautionRateThreshold)
                           || _weightedRollbackScore >= CautionRollbackScoreThreshold;
 

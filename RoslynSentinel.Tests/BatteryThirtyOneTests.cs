@@ -3,11 +3,8 @@
 //   1. inline_class was an unimplemented stub (InvalidOperationException)
 //   2. convert_method_to_indexer had silent no-op on method-not-found / wrong param count
 
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -98,7 +95,7 @@ public class Owner {}";
         var result = await _tools.InlineClass("SameFile.cs", "SameFile.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("SameFile.cs"), "Should produce updated file");
-        var content = result["SameFile.cs"];
+        var content = ((Dictionary<string, string>)result)["SameFile.cs"];
         Assert.That(content, Does.Contain("Value"), "Owner should contain the inlined field");
         Assert.That(content, Does.Contain("Go"), "Owner should contain the inlined method");
         Assert.That(content, Does.Not.Contain("class Helper"), "Helper class should be removed");
@@ -117,7 +114,7 @@ public class Consumer {}";
         Dictionary<string, string>? result = null;
         Assert.DoesNotThrowAsync(async () =>
         {
-            result = await _tools.InlineClass("File.cs", "File.cs", "HelperClass");
+            result = (Dictionary<string, string>?)await _tools.InlineClass("File.cs", "File.cs", "HelperClass");
         });
         Assert.That(result, Is.Not.Null);
     }
@@ -135,7 +132,7 @@ public class DataClass {
 public class Target {}";
         SetSource(src, "Multi.cs");
         var result = await _tools.InlineClass("Multi.cs", "Multi.cs", "DataClass");
-        var content = result["Multi.cs"];
+        var content = ((Dictionary<string, string>)result)["Multi.cs"];
         Assert.That(content, Does.Contain("Alpha"));
         Assert.That(content, Does.Contain("Beta"));
         Assert.That(content, Does.Contain("Gamma"));
@@ -152,8 +149,9 @@ public class Target {}";
         var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("Target.cs"), "Target file should be updated");
-        Assert.That(result["Target.cs"], Does.Contain("Value"), "Value field should be in target");
-        Assert.That(result["Target.cs"], Does.Contain("Act"), "Act method should be in target");
+        var targetContent = ((Dictionary<string, string>)result)["Target.cs"];
+        Assert.That(targetContent, Does.Contain("Value"), "Value field should be in target");
+        Assert.That(targetContent, Does.Contain("Act"), "Act method should be in target");
     }
 
     [Test]
@@ -165,7 +163,8 @@ public class Target {}";
         var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("Source.cs"), "Source file should also be returned");
-        Assert.That(result["Source.cs"], Does.Not.Contain("class Helper"), "Helper should be removed from source");
+        var sourceContent = ((Dictionary<string, string>)result)["Source.cs"];
+        Assert.That(sourceContent, Does.Not.Contain("class Helper"), "Helper should be removed from source");
     }
 
     [Test]
@@ -176,7 +175,8 @@ public class Target {}";
         var result = await _tools.InlineClass("File.cs", "File.cs", "NonExistent");
 
         Assert.That(result, Does.ContainKey("__error__"), "Should return __error__ key");
-        Assert.That(result["__error__"], Does.Contain("NonExistent"), "Error should mention the missing class");
+        var errorContent = ((Dictionary<string, string>)result)["__error__"];
+        Assert.That(errorContent, Does.Contain("NonExistent"), "Error should mention the missing class");
     }
 
     [Test]
@@ -218,8 +218,9 @@ public class Recipient { public int Existing; }";
 
         // Empty class inlined — should succeed, Recipient should still exist, Empty removed
         Assert.That(result, Does.ContainKey("F.cs"));
-        Assert.That(result["F.cs"], Does.Contain("class Recipient"));
-        Assert.That(result["F.cs"], Does.Not.Contain("class Empty"));
+        var updatedContent = ((Dictionary<string, string>)result)["F.cs"];
+        Assert.That(updatedContent, Does.Contain("class Recipient"));
+        Assert.That(updatedContent, Does.Not.Contain("class Empty"));
     }
 
     // ======================================================================
@@ -240,12 +241,12 @@ public class Recipient { public int Existing; }";
 
         // Primary files updated
         Assert.That(result, Does.ContainKey("Owner.cs"), "Target file should be in result");
-        Assert.That(result["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
+        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
 
         // Third file should also be updated: 'Helper' → 'Owner'
         Assert.That(result, Does.ContainKey("Consumer.cs"), "Third file with type reference should also be updated");
-        Assert.That(result["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
-        Assert.That(result["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
+        Assert.That(((Dictionary<string, string>)result)["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
+        Assert.That(((Dictionary<string, string>)result)["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
     }
 
     [Test]
@@ -263,7 +264,7 @@ public class Service
         var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
 
         Assert.That(result, Does.ContainKey("Service.cs"), "Updated source should be in result");
-        var updatedSource = result["Service.cs"];
+        var updatedSource = ((Dictionary<string, string>)result)["Service.cs"];
         // Should have public property, NOT private readonly field
         Assert.That(updatedSource, Does.Contain("public Validator"), "Should expose extracted class via public property");
         Assert.That(updatedSource, Does.Not.Contain("private readonly Validator"), "Should not use private field");
@@ -281,7 +282,7 @@ public class Service
         var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
 
         Assert.That(result, Does.ContainKey("Client.cs"), "Client file should be updated with new call sites");
-        var clientContent = result["Client.cs"];
+        var clientContent = ((Dictionary<string, string>)result)["Client.cs"];
         // Call sites should now go through the Validator property
         Assert.That(clientContent, Does.Contain("Validator"), "Cross-file call sites should reference the extracted class");
     }

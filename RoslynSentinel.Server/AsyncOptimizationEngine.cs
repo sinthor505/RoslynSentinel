@@ -1861,7 +1861,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                     attrScore = scoreVal;
                                 }
                                 else if (scoreExpr is PrefixUnaryExpressionSyntax
-                                    { RawKind: (int)SyntaxKind.UnaryMinusExpression } negExpr &&
+                                { RawKind: (int)SyntaxKind.UnaryMinusExpression } negExpr &&
                                     negExpr.Operand is LiteralExpressionSyntax negLit &&
                                     negLit.Token.Value is int negVal)
                                 {
@@ -1933,7 +1933,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
         /// contribution (e.g. <c>["blocking-calls:40", "service-class:15"]</c>).
         /// </summary>
         public IReadOnlyList<string> Breakdown =>
-            Reason.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            Reason.Split(separator, StringSplitOptions.RemoveEmptyEntries);
+
+        private static readonly char[] separator = new[] { ' ' };
     }
 
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>

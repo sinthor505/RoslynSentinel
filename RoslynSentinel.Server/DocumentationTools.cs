@@ -148,6 +148,8 @@ public class DocumentationTools
         string? name    = null,
         string? content = null)
     {
+        try
+        {
         var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
         if (rateLimitError is not null)
         {
@@ -223,16 +225,25 @@ public class DocumentationTools
                 ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
                 : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
 
+        if (action == "write" && content is null)
+            return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
+        if (action == "append" && content is null)
+            return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
+
         return action switch
         {
             "read"   => (object)ReadFile(subdir, name),
-            "write"  => WriteFile(subdir, name, content
-                ?? throw new ArgumentException("content is required for action=write.", nameof(content))),
+            "write"  => WriteFile(subdir, name, content!),
             "append" => docType == "completed_work"
-                ? WriteFile(subdir, name, content
-                    ?? throw new ArgumentException("content is required for action=append.", nameof(content)), append: true)
+                ? WriteFile(subdir, name, content!, append: true)
                 : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
             _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unknown action '{action}'. Valid: read, write, append, list." }
         };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ProjectDoc ({Action}/{DocType}) failed", action, docType);
+            return new DocWriteResult { Success = false, Filename = name ?? "", Error = $"ProjectDoc failed: {ex.GetType().Name}: {ex.Message}" };
+        }
     }
 }

@@ -31,45 +31,64 @@ public class SentinelGenerationTools
 
     [McpServerTool]
     [Description("Generates C# classes from a JSON string.")]
-    public GenerationResult GenerateClassesFromJson(string json, string rootClassName, string @namespace)
-        => _codeGenerationEngine.GenerateClassesFromJson(json, rootClassName, @namespace);
+    public object GenerateClassesFromJson(string json, string rootClassName, string @namespace)
+    {
+        try
+        {
+            return _codeGenerationEngine.GenerateClassesFromJson(json, rootClassName, @namespace);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName);
+            return $"GenerateClassesFromJson failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     [McpServerTool]
     [Description("Generates a typed HttpClient for a Web API controller.")]
     public async Task<string> GenerateHttpClient(string filePath, string controllerName)
     {
-        var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
-        if (string.IsNullOrEmpty(result))
+        try
         {
-            return (
-                $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
-                "file not found in workspace or controller class not found. Ensure the solution is loaded.");
+            var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
+            if (string.IsNullOrEmpty(result))
+            {
+                return (
+                    $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
+                    "file not found in workspace or controller class not found. Ensure the solution is loaded.");
+            }
+
+            return result;
         }
-
-        return result;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath);
+            return $"GenerateHttpClient failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
-
-
-
-
 
     [McpServerTool]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and generates a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(string projectName)
     {
-        var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
-        if (string.IsNullOrEmpty(result))
+        try
         {
-            return (
-                $"GenerateDefaultConfigJson failed for project '{projectName}': " +
-                "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
+            var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
+            if (string.IsNullOrEmpty(result))
+            {
+                return (
+                    $"GenerateDefaultConfigJson failed for project '{projectName}': " +
+                    "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
+            }
+
+            return result;
         }
-
-        return result;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName);
+            return $"GenerateDefaultConfigJson failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
-
-
-
 
     [McpServerTool]
     [Description("""
@@ -83,14 +102,22 @@ public class SentinelGenerationTools
         """)]
     public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
     {
-        var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
-        if (string.IsNullOrEmpty(result))
+        try
         {
-            return (
-                $"InterpolateStringSafe failed in '{filePath}': " +
-                "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
-        }
+            var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            if (string.IsNullOrEmpty(result))
+            {
+                return (
+                    $"InterpolateStringSafe failed in '{filePath}': " +
+                    "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
+            }
 
-        return result;
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath);
+            return $"InterpolateStringSafe failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }

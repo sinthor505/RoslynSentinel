@@ -1,9 +1,8 @@
 // Battery #21 — SentinelModernizationTools
 // Tests all 26 public methods of SentinelModernizationTools in-memory via TestSolutionBuilder.
 
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618

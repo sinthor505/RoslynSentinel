@@ -75,7 +75,7 @@ public class Service {
         // Arrange
         SetSource("public class Target { public void DeadMethod() {} }", "Target.cs", "Proj");
 
-        var projectId = _workspaceManager.CurrentSolution?.ProjectIds.First() ?? throw new InvalidOperationException("No project found.");
+        var projectId = _workspaceManager.CurrentSolution?.ProjectIds[0] ?? throw new InvalidOperationException("No project found.");
         var callerDocId = DocumentId.CreateNewId(projectId);
         var solution = _workspaceManager.CurrentSolution.AddDocument(callerDocId, "Caller.cs", "public class Caller { void M() { var name = \"DeadMethod\"; } }");
         _workspaceManager.SetTestSolution(solution);

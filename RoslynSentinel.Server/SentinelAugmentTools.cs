@@ -51,7 +51,7 @@ public class SentinelAugmentTools
 
         Returns: UpdatedContent with the corrected encapsulation applied.
         """)]
-    public async Task<MsAugmentResult> EncapsulateFieldSafe(
+    public async Task<object> EncapsulateFieldSafe(
         string filePath,
         string fieldName,
         string? overridePropertyName = null)
@@ -60,7 +60,15 @@ public class SentinelAugmentTools
         {
             _logger.LogInformation("EncapsulateFieldSafe: {Field} in {File}", fieldName, filePath);
         }
-        return await _engine.EncapsulateFieldSafeAsync(filePath, fieldName, overridePropertyName);
+        try
+        {
+            return await _engine.EncapsulateFieldSafeAsync(filePath, fieldName, overridePropertyName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "EncapsulateFieldSafe failed for '{Field}' in '{File}'", fieldName, filePath);
+            return $"EncapsulateFieldSafe failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
@@ -81,7 +89,7 @@ public class SentinelAugmentTools
         contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
         lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
         """)]
-    public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversion(
+    public async Task<object> AnalyzeSwitchForPatternConversion(
         string filePath,
         string contextSnippet,
         string? lineBefore = null,
@@ -91,7 +99,15 @@ public class SentinelAugmentTools
         {
             _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
         }
-        return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        try
+        {
+            return await _engine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
+            return $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── 3. ConvertSwitchToPatternSafe ─────────────────────────────────────────
@@ -115,7 +131,7 @@ public class SentinelAugmentTools
         Returns MsAugmentResult with UpdatedContent on success, or Error describing why
         conversion was rejected.
         """)]
-    public async Task<MsAugmentResult> ConvertSwitchToPatternSafe(
+    public async Task<object> ConvertSwitchToPatternSafe(
         string filePath,
         string contextSnippet,
         string? lineBefore = null,
@@ -125,11 +141,18 @@ public class SentinelAugmentTools
         {
             _logger.LogInformation("ConvertSwitchToPatternSafe in {File}", filePath);
         }
-        return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        try
+        {
+            return await _engine.ConvertSwitchToPatternSafeAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConvertSwitchToPatternSafe failed in '{File}'", filePath);
+            return $"ConvertSwitchToPatternSafe failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
-
 
     // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
 
@@ -148,7 +171,7 @@ public class SentinelAugmentTools
         contextSnippet: short snippet of the foreach statement (e.g., "foreach (var item in").
         lineBefore/lineAfter: optional disambiguation.
         """)]
-    public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversion(
+    public async Task<object> AnalyzeForeachForLinqConversion(
         string filePath, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
@@ -156,7 +179,15 @@ public class SentinelAugmentTools
         {
             _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
         }
-        return await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        try
+        {
+            return await _engine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
+            return $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
@@ -184,16 +215,22 @@ public class SentinelAugmentTools
         Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
         been loaded yet — this is a normal state, not an error.
         """)]
-    public async Task<WorkspaceHealthReport> GetWorkspaceHealth()
+    public async Task<object> GetWorkspaceHealth()
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("GetWorkspaceHealth called");
         }
-        return await _engine.GetWorkspaceHealthAsync();
+        try
+        {
+            return await _engine.GetWorkspaceHealthAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetWorkspaceHealth failed");
+            return $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
-
-
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
 
@@ -218,7 +255,7 @@ public class SentinelAugmentTools
         Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
                  or Success=false and Error with a human-readable explanation.
         """)]
-    public async Task<MsAugmentResult> ExtractMethodSafe(
+    public async Task<object> ExtractMethodSafe(
         string filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
@@ -226,7 +263,15 @@ public class SentinelAugmentTools
         {
             _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
         }
-        return await _engine.ExtractMethodSafeAsync(
-            filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+        try
+        {
+            return await _engine.ExtractMethodSafeAsync(
+                filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePath}'", newMethodName, filePath);
+            return $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 }

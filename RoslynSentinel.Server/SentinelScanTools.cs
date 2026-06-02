@@ -110,6 +110,8 @@ public class SentinelScanTools
         string? filePath = scope == "file" ? scopeName : null;
         string? projectName = scope == "project" ? scopeName : null;
 
+        try
+        {
         switch (detector)
         {
             // ── concurrency ────────────────────────────────────────────────────
@@ -304,7 +306,7 @@ public class SentinelScanTools
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
-                    throw new ArgumentException("duplicate_blocks_in_hierarchy requires scopeName to be the root type name.");
+                    return "duplicate_blocks_in_hierarchy requires scopeName to be the root type name.";
                 }
                 return (object)await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4);
             }
@@ -339,6 +341,12 @@ public class SentinelScanTools
             default:
                 return ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
         }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Scan ({Detector}) failed", detector);
+            return $"Scan ({detector}) failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
@@ -354,6 +362,8 @@ public class SentinelScanTools
         """)]
     public Task<object> DescribeScanDetectors(string? domain = null, string? detector = null)
     {
+        try
+        {
         IEnumerable<ScanDescriptor> entries = s_descriptors;
         if (!string.IsNullOrEmpty(domain))
         {
@@ -366,6 +376,12 @@ public class SentinelScanTools
             entries = entries.Where(e => e.Id.Equals(detectorFilter, StringComparison.OrdinalIgnoreCase));
         }
         return Task.FromResult<object>(entries.ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DescribeScanDetectors failed");
+            return Task.FromResult<object>($"DescribeScanDetectors failed: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     [McpServerTool]
@@ -380,6 +396,8 @@ public class SentinelScanTools
         """)]
     public async Task<object> AnalyzeMethod(string filePath, string methodName, string aspect)
     {
+        try
+        {
         switch (aspect)
         {
             case "controlFlow":
@@ -392,6 +410,12 @@ public class SentinelScanTools
                 return (object)await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
             default:
                 return ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
+        }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePath}'", aspect, methodName, filePath);
+            return $"AnalyzeMethod failed: {ex.GetType().Name}: {ex.Message}";
         }
     }
 

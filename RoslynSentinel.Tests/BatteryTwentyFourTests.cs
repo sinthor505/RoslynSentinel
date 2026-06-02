@@ -1,9 +1,8 @@
 // Battery #24 — SentinelRefactoringTools
 // Tests all ~65 public methods of SentinelRefactoringTools in-memory via TestSolutionBuilder.
 
-using System.Collections.Generic;
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -587,8 +586,8 @@ public enum Status { Active = 1, Pending = 2 }
             ("Owner.cs", "namespace App; public class Owner {}"));
         var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
         Assert.That(result, Does.ContainKey("Owner.cs"));
-        Assert.That(result["Owner.cs"], Does.Contain("Value"));
-        Assert.That(result["Owner.cs"], Does.Contain("Go"));
+        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Value"));
+        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Go"));
     }
 
     // --- IntroduceVariable ---

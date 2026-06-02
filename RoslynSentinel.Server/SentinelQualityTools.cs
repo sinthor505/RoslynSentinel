@@ -1,12 +1,9 @@
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.IO;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -104,15 +101,15 @@ public record AsyncMigrationProgressReport(
 /// <param name="FlaggedDate">ISO date string (yyyy-MM-dd) when the method was flagged, or <c>null</c>.</param>
 /// <param name="Line">1-based source line of the method declaration.</param>
 public record MigrationCandidateFinding(
-    string  FilePath,
-    string  MethodName,
-    string  ClassName,
-    string  Pattern,
-    int     Score,
+    string FilePath,
+    string MethodName,
+    string ClassName,
+    string Pattern,
+    int Score,
     string? Reason,
     string? FlaggedDate,
-    int     Line,
-    string  ProjectName = ""
+    int Line,
+    string ProjectName = ""
 )
 {
     /// <summary>
@@ -147,14 +144,14 @@ public record MigrationCandidateFinding(
 /// </param>
 /// <param name="Summary">Human-readable summary of the flag action for log display.</param>
 public record FlagMigrationCandidateResult(
-    string  FilePath,
-    string  MethodName,
-    string  Pattern,
-    int     Line,
-    bool    WasAlreadyFlagged,
+    string FilePath,
+    string MethodName,
+    string Pattern,
+    int Line,
+    bool WasAlreadyFlagged,
     string? PreviousPattern,
-    bool    AttributeClassInjected,
-    string  Summary
+    bool AttributeClassInjected,
+    string Summary
 );
 
 [McpServerToolType]
@@ -177,6 +174,10 @@ public class SentinelQualityTools
     private readonly StackOverflowEngine _stackOverflowEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelQualityTools> _logger;
+    private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     public SentinelQualityTools(
         PerformanceEngine performanceEngine,
@@ -216,12 +217,20 @@ public class SentinelQualityTools
         _logger = logger;
     }
 
-
-
     [McpServerTool]
     [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
-    public async Task<TestCoverageMap> GetTestCoverageMap(string filePath, string methodName)
-        => await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
+    public async Task<object> GetTestCoverageMap(string filePath, string methodName)
+    {
+        try
+        {
+            return await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            return $"GetTestCoverageMap failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     [McpServerTool]
     [Description("""
@@ -249,21 +258,21 @@ public class SentinelQualityTools
         call get_scan_result(changeId) to read back the offloaded result in pages.
         """)]
     public async Task<object> ScanMigrationCandidates(
-        string? filePath    = null,
+        string? filePath = null,
         string? projectName = null,
-        string? pattern     = null,
-        bool    summarize   = false,
-        int?    topN        = null,
-        int?    minScore    = null,
-        int     limit       = 50,
-        int     offset      = 0)
+        string? pattern = null,
+        bool summarize = false,
+        int? topN = null,
+        int? minScore = null,
+        int limit = 50,
+        int offset = 0)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
             return new MigrationResult<object>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call load_solution first.")
             };
         }
@@ -282,7 +291,7 @@ public class SentinelQualityTools
                 return new MigrationResult<object>
                 {
                     Success = false,
-                    Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+                    Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
                 };
             }
             catch (Exception ex)
@@ -290,7 +299,7 @@ public class SentinelQualityTools
                 return new MigrationResult<object>
                 {
                     Success = false,
-                    Error   = new ResultError(MigrationErrorCode.Exception,
+                    Error = new ResultError(MigrationErrorCode.Exception,
                                   "An unexpected error occurred.", ex.Message)
                 };
             }
@@ -302,15 +311,15 @@ public class SentinelQualityTools
 
             var buckets = new Dictionary<string, int>
             {
-                ["<0"]     = 0,
-                ["0-25"]   = 0,
-                ["26-50"]  = 0,
-                ["51-75"]  = 0,
+                ["<0"] = 0,
+                ["0-25"] = 0,
+                ["26-50"] = 0,
+                ["51-75"] = 0,
                 ["76plus"] = 0,
             };
             foreach (var f in aggregateFindings)
             {
-                var key = f.Score < 0   ? "<0"
+                var key = f.Score < 0 ? "<0"
                         : f.Score <= 25 ? "0-25"
                         : f.Score <= 50 ? "26-50"
                         : f.Score <= 75 ? "51-75"
@@ -327,9 +336,9 @@ public class SentinelQualityTools
             var allByClass = aggregateFindings
                 .GroupBy(f => (f.ClassName, f.ProjectName))
                 .Select(g => new ClassCandidateSummarySlim(
-                    ClassName:   g.Key.ClassName,
+                    ClassName: g.Key.ClassName,
                     ProjectName: g.Key.ProjectName,
-                    Count:       g.Count()))
+                    Count: g.Count()))
                 .OrderByDescending(c => c.Count)
                 .ToList();
             bool byClassTruncated = allByClass.Count > MaxByClass;
@@ -349,20 +358,20 @@ public class SentinelQualityTools
                         var s = f.Summary;
                         return new TopCandidateSummaryEntry(
                             MethodName: f.MethodName,
-                            ClassName:  f.ClassName,
-                            Pattern:    f.Pattern,
-                            Score:      f.Score,
-                            Summary:    s[..Math.Min(120, s.Length)]);
+                            ClassName: f.ClassName,
+                            Pattern: f.Pattern,
+                            Score: f.Score,
+                            Summary: s[..Math.Min(120, s.Length)]);
                     })
                     .ToList();
             }
 
             var summary = new MigrationScanSummary(
-                TotalCandidates:  aggregateFindings.Count,
-                ByPattern:        byPattern,
-                ByClass:          byClass,
-                ByScoreBucket:    buckets,
-                TopCandidates:    topCandidates,
+                TotalCandidates: aggregateFindings.Count,
+                ByPattern: byPattern,
+                ByClass: byClass,
+                ByScoreBucket: buckets,
+                TopCandidates: topCandidates,
                 ByClassTruncated: byClassTruncated);
 
             // B1 Fix 4: 8 KB overflow safety net — should be unreachable with slim types + caps.
@@ -370,27 +379,27 @@ public class SentinelQualityTools
             var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary);
             if (summaryJson.Length > SummaryThresholdBytes)
             {
-                var operationId  = Guid.NewGuid().ToString("N");
+                var operationId = Guid.NewGuid().ToString("N");
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
                 if (!string.IsNullOrEmpty(solutionRoot))
                 {
                     var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
                     Directory.CreateDirectory(dir);
-                    var ts   = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-                    var fp   = System.IO.Path.Combine(dir, $"scan_{ts}_{operationId}.json");
+                    var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+                    var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{operationId}.json");
                     await File.WriteAllTextAsync(fp,
-                        System.Text.Json.JsonSerializer.Serialize(summary, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+                        System.Text.Json.JsonSerializer.Serialize(summary, _jsonOptions),
                         new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                     return new MigrationResult<LargeResultInfo>
                     {
-                        Success    = true,
+                        Success = true,
                         LargeResult = new LargeResultInfo(
                             WrittenToFile: true,
-                            FilePath:      fp,
-                            OperationId:   operationId,
-                            SizeBytes:     summaryJson.Length,
-                            TotalRecords:  aggregateFindings.Count,
-                            Message:       $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
+                            FilePath: fp,
+                            OperationId: operationId,
+                            SizeBytes: summaryJson.Length,
+                            TotalRecords: aggregateFindings.Count,
+                            Message: $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
                                            $"Use get_scan_result(changeId: \"{operationId}\") to page through results.")
                     };
                 }
@@ -399,7 +408,7 @@ public class SentinelQualityTools
             return new MigrationResult<MigrationScanSummary>
             {
                 Success = true,
-                Data    = summary
+                Data = summary
             };
         }
 
@@ -415,7 +424,7 @@ public class SentinelQualityTools
             return new MigrationResult<object>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+                Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
             };
         }
         catch (Exception ex)
@@ -423,7 +432,7 @@ public class SentinelQualityTools
             return new MigrationResult<object>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.Exception,
+                Error = new ResultError(MigrationErrorCode.Exception,
                               "An unexpected error occurred.", ex.Message)
             };
         }
@@ -456,7 +465,7 @@ public class SentinelQualityTools
                 scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{operationId}.json");
                 await File.WriteAllTextAsync(
                     scanFilePath,
-                    JsonSerializer.Serialize(page, new JsonSerializerOptions { WriteIndented = true }),
+                    JsonSerializer.Serialize(page, _jsonOptions),
                     new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 written = true;
             }
@@ -467,16 +476,16 @@ public class SentinelQualityTools
 
             return new MigrationResult<List<MigrationCandidateFinding>>
             {
-                Success     = written,
+                Success = written,
                 TotalRecords = totalCount,
-                HasMore      = hasMore,
-                LargeResult  = new LargeResultInfo(
+                HasMore = hasMore,
+                LargeResult = new LargeResultInfo(
                     WrittenToFile: written,
-                    FilePath:      scanFilePath,
-                    OperationId:   operationId,
-                    SizeBytes:     jsonBytes.Length,
-                    TotalRecords:  totalCount,
-                    Message:       $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
+                    FilePath: scanFilePath,
+                    OperationId: operationId,
+                    SizeBytes: jsonBytes.Length,
+                    TotalRecords: totalCount,
+                    Message: $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
                                    $"Use get_scan_result(changeId: \"{operationId}\") to page through results. " +
                                    "Pass limit and offset to control page size (default limit: 50).")
             };
@@ -485,18 +494,27 @@ public class SentinelQualityTools
         // ── inline result ─────────────────────────────────────────────────
         return new MigrationResult<List<MigrationCandidateFinding>>
         {
-            Success      = true,
-            Data         = page,
+            Success = true,
+            Data = page,
             TotalRecords = totalCount,
-            HasMore      = hasMore,
+            HasMore = hasMore,
         };
     }
 
-
     [McpServerTool]
     [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
-    public async Task<TestComplexityReport> GetMethodComplexity(string filePath, string methodName)
-        => await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+    public async Task<object> GetMethodComplexity(string filePath, string methodName)
+    {
+        try
+        {
+            return await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            return $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     // ── get_scan_result ────────────────────────────────────────────────────────
 
@@ -515,10 +533,10 @@ public class SentinelQualityTools
         Returns MigrationResult<List<MigrationCandidateFinding>> with TotalRecords and HasMore.
         """)]
     public async Task<MigrationResult<List<MigrationCandidateFinding>>> GetScanResult(
-        string? changeId  = null,
-        string? filePath  = null,
-        int     limit     = 50,
-        int     offset    = 0)
+        string? changeId = null,
+        string? filePath = null,
+        int limit = 50,
+        int offset = 0)
     {
         string? resolvedPath = null;
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -557,7 +575,7 @@ public class SentinelQualityTools
             return new MigrationResult<List<MigrationCandidateFinding>>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.InvalidArgument,
+                Error = new ResultError(MigrationErrorCode.InvalidArgument,
                               "Scan file not found. Supply a valid changeId or filePath pointing to a scan_*.json file in the operations directory.")
             };
         }
@@ -568,7 +586,7 @@ public class SentinelQualityTools
             var json = await File.ReadAllTextAsync(resolvedPath);
             all = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(
                       json,
-                      new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                      _jsonOptions)
                   ?? new List<MigrationCandidateFinding>();
         }
         catch (Exception ex)
@@ -576,20 +594,20 @@ public class SentinelQualityTools
             return new MigrationResult<List<MigrationCandidateFinding>>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.Exception,
+                Error = new ResultError(MigrationErrorCode.Exception,
                               "Failed to read scan file.", ex.Message)
             };
         }
 
-        var page   = all.Skip(offset).Take(limit).ToList();
+        var page = all.Skip(offset).Take(limit).ToList();
         bool hasMore = (offset + limit) < all.Count;
 
         return new MigrationResult<List<MigrationCandidateFinding>>
         {
-            Success      = true,
-            Data         = page,
+            Success = true,
+            Data = page,
             TotalRecords = all.Count,
-            HasMore      = hasMore,
+            HasMore = hasMore,
         };
     }
 
@@ -615,7 +633,7 @@ public class SentinelQualityTools
             return new MigrationResult<AsyncMigrationProgressReport>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call load_solution first.")
             };
         }
@@ -627,7 +645,7 @@ public class SentinelQualityTools
             return new MigrationResult<AsyncMigrationProgressReport>
             {
                 Success = true,
-                Data    = report
+                Data = report
             };
         }
         catch (Exception ex)
@@ -635,7 +653,7 @@ public class SentinelQualityTools
             return new MigrationResult<AsyncMigrationProgressReport>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.Exception,
+                Error = new ResultError(MigrationErrorCode.Exception,
                               "An unexpected error occurred.", ex.Message)
             };
         }
@@ -657,7 +675,7 @@ public class SentinelQualityTools
         Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
         """)]
     private async Task<BatchResultSummary> PropagateCancellationToken(
-        BatchTargetInput  input,
+        BatchTargetInput input,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -670,11 +688,11 @@ public class SentinelQualityTools
         {
             Targets = input.Targets.Select(t => new PropagateCtFileTarget
             {
-                FilePath    = t.FilePath,
+                FilePath = t.FilePath,
                 MethodNames = t.MethodNames,
             }).ToList(),
-            DryRun       = input.DryRun,
-            MaxFiles     = input.MaxItems,
+            DryRun = input.DryRun,
+            MaxFiles = input.MaxItems,
             FlagFailures = true,
         };
 
@@ -691,20 +709,20 @@ public class SentinelQualityTools
         }
 
         int succeeded = result.Applied.Count;
-        int failed    = result.Failed.Count;
-        int skipped   = result.RemainingFiles;
+        int failed = result.Failed.Count;
+        int skipped = result.RemainingFiles;
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var items    = new List<OperationItemRecord>();
+        var items = new List<OperationItemRecord>();
         foreach (var a in result.Applied)
         {
             items.Add(new OperationItemRecord
             {
                 FilePath = a.FilePath,
-                Outcome  = a.TotalForwarded > 0 ? "succeeded" : "skipped",
-                Reason   = a.TotalForwarded == 0 ? "no eligible call sites" : null,
+                Outcome = a.TotalForwarded > 0 ? "succeeded" : "skipped",
+                Reason = a.TotalForwarded == 0 ? "no eligible call sites" : null,
             });
         }
         foreach (var f in result.Failed)
@@ -712,26 +730,26 @@ public class SentinelQualityTools
             items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = "failed", Reason = f.Reason });
         }
 
-        var blobName  = await OperationBlobWriter.WriteAsync(
+        var blobName = await OperationBlobWriter.WriteAsync(
             "propagate_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status    = _workspaceManager.GetBreakerStatus();
-        var failures  = result.Failed
+        var status = _workspaceManager.GetBreakerStatus();
+        var failures = result.Failed
             .Take(15)
             .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = "failed" })
             .ToList();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = skipped,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed + skipped,
-            Failures    = failures,
-            Severity    = status.Severity,
-            Directive   = status.Directive,
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = skipped,
+            RolledBack = 0,
+            Attempted = succeeded + failed + skipped,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -751,8 +769,8 @@ public class SentinelQualityTools
         Returns BatchResultSummary. Use get_operation_detail(changeId) for per-method details.
         """)]
     private async Task<BatchResultSummary> ConvertToAsyncBridge(
-        BatchTargetInput  input,
-        bool              propagateCancellationTokens = true,
+        BatchTargetInput input,
+        bool propagateCancellationTokens = true,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -762,10 +780,10 @@ public class SentinelQualityTools
         }
 
         int succeeded = 0;
-        int failed    = 0;
+        int failed = 0;
         int processed = 0;
-        var items     = new List<OperationItemRecord>();
-        var failures  = new List<FailureDetail>();
+        var items = new List<OperationItemRecord>();
+        var failures = new List<FailureDetail>();
 
         foreach (var target in input.Targets)
         {
@@ -774,8 +792,8 @@ public class SentinelQualityTools
                 var fd = new FailureDetail
                 {
                     FilePath = target.FilePath,
-                    Reason   = "MethodNames must be specified for convert_to_async_bridge",
-                    Outcome  = "failed",
+                    Reason = "MethodNames must be specified for convert_to_async_bridge",
+                    Outcome = "failed",
                 };
                 items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = fd.Reason });
                 if (failures.Count < 15) { failures.Add(fd); }
@@ -796,10 +814,10 @@ public class SentinelQualityTools
                 {
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = target.FilePath,
+                        FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome    = "skipped",
-                        Reason     = "dry_run",
+                        Outcome = "skipped",
+                        Reason = "dry_run",
                     });
                     succeeded++;
                     continue;
@@ -829,9 +847,9 @@ public class SentinelQualityTools
 
                     items.Add(new OperationItemRecord
                     {
-                        FilePath     = target.FilePath,
-                        MethodName   = methodName,
-                        Outcome      = "succeeded",
+                        FilePath = target.FilePath,
+                        MethodName = methodName,
+                        Outcome = "succeeded",
                         BeforeSource = beforeSource782,
                     });
                     succeeded++;
@@ -841,19 +859,19 @@ public class SentinelQualityTools
                     var reason = ex.Message;
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = target.FilePath,
+                        FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome    = "failed",
-                        Reason     = reason,
+                        Outcome = "failed",
+                        Reason = reason,
                     });
                     if (failures.Count < 15)
                     {
                         failures.Add(new FailureDetail
                         {
-                            FilePath   = target.FilePath,
+                            FilePath = target.FilePath,
                             MethodName = methodName,
-                            Reason     = reason,
-                            Outcome    = "failed",
+                            Reason = reason,
+                            Outcome = "failed",
                         });
                     }
                     failed++;
@@ -869,20 +887,20 @@ public class SentinelQualityTools
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var blobName = await OperationBlobWriter.WriteAsync(
             "convert_to_async_bridge", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status   = _workspaceManager.GetBreakerStatus();
+        var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = 0,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed,
-            Failures    = failures,
-            Severity    = status.Severity,
-            Directive   = status.Directive,
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = 0,
+            RolledBack = 0,
+            Attempted = succeeded + failed,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -902,7 +920,7 @@ public class SentinelQualityTools
         Use get_operation_detail(changeId) for per-file details.
         """)]
     private async Task<BatchResultSummary> AddCancellationToken(
-        BatchTargetInput  input,
+        BatchTargetInput input,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -912,12 +930,12 @@ public class SentinelQualityTools
         }
 
         var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        int succeeded  = 0;
-        int failed     = 0;
-        int skipped    = 0;
-        var items      = new List<OperationItemRecord>();
-        var failures   = new List<FailureDetail>();
-        int processed  = 0;
+        int succeeded = 0;
+        int failed = 0;
+        int skipped = 0;
+        var items = new List<OperationItemRecord>();
+        var failures = new List<FailureDetail>();
+        int processed = 0;
 
         foreach (var target in input.Targets)
         {
@@ -950,8 +968,8 @@ public class SentinelQualityTools
                     items.Add(new OperationItemRecord
                     {
                         FilePath = target.FilePath,
-                        Outcome  = "skipped",
-                        Reason   = "no eligible async methods",
+                        Outcome = "skipped",
+                        Reason = "no eligible async methods",
                     });
                     skipped++;
                 }
@@ -966,10 +984,10 @@ public class SentinelQualityTools
                     {
                         items.Add(new OperationItemRecord
                         {
-                            FilePath   = target.FilePath,
+                            FilePath = target.FilePath,
                             MethodName = m,
-                            Outcome    = input.DryRun ? "skipped" : "succeeded",
-                            Reason     = input.DryRun ? "dry_run" : null,
+                            Outcome = input.DryRun ? "skipped" : "succeeded",
+                            Reason = input.DryRun ? "dry_run" : null,
                         });
                     }
 
@@ -1011,20 +1029,20 @@ public class SentinelQualityTools
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var blobName = await OperationBlobWriter.WriteAsync(
             "add_cancellation_token", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status   = _workspaceManager.GetBreakerStatus();
+        var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = skipped,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed + skipped,
-            Failures    = failures,
-            Severity    = status.Severity,
-            Directive   = status.Directive,
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = skipped,
+            RolledBack = 0,
+            Attempted = succeeded + failed + skipped,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -1043,7 +1061,7 @@ public class SentinelQualityTools
         skipped (flagged NeedsManualReview). Use get_operation_detail(changeId) for details.
         """)]
     private async Task<BatchResultSummary> RunUplift(
-        RunUpliftInput    input,
+        RunUpliftInput input,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1057,11 +1075,11 @@ public class SentinelQualityTools
             Targets = input.Targets.Select(t => new UpliftBatchMultiTarget
             {
                 BridgedMethodName = t.BridgedMethodName,
-                ProjectName       = t.ProjectName,
+                ProjectName = t.ProjectName,
             }).ToList(),
-            MaxCallersPerMethod          = input.MaxCallersPerMethod,
-            DryRun                       = input.DryRun,
-            PropagateCancellationTokens  = input.PropagateCancellationTokens,
+            MaxCallersPerMethod = input.MaxCallersPerMethod,
+            DryRun = input.DryRun,
+            PropagateCancellationTokens = input.PropagateCancellationTokens,
         };
 
         UpliftBatchMultiResult result;
@@ -1077,31 +1095,31 @@ public class SentinelQualityTools
         }
 
         int succeeded = result.TotalUplifted;
-        int failed    = result.TotalSkipped;
+        int failed = result.TotalSkipped;
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
-        var items    = new List<OperationItemRecord>();
+        var items = new List<OperationItemRecord>();
         foreach (var pm in result.PerMethod)
         {
             foreach (var u in pm.Result.Uplifted)
             {
                 items.Add(new OperationItemRecord
                 {
-                    FilePath   = u.FilePath,
+                    FilePath = u.FilePath,
                     MethodName = u.CallerMethod,
-                    Outcome    = "succeeded",
+                    Outcome = "succeeded",
                 });
             }
             foreach (var s in pm.Result.Skipped)
             {
                 items.Add(new OperationItemRecord
                 {
-                    FilePath   = s.FilePath,
+                    FilePath = s.FilePath,
                     MethodName = s.CallerMethod,
-                    Outcome    = "failed",
-                    Reason     = s.Reason,
+                    Outcome = "failed",
+                    Reason = s.Reason,
                 });
             }
             if (pm.Error != null)
@@ -1109,38 +1127,38 @@ public class SentinelQualityTools
                 items.Add(new OperationItemRecord
                 {
                     FilePath = pm.BridgedMethodName,
-                    Outcome  = "failed",
-                    Reason   = pm.Error,
+                    Outcome = "failed",
+                    Reason = pm.Error,
                 });
             }
         }
 
         var blobName = await OperationBlobWriter.WriteAsync(
             "run_uplift", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status   = _workspaceManager.GetBreakerStatus();
+        var status = _workspaceManager.GetBreakerStatus();
         var failures = result.PerMethod
             .SelectMany(pm => pm.Result.Skipped.Select(s => new FailureDetail
             {
-                FilePath   = s.FilePath,
+                FilePath = s.FilePath,
                 MethodName = s.CallerMethod,
-                Reason     = s.Reason,
-                Outcome    = "failed",
+                Reason = s.Reason,
+                Outcome = "failed",
             }))
             .Take(15)
             .ToList();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = 0,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed,
-            Failures    = failures,
-            Severity    = status.Severity,
-            Directive   = status.Directive,
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = 0,
+            RolledBack = 0,
+            Attempted = succeeded + failed,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -1164,7 +1182,7 @@ public class SentinelQualityTools
         """)]
     private async Task<BatchResultSummary> FlagMigrationCandidates(
         FlagCandidatesInput input,
-        CancellationToken   cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
@@ -1173,11 +1191,11 @@ public class SentinelQualityTools
         }
 
         int succeeded = 0;
-        int failed    = 0;
-        int skipped   = 0;
-        var items     = new List<OperationItemRecord>();
-        var failures  = new List<FailureDetail>();
-        var changeId  = Guid.NewGuid().ToString("N")[..8];
+        int failed = 0;
+        int skipped = 0;
+        var items = new List<OperationItemRecord>();
+        var failures = new List<FailureDetail>();
+        var changeId = Guid.NewGuid().ToString("N")[..8];
 
         try
         {
@@ -1197,10 +1215,10 @@ public class SentinelQualityTools
                         applyResult1126.PreImages?.TryGetValue(f.FilePath, out beforeSource1135);
                         items.Add(new OperationItemRecord
                         {
-                            FilePath     = f.FilePath,
-                            MethodName   = f.MethodName,
-                            Outcome      = "succeeded",
-                            Reason       = null,
+                            FilePath = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome = "succeeded",
+                            Reason = null,
                             BeforeSource = beforeSource1135,
                         });
                         succeeded++;
@@ -1212,10 +1230,10 @@ public class SentinelQualityTools
                     {
                         items.Add(new OperationItemRecord
                         {
-                            FilePath   = f.FilePath,
+                            FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome    = input.DryRun ? "skipped" : "succeeded",
-                            Reason     = input.DryRun ? "dry_run" : null,
+                            Outcome = input.DryRun ? "skipped" : "succeeded",
+                            Reason = input.DryRun ? "dry_run" : null,
                         });
                         succeeded++;
                     }
@@ -1224,10 +1242,10 @@ public class SentinelQualityTools
                 {
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = s.FilePath,
+                        FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome    = "skipped",
-                        Reason     = $"score {s.Score} below minScore {input.MinScore}",
+                        Outcome = "skipped",
+                        Reason = $"score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
                 }
@@ -1235,10 +1253,10 @@ public class SentinelQualityTools
                 {
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = a.FilePath,
+                        FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome    = "skipped",
-                        Reason     = "already flagged",
+                        Outcome = "skipped",
+                        Reason = "already flagged",
                     });
                     skipped++;
                 }
@@ -1247,7 +1265,7 @@ public class SentinelQualityTools
             {
                 // scope="targets" — explicit list
                 var targets = input.Targets ?? new List<FlagCandidateTarget>();
-                var tuples  = targets.Select(t =>
+                var tuples = targets.Select(t =>
                     (FilePath: t.FilePath, MethodName: t.MethodName,
                      Pattern: t.Pattern, Score: t.Score, Reason: t.Reason))
                     .ToList();
@@ -1257,8 +1275,8 @@ public class SentinelQualityTools
                 var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 for (int i = 0; i < results.Count; i++)
                 {
-                    var r    = results[i];
-                    var tgt  = targets[i];
+                    var r = results[i];
+                    var tgt = targets[i];
                     if (r.Line == -1)
                     {
                         continue;
@@ -1271,9 +1289,9 @@ public class SentinelQualityTools
 
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = tgt.FilePath,
+                        FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome    = "succeeded",
+                        Outcome = "succeeded",
                     });
                     succeeded++;
                 }
@@ -1283,19 +1301,19 @@ public class SentinelQualityTools
                     var tgt = targets[idx];
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = tgt.FilePath,
+                        FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome    = "failed",
-                        Reason     = err,
+                        Outcome = "failed",
+                        Reason = err,
                     });
                     if (failures.Count < 15)
                     {
                         failures.Add(new FailureDetail
                         {
-                            FilePath   = tgt.FilePath,
+                            FilePath = tgt.FilePath,
                             MethodName = tgt.MethodName,
-                            Reason     = err,
-                            Outcome    = "failed",
+                            Reason = err,
+                            Outcome = "failed",
                         });
                     }
                     failed++;
@@ -1330,20 +1348,20 @@ public class SentinelQualityTools
 
         var blobName = await OperationBlobWriter.WriteAsync(
             "flag_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status   = _workspaceManager.GetBreakerStatus();
+        var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = skipped,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed + skipped,
-            Failures    = failures,
-            Severity    = status.Severity,
-            Directive   = status.Directive,
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = skipped,
+            RolledBack = 0,
+            Attempted = succeeded + failed + skipped,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -1383,7 +1401,7 @@ public class SentinelQualityTools
         Use get_operation_detail(changeId) to inspect per-phase, per-method results.
         """)]
     private async Task<BatchResultSummary> Asyncify(
-        AsyncifyInput     input,
+        AsyncifyInput input,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1392,7 +1410,7 @@ public class SentinelQualityTools
             return halt;
         }
 
-        var items    = new List<OperationItemRecord>();
+        var items = new List<OperationItemRecord>();
         var failures = new List<FailureDetail>();
         int succeeded = 0, failed = 0, skipped = 0;
         var changeId = Guid.NewGuid().ToString("N")[..8];
@@ -1417,10 +1435,10 @@ public class SentinelQualityTools
                         {
                             items.Add(new OperationItemRecord
                             {
-                                FilePath   = f.FilePath,
+                                FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome    = "skipped",
-                                Reason     = "excluded",
+                                Outcome = "skipped",
+                                Reason = "excluded",
                             });
                             skipped++;
                             continue;
@@ -1430,10 +1448,10 @@ public class SentinelQualityTools
                         applyResult1317.PreImages?.TryGetValue(f.FilePath, out beforeSource1339);
                         items.Add(new OperationItemRecord
                         {
-                            FilePath     = f.FilePath,
-                            MethodName   = f.MethodName,
-                            Outcome      = "succeeded",
-                            Reason       = "phase:flag",
+                            FilePath = f.FilePath,
+                            MethodName = f.MethodName,
+                            Outcome = "succeeded",
+                            Reason = "phase:flag",
                             BeforeSource = beforeSource1339,
                         });
                         succeeded++;
@@ -1447,10 +1465,10 @@ public class SentinelQualityTools
                         {
                             items.Add(new OperationItemRecord
                             {
-                                FilePath   = f.FilePath,
+                                FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome    = "skipped",
-                                Reason     = "excluded",
+                                Outcome = "skipped",
+                                Reason = "excluded",
                             });
                             skipped++;
                             continue;
@@ -1458,10 +1476,10 @@ public class SentinelQualityTools
 
                         items.Add(new OperationItemRecord
                         {
-                            FilePath   = f.FilePath,
+                            FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome    = "skipped",
-                            Reason     = "dry_run:flag",
+                            Outcome = "skipped",
+                            Reason = "dry_run:flag",
                         });
                         skipped++;
                     }
@@ -1470,10 +1488,10 @@ public class SentinelQualityTools
                 {
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = s.FilePath,
+                        FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome    = "skipped",
-                        Reason     = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
+                        Outcome = "skipped",
+                        Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
                 }
@@ -1481,10 +1499,10 @@ public class SentinelQualityTools
                 {
                     items.Add(new OperationItemRecord
                     {
-                        FilePath   = a.FilePath,
+                        FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome    = "skipped",
-                        Reason     = "phase:flag — already flagged",
+                        Outcome = "skipped",
+                        Reason = "phase:flag — already flagged",
                     });
                     skipped++;
                 }
@@ -1512,10 +1530,10 @@ public class SentinelQualityTools
                         foreach (var kv in r.Changes) { allChanges[kv.Key] = kv.Value; }
                         items.Add(new OperationItemRecord
                         {
-                            FilePath   = tuples[i].FilePath,
+                            FilePath = tuples[i].FilePath,
                             MethodName = tuples[i].MethodName,
-                            Outcome    = "succeeded",
-                            Reason     = "phase:flag",
+                            Outcome = "succeeded",
+                            Reason = "phase:flag",
                         });
                         succeeded++;
                     }
@@ -1523,19 +1541,19 @@ public class SentinelQualityTools
                     {
                         items.Add(new OperationItemRecord
                         {
-                            FilePath   = tuples[idx].FilePath,
+                            FilePath = tuples[idx].FilePath,
                             MethodName = tuples[idx].MethodName,
-                            Outcome    = "failed",
-                            Reason     = $"phase:flag — {err}",
+                            Outcome = "failed",
+                            Reason = $"phase:flag — {err}",
                         });
                         if (failures.Count < 15)
                         {
                             failures.Add(new FailureDetail
                             {
-                                FilePath   = tuples[idx].FilePath,
+                                FilePath = tuples[idx].FilePath,
                                 MethodName = tuples[idx].MethodName,
-                                Reason     = err,
-                                Outcome    = "failed",
+                                Reason = err,
+                                Outcome = "failed",
                             });
                         }
                         failed++;
@@ -1573,10 +1591,10 @@ public class SentinelQualityTools
                 if (input.Exclusions?.Contains(a.MethodName) == true) { continue; }
                 items.Add(new OperationItemRecord
                 {
-                    FilePath   = a.FilePath,
+                    FilePath = a.FilePath,
                     MethodName = a.MethodName,
-                    Outcome    = "succeeded",
-                    Reason     = "phase:bridge",
+                    Outcome = "succeeded",
+                    Reason = "phase:bridge",
                 });
                 succeeded++;
             }
@@ -1584,19 +1602,19 @@ public class SentinelQualityTools
             {
                 items.Add(new OperationItemRecord
                 {
-                    FilePath   = s.FilePath,
+                    FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome    = "failed",
-                    Reason     = $"phase:bridge — {s.Reason}",
+                    Outcome = "failed",
+                    Reason = $"phase:bridge — {s.Reason}",
                 });
                 if (failures.Count < 15)
                 {
                     failures.Add(new FailureDetail
                     {
-                        FilePath   = s.FilePath,
+                        FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Reason     = s.Reason,
-                        Outcome    = "failed",
+                        Reason = s.Reason,
+                        Outcome = "failed",
                     });
                 }
                 failed++;
@@ -1614,7 +1632,7 @@ public class SentinelQualityTools
                     .Select(a => new UpliftBatchMultiTarget
                     {
                         BridgedMethodName = a.MethodName,
-                        ProjectName       = input.ProjectName,
+                        ProjectName = input.ProjectName,
                     })
                     .ToList();
 
@@ -1623,9 +1641,9 @@ public class SentinelQualityTools
                     var upliftResult = await _asyncBatchEngine.RunUpliftBatchMultiAsync(
                         new UpliftBatchMultiInput
                         {
-                            Targets                     = upliftTargets,
-                            MaxCallersPerMethod         = input.MaxCallersPerMethod,
-                            DryRun                      = input.DryRun,
+                            Targets = upliftTargets,
+                            MaxCallersPerMethod = input.MaxCallersPerMethod,
+                            DryRun = input.DryRun,
                             PropagateCancellationTokens = input.PropagateCancellationTokens,
                         },
                         cancellationToken);
@@ -1636,10 +1654,10 @@ public class SentinelQualityTools
                         {
                             items.Add(new OperationItemRecord
                             {
-                                FilePath   = u.FilePath,
+                                FilePath = u.FilePath,
                                 MethodName = u.CallerMethod,
-                                Outcome    = "succeeded",
-                                Reason     = "phase:uplift",
+                                Outcome = "succeeded",
+                                Reason = "phase:uplift",
                             });
                             succeeded++;
                         }
@@ -1647,19 +1665,19 @@ public class SentinelQualityTools
                         {
                             items.Add(new OperationItemRecord
                             {
-                                FilePath   = s.FilePath,
+                                FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
-                                Outcome    = "failed",
-                                Reason     = $"phase:uplift — {s.Reason}",
+                                Outcome = "failed",
+                                Reason = $"phase:uplift — {s.Reason}",
                             });
                             if (failures.Count < 15)
                             {
                                 failures.Add(new FailureDetail
                                 {
-                                    FilePath   = s.FilePath,
+                                    FilePath = s.FilePath,
                                     MethodName = s.CallerMethod,
-                                    Reason     = s.Reason,
-                                    Outcome    = "failed",
+                                    Reason = s.Reason,
+                                    Outcome = "failed",
                                 });
                             }
                             failed++;
@@ -1682,9 +1700,12 @@ public class SentinelQualityTools
                         new PropagateCtBatchInput
                         {
                             Targets = bridgedFiles.Select(fp => new PropagateCtFileTarget
-                                { FilePath = fp, MethodNames = null }).ToList(),
-                            DryRun       = false,
-                            MaxFiles     = bridgedFiles.Count,
+                            {
+                                FilePath = fp,
+                                MethodNames = null
+                            }).ToList(),
+                            DryRun = false,
+                            MaxFiles = bridgedFiles.Count,
                             FlagFailures = false,
                         },
                         cancellationToken);
@@ -1694,8 +1715,8 @@ public class SentinelQualityTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = a.FilePath,
-                            Outcome  = "succeeded",
-                            Reason   = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
+                            Outcome = "succeeded",
+                            Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
                         });
                     }
                     foreach (var f in ctResult.Failed)
@@ -1703,8 +1724,8 @@ public class SentinelQualityTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = f.FilePath,
-                            Outcome  = "failed",
-                            Reason   = $"phase:propagate_ct — {f.Reason}",
+                            Outcome = "failed",
+                            Reason = $"phase:propagate_ct — {f.Reason}",
                         });
                     }
                 }
@@ -1721,20 +1742,20 @@ public class SentinelQualityTools
 
         var blobName2 = await OperationBlobWriter.WriteAsync(
             "asyncify", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status2   = _workspaceManager.GetBreakerStatus();
+        var status2 = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
         {
-            ChangeId    = changeId,
-            BlobName    = blobName2,
-            Succeeded   = succeeded,
-            Failed      = failed,
-            Skipped     = skipped,
-            RolledBack  = 0,
-            Attempted   = succeeded + failed + skipped,
-            Failures    = failures,
-            Severity    = status2.Severity,
-            Directive   = status2.Directive,
+            ChangeId = changeId,
+            BlobName = blobName2,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = skipped,
+            RolledBack = 0,
+            Attempted = succeeded + failed + skipped,
+            Failures = failures,
+            Severity = status2.Severity,
+            Directive = status2.Directive,
             BreakerOpen = status2.Open,
         };
     }
@@ -1757,7 +1778,7 @@ public class SentinelQualityTools
         ErrorCode="InvalidArgument" — unknown operation name; see Message for valid values.
         """)]
     public async Task<MigrationResult<BatchResultSummary>> AsyncMigrate(
-        string            operation,
+        string operation,
         AsyncMigrateInput input,
         CancellationToken cancellationToken = default)
     {
@@ -1766,7 +1787,7 @@ public class SentinelQualityTools
             return new MigrationResult<BatchResultSummary>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call load_solution first.")
             };
         }
@@ -1779,8 +1800,8 @@ public class SentinelQualityTools
                 "propagate_cancellation_token" => await PropagateCancellationToken(
                     new BatchTargetInput
                     {
-                        Targets  = input.Targets ?? [],
-                        DryRun   = input.DryRun,
+                        Targets = input.Targets ?? [],
+                        DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
                     cancellationToken),
@@ -1788,8 +1809,8 @@ public class SentinelQualityTools
                 "convert_to_async_bridge" => await ConvertToAsyncBridge(
                     new BatchTargetInput
                     {
-                        Targets  = input.Targets ?? [],
-                        DryRun   = input.DryRun,
+                        Targets = input.Targets ?? [],
+                        DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
                     input.PropagateCancellationTokens,
@@ -1798,8 +1819,8 @@ public class SentinelQualityTools
                 "add_cancellation_token" => await AddCancellationToken(
                     new BatchTargetInput
                     {
-                        Targets  = input.Targets ?? [],
-                        DryRun   = input.DryRun,
+                        Targets = input.Targets ?? [],
+                        DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
                     cancellationToken),
@@ -1807,9 +1828,9 @@ public class SentinelQualityTools
                 "run_uplift" => await RunUplift(
                     new RunUpliftInput
                     {
-                        Targets                    = input.UpliftTargets ?? [],
-                        DryRun                     = input.DryRun,
-                        MaxCallersPerMethod        = input.MaxCallersPerMethod,
+                        Targets = input.UpliftTargets ?? [],
+                        DryRun = input.DryRun,
+                        MaxCallersPerMethod = input.MaxCallersPerMethod,
                         PropagateCancellationTokens = input.PropagateCancellationTokens,
                     },
                     cancellationToken),
@@ -1817,12 +1838,12 @@ public class SentinelQualityTools
                 "flag_migration_candidates" => await FlagMigrationCandidates(
                     new FlagCandidatesInput
                     {
-                        Scope       = input.FlagScope,
-                        Targets     = input.FlagTargets,
+                        Scope = input.FlagScope,
+                        Targets = input.FlagTargets,
                         ProjectName = input.ProjectName,
-                        Pattern     = input.Pattern,
-                        MinScore    = input.MinScore,
-                        DryRun      = input.DryRun,
+                        Pattern = input.Pattern,
+                        MinScore = input.MinScore,
+                        DryRun = input.DryRun,
                         ForceRescan = input.ForceRescan,
                     },
                     cancellationToken),
@@ -1830,15 +1851,15 @@ public class SentinelQualityTools
                 "asyncify" => await Asyncify(
                     new AsyncifyInput
                     {
-                        ProjectName                  = input.ProjectName,
-                        MethodTargets                = input.MethodTargets,
-                        Exclusions                   = input.Exclusions,
-                        DryRun                       = input.DryRun,
-                        PropagateCancellationTokens  = input.PropagateCancellationTokens,
-                        MaxMethods                   = input.MaxMethods,
-                        MaxCallersPerMethod          = input.MaxCallersPerMethod,
-                        MinScore                     = input.MinScore,
-                        ScoreThreshold               = input.ScoreThreshold,
+                        ProjectName = input.ProjectName,
+                        MethodTargets = input.MethodTargets,
+                        Exclusions = input.Exclusions,
+                        DryRun = input.DryRun,
+                        PropagateCancellationTokens = input.PropagateCancellationTokens,
+                        MaxMethods = input.MaxMethods,
+                        MaxCallersPerMethod = input.MaxCallersPerMethod,
+                        MinScore = input.MinScore,
+                        ScoreThreshold = input.ScoreThreshold,
                     },
                     cancellationToken),
 
@@ -1854,7 +1875,7 @@ public class SentinelQualityTools
             return new MigrationResult<BatchResultSummary>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+                Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
             };
         }
         catch (Exception ex)
@@ -1862,7 +1883,7 @@ public class SentinelQualityTools
             return new MigrationResult<BatchResultSummary>
             {
                 Success = false,
-                Error   = new ResultError(MigrationErrorCode.Exception,
+                Error = new ResultError(MigrationErrorCode.Exception,
                               "An unexpected error occurred.", ex.Message)
             };
         }
@@ -1870,7 +1891,7 @@ public class SentinelQualityTools
         return new MigrationResult<BatchResultSummary>
         {
             Success = true,
-            Data    = result
+            Data = result
         };
     }
 
@@ -1892,20 +1913,20 @@ public class SentinelQualityTools
     {
         return toolName switch
         {
-            "async_migrate"                         => AsyncMigrateOptions(),
-            "scan"                                  => ScanOptions(),
-            "scan_migration_candidates"             => ScanMigrationCandidatesOptions(),
-            "apply_file_codemod"                    => ApplyFileCodemodOptions(),
-            "apply_method_codemod"                  => ApplyMethodCodemodOptions(),
-            "apply_class_codemod"                   => ApplyClassCodemodOptions(),
-            "generate"                              => GenerateOptions(),
-            "convert_switch_to_pattern_safe"        => ConvertSwitchOptions(),
+            "async_migrate" => AsyncMigrateOptions(),
+            "scan" => ScanOptions(),
+            "scan_migration_candidates" => ScanMigrationCandidatesOptions(),
+            "apply_file_codemod" => ApplyFileCodemodOptions(),
+            "apply_method_codemod" => ApplyMethodCodemodOptions(),
+            "apply_class_codemod" => ApplyClassCodemodOptions(),
+            "generate" => GenerateOptions(),
+            "convert_switch_to_pattern_safe" => ConvertSwitchOptions(),
             "analyze_switch_for_pattern_conversion" => AnalyzeSwitchOptions(),
-            "analyze_foreach_for_linq_conversion"   => AnalyzeForeachOptions(),
+            "analyze_foreach_for_linq_conversion" => AnalyzeForeachOptions(),
             _ => new ToolOptionsResult
             {
                 Description = $"Unknown tool '{toolName}'.",
-                Error       = new ResultError("UnknownTool", $"No options registered for '{toolName}'.")
+                Error = new ResultError("UnknownTool", $"No options registered for '{toolName}'.")
             }
         };
     }
@@ -1959,11 +1980,11 @@ public class SentinelQualityTools
         StructuredOptions = new Dictionary<string, object>
         {
             ["propagate_cancellation_token"] = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
-            ["convert_to_async_bridge"]      = new { Targets = "list of {FilePath, MethodNames}", DryRun = false, PropagateCancellationTokens = true },
-            ["add_cancellation_token"]       = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
-            ["run_uplift"]                   = new { UpliftTargets = "list of {BridgedMethodName, ProjectName?}", DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
-            ["flag_migration_candidates"]    = new { FlagScope = "targets|project", DryRun = false, MinScore = 50, ForceRescan = false },
-            ["asyncify"]                     = new { DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
+            ["convert_to_async_bridge"] = new { Targets = "list of {FilePath, MethodNames}", DryRun = false, PropagateCancellationTokens = true },
+            ["add_cancellation_token"] = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
+            ["run_uplift"] = new { UpliftTargets = "list of {BridgedMethodName, ProjectName?}", DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
+            ["flag_migration_candidates"] = new { FlagScope = "targets|project", DryRun = false, MinScore = 50, ForceRescan = false },
+            ["asyncify"] = new { DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
         }
     };
 
@@ -2218,7 +2239,7 @@ public class SentinelQualityTools
         StructuredOptions = new Dictionary<string, object>
         {
             ["supportedForms"] = new[] { "single-variable assignment", "return statements", "throw statements" },
-            ["rejectedForms"]  = new[] { "multiple-variable assignment per case", "different variables across cases", "complex multi-statement bodies" }
+            ["rejectedForms"] = new[] { "multiple-variable assignment per case", "different variables across cases", "complex multi-statement bodies" }
         }
     };
 
@@ -2346,15 +2367,15 @@ public class SentinelQualityTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["concurrency"]  = new[] { "async_in_constructor", "async_over_sync", "async_void_without_try_catch", "cancellation_token_not_forwarded", "cas_loop_without_backoff", "check_then_act_on_dictionary", "concurrent_collection_opportunities", "configure_await_missing", "double_checked_locking", "inconsistent_async_suffix", "mismatched_await", "missing_cancellation_tokens", "possible_deadlocks", "semaphore_usage", "sequential_independent_awaits", "task_delay_usage", "task_delay_zero_usage", "task_run_in", "task_void_usage", "task_when_all_usage", "task_yield_usage", "unawaited_fire_and_forget", "unobserved_task_in_field", "unsafe_lazy_init", "unsafe_lazy_init_thread", "value_task_misuse" },
-            ["config"]       = new[] { "json_anti_patterns", "package_inconsistency", "project_consistency" },
-            ["convention"]   = new[] { "mutable_public_collection_properties", "mutable_public_properties", "naming_violations", "readonly_field_candidates", "string_magic_values", "todo_fixme_comments" },
-            ["correctness"]  = new[] { "all_throw_sites", "empty_catch_blocks", "exception_handling", "memory_leaks", "misbound_overload_chains", "missing_generic_constraints", "multiple_out_parameter_methods", "non_exhaustive_enum_switches", "possible_infinite_loops", "redundant_cast", "resource_disposal", "services_not_registered", "stack_overflow_risks", "unawaked_dispose", "unbounded_recursion", "unbounded_static_collections", "value_type_mutation_intent" },
-            ["dead-code"]    = new[] { "obsolete_callers", "uninstantiated_types", "unused_constructors", "unused_event_subscriptions", "unused_interfaces", "unused_local_variables", "unused_private_fields", "unused_references" },
-            ["misc"]         = new[] { "anti_patterns", "blocking_calls_in", "finalizer_on_disposable" },
-            ["performance"]  = new[] { "boxing_allocations", "implicit_nullable_boxing", "inefficient_string_comparisons", "linq_n1_patterns", "linq_redundant_where", "multiple_enumeration", "performance", "re_do_s_patterns", "regex_new_in_loop", "string_format_in_loops", "use_frozen_collections" },
-            ["security"]     = new[] { "hardcoded_paths", "reflection_usage", "security", "sql_injection", "unvalidated_regex_source" },
-            ["structure"]    = new[] { "circular_dependencies", "circular_type_references", "duplicate_blocks_in_hierarchy", "duplicate_methods", "interface_extraction_candidates", "internal_classes_that_could_be_private", "large_methods", "large_switch_statements", "large_types", "layer_violations", "long_parameter_list", "namespace_path_mismatches", "primitive_obsession", "structural_smells", "type_cohesion" },
+            ["concurrency"] = new[] { "async_in_constructor", "async_over_sync", "async_void_without_try_catch", "cancellation_token_not_forwarded", "cas_loop_without_backoff", "check_then_act_on_dictionary", "concurrent_collection_opportunities", "configure_await_missing", "double_checked_locking", "inconsistent_async_suffix", "mismatched_await", "missing_cancellation_tokens", "possible_deadlocks", "semaphore_usage", "sequential_independent_awaits", "task_delay_usage", "task_delay_zero_usage", "task_run_in", "task_void_usage", "task_when_all_usage", "task_yield_usage", "unawaited_fire_and_forget", "unobserved_task_in_field", "unsafe_lazy_init", "unsafe_lazy_init_thread", "value_task_misuse" },
+            ["config"] = new[] { "json_anti_patterns", "package_inconsistency", "project_consistency" },
+            ["convention"] = new[] { "mutable_public_collection_properties", "mutable_public_properties", "naming_violations", "readonly_field_candidates", "string_magic_values", "todo_fixme_comments" },
+            ["correctness"] = new[] { "all_throw_sites", "empty_catch_blocks", "exception_handling", "memory_leaks", "misbound_overload_chains", "missing_generic_constraints", "multiple_out_parameter_methods", "non_exhaustive_enum_switches", "possible_infinite_loops", "redundant_cast", "resource_disposal", "services_not_registered", "stack_overflow_risks", "unawaked_dispose", "unbounded_recursion", "unbounded_static_collections", "value_type_mutation_intent" },
+            ["dead-code"] = new[] { "obsolete_callers", "uninstantiated_types", "unused_constructors", "unused_event_subscriptions", "unused_interfaces", "unused_local_variables", "unused_private_fields", "unused_references" },
+            ["misc"] = new[] { "anti_patterns", "blocking_calls_in", "finalizer_on_disposable" },
+            ["performance"] = new[] { "boxing_allocations", "implicit_nullable_boxing", "inefficient_string_comparisons", "linq_n1_patterns", "linq_redundant_where", "multiple_enumeration", "performance", "re_do_s_patterns", "regex_new_in_loop", "string_format_in_loops", "use_frozen_collections" },
+            ["security"] = new[] { "hardcoded_paths", "reflection_usage", "security", "sql_injection", "unvalidated_regex_source" },
+            ["structure"] = new[] { "circular_dependencies", "circular_type_references", "duplicate_blocks_in_hierarchy", "duplicate_methods", "interface_extraction_candidates", "internal_classes_that_could_be_private", "large_methods", "large_switch_statements", "large_types", "layer_violations", "long_parameter_list", "namespace_path_mismatches", "primitive_obsession", "structural_smells", "type_cohesion" },
         }
     };
 }

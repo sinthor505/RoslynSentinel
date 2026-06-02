@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using System.ComponentModel;
-using System.Threading.Tasks;
+﻿using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -59,33 +59,18 @@ public class SentinelModernizationTools
         _logger = logger;
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     [McpServerTool]
     [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with '!' and removes double negations. Returns a file-to-content map of changed files.")]
-    public async Task<Dictionary<string, string>> InvertBooleanLogic(string filePath, string boolName)
-        => await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName);
-
-
-
-
+    public async Task<object> InvertBooleanLogic(string filePath, string boolName)
+    {
+        try
+        {
+            return await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePath}'", boolName, filePath);
+            return $"InvertBooleanLogic failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 }

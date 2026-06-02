@@ -63,14 +63,21 @@ public class SentinelWorkspaceTools
         List<string>? names = null,
         List<KeyValuePair<string, bool>>? enabled = null)
     {
-        return action switch
+        try
         {
-            "list" => (object)_config.GetFeatureStatuses(),
-            "get" => _config.GetFeatureStatuses(names),
-            "update" => (object)UpdateFeaturesInternal(enabled ?? []),
-            _ => throw new ArgumentException(
-                $"Unknown action '{action}'. Valid: list, get, update.", nameof(action))
-        };
+            return action switch
+            {
+                "list" => (object)_config.GetFeatureStatuses(),
+                "get" => _config.GetFeatureStatuses(names),
+                "update" => (object)UpdateFeaturesInternal(enabled ?? []),
+                _ => (object)$"Unknown action '{action}'. Valid: list, get, update."
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Features ({Action}) failed", action);
+            return $"Features failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates)
@@ -83,6 +90,8 @@ public class SentinelWorkspaceTools
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
     public async Task<object> List(string kind, string? projectName = null)
     {
+        try
+        {
         if (kind == "projects")
         {
             var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -92,7 +101,7 @@ public class SentinelWorkspaceTools
         {
             if (string.IsNullOrEmpty(projectName))
             {
-                throw new ArgumentException("projectName is required when kind=files.");
+                return "projectName is required when kind=files.";
             }
             try
             {
@@ -100,34 +109,47 @@ public class SentinelWorkspaceTools
                 var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
                 if (project == null)
                 {
-                    throw new InvalidOperationException($"Project '{projectName}' not found.");
+                    return $"Project '{projectName}' not found.";
                 }
                 return project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>();
             }
-            catch (InvalidOperationException) { throw; }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                throw new InvalidOperationException($"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+                return $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}";
             }
         }
         if (kind == "dependencies")
         {
             if (string.IsNullOrEmpty(projectName))
             {
-                throw new ArgumentException("projectName is required when kind=dependencies.");
+                return "projectName is required when kind=dependencies.";
             }
             return await _dependencyEngine.GetProjectDependenciesAsync(projectName);
         }
-        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: projects, files, dependencies.");
+        return $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "List ({Kind}) failed", kind);
+            return $"List failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Loads a .NET solution into memory for persistent analysis.")]
-    public async Task<string> LoadSolution(string solutionPath)
+    public async Task<object> LoadSolution(string solutionPath)
     {
-        await _workspaceManager.LoadSolutionAsync(solutionPath);
-        return $"Solution loaded: {solutionPath}";
+        try
+        {
+            await _workspaceManager.LoadSolutionAsync(solutionPath);
+            return $"Solution loaded: {solutionPath}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
+            return $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
@@ -177,7 +199,14 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Diagnose unexpected exception");
-            throw new InvalidOperationException($"Diagnose failed: {ex.GetType().Name}: {ex.Message}", ex);
+            return new HealthReport(
+                Healthy: false,
+                Components: new HealthComponents(false, "", false, null, false, null),
+                Workspace: new WorkspaceStatus(0, false, null, 0, 0),
+                Capabilities: [],
+                Errors: [new HealthIssue("E9000", "Diagnose failed", $"{ex.GetType().Name}: {ex.Message}")],
+                Warnings: []
+            );
         }
     }
 
@@ -210,11 +239,13 @@ public class SentinelWorkspaceTools
         int retryCount = 3,
         bool validateOnApply = true)
     {
+        try
+        {
         if (format == "files")
         {
             if (changes == null)
             {
-                throw new ArgumentException("changes is required when format=files.");
+                return "changes is required when format=files.";
             }
             if (action == "apply")
             {
@@ -231,7 +262,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
-                        throw new InvalidOperationException($"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                        return $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}";
                     }
 
                     if (!validation.Success)
@@ -253,7 +284,7 @@ public class SentinelWorkspaceTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ProposedChange validate unexpected exception");
-                    throw new InvalidOperationException($"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                    return $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}";
                 }
             }
         }
@@ -261,7 +292,7 @@ public class SentinelWorkspaceTools
         {
             if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
             {
-                throw new ArgumentException("filePath and unifiedDiff are required when format=diff.");
+                return "filePath and unifiedDiff are required when format=diff.";
             }
             if (action == "apply")
             {
@@ -272,7 +303,7 @@ public class SentinelWorkspaceTools
                         .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
                     if (document == null)
                     {
-                        throw new InvalidOperationException("File not found.");
+                        return "File not found.";
                     }
                     var oldText = await document.GetTextAsync();
                     var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
@@ -293,11 +324,10 @@ public class SentinelWorkspaceTools
                     await WriteBlobForApplyAsync("proposed_change", result);
                     return result;
                 }
-                catch (InvalidOperationException) { throw; }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
-                    throw new InvalidOperationException($"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}", ex);
+                    return $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
                 }
             }
             if (action == "validate")
@@ -305,14 +335,28 @@ public class SentinelWorkspaceTools
                 return await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
             }
         }
-        throw new ArgumentException($"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.");
+        return $"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ProposedChange ({Format}/{Action}) failed", format, action);
+            return $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Retries committing previously failed file changes using server-side cached content. Token-efficient: no need to re-send file contents.")]
-    public async Task<PersistentWorkspaceManager.ApplyChangesResult> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)
+    public async Task<object> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)
     {
-        return await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount);
+        try
+        {
+            return await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RetryFailedChanges failed");
+            return $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
@@ -328,6 +372,8 @@ public class SentinelWorkspaceTools
         """)]
     public async Task<object> StagedChange(string action, string changeId, int retryCount = 3, bool validateOnApply = true)
     {
+        try
+        {
         if (action == "apply")
         {
             // ── Validate-on-apply gate ────────────────────────────────────────
@@ -342,7 +388,7 @@ public class SentinelWorkspaceTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
-                    throw new InvalidOperationException($"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}", ex);
+                    return $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}";
                 }
 
                 if (!validation.Success)
@@ -370,7 +416,13 @@ public class SentinelWorkspaceTools
             var success = _workspaceManager.DiscardStagedChanges(changeId);
             return success ? $"Staged change '{changeId}' discarded." : $"Staged change '{changeId}' not found.";
         }
-        throw new ArgumentException($"Unknown action '{action}'. Valid values: apply, get, validate, discard.");
+        return $"Unknown action '{action}'. Valid values: apply, get, validate, discard.";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "StagedChange ({Action}) failed for '{ChangeId}'", action, changeId);
+            return $"StagedChange failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     /// <summary>
@@ -430,12 +482,14 @@ public class SentinelWorkspaceTools
         """)]
     public async Task<object> GetDiagnostics(string scope, string? scopeName = null, bool summarize = false, int maxDetails = 50, int topN = 20)
     {
+        try
+        {
         DiagnosticSummary summary;
         if (scope == "file")
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new ArgumentException("scopeName (filePath) is required when scope=file.");
+                return "scopeName (filePath) is required when scope=file.";
             }
             summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
         }
@@ -443,7 +497,7 @@ public class SentinelWorkspaceTools
         {
             if (string.IsNullOrEmpty(scopeName))
             {
-                throw new ArgumentException("scopeName (projectName) is required when scope=project.");
+                return "scopeName (projectName) is required when scope=project.";
             }
             summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
         }
@@ -453,7 +507,7 @@ public class SentinelWorkspaceTools
         }
         else
         {
-            throw new ArgumentException($"Unknown scope '{scope}'. Valid values: file, project, solution.");
+            return $"Unknown scope '{scope}'. Valid values: file, project, solution.";
         }
 
         if (!summarize)
@@ -489,22 +543,58 @@ public class SentinelWorkspaceTools
             Warnings: summary.Warnings,
             TopIssues: groups
         );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
+            return $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase.")]
-    public async Task<string> SafeDelete(string filePath, int line, int column)
-        => await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
+    public async Task<object> SafeDelete(string filePath, int line, int column)
+    {
+        try
+        {
+            return await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SafeDelete failed for '{FilePath}' at {Line}:{Column}", filePath, line, column);
+            return $"SafeDelete failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     [McpServerTool]
     [Description("Creates a new project and adds it to the current solution.")]
-    public async Task<string> CreateProject(string projectName, string projectType = "console")
-        => await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+    public async Task<object> CreateProject(string projectName, string projectType = "console")
+    {
+        try
+        {
+            return await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
+            return $"CreateProject failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     [McpServerTool]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
-    public async Task<string> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
-        => await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+    public async Task<object> SplitProjectByFolder(string sourceProjectName, string folderName, string targetProjectName)
+    {
+        try
+        {
+            return await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
+            return $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}";
+        }
+    }
 
     // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
 
@@ -512,6 +602,8 @@ public class SentinelWorkspaceTools
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match when names are overloaded.")]
     public async Task<string> GetMethodSource(string filePath, string methodName)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
 
@@ -526,13 +618,11 @@ public class SentinelWorkspaceTools
 
         if (document == null)
         {
-            throw new FileNotFoundException(
-                $"File not found in solution: {normalizedPath} " +
-                $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).");
+            return $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).";
         }
 
-        var root = await document.GetSyntaxRootAsync()
-                   ?? throw new InvalidOperationException("Syntax root not found.");
+        var root = await document.GetSyntaxRootAsync();
+        if (root == null) return "Syntax root not found.";
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                          .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
@@ -541,16 +631,24 @@ public class SentinelWorkspaceTools
 
         if (method == null)
         {
-            throw new InvalidOperationException($"Method '{methodName}' not found in '{filePath}'.");
+            return $"Method '{methodName}' not found in '{filePath}'.";
         }
 
         return method.ToFullString();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
+            return $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Returns a structural outline of a file: namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Does not include member bodies.")]
-    public async Task<List<OutlineItem>> GetFileOutline(string filePath)
+    public async Task<object> GetFileOutline(string filePath)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
 
@@ -565,13 +663,12 @@ public class SentinelWorkspaceTools
 
         if (document == null)
         {
-            throw new FileNotFoundException(
-                $"File not found in solution: {normalizedPath} " +
-                $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).");
+            return $"File not found in solution: {normalizedPath} " +
+                   $"(existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).";
         }
 
-        var root = await document.GetSyntaxRootAsync()
-                   ?? throw new InvalidOperationException("Syntax root not found.");
+        var root = await document.GetSyntaxRootAsync();
+        if (root == null) return "Syntax root not found.";
 
         var items = new List<OutlineItem>();
 
@@ -630,16 +727,24 @@ public class SentinelWorkspaceTools
         }
 
         return items;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetFileOutline failed for '{FilePath}'", filePath);
+            return $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. Solution-scoped grep. maxResults caps total matches.")]
-    public async Task<List<TextSearchMatch>> SearchSolutionText(
+    public async Task<object> SearchSolutionText(
         string pattern,
         bool isRegex = false,
         string? fileGlob = null,
         int maxResults = 200)
     {
+        try
+        {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var results = new List<TextSearchMatch>();
 
@@ -708,6 +813,12 @@ public class SentinelWorkspaceTools
         }
 
         return results;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
+            return $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     private static bool GlobMatchesFileName(string filePath, string glob)
@@ -721,11 +832,13 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: 'failures', 'skipped', 'rolledback', 'file:<path>', or null for all items. maxItems caps the returned slice — never dumps the full document.")]
-    public async Task<OperationDetailResult> GetOperationDetail(
+    public async Task<object> GetOperationDetail(
         string changeId,
         string? filter = null,
         int maxItems = 50)
     {
+        try
+        {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
@@ -781,12 +894,20 @@ public class SentinelWorkspaceTools
             Filter = filter,
             Items = slice,
         };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
+            return $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     [McpServerTool]
     [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Available for all apply operations (proposed_change, staged_change, and batch-first tools).")]
     public async Task<string> UndoLastApply(string changeId)
     {
+        try
+        {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
@@ -836,6 +957,12 @@ public class SentinelWorkspaceTools
 
         var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
         return $"Reverted {reverted.Count} files.{failedPart}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
+            return $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}";
+        }
     }
 
     // ── Phase 3 — Circuit breaker tools ────────────────────────────────────
