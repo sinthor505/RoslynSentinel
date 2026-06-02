@@ -2325,81 +2325,62 @@ public class SentinelQualityTools
         }
     };
 
-    private static ToolOptionsResult ScanOptions() => new()
+    private static ToolOptionsResult ScanOptions()
     {
-        Description = """
-            scan — valid detector IDs grouped by domain (94 total):
+        // Single source of truth: derived from SentinelScanTools.s_descriptors.
+        // Adding, removing, or reclassifying a detector in s_descriptors automatically
+        // propagates here — no manual sync required.
+        var byDomain = SentinelScanTools.s_descriptors
+            .GroupBy(d => d.Domain)
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(d => d.Id).ToArray());
 
-            concurrency (26):
-              async_in_constructor, async_over_sync, async_void_without_try_catch,
-              cancellation_token_not_forwarded, cas_loop_without_backoff,
-              check_then_act_on_dictionary, concurrent_collection_opportunities,
-              configure_await_missing, double_checked_locking, inconsistent_async_suffix,
-              mismatched_await, missing_cancellation_tokens, possible_deadlocks,
-              semaphore_usage, sequential_independent_awaits, task_delay_usage,
-              task_delay_zero_usage, task_run_in, task_void_usage, task_when_all_usage,
-              task_yield_usage, unawaited_fire_and_forget, unobserved_task_in_field,
-              unsafe_lazy_init, unsafe_lazy_init_thread, value_task_misuse
+        int total = SentinelScanTools.s_descriptors.Length;
 
-            config (3):
-              json_anti_patterns, package_inconsistency, project_consistency
-
-            convention (6):
-              mutable_public_collection_properties, mutable_public_properties,
-              naming_violations, readonly_field_candidates, string_magic_values,
-              todo_fixme_comments
-
-            correctness (18):
-              all_throw_sites, empty_catch_blocks, exception_handling,
-              memory_leaks, misbound_overload_chains, missing_generic_constraints,
-              multiple_out_parameter_methods, non_exhaustive_enum_switches,
-              possible_infinite_loops, redundant_cast, resource_disposal,
-              services_not_registered, stack_overflow_risks, unawaked_dispose,
-              unbounded_recursion, unbounded_static_collections, value_type_mutation_intent
-
-            dead-code (8):
-              obsolete_callers, uninstantiated_types, unused_constructors,
-              unused_event_subscriptions, unused_interfaces, unused_local_variables,
-              unused_private_fields, unused_references
-
-            misc (3):
-              anti_patterns, blocking_calls_in, finalizer_on_disposable
-
-            performance (11):
-              boxing_allocations, implicit_nullable_boxing,
-              inefficient_string_comparisons, linq_n1_patterns, linq_redundant_where,
-              multiple_enumeration, performance, re_do_s_patterns, regex_new_in_loop,
-              string_format_in_loops, use_frozen_collections
-
-            security (5):
-              hardcoded_paths, reflection_usage, security, sql_injection,
-              unvalidated_regex_source
-
-            structure (14):
-              circular_dependencies, circular_type_references,
-              duplicate_blocks_in_hierarchy, duplicate_methods,
-              interface_extraction_candidates, internal_classes_that_could_be_private,
-              large_methods, large_switch_statements, large_types, layer_violations,
-              long_parameter_list, namespace_path_mismatches, primitive_obsession,
-              structural_smells, type_cohesion
-
-            scope values: "file" | "project" | "solution"
-            scopeName: filePath for scope=file; projectName for scope=project; omit for solution.
-              For duplicate_blocks_in_hierarchy, scopeName is the root type name.
-            File-scope-only detectors require scope="file". unused_references requires scope="project".
-            Call describe_scan_detectors for per-detector scope hints and descriptions.
-            """,
-        StructuredOptions = new Dictionary<string, object>
+        var sb = new StringBuilder();
+        sb.AppendLine($"scan — valid detector IDs grouped by domain ({total} total):");
+        sb.AppendLine();
+        foreach (var (domain, ids) in byDomain)
         {
-            ["concurrency"] = new[] { "async_in_constructor", "async_over_sync", "async_void_without_try_catch", "cancellation_token_not_forwarded", "cas_loop_without_backoff", "check_then_act_on_dictionary", "concurrent_collection_opportunities", "configure_await_missing", "double_checked_locking", "inconsistent_async_suffix", "mismatched_await", "missing_cancellation_tokens", "possible_deadlocks", "semaphore_usage", "sequential_independent_awaits", "task_delay_usage", "task_delay_zero_usage", "task_run_in", "task_void_usage", "task_when_all_usage", "task_yield_usage", "unawaited_fire_and_forget", "unobserved_task_in_field", "unsafe_lazy_init", "unsafe_lazy_init_thread", "value_task_misuse" },
-            ["config"] = new[] { "json_anti_patterns", "package_inconsistency", "project_consistency" },
-            ["convention"] = new[] { "mutable_public_collection_properties", "mutable_public_properties", "naming_violations", "readonly_field_candidates", "string_magic_values", "todo_fixme_comments" },
-            ["correctness"] = new[] { "all_throw_sites", "empty_catch_blocks", "exception_handling", "memory_leaks", "misbound_overload_chains", "missing_generic_constraints", "multiple_out_parameter_methods", "non_exhaustive_enum_switches", "possible_infinite_loops", "redundant_cast", "resource_disposal", "services_not_registered", "stack_overflow_risks", "unawaked_dispose", "unbounded_recursion", "unbounded_static_collections", "value_type_mutation_intent" },
-            ["dead-code"] = new[] { "obsolete_callers", "uninstantiated_types", "unused_constructors", "unused_event_subscriptions", "unused_interfaces", "unused_local_variables", "unused_private_fields", "unused_references" },
-            ["misc"] = new[] { "anti_patterns", "blocking_calls_in", "finalizer_on_disposable" },
-            ["performance"] = new[] { "boxing_allocations", "implicit_nullable_boxing", "inefficient_string_comparisons", "linq_n1_patterns", "linq_redundant_where", "multiple_enumeration", "performance", "re_do_s_patterns", "regex_new_in_loop", "string_format_in_loops", "use_frozen_collections" },
-            ["security"] = new[] { "hardcoded_paths", "reflection_usage", "security", "sql_injection", "unvalidated_regex_source" },
-            ["structure"] = new[] { "circular_dependencies", "circular_type_references", "duplicate_blocks_in_hierarchy", "duplicate_methods", "interface_extraction_candidates", "internal_classes_that_could_be_private", "large_methods", "large_switch_statements", "large_types", "layer_violations", "long_parameter_list", "namespace_path_mismatches", "primitive_obsession", "structural_smells", "type_cohesion" },
+            sb.AppendLine($"{domain} ({ids.Length}):");
+            // Wrap ids at ~80 chars, indented two spaces
+            const int Indent = 2;
+            const int WrapAt = 80;
+            var line = new StringBuilder(new string(' ', Indent));
+            foreach (var id in ids)
+            {
+                string candidate = line.Length == Indent ? id : ", " + id;
+                if (line.Length + candidate.Length > WrapAt && line.Length > Indent)
+                {
+                    sb.AppendLine(line.ToString());
+                    line.Clear().Append(new string(' ', Indent)).Append(id);
+                }
+                else
+                {
+                    line.Append(candidate);
+                }
+            }
+            if (line.Length > Indent)
+            {
+                sb.AppendLine(line.ToString());
+            }
+            sb.AppendLine();
         }
-    };
+        sb.AppendLine("scope values: \"file\" | \"project\" | \"solution\"");
+        sb.AppendLine("scopeName: filePath for scope=file; projectName for scope=project; omit for solution.");
+        sb.AppendLine("  For duplicate_blocks_in_hierarchy, scopeName is the root type name.");
+        sb.AppendLine("File-scope-only detectors require scope=\"file\". unused_references requires scope=\"project\".");
+        sb.Append("Call describe_scan_detectors for per-detector scope hints and descriptions.");
+
+        return new ToolOptionsResult
+        {
+            Description = sb.ToString(),
+            StructuredOptions = new Dictionary<string, object>(
+                byDomain.Select(kvp =>
+                    new KeyValuePair<string, object>(kvp.Key, kvp.Value)))
+        };
+    }
 }
+// v2 — ScanOptions() now derived from SentinelScanTools.s_descriptors (single source of truth)

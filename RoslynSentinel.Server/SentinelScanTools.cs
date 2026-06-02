@@ -437,9 +437,9 @@ public class SentinelScanTools
         return scopeName;
     }
 
-    private sealed record ScanDescriptor(string Id, string Domain, string ScopeHint, string Description);
+    internal sealed record ScanDescriptor(string Id, string Domain, string ScopeHint, string Description);
 
-    private static readonly ScanDescriptor[] s_descriptors =
+    internal static readonly ScanDescriptor[] s_descriptors =
     [
         // async (20)
         new("async_in_constructor", "async", "file", "Finds constructors that call async methods or contain await expressions. Constructors cannot be async."),
@@ -548,3 +548,4 @@ public class SentinelScanTools
     ];
 }
 // v2 — async domain extracted from concurrency; blocking_calls_in and unawaked_dispose relocated
+// v2 — async domain extracted; s_descriptors made internal; ScanOptions derived from s_descriptors

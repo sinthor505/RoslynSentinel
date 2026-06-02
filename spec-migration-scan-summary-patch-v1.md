@@ -1,8 +1,8 @@
 # Spec — Migration Scan Summary Patch (post-v2)
-<!-- spec-migration-scan-summary-patch-v1.md / v7 -->
+<!-- spec-migration-scan-summary-patch-v1.md / v8 -->
 **Target server:** RoslynSentinel (rhale78)
-**Date:** 2026-05-31
-**Supersedes:** spec-migration-scan-summary-patch-v1.md / v6
+**Date:** 2026-06-02
+**Supersedes:** spec-migration-scan-summary-patch-v1.md / v7
 **Depends on:** spec-migration-scan-result-handling-v2.md fully implemented and passing
 **Motivated by:** Six MCP tool usage feedback sessions (May 31, 2026):
 - Session 1 (post-v2): naming confusion, missing actionable detail in summary, two missing fields → §P1–P5
@@ -14,9 +14,10 @@
 - Session 5: B1 root cause confirmed (byClass bloat + ordering), B2 root cause corrected
   (cross-project compilation in FindObsoleteCallersAsync), Bug 3 threshold confirmed → B1/B2
   updated; v2 spec §2.3 threshold updated to 30KB
-- Session 6: VS Code intercept threshold confirmed ~10KB (not ~64KB); fat TopCandidates
-  identified as third cause of B1; describe_tool_options registry incomplete; empty response
-  semantics gap → B1 rewritten with slim types + 5-fix structure; B8/B9 pending
+- Session 6 (post-B fixes): VS Code intercept threshold confirmed ~10KB; fat TopCandidates
+  identified as third cause of B1; describe_advanced_tool_options registry incomplete (5 missing
+  tools); empty response semantics gap → B1 rewritten with slim types + 5-fix structure;
+  §B8 (registry completion) and §B9 (empty response semantics) added
 
 ---
 
@@ -748,6 +749,113 @@ Remove or correct any existing description text that implies `minScore` only app
 
 ---
 
+## B8 — `describe_advanced_tool_options` registry incomplete
+
+**File:** `RoslynSentinel.Server/SentinelQualityTools.cs` — `DescribeAdvancedToolOptions` switch
+
+### Problem
+Session 6 confirmed that `wrap_range`, `add_member`, `move_all_types_to_files`,
+`staged_change`, and `proposed_change` exist in the MCP tool list but return
+`ErrorCode = "NoFurtherDocumentation"` (or equivalent UnknownTool response) from
+`describe_advanced_tool_options`. Agents hitting this error on common refactoring tools
+cannot discover their valid parameter schemas.
+
+### Fix
+Add the five missing tools to the switch statement in `DescribeAdvancedToolOptions`. For each,
+implement a private `XxxOptions()` method returning a `ToolOptionsResult` with:
+- `Description`: human-readable parameter table (action values, required fields per action,
+  valid wrapper/kind/destination values, defaults)
+- `StructuredOptions`: machine-readable `Dictionary<string, object>` matching the existing
+  pattern in the covered tools
+
+**`wrap_range`** — document the `wrapper` enum values (`tryCatch`, `using`, `region`) and
+per-wrapper required fields (`name`, `exceptionType`, `catchVariableName`, `catchBody`).
+
+**`add_member`** — document the `position` format (`null`/`"end"`/`"after:MemberName"`/
+`"before:MemberName"`) and the `newMemberSource` expectation (full C# member declaration text).
+
+**`move_all_types_to_files`** — document `scope` values (`file`, `project`, `solution`) and
+`scopeName` requirements per scope.
+
+**`staged_change`** — document `action` values (`apply`, `get`, `validate`, `discard`) and
+when each is appropriate.
+
+**`proposed_change`** — document `format` values (`files`, `diff`), `action` values (`apply`,
+`validate`), and the `changes` dict vs `unifiedDiff` distinction.
+
+### Anti-circling
+Do not invent parameter descriptions — read the existing `[Description]` attribute on each tool
+and the existing covered-tool options methods for the format to follow. Content is cut from the
+existing descriptions, not invented.
+
+### Test
+- New T22: `describe_advanced_tool_options("wrap_range")` → `Error == null`; `Description`
+  contains `"tryCatch"`, `"using"`, `"region"`
+- New T23: `describe_advanced_tool_options("staged_change")` → `Error == null`; `Description`
+  contains `"apply"`, `"validate"`, `"discard"`
+- New T24: `describe_advanced_tool_options("proposed_change")` → `Error == null`; `Description`
+  contains `"files"`, `"diff"`
+
+---
+
+## B9 — Empty response semantics on mutation tools
+
+**File:** `RoslynSentinel.Server/` — any `[McpServerTool]` method currently returning
+`string`, `void`, or empty string on success
+
+### Problem
+Session 6 confirmed `add_summary_comment` and `wrap_range` return an empty string instead of
+a structured response. An agent receiving `""` cannot determine whether the operation succeeded,
+was skipped (e.g. summary already exists), or silently failed. This breaks the agent's ability
+to confirm work before proceeding.
+
+### Fix
+All `[McpServerTool]` methods that currently return a raw `string` or empty `string` on success
+must return a structured result. The minimum acceptable shape:
+
+```csharp
+// For tools that return updated file content on success:
+public sealed class ToolUpdateResult
+{
+    public bool Success { get; set; }
+    public string? UpdatedContent { get; set; }  // null when autoStage=true
+    public string? ChangeId { get; set; }        // populated when autoStage=true
+    public string? Message { get; set; }         // human-readable status
+    public ResultError? Error { get; set; }      // null on success
+}
+```
+
+Add `ToolUpdateResult` to `MigrationEnvelope.cs`.
+
+**For `add_summary_comment`:**
+- On success (summary added or replaced): `Success = true`, `ChangeId` or `UpdatedContent`
+  populated per `autoStage` flag, `Message = "Summary comment added to '{targetName}'."` or
+  `"Summary comment replaced on '{targetName}'."`
+- On skip (target not found): `Success = false`, `ErrorCode = "TargetNotFound"`,
+  `Message = "No type or member named '{targetName}' found in '{filePath}'."`
+
+**For `wrap_range`:**
+- On success: `Success = true`, `ChangeId` or `UpdatedContent` populated
+- On invalid range: `Success = false`, `ErrorCode = "InvalidArgument"`
+
+**Scope:** audit all `[McpServerTool]` methods in the server. Find every method returning
+`string` or `Task<string>` where the returned string is file content or an empty string.
+Apply `ToolUpdateResult` consistently. Do not change methods that already return a typed
+result object.
+
+**Do not** change methods that return `string` as meaningful data (e.g. a tool that returns
+a formatted report as a string — that is data, not a status signal).
+
+### Test
+- New T25: `add_summary_comment` on a known type → `Success = true`; `ChangeId` non-null
+  (autoStage=true default); response is not empty string
+- New T26: `add_summary_comment` with `targetName` that does not exist → `Success = false`;
+  `ErrorCode = "TargetNotFound"`
+- New T27: `wrap_range` with valid range and `wrapper="region"` → `Success = true`; response
+  is not empty string
+
+---
+
 ## Test summary — all cases
 
 | # | Section | Case | Key assertion |
@@ -756,7 +864,7 @@ Remove or correct any existing description text that implies `minScore` only app
 | T10 | P4 | `summarize=true, topN=5, minScore=70` | `TopCandidates` ≤ 5, all Score ≥ 70 |
 | T11 | P4 | `summarize=true`, no topN/minScore | `TopCandidates == null` |
 | T12 | P5 | `get_workspace_health` after load | `LoadedSolutionPath` non-null, ends with `.sln` |
-| T13 | B2 | `get_async_migration_progress` after load (solution with `.Designer.cs`) | No exception; report fields non-null |
+| T13 | B2 | `get_async_migration_progress` after load | No exception; report fields non-null |
 | T14 | B2 | `get_async_migration_progress(projectName:...)` | Scoped report; no exception |
 | T15 | B3 | `project_doc` read, no solution loaded | Succeeds; no `SolutionNotLoaded` error |
 | T16 | B4 | All `MigrationCandidateFinding.Reason` fields | Every token matches `[\w\-]+:[0-9\-]+` |
@@ -765,6 +873,12 @@ Remove or correct any existing description text that implies `minScore` only app
 | T19 | B6 | Large-result offload message | Contains `"get_scan_result"` and `OperationId`; no `"read_file"` |
 | T20 | B7 | `summarize=true, minScore=80` | `TotalCandidates` = filtered count; result inline |
 | T21 | B7b | `summarize=false, minScore=85, limit=20` | All records have `Score >= 85`; `TotalRecords` = filtered count (not 986) |
+| T22 | B8 | `describe_advanced_tool_options("wrap_range")` | `Error == null`; description contains wrapper values |
+| T23 | B8 | `describe_advanced_tool_options("staged_change")` | `Error == null`; description contains action values |
+| T24 | B8 | `describe_advanced_tool_options("proposed_change")` | `Error == null`; description contains format values |
+| T25 | B9 | `add_summary_comment` on known type | `Success = true`; `ChangeId` non-null; not empty string |
+| T26 | B9 | `add_summary_comment`, target not found | `Success = false`; `ErrorCode = "TargetNotFound"` |
+| T27 | B9 | `wrap_range` valid range + region | `Success = true`; not empty string |
 
 Existing tests T8, T9 from `spec-migration-scan-result-handling-v2.md §6` remain load-bearing —
 confirm they still pass after B2 and B5 changes.
@@ -775,7 +889,7 @@ confirm they still pass after B2 and B5 changes.
 
 - Re-speccing `get_scan_result` — fully specced in `spec-migration-scan-result-handling-v2.md §3`;
   implement from that document.
-- Re-speccing `describe_tool_options` — fully specced in
+- Re-speccing `describe_advanced_tool_options` — fully specced in
   `spec-tool-description-compression-v1.md §1`; implement from that document.
 - VS Code infrastructure-level response offload (where VS Code intercepts a large inline response
   and writes it to a resource file outside `.roslynsentinel/`). This is not fixable server-side.
@@ -784,5 +898,7 @@ confirm they still pass after B2 and B5 changes.
 - Combined health snapshot tool — deferred (carried from §P out-of-scope).
 - Any changes to the circuit-breaker logic or `BatchResultSummary` shape beyond the envelope wrap
   in B5.
+- B9 scope: do not change tools that return `string` as meaningful data content. Only target
+  tools where an empty string or raw file content string is being used as a status signal.
 
-<!-- v5 -->
+<!-- v8 -->

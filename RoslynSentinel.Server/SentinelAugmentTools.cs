@@ -51,7 +51,7 @@ public class SentinelAugmentTools
 
         Returns: UpdatedContent with the corrected encapsulation applied.
         """)]
-    public async Task<object> EncapsulateFieldSafe(
+    public async Task<ToolUpdateResult> EncapsulateFieldSafe(
         string filePath,
         string fieldName,
         string? overridePropertyName = null)
