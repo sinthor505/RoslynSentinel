@@ -337,7 +337,7 @@ public class SentinelScanTools
                 return (object)await _metricsEngine.AnalyzeTypeCohesionAsync(RequireFile(scope, scopeName), null);
 
             default:
-                throw new ArgumentException($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
+                return ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
         }
     }
 
@@ -391,7 +391,7 @@ public class SentinelScanTools
             case "unreachableCode":
                 return (object)await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
             default:
-                throw new ArgumentException($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
+                return ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
         }
     }
 
@@ -399,7 +399,7 @@ public class SentinelScanTools
     {
         if (scope != "file" || string.IsNullOrEmpty(scopeName))
         {
-            throw new ArgumentException("This detector requires scope='file' with a filePath as scopeName.");
+            return ("This detector requires scope='file' with a filePath as scopeName.");
         }
         return scopeName;
     }
@@ -408,7 +408,7 @@ public class SentinelScanTools
     {
         if (scope != "project" || string.IsNullOrEmpty(scopeName))
         {
-            throw new ArgumentException("This detector requires scope='project' with a projectName as scopeName.");
+            return ("This detector requires scope='project' with a projectName as scopeName.");
         }
         return scopeName;
     }

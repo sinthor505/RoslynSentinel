@@ -294,7 +294,7 @@ public class SentinelCodemodTools
                     return r;
                 }
             default:
-                throw new ArgumentException(
+                return (
                     $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " +
                     "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " +
                     "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " +
@@ -346,7 +346,7 @@ public class SentinelCodemodTools
             case "convert_expression_body":
                 {
                     if (string.IsNullOrEmpty(direction))
-                        throw new ArgumentException("direction is required for convert_expression_body. Valid values: ToExpression, ToBlock.");
+                        return ("direction is required for convert_expression_body. Valid values: ToExpression, ToBlock.");
                     var r = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter);
                     if (string.IsNullOrEmpty(r))
                         return ($"convert_expression_body failed for '{methodName}' ({direction}) in '{filePath}': file not found, member not found, or context snippet did not match. Ensure the solution is loaded.");
@@ -554,7 +554,7 @@ public class SentinelCodemodTools
                 {
                     var propName = propertyName ?? className;
                     if (string.IsNullOrEmpty(direction))
-                        throw new ArgumentException("direction is required for convert_property_safe. Valid values: ToFullProperty, ToAutoProperty.");
+                        return ("direction is required for convert_property_safe. Valid values: ToFullProperty, ToAutoProperty.");
                     var r = await _codeGenerationEngine.ConvertPropertySafeAsync(filePath, propName, direction, contextSnippet, lineBefore, lineAfter);
                     if (string.IsNullOrEmpty(r))
                         return ($"convert_property_safe failed for property '{propName}' ({direction}) in '{filePath}': file not found, property not found, or context snippet did not match. Ensure the solution is loaded.");
@@ -625,12 +625,7 @@ public class SentinelCodemodTools
                     return r;
                 }
             default:
-                throw new ArgumentException(
-                    $"Unknown transform '{transform}'. Valid values: add_validation_to_poco, class_to_record, " +
-                    "convert_abstract_to_interface, convert_property_safe, convert_property_to_methods, " +
-                    "convert_to_background_service, convert_to_source_generated_logging, document_poco_fields, " +
-                    "make_class_immutable, record_to_class, replace_constructor_with_factory, sort_members, " +
-                    "upgrade_to_primary_constructor.");
+                return ($"Unknown transform '{transform}'. Valid values: add_validation_to_poco, class_to_record, " + "convert_abstract_to_interface, convert_property_safe, convert_property_to_methods, " + "convert_to_background_service, convert_to_source_generated_logging, document_poco_fields, " + "make_class_immutable, record_to_class, replace_constructor_with_factory, sort_members, " + "upgrade_to_primary_constructor.");
         }
     }
 
@@ -667,11 +662,11 @@ public class SentinelCodemodTools
             case "add_benchmark_stub":
                 {
                     if (string.IsNullOrEmpty(filePath))
-                        throw new ArgumentException("filePath is required for add_benchmark_stub.");
+                        return ("filePath is required for add_benchmark_stub.");
                     if (string.IsNullOrEmpty(className))
-                        throw new ArgumentException("className is required for add_benchmark_stub.");
+                        return ("className is required for add_benchmark_stub.");
                     if (string.IsNullOrEmpty(methodName))
-                        throw new ArgumentException("methodName is required for add_benchmark_stub.");
+                        return ("methodName is required for add_benchmark_stub.");
                     var r = await _testingEngine.AddBenchmarkStubAsync(filePath, className, methodName);
                     if (string.IsNullOrEmpty(r))
                         return ($"add_benchmark_stub failed for '{className}.{methodName}' in '{filePath}': file not found, class not found, or method not found. Ensure the solution is loaded.");
@@ -680,9 +675,9 @@ public class SentinelCodemodTools
             case "generate_constructor":
                 {
                     if (string.IsNullOrEmpty(filePath))
-                        throw new ArgumentException("filePath is required for generate_constructor.");
+                        return ("filePath is required for generate_constructor.");
                     if (string.IsNullOrEmpty(className))
-                        throw new ArgumentException("className is required for generate_constructor.");
+                        return ("className is required for generate_constructor.");
                     var r = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
                     if (string.IsNullOrEmpty(r))
                         return ($"generate_constructor failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.");

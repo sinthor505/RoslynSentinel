@@ -110,7 +110,7 @@ public class SentinelIntelligenceTools
         {
             return await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
         }
-        throw new ArgumentException($"Unknown aspect '{aspect}'. Valid values: info, blastRadius.");
+        return ($"Unknown aspect '{aspect}'. Valid values: info, blastRadius.");
     }
 
 
@@ -159,7 +159,7 @@ public class SentinelIntelligenceTools
         {
             return await _analysisEngine.GenerateCallTreeAsync(filePath, methodName, maxDepth);
         }
-        throw new ArgumentException($"Unknown direction '{direction}'. Valid values: forward, reverse, tree.");
+        return ($"Unknown direction '{direction}'. Valid values: forward, reverse, tree.");
     }
 
 
@@ -203,7 +203,7 @@ public class SentinelIntelligenceTools
         {
             return await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name);
         }
-        throw new ArgumentException($"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.");
+        return ($"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.");
     }
 
     [McpServerTool]
@@ -222,7 +222,7 @@ public class SentinelIntelligenceTools
         }
         if (string.IsNullOrEmpty(projectName))
         {
-            throw new ArgumentException("projectName is required when persistBaseline=false.");
+            return ("projectName is required when persistBaseline=false.");
         }
         return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
     }
