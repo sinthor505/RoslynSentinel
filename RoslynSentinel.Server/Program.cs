@@ -61,7 +61,7 @@ builder.Logging.ClearProviders();
 
 var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "server.log");
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Verbose()
     .Enrich.FromLogContext()
     .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
