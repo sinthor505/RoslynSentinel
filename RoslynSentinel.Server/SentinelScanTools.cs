@@ -88,7 +88,7 @@ public class SentinelScanTools
         Dispatches a named detector across a file, project, or entire solution.
 
         detector:  one of 94 detector IDs \u2014 call describe_advanced_tool_options("scan") for the full
-                   list grouped by domain (concurrency, config, convention, correctness,
+                   list grouped by domain (async, concurrency, config, convention, correctness,
                    dead-code, misc, performance, security, structure).
         scope:     "file" | "project" | "solution"
         scopeName: filePath when scope=file; projectName when scope=project; omit for solution.
@@ -111,7 +111,7 @@ public class SentinelScanTools
         {
             switch (detector)
             {
-                // ── concurrency ────────────────────────────────────────────────────
+                // ── async ──────────────────────────────────────────────────────────
 
                 case "async_in_constructor":
                     return (object)await _asyncSafetyEngine.FindAsyncInConstructorAsync(RequireFile(scope, scopeName));
@@ -119,28 +119,18 @@ public class SentinelScanTools
                     return (object)await _asyncSafetyEngine.FindAsyncOverSyncAsync(RequireFile(scope, scopeName));
                 case "async_void_without_try_catch":
                     return (object)await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
+                case "blocking_calls_in":
+                    return (object)await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
                 case "cancellation_token_not_forwarded":
                     return (object)await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
-                case "cas_loop_without_backoff":
-                    return (object)await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
-                case "check_then_act_on_dictionary":
-                    return (object)await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
-                case "concurrent_collection_opportunities":
-                    return (object)await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
                 case "configure_await_missing":
                     return (object)await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(RequireFile(scope, scopeName));
-                case "double_checked_locking":
-                    return (object)await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
                 case "inconsistent_async_suffix":
                     return (object)await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
                 case "mismatched_await":
                     return (object)await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
                 case "missing_cancellation_tokens":
                     return (object)await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
-                case "possible_deadlocks":
-                    return (object)await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
-                case "semaphore_usage":
-                    return (object)await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
                 case "sequential_independent_awaits":
                     return (object)await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
                 case "task_delay_usage":
@@ -157,14 +147,31 @@ public class SentinelScanTools
                     return (object)await _asyncSafetyEngine.FindTaskYieldUsageAsync(RequireFile(scope, scopeName));
                 case "unawaited_fire_and_forget":
                     return (object)await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
+                case "unawaked_dispose":
+                    return (object)await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
                 case "unobserved_task_in_field":
                     return (object)await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
+                case "value_task_misuse":
+                    return (object)await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
+
+                // ── concurrency ────────────────────────────────────────────────────
+
+                case "cas_loop_without_backoff":
+                    return (object)await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
+                case "check_then_act_on_dictionary":
+                    return (object)await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
+                case "concurrent_collection_opportunities":
+                    return (object)await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
+                case "double_checked_locking":
+                    return (object)await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
+                case "possible_deadlocks":
+                    return (object)await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+                case "semaphore_usage":
+                    return (object)await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
                 case "unsafe_lazy_init":
                     return (object)await _asyncSafetyEngine.FindUnsafeLazyInitAsync(RequireFile(scope, scopeName));
                 case "unsafe_lazy_init_thread":
                     return (object)await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
-                case "value_task_misuse":
-                    return (object)await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
 
                 // ── config ─────────────────────────────────────────────────────────
 
@@ -218,8 +225,6 @@ public class SentinelScanTools
                     return (object)await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
                 case "stack_overflow_risks":
                     return (object)await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(RequireFile(scope, scopeName), false);
-                case "unawaked_dispose":
-                    return (object)await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
                 case "unbounded_recursion":
                     return (object)await _analysisEngine.FindUnboundedRecursionAsync(projectName);
                 case "unbounded_static_collections":
@@ -250,8 +255,6 @@ public class SentinelScanTools
 
                 case "anti_patterns":
                     return (object)await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, null);
-                case "blocking_calls_in":
-                    return (object)await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
                 case "finalizer_on_disposable":
                     return (object)await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
 
@@ -350,7 +353,7 @@ public class SentinelScanTools
     [Description("""
         Returns the catalogue of available scan detectors.
 
-        domain:   filter by domain — concurrency | config | convention | correctness |
+        domain:   filter by domain — async | concurrency | config | convention | correctness |
                   dead-code | misc | performance | security | structure
         detector: return info for a single detector by exact id.
         If both are omitted, all 94 detectors are returned.
@@ -438,33 +441,36 @@ public class SentinelScanTools
 
     private static readonly ScanDescriptor[] s_descriptors =
     [
-        // concurrency (26)
-        new("async_in_constructor", "concurrency", "file", "Finds constructors that call async methods or contain await expressions. Constructors cannot be async."),
-        new("async_over_sync", "concurrency", "file", "Finds async methods with no real await — wraps only completed tasks (async over sync anti-pattern)."),
-        new("async_void_without_try_catch", "concurrency", "file|solution", "Finds async void methods whose body is not wrapped in a try/catch. Unhandled exceptions crash the process."),
-        new("cancellation_token_not_forwarded", "concurrency", "file|solution", "Finds async methods that have a CancellationToken parameter but don't forward it to awaitable callees."),
+        // async (20)
+        new("async_in_constructor", "async", "file", "Finds constructors that call async methods or contain await expressions. Constructors cannot be async."),
+        new("async_over_sync", "async", "file", "Finds async methods with no real await — wraps only completed tasks (async over sync anti-pattern)."),
+        new("async_void_without_try_catch", "async", "file|solution", "Finds async void methods whose body is not wrapped in a try/catch. Unhandled exceptions crash the process."),
+        new("blocking_calls_in", "async", "file", "Finds .Result/.Wait()/.GetAwaiter().GetResult() inside async methods — deadlock risk."),
+        new("cancellation_token_not_forwarded", "async", "file|solution", "Finds async methods that have a CancellationToken parameter but don't forward it to awaitable callees."),
+        new("configure_await_missing", "async", "file", "Finds awaits missing .ConfigureAwait(false) in library code."),
+        new("inconsistent_async_suffix", "async", "any", "Finds async methods not ending with 'Async', and non-async methods that end with 'Async'."),
+        new("mismatched_await", "async", "any", "Detects Task-returning method calls that are not awaited (potential fire-and-forget bugs)."),
+        new("missing_cancellation_tokens", "async", "any", "Finds async Task/ValueTask methods lacking CancellationToken but calling cancellable methods."),
+        new("sequential_independent_awaits", "async", "file|solution", "Detects consecutive independent awaits that could be parallelized with Task.WhenAll."),
+        new("task_delay_usage", "async", "file", "Detects Task.Delay() usage patterns."),
+        new("task_delay_zero_usage", "async", "file", "Detects redundant Task.Delay(0) calls."),
+        new("task_run_in", "async", "file", "Detects 'await Task.Run(...)' patterns in server-side code — wasteful thread pool allocation."),
+        new("task_void_usage", "async", "file", "Detects dangerous async void methods that can crash the process on unhandled exceptions."),
+        new("task_when_all_usage", "async", "file", "Detects sequential awaits that could be parallelized with Task.WhenAll."),
+        new("task_yield_usage", "async", "file", "Detects Task.Yield() calls."),
+        new("unawaited_fire_and_forget", "async", "any", "Finds Task-returning method calls not awaited (fire-and-forget). Exceptions are silently swallowed."),
+        new("unawaked_dispose", "async", "file|solution", "Detects DisposeAsync() calls that are not awaited — async cleanup finishes after the method returns."),
+        new("unobserved_task_in_field", "async", "file|solution", "Finds Task/ValueTask assigned to fields without being awaited — silent failure risk."),
+        new("value_task_misuse", "async", "file", "Detects invalid ValueTask usage: double-await, deferred-await, .Result access."),
+        // concurrency (8)
         new("cas_loop_without_backoff", "concurrency", "any", "Detects CAS loops using Interlocked.CompareExchange with no back-off — can pin a CPU core under contention."),
         new("check_then_act_on_dictionary", "concurrency", "any", "Detects ContainsKey()+Add() race on Dictionary/ConcurrentDictionary outside a lock. Use GetOrAdd()/TryAdd()."),
         new("concurrent_collection_opportunities", "concurrency", "file", "Finds lock-protected List/Dictionary fields that could use ConcurrentDictionary or ImmutableDictionary."),
-        new("configure_await_missing", "concurrency", "file", "Finds awaits missing .ConfigureAwait(false) in library code."),
         new("double_checked_locking", "concurrency", "any", "Detects DCL pattern where the lazily-initialized field is not declared volatile (memory model violation)."),
-        new("inconsistent_async_suffix", "concurrency", "any", "Finds async methods not ending with 'Async', and non-async methods that end with 'Async'."),
-        new("mismatched_await", "concurrency", "any", "Detects Task-returning method calls that are not awaited (potential fire-and-forget bugs)."),
-        new("missing_cancellation_tokens", "concurrency", "any", "Finds async Task/ValueTask methods lacking CancellationToken but calling cancellable methods."),
         new("possible_deadlocks", "concurrency", "any", "Detects potential deadlock patterns."),
         new("semaphore_usage", "concurrency", "file", "Finds SemaphoreSlim usage with potentially missing Release() calls."),
-        new("sequential_independent_awaits", "concurrency", "file|solution", "Detects consecutive independent awaits that could be parallelized with Task.WhenAll."),
-        new("task_delay_usage", "concurrency", "file", "Detects Task.Delay() usage patterns."),
-        new("task_delay_zero_usage", "concurrency", "file", "Detects redundant Task.Delay(0) calls."),
-        new("task_run_in", "concurrency", "file", "Detects 'await Task.Run(...)' patterns in server-side code — wasteful thread pool allocation."),
-        new("task_void_usage", "concurrency", "file", "Detects dangerous async void methods that can crash the process on unhandled exceptions."),
-        new("task_when_all_usage", "concurrency", "file", "Detects sequential awaits that could be parallelized with Task.WhenAll."),
-        new("task_yield_usage", "concurrency", "file", "Detects Task.Yield() calls."),
-        new("unawaited_fire_and_forget", "concurrency", "any", "Finds Task-returning method calls not awaited (fire-and-forget). Exceptions are silently swallowed."),
-        new("unobserved_task_in_field", "concurrency", "file|solution", "Finds Task/ValueTask assigned to fields without being awaited — silent failure risk."),
         new("unsafe_lazy_init", "concurrency", "file", "Detects unsafe lazy initialization (if (_field == null) { _field = new X(); }) without volatile or Lazy<T>."),
         new("unsafe_lazy_init_thread", "concurrency", "any", "Detects DCL-style unsafe lazy init: non-volatile field, non-atomic check-then-set outside a lock."),
-        new("value_task_misuse", "concurrency", "file", "Detects invalid ValueTask usage: double-await, deferred-await, .Result access."),
         // config (3)
         new("json_anti_patterns", "config", "file", "Detects unsafe System.Text.Json patterns: un-wrapped Parse (memory leak), GetProperty instead of TryGetProperty."),
         new("package_inconsistency", "config", "solution", "Checks for NuGet package version inconsistencies across projects in the solution."),
@@ -476,7 +482,7 @@ public class SentinelScanTools
         new("readonly_field_candidates", "convention", "file", "Finds private non-readonly fields only ever assigned in constructors — can be marked readonly."),
         new("string_magic_values", "convention", "any", "Finds string literals appearing 3+ times — candidates for named constants."),
         new("todo_fixme_comments", "convention", "any", "Scans for TODO/FIXME/HACK/BUG/REVIEW comments sorted by severity."),
-        // correctness (17)
+        // correctness (16)
         new("all_throw_sites", "correctness", "any", "Finds all throw statements across the scope, optionally sortable by exception-type frequency."),
         new("empty_catch_blocks", "correctness", "any", "Scans for empty catch blocks that silently swallow exceptions."),
         new("exception_handling", "correctness", "file", "Detects CatchAll, EmptyRethrow (throw ex;), SwallowedException, ExceptionAsControlFlow patterns."),
@@ -490,7 +496,6 @@ public class SentinelScanTools
         new("resource_disposal", "correctness", "any", "Finds IDisposable objects not properly disposed (missing using/Dispose call)."),
         new("services_not_registered", "correctness", "project|solution", "Finds injected service types (interfaces, Service/Repository/etc. suffixed types) missing from DI registrations."),
         new("stack_overflow_risks", "correctness", "file", "Detects direct recursion, property self-read/write, override-calls-self, and mutual recursion patterns."),
-        new("unawaked_dispose", "correctness", "file|solution", "Detects DisposeAsync() calls that are not awaited — async cleanup finishes after the method returns."),
         new("unbounded_recursion", "correctness", "project|solution", "Finds recursive methods without a depth guard or base-case check — StackOverflowException risk."),
         new("unbounded_static_collections", "correctness", "project|solution", "Finds static collections populated with .Add() but never .Clear()ed — memory exhaustion risk."),
         new("value_type_mutation_intent", "correctness", "any", "Flags value-type parameter reassignment inside the method body — change is invisible to the caller."),
@@ -503,9 +508,8 @@ public class SentinelScanTools
         new("unused_local_variables", "dead-code", "file", "Identifies local variables declared but never used within their scope."),
         new("unused_private_fields", "dead-code", "file", "Detects private fields never read or written."),
         new("unused_references", "dead-code", "project", "Finds unused NuGet package references in a project. Requires scope='project'."),
-        // misc (3)
+        // misc (2)
         new("anti_patterns", "misc", "any", "Detects AI-generated code anti-patterns: blocking waits, async void, string concat in loop, magic numbers, etc."),
-        new("blocking_calls_in", "misc", "file", "Finds .Result/.Wait()/.GetAwaiter().GetResult() inside async methods — deadlock risk."),
         new("finalizer_on_disposable", "misc", "project|solution", "Finds IDisposable+finalizer combinations without a disposed-flag guard (double-free of unmanaged resources)."),
         // performance (11)
         new("boxing_allocations", "performance", "any", "Finds potential boxing allocations (value types cast to object, interface)."),
@@ -543,3 +547,4 @@ public class SentinelScanTools
         new("type_cohesion", "structure", "file", "Analyses LCOM cohesion metric per class — identifies god classes with low cohesion."),
     ];
 }
+// v2 — async domain extracted from concurrency; blocking_calls_in and unawaked_dispose relocated
