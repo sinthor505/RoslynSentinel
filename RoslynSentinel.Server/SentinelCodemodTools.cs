@@ -111,7 +111,7 @@ public class SentinelCodemodTools
         as a string; pass the result to apply_proposed_changes to write to disk.
 
         filePath:  the .cs file to transform.
-        transform: the codemod to apply — call describe_tool_options("apply_file_codemod") for
+        transform: the codemod to apply — call describe_advanced_tool_options("apply_file_codemod") for
                    valid values and per-transform notes.
         libraryMode: for add_configure_await_false — true (default) adds .ConfigureAwait(false) to all awaits.
         preview: for format_document_safe and sort_and_deduplicate_usings — false (default) writes to disk;
@@ -322,7 +322,7 @@ public class SentinelCodemodTools
 
         filePath:   the .cs file containing the method.
         methodName: the method to transform.
-        transform:  the codemod to apply — call describe_tool_options("apply_method_codemod") for
+        transform:  the codemod to apply — call describe_advanced_tool_options("apply_method_codemod") for
                     valid values and per-transform notes.
         direction: required for convert_expression_body — "ToExpression" or "ToBlock".
         contextSnippet/lineBefore/lineAfter: for convert_expression_body disambiguation.
@@ -506,7 +506,7 @@ public class SentinelCodemodTools
 
         filePath:  the .cs file containing the class.
         className: the target class name.
-        transform: the codemod to apply — call describe_tool_options("apply_class_codemod") for
+        transform: the codemod to apply — call describe_advanced_tool_options("apply_class_codemod") for
                    valid values and per-transform notes.
         propertyName: for convert_property_safe and convert_property_to_methods — the property name.
         direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty".
@@ -659,7 +659,7 @@ public class SentinelCodemodTools
     [Description("""
         Generates new code for a type or method. Returns a kind-specific result object.
 
-        kind:      the artefact to generate — call describe_tool_options("generate") for valid
+        kind:      the artefact to generate — call describe_advanced_tool_options("generate") for valid
                    values, required parameters per kind, and return types.
         filePath:  required for all kinds except generate_decorator_class.
         className: target class name; for generate_decorator_class, pass the interface name.

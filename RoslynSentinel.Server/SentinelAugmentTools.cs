@@ -82,7 +82,7 @@ public class SentinelAugmentTools
         cases that assign to multiple variables, producing broken code without any warning.
 
         If IsSafeToConvert is true, the standard tool (or ConvertSwitchToPatternSafe) will
-        produce correct output. Call describe_tool_options("analyze_switch_for_pattern_conversion")
+        produce correct output. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion")
         for the full output field reference and case-by-case safety rules.
 
         filePath:      absolute path to the .cs file.
@@ -120,7 +120,7 @@ public class SentinelAugmentTools
         variable assignments for cases that set more than one variable, generating incorrect
         code. This tool rejects those cases with a clear error message instead.
 
-        Call describe_tool_options("convert_switch_to_pattern_safe") for the supported switch
+        Call describe_advanced_tool_options("convert_switch_to_pattern_safe") for the supported switch
         forms, rejection rules, and usage guidance.
         Run analyze_switch_for_pattern_conversion first if you are unsure.
 
@@ -164,7 +164,7 @@ public class SentinelAugmentTools
         collection is modified before the foreach. ALWAYS call this before convert_foreach_linq;
         only proceed if IsSafeToConvert=true.
 
-        Call describe_tool_options("analyze_foreach_for_linq_conversion") for the full output
+        Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for the full output
         field reference and safety rules.
 
         filePath:       absolute path to the .cs file.

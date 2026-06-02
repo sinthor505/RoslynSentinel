@@ -1,10 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server;
@@ -90,7 +87,7 @@ public class SentinelScanTools
     [Description("""
         Dispatches a named detector across a file, project, or entire solution.
 
-        detector:  one of 94 detector IDs \u2014 call describe_tool_options("scan") for the full
+        detector:  one of 94 detector IDs \u2014 call describe_advanced_tool_options("scan") for the full
                    list grouped by domain (concurrency, config, convention, correctness,
                    dead-code, misc, performance, security, structure).
         scope:     "file" | "project" | "solution"
@@ -112,235 +109,235 @@ public class SentinelScanTools
 
         try
         {
-        switch (detector)
-        {
-            // ── concurrency ────────────────────────────────────────────────────
-
-            case "async_in_constructor":
-                return (object)await _asyncSafetyEngine.FindAsyncInConstructorAsync(RequireFile(scope, scopeName));
-            case "async_over_sync":
-                return (object)await _asyncSafetyEngine.FindAsyncOverSyncAsync(RequireFile(scope, scopeName));
-            case "async_void_without_try_catch":
-                return (object)await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
-            case "cancellation_token_not_forwarded":
-                return (object)await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
-            case "cas_loop_without_backoff":
-                return (object)await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
-            case "check_then_act_on_dictionary":
-                return (object)await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
-            case "concurrent_collection_opportunities":
-                return (object)await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
-            case "configure_await_missing":
-                return (object)await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(RequireFile(scope, scopeName));
-            case "double_checked_locking":
-                return (object)await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
-            case "inconsistent_async_suffix":
-                return (object)await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
-            case "mismatched_await":
-                return (object)await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
-            case "missing_cancellation_tokens":
-                return (object)await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
-            case "possible_deadlocks":
-                return (object)await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
-            case "semaphore_usage":
-                return (object)await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
-            case "sequential_independent_awaits":
-                return (object)await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
-            case "task_delay_usage":
-                return (object)await _asyncSafetyEngine.FindTaskDelayUsageAsync(RequireFile(scope, scopeName));
-            case "task_delay_zero_usage":
-                return (object)await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(RequireFile(scope, scopeName));
-            case "task_run_in":
-                return (object)await _asyncSafetyEngine.FindTaskRunInAsyncAsync(RequireFile(scope, scopeName));
-            case "task_void_usage":
-                return (object)await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(RequireFile(scope, scopeName));
-            case "task_when_all_usage":
-                return (object)await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(RequireFile(scope, scopeName));
-            case "task_yield_usage":
-                return (object)await _asyncSafetyEngine.FindTaskYieldUsageAsync(RequireFile(scope, scopeName));
-            case "unawaited_fire_and_forget":
-                return (object)await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
-            case "unobserved_task_in_field":
-                return (object)await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
-            case "unsafe_lazy_init":
-                return (object)await _asyncSafetyEngine.FindUnsafeLazyInitAsync(RequireFile(scope, scopeName));
-            case "unsafe_lazy_init_thread":
-                return (object)await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
-            case "value_task_misuse":
-                return (object)await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
-
-            // ── config ─────────────────────────────────────────────────────────
-
-            case "json_anti_patterns":
-                return (object)await _securityEngine.DetectJsonAntiPatternsAsync(RequireFile(scope, scopeName));
-            case "package_inconsistency":
-                return (object)await _dependencyEngine.CheckPackageInconsistencyAsync();
-            case "project_consistency":
-                return (object)await _projectConsistencyEngine.CheckConsistencyAsync();
-
-            // ── convention ─────────────────────────────────────────────────────
-
-            case "mutable_public_collection_properties":
-                return (object)await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
-            case "mutable_public_properties":
-                return (object)await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
-            case "naming_violations":
-                return (object)await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
-            case "readonly_field_candidates":
-                return (object)await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(RequireFile(scope, scopeName));
-            case "string_magic_values":
-                return (object)await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, 3);
-            case "todo_fixme_comments":
-                return (object)await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
-
-            // ── correctness ────────────────────────────────────────────────────
-
-            case "all_throw_sites":
-                return (object)await _discoveryEngine.FindAllThrowSitesAsync(null, filePath, projectName, false);
-            case "empty_catch_blocks":
-                return (object)await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
-            case "exception_handling":
-                return (object)await _antiPatternEngine.AnalyzeExceptionHandlingAsync(RequireFile(scope, scopeName));
-            case "memory_leaks":
-                return (object)await _analysisEngine.DetectMemoryLeaksAsync(RequireFile(scope, scopeName));
-            case "misbound_overload_chains":
-                return (object)await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
-            case "missing_generic_constraints":
-                return (object)await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
-            case "multiple_out_parameter_methods":
-                return (object)await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
-            case "non_exhaustive_enum_switches":
-                return (object)await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
-            case "possible_infinite_loops":
-                return (object)await _analysisEngine.FindPossibleInfiniteLoopsAsync(RequireFile(scope, scopeName));
-            case "redundant_cast":
-                return (object)await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
-            case "resource_disposal":
-                return (object)await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
-            case "services_not_registered":
-                return (object)await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
-            case "stack_overflow_risks":
-                return (object)await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(RequireFile(scope, scopeName), false);
-            case "unawaked_dispose":
-                return (object)await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
-            case "unbounded_recursion":
-                return (object)await _analysisEngine.FindUnboundedRecursionAsync(projectName);
-            case "unbounded_static_collections":
-                return (object)await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
-            case "value_type_mutation_intent":
-                return (object)await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
-
-            // ── dead-code ──────────────────────────────────────────────────────
-
-            case "obsolete_callers":
-                return (object)await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken);
-            case "uninstantiated_types":
-                return (object)await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
-            case "unused_constructors":
-                return (object)await _deadCodeEngine.FindUnusedConstructorsAsync(RequireFile(scope, scopeName));
-            case "unused_event_subscriptions":
-                return (object)(await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(RequireFile(scope, scopeName)) ?? new List<DeadCodeReport>());
-            case "unused_interfaces":
-                return (object)await _analysisEngine.FindUnusedInterfacesAsync(projectName);
-            case "unused_local_variables":
-                return (object)await _deadCodeEngine.DetectUnusedLocalVariablesAsync(RequireFile(scope, scopeName));
-            case "unused_private_fields":
-                return (object)await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(RequireFile(scope, scopeName));
-            case "unused_references":
-                return (object)await _dependencyEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName));
-
-            // ── misc ───────────────────────────────────────────────────────────
-
-            case "anti_patterns":
-                return (object)await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, null);
-            case "blocking_calls_in":
-                return (object)await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
-            case "finalizer_on_disposable":
-                return (object)await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
-
-            // ── performance ────────────────────────────────────────────────────
-
-            case "boxing_allocations":
-                return (object)await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
-            case "implicit_nullable_boxing":
-                return (object)await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
-            case "inefficient_string_comparisons":
-                return (object)await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
-            case "linq_n1_patterns":
-                return (object)await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
-            case "linq_redundant_where":
-                return (object)await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
-            case "multiple_enumeration":
-                return (object)await _performanceEngine.FindMultipleEnumerationAsync(filePath);
-            case "performance":
-                return (object)await _performanceEngine.AnalyzePerformanceAsync(RequireFile(scope, scopeName));
-            case "re_do_s_patterns":
-                return (object)await _securityEngine.FindReDoSPatternsAsync(RequireFile(scope, scopeName));
-            case "regex_new_in_loop":
-                return (object)await _securityEngine.FindRegexNewInLoopAsync(RequireFile(scope, scopeName));
-            case "string_format_in_loops":
-                return (object)await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
-            case "use_frozen_collections":
-                return (object)await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
-
-            // ── security ───────────────────────────────────────────────────────
-
-            case "hardcoded_paths":
-                return (object)await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
-            case "reflection_usage":
-                return (object)await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
-            case "security":
-                return (object)await _securityEngine.AnalyzeSecurityAsync(RequireFile(scope, scopeName));
-            case "sql_injection":
-                return (object)await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
-            case "unvalidated_regex_source":
-                return (object)await _securityEngine.FindUnvalidatedRegexSourceAsync(RequireFile(scope, scopeName));
-
-            // ── structure ──────────────────────────────────────────────────────
-
-            case "circular_dependencies":
-                return (object)await _analysisEngine.FindCircularDependenciesAsync();
-            case "circular_type_references":
-                return (object)await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
-            case "duplicate_blocks_in_hierarchy":
+            switch (detector)
             {
-                if (string.IsNullOrEmpty(scopeName))
-                {
-                    return "duplicate_blocks_in_hierarchy requires scopeName to be the root type name.";
-                }
-                return (object)await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4);
-            }
-            case "duplicate_methods":
-                return (object)await _analysisEngine.FindDuplicateMethodsAsync(5, projectName);
-            case "interface_extraction_candidates":
-                return (object)await _analysisEngine.FindInterfaceExtractionCandidatesAsync(3, projectName);
-            case "internal_classes_that_could_be_private":
-                return (object)await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
-            case "large_methods":
-                return (object)await _analysisEngine.FindLargeMethodsAsync(50, projectName);
-            case "large_switch_statements":
-                return (object)await _analysisEngine.FindLargeSwitchStatementsAsync(10, projectName);
-            case "large_types":
-                return (object)await _analysisEngine.FindLargeTypesAsync(500, projectName);
-            case "layer_violations":
-                return (object)await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
-            case "long_parameter_list":
-                return (object)await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, 4);
-            case "namespace_path_mismatches":
-            {
-                var solution = await _workspaceManager.GetBranchedSolutionAsync();
-                return (object)await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
-            }
-            case "primitive_obsession":
-                return (object)await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
-            case "structural_smells":
-                return (object)await _projectStructureEngine.FindStructuralSmellsAsync(ProjectStructureEngine.StructuralSmellType.All, projectName, filePath);
-            case "type_cohesion":
-                return (object)await _metricsEngine.AnalyzeTypeCohesionAsync(RequireFile(scope, scopeName), null);
+                // ── concurrency ────────────────────────────────────────────────────
 
-            default:
-                return ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
-        }
+                case "async_in_constructor":
+                    return (object)await _asyncSafetyEngine.FindAsyncInConstructorAsync(RequireFile(scope, scopeName));
+                case "async_over_sync":
+                    return (object)await _asyncSafetyEngine.FindAsyncOverSyncAsync(RequireFile(scope, scopeName));
+                case "async_void_without_try_catch":
+                    return (object)await _asyncSafetyEngine.FindAsyncVoidWithoutTryCatchAsync(filePath);
+                case "cancellation_token_not_forwarded":
+                    return (object)await _asyncSafetyEngine.FindCancellationTokenNotForwardedAsync(filePath);
+                case "cas_loop_without_backoff":
+                    return (object)await _threadSafetyEngine.FindCasLoopWithoutBackoffAsync(projectName, filePath);
+                case "check_then_act_on_dictionary":
+                    return (object)await _threadSafetyEngine.FindCheckThenActOnDictionaryAsync(projectName, filePath);
+                case "concurrent_collection_opportunities":
+                    return (object)await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync(RequireFile(scope, scopeName));
+                case "configure_await_missing":
+                    return (object)await _asyncSafetyEngine.FindConfigureAwaitMissingAsync(RequireFile(scope, scopeName));
+                case "double_checked_locking":
+                    return (object)await _threadSafetyEngine.FindDoubleCheckedLockingAsync(projectName, filePath);
+                case "inconsistent_async_suffix":
+                    return (object)await _antiPatternEngine.FindInconsistentAsyncSuffixAsync(filePath, projectName);
+                case "mismatched_await":
+                    return (object)await _analysisEngine.DetectMismatchedAwaitAsync(filePath, projectName);
+                case "missing_cancellation_tokens":
+                    return (object)await _antiPatternEngine.FindMissingCancellationTokensAsync(filePath, projectName);
+                case "possible_deadlocks":
+                    return (object)await _analysisEngine.FindPossibleDeadlocksAsync(projectName, filePath);
+                case "semaphore_usage":
+                    return (object)await _analysisEngine.AnalyzeSemaphoreUsageAsync(RequireFile(scope, scopeName));
+                case "sequential_independent_awaits":
+                    return (object)await _asyncSafetyEngine.FindSequentialIndependentAwaitsAsync(filePath);
+                case "task_delay_usage":
+                    return (object)await _asyncSafetyEngine.FindTaskDelayUsageAsync(RequireFile(scope, scopeName));
+                case "task_delay_zero_usage":
+                    return (object)await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync(RequireFile(scope, scopeName));
+                case "task_run_in":
+                    return (object)await _asyncSafetyEngine.FindTaskRunInAsyncAsync(RequireFile(scope, scopeName));
+                case "task_void_usage":
+                    return (object)await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(RequireFile(scope, scopeName));
+                case "task_when_all_usage":
+                    return (object)await _asyncSafetyEngine.FindTaskWhenAllUsageAsync(RequireFile(scope, scopeName));
+                case "task_yield_usage":
+                    return (object)await _asyncSafetyEngine.FindTaskYieldUsageAsync(RequireFile(scope, scopeName));
+                case "unawaited_fire_and_forget":
+                    return (object)await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
+                case "unobserved_task_in_field":
+                    return (object)await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
+                case "unsafe_lazy_init":
+                    return (object)await _asyncSafetyEngine.FindUnsafeLazyInitAsync(RequireFile(scope, scopeName));
+                case "unsafe_lazy_init_thread":
+                    return (object)await _threadSafetyEngine.FindUnsafeLazyInitAsync(projectName, filePath);
+                case "value_task_misuse":
+                    return (object)await _asyncSafetyEngine.DetectValueTaskMisuseAsync(RequireFile(scope, scopeName));
+
+                // ── config ─────────────────────────────────────────────────────────
+
+                case "json_anti_patterns":
+                    return (object)await _securityEngine.DetectJsonAntiPatternsAsync(RequireFile(scope, scopeName));
+                case "package_inconsistency":
+                    return (object)await _dependencyEngine.CheckPackageInconsistencyAsync();
+                case "project_consistency":
+                    return (object)await _projectConsistencyEngine.CheckConsistencyAsync();
+
+                // ── convention ─────────────────────────────────────────────────────
+
+                case "mutable_public_collection_properties":
+                    return (object)await _codeStyleAnalysisEngine.FindMutablePublicCollectionPropertiesAsync(projectName);
+                case "mutable_public_properties":
+                    return (object)await _antiPatternEngine.FindMutablePublicPropertiesAsync(filePath, projectName);
+                case "naming_violations":
+                    return (object)await _antiPatternEngine.FindNamingViolationsAsync(filePath, projectName);
+                case "readonly_field_candidates":
+                    return (object)await _symbolNavigationEngine.FindReadonlyFieldCandidatesAsync(RequireFile(scope, scopeName));
+                case "string_magic_values":
+                    return (object)await _antiPatternEngine.FindStringMagicValuesAsync(filePath, projectName, 3);
+                case "todo_fixme_comments":
+                    return (object)await _discoveryEngine.FindTodoFixmeCommentsAsync(filePath, projectName);
+
+                // ── correctness ────────────────────────────────────────────────────
+
+                case "all_throw_sites":
+                    return (object)await _discoveryEngine.FindAllThrowSitesAsync(null, filePath, projectName, false);
+                case "empty_catch_blocks":
+                    return (object)await _analysisEngine.CheckForEmptyCatchBlocksAsync(filePath, projectName);
+                case "exception_handling":
+                    return (object)await _antiPatternEngine.AnalyzeExceptionHandlingAsync(RequireFile(scope, scopeName));
+                case "memory_leaks":
+                    return (object)await _analysisEngine.DetectMemoryLeaksAsync(RequireFile(scope, scopeName));
+                case "misbound_overload_chains":
+                    return (object)await _analysisEngine.FindMisboundOverloadChainsAsync(projectName);
+                case "missing_generic_constraints":
+                    return (object)await _analysisEngine.FindMissingGenericConstraintsAsync(projectName, filePath);
+                case "multiple_out_parameter_methods":
+                    return (object)await _antiPatternEngine.FindMultipleOutParameterMethodsAsync(filePath, projectName);
+                case "non_exhaustive_enum_switches":
+                    return (object)await _controlFlowEngine.FindNonExhaustiveEnumSwitchesAsync(filePath, projectName);
+                case "possible_infinite_loops":
+                    return (object)await _analysisEngine.FindPossibleInfiniteLoopsAsync(RequireFile(scope, scopeName));
+                case "redundant_cast":
+                    return (object)await _analysisEngine.CheckForRedundantCastAsync(filePath, projectName);
+                case "resource_disposal":
+                    return (object)await _analysisEngine.OptimizeResourceDisposalAsync(filePath, projectName);
+                case "services_not_registered":
+                    return (object)await _dependencyInjectionEngine.FindServicesNotRegisteredAsync(projectName);
+                case "stack_overflow_risks":
+                    return (object)await _stackOverflowEngine.AnalyzeStackOverflowRisksAsync(RequireFile(scope, scopeName), false);
+                case "unawaked_dispose":
+                    return (object)await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
+                case "unbounded_recursion":
+                    return (object)await _analysisEngine.FindUnboundedRecursionAsync(projectName);
+                case "unbounded_static_collections":
+                    return (object)await _analysisEngine.FindUnboundedStaticCollectionsAsync(projectName);
+                case "value_type_mutation_intent":
+                    return (object)await _antiPatternEngine.FindValueTypeMutationIntentAsync(filePath, projectName);
+
+                // ── dead-code ──────────────────────────────────────────────────────
+
+                case "obsolete_callers":
+                    return (object)await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken);
+                case "uninstantiated_types":
+                    return (object)await _analysisEngine.FindUninstantiatedTypesAsync(projectName);
+                case "unused_constructors":
+                    return (object)await _deadCodeEngine.FindUnusedConstructorsAsync(RequireFile(scope, scopeName));
+                case "unused_event_subscriptions":
+                    return (object)(await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync(RequireFile(scope, scopeName)) ?? new List<DeadCodeReport>());
+                case "unused_interfaces":
+                    return (object)await _analysisEngine.FindUnusedInterfacesAsync(projectName);
+                case "unused_local_variables":
+                    return (object)await _deadCodeEngine.DetectUnusedLocalVariablesAsync(RequireFile(scope, scopeName));
+                case "unused_private_fields":
+                    return (object)await _deadCodeEngine.DetectUnusedPrivateFieldsAsync(RequireFile(scope, scopeName));
+                case "unused_references":
+                    return (object)await _dependencyEngine.FindUnusedReferencesAsync(RequireProject(scope, scopeName));
+
+                // ── misc ───────────────────────────────────────────────────────────
+
+                case "anti_patterns":
+                    return (object)await _antiPatternEngine.DetectAntiPatternsAsync(filePath, projectName, null);
+                case "blocking_calls_in":
+                    return (object)await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync(RequireFile(scope, scopeName));
+                case "finalizer_on_disposable":
+                    return (object)await _analysisEngine.FindFinalizerOnDisposableAsync(projectName);
+
+                // ── performance ────────────────────────────────────────────────────
+
+                case "boxing_allocations":
+                    return (object)await _analysisEngine.FindBoxingAllocationsAsync(filePath, projectName);
+                case "implicit_nullable_boxing":
+                    return (object)await _performanceEngine.FindImplicitNullableBoxingAsync(filePath);
+                case "inefficient_string_comparisons":
+                    return (object)await _analysisEngine.DetectInefficientStringComparisonsAsync(filePath, projectName);
+                case "linq_n1_patterns":
+                    return (object)await _performanceEngine.FindLinqN1PatternsAsync(filePath, projectName);
+                case "linq_redundant_where":
+                    return (object)await _performanceEngine.FindLinqRedundantWhereAsync(filePath);
+                case "multiple_enumeration":
+                    return (object)await _performanceEngine.FindMultipleEnumerationAsync(filePath);
+                case "performance":
+                    return (object)await _performanceEngine.AnalyzePerformanceAsync(RequireFile(scope, scopeName));
+                case "re_do_s_patterns":
+                    return (object)await _securityEngine.FindReDoSPatternsAsync(RequireFile(scope, scopeName));
+                case "regex_new_in_loop":
+                    return (object)await _securityEngine.FindRegexNewInLoopAsync(RequireFile(scope, scopeName));
+                case "string_format_in_loops":
+                    return (object)await _performanceEngine.FindStringFormatInLoopsAsync(filePath);
+                case "use_frozen_collections":
+                    return (object)await _codeStyleEngine.FindUseFrozenCollectionsAsync(filePath, projectName);
+
+                // ── security ───────────────────────────────────────────────────────
+
+                case "hardcoded_paths":
+                    return (object)await _securityEngine.FindHardcodedPathsAsync(filePath, projectName);
+                case "reflection_usage":
+                    return (object)await _analysisEngine.DetectReflectionUsageAsync(filePath, projectName);
+                case "security":
+                    return (object)await _securityEngine.AnalyzeSecurityAsync(RequireFile(scope, scopeName));
+                case "sql_injection":
+                    return (object)await _securityEngine.CheckForSqlInjectionAsync(filePath, projectName);
+                case "unvalidated_regex_source":
+                    return (object)await _securityEngine.FindUnvalidatedRegexSourceAsync(RequireFile(scope, scopeName));
+
+                // ── structure ──────────────────────────────────────────────────────
+
+                case "circular_dependencies":
+                    return (object)await _analysisEngine.FindCircularDependenciesAsync();
+                case "circular_type_references":
+                    return (object)await _analysisEngine.FindCircularTypeReferencesAsync(projectName);
+                case "duplicate_blocks_in_hierarchy":
+                    {
+                        if (string.IsNullOrEmpty(scopeName))
+                        {
+                            return "duplicate_blocks_in_hierarchy requires scopeName to be the root type name.";
+                        }
+                        return (object)await _cloneDetectionEngine.FindDuplicateBlocksInHierarchyAsync(scopeName, null, 4);
+                    }
+                case "duplicate_methods":
+                    return (object)await _analysisEngine.FindDuplicateMethodsAsync(5, projectName);
+                case "interface_extraction_candidates":
+                    return (object)await _analysisEngine.FindInterfaceExtractionCandidatesAsync(3, projectName);
+                case "internal_classes_that_could_be_private":
+                    return (object)await _analysisEngine.FindInternalClassesThatCouldBePrivateAsync(projectName);
+                case "large_methods":
+                    return (object)await _analysisEngine.FindLargeMethodsAsync(50, projectName);
+                case "large_switch_statements":
+                    return (object)await _analysisEngine.FindLargeSwitchStatementsAsync(10, projectName);
+                case "large_types":
+                    return (object)await _analysisEngine.FindLargeTypesAsync(500, projectName);
+                case "layer_violations":
+                    return (object)await _architecturalEngine.DetectLayerViolationsAsync(projectName, filePath);
+                case "long_parameter_list":
+                    return (object)await _antiPatternEngine.FindLongParameterListAsync(filePath, projectName, 4);
+                case "namespace_path_mismatches":
+                    {
+                        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                        return (object)await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
+                    }
+                case "primitive_obsession":
+                    return (object)await _antiPatternEngine.FindPrimitiveObsessionAsync(filePath, projectName);
+                case "structural_smells":
+                    return (object)await _projectStructureEngine.FindStructuralSmellsAsync(ProjectStructureEngine.StructuralSmellType.All, projectName, filePath);
+                case "type_cohesion":
+                    return (object)await _metricsEngine.AnalyzeTypeCohesionAsync(RequireFile(scope, scopeName), null);
+
+                default:
+                    return ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.");
+            }
         }
         catch (Exception ex)
         {
@@ -364,18 +361,18 @@ public class SentinelScanTools
     {
         try
         {
-        IEnumerable<ScanDescriptor> entries = s_descriptors;
-        if (!string.IsNullOrEmpty(domain))
-        {
-            string domainFilter = domain;
-            entries = entries.Where(e => e.Domain.Equals(domainFilter, StringComparison.OrdinalIgnoreCase));
-        }
-        if (!string.IsNullOrEmpty(detector))
-        {
-            string detectorFilter = detector;
-            entries = entries.Where(e => e.Id.Equals(detectorFilter, StringComparison.OrdinalIgnoreCase));
-        }
-        return Task.FromResult<object>(entries.ToList());
+            IEnumerable<ScanDescriptor> entries = s_descriptors;
+            if (!string.IsNullOrEmpty(domain))
+            {
+                string domainFilter = domain;
+                entries = entries.Where(e => e.Domain.Equals(domainFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            if (!string.IsNullOrEmpty(detector))
+            {
+                string detectorFilter = detector;
+                entries = entries.Where(e => e.Id.Equals(detectorFilter, StringComparison.OrdinalIgnoreCase));
+            }
+            return Task.FromResult<object>(entries.ToList());
         }
         catch (Exception ex)
         {
@@ -398,19 +395,19 @@ public class SentinelScanTools
     {
         try
         {
-        switch (aspect)
-        {
-            case "controlFlow":
-                return (object)await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null);
-            case "dataFlow":
-                return (object)await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null);
-            case "pathCoverage":
-                return (object)await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
-            case "unreachableCode":
-                return (object)await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
-            default:
-                return ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
-        }
+            switch (aspect)
+            {
+                case "controlFlow":
+                    return (object)await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null);
+                case "dataFlow":
+                    return (object)await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null);
+                case "pathCoverage":
+                    return (object)await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
+                case "unreachableCode":
+                    return (object)await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
+                default:
+                    return ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.");
+            }
         }
         catch (Exception ex)
         {

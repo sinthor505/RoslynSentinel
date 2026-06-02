@@ -239,7 +239,7 @@ public class SentinelQualityTools
 
         filePath:    restrict to one file (full or partial path suffix).
         projectName: restrict to one project (case-insensitive).
-        pattern:     restrict to one pattern — call describe_tool_options("scan_migration_candidates")
+        pattern:     restrict to one pattern — call describe_advanced_tool_options("scan_migration_candidates")
                      for valid pattern values.
         summarize:   when true, return a guaranteed ≤2KB dashboard view. byClass is capped at 10
                      entries (highest-count classes); ByClassTruncated=true when truncated.
@@ -1768,9 +1768,9 @@ public class SentinelQualityTools
         engine based on the operation string; all operations check the circuit breaker first
         and return BatchResultSummary.
 
-        operation: one of six values — call describe_tool_options("async_migrate") for valid
+        operation: one of six values — call describe_advanced_tool_options("async_migrate") for valid
                    values and required input fields per operation.
-        input:     AsyncMigrateInput — fields vary by operation; see describe_tool_options.
+        input:     AsyncMigrateInput — fields vary by operation; see describe_advanced_tool_options.
 
         Returns MigrationResult<BatchResultSummary>. Use get_operation_detail(changeId) for per-item details.
         Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
@@ -1895,21 +1895,24 @@ public class SentinelQualityTools
         };
     }
 
-    // ── describe_tool_options ─────────────────────────────────────────────────
+    // ── describe_advanced_tool_options ─────────────────────────────────────────────────
 
     [McpServerTool]
     [Description("""
-        Returns reference documentation for a named tool: valid operation values, required input
-        fields per operation, valid transform/kind/detector names, and parameter defaults. Call
-        this once at the start of a session when you need to know what values a tool accepts.
+    Returns reference documentation for a named tool's valid input values: operation names,
+    transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid
+    values cannot be inferred from the parameter schema alone (e.g. enum-like string parameters
+    with many valid values).
 
-        toolName: the MCP tool name (e.g. "async_migrate", "scan", "apply_file_codemod").
+    Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod,
+    apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe,
+    analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion.
 
-        Returns a ToolOptionsResult with a Description string (human-readable reference table) and
-        a StructuredOptions object (machine-readable key→field-list map). Returns ErrorCode =
-        "UnknownTool" if the tool name is not recognised.
-        """)]
-    public ToolOptionsResult DescribeToolOptions(string toolName)
+    toolName: the MCP tool name. Returns ErrorCode = "UnknownTool" if the tool is not in the
+    covered set — this does not mean the tool is invalid, only that its valid values are fully
+    described by its parameter schema and no separate reference table is needed.
+    """)]
+    public ToolOptionsResult DescribeAdvancedToolOptions(string toolName)
     {
         return toolName switch
         {
@@ -1925,8 +1928,15 @@ public class SentinelQualityTools
             "analyze_foreach_for_linq_conversion" => AnalyzeForeachOptions(),
             _ => new ToolOptionsResult
             {
-                Description = $"Unknown tool '{toolName}'.",
-                Error = new ResultError("UnknownTool", $"No options registered for '{toolName}'.")
+                Description = $"'{toolName}' is not in the describe_advanced_tool_options covered set. " +
+                               "This does not mean the tool is invalid — its parameter schema fully " +
+                               "describes its inputs. Covered tools: async_migrate, scan, " +
+                               "scan_migration_candidates, apply_file_codemod, apply_method_codemod, " +
+                               "apply_class_codemod, generate, convert_switch_to_pattern_safe, " +
+                               "analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion.",
+                Error = new ResultError(
+                    "NoFurtherDocumentation",
+                    $"'{toolName}' has no registered options table. See Description for the covered tool list.")
             }
         };
     }

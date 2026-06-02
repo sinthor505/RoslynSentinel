@@ -114,10 +114,10 @@ public record MigrationScanSummary(
     bool                                 ByClassTruncated = false
 );
 
-// ── Tool options (describe_tool_options return type) ─────────────────────────
+// ── Tool options (describe_advanced_tool_options return type) ─────────────────────────
 
 /// <summary>
-/// Return type for <c>describe_tool_options</c>. Contains the reference enumeration
+/// Return type for <c>describe_advanced_tool_options</c>. Contains the reference enumeration
 /// (valid values, field tables, transform catalogues) that was removed from tool
 /// descriptions to reduce per-session schema token cost.
 /// </summary>
