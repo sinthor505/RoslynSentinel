@@ -375,12 +375,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Adds a new value to an existing enum declaration.
-
-        Specify the enum name and the new value name. Optionally provide an explicit integer value
-        (e.g. enumName="Status", valueName="Archived", explicitValue=99 produces 'Archived = 99').
-        If the enum is not found in the file, the file is returned unchanged.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        Adds a new value to an existing enum. `explicitValue=99` → `Archived = 99`. If the enum is not found, the file is returned unchanged. `autoStage=true` → ChangeId for `staged_change`.
         """)]
     public async Task<ToolResult<object>> AddEnumValue(string filePath, string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
     {
@@ -517,12 +512,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment.
-
-        className is the target class; paramName and paramType define the parameter.
-        fieldName overrides the derived field name (defaults to _camelCase of paramName).
-        If the class has no constructor one is created. Expression-bodied constructors are converted to block bodies.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
+        Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. `fieldName` overrides the derived field name (defaults to `_camelCase` of `paramName`). Creates a constructor if none exists; converts expression-bodied constructors to block bodies. `autoStage=true` → ChangeId for `staged_change`
         """)]
     public async Task<ToolResult<object>> AddConstructorParameter(string filePath, string className, string paramName, string paramType, string? fieldName = null, bool autoStage = true)
     {

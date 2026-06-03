@@ -216,8 +216,8 @@ public class SentinelWorkspaceTools
     public List<string> GetExternalChanges() => _workspaceManager.GetExternalDrift();
 
     [McpServerTool]
-    [Description("Clears the external drift list, indicating the AI has acknowledged and read the latest disk changes.")]
-    public void AcknowledgeSync() => _workspaceManager.ClearDrift();
+    [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters..")]
+    public void ClearExternalDrift() => _workspaceManager.ClearDrift();
 
     [McpServerTool]
     [Description("""
