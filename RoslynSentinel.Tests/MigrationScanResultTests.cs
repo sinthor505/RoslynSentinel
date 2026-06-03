@@ -151,7 +151,7 @@ public class Svc
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
 
-        var result = rawResult as MigrationEnvelope<MigrationScanSummary>;
+        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -199,7 +199,7 @@ public class Svc
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 3, offset: 2);
 
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null, "Inline Data should be populated.");
@@ -225,7 +225,7 @@ public class Svc
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(); // default limit=50, offset=0
 
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
         Assert.That(result.LargeResult, Is.Null,
@@ -251,13 +251,13 @@ public class Svc
         // Use a large limit to capture all findings in one page.
         var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
 
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.LargeResult, Is.Not.Null,
             "A page > 256 KB should trigger the file-write path.");
         Assert.That(result.LargeResult!.WrittenToFile, Is.True);
         Assert.That(result.LargeResult.FilePath, Is.Not.Null.And.Not.Empty);
-        Assert.That(result.LargeResult.OperationId, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.LargeResult.ScanId, Is.Not.Null.And.Not.Empty);
         Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(256 * 1024));
         Assert.That(result.LargeResult.TotalRecords, Is.GreaterThan(0));
         Assert.That(result.Data, Is.Null, "Data should be null when LargeResult is set.");
@@ -277,14 +277,14 @@ public class Svc
 
         // Run the scan to produce the spill file (same as T4).
         var scanRaw = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
-        var scanResult = scanRaw as MigrationResult<List<MigrationCandidateFinding>>;
+        var scanResult = scanRaw.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
-        var operationId = scanResult!.LargeResult!.OperationId;
+        var operationId = scanResult!.LargeResult!.ScanId;
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = await _qualityTools.GetScanResult(changeId: operationId, limit: 10, offset: 0);
+        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _qualityTools.GetScanResult(scanId: operationId, limit: 10, offset: 0)).Data;
         Assert.That(page1Result.Success, Is.True);
         Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
@@ -300,7 +300,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
-        var page2Result = await _qualityTools.GetScanResult(changeId: operationId, limit: 10, offset: 10);
+        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _qualityTools.GetScanResult(scanId: operationId, limit: 10, offset: 10)).Data;
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.Data!.Select(f => f.MethodName).ToHashSet();
@@ -331,13 +331,13 @@ public class Svc
 
         // Query using only the filename (suffix match).
         var rawSuffix = await _qualityTools.ScanMigrationCandidates(filePath: "Service.cs");
-        var suffixResult = rawSuffix as MigrationResult<List<MigrationCandidateFinding>>;
+        var suffixResult = rawSuffix.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(suffixResult?.Success, Is.True, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.Data?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path — should yield the same finding.
         var rawAbs = await _qualityTools.ScanMigrationCandidates(filePath: AbsPath);
-        var absResult = rawAbs as MigrationResult<List<MigrationCandidateFinding>>;
+        var absResult = rawAbs.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(absResult?.Success, Is.True, "Full absolute filePath should succeed.");
         Assert.That(absResult!.Data?.Count, Is.EqualTo(1));
 
@@ -364,7 +364,7 @@ public class Svc
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(filePath: "NonExistent.cs");
 
-        var result = rawResult as MigrationResult<object>;
+        var result = rawResult.Data as MigrationEnvelope<object>;
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -431,7 +431,7 @@ public class Svc
         SetSource(sb.ToString());
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, topN: 5, minScore: 70);
-        var result = rawResult as MigrationResult<MigrationScanSummary>;
+        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -468,7 +468,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
-        var result = rawResult as MigrationResult<MigrationScanSummary>;
+        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -589,7 +589,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _qualityTools.ScanMigrationCandidates();
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -658,7 +658,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
@@ -669,8 +669,8 @@ public class Svc
             "Message must name the correct recovery tool.");
         Assert.That(largeResult.Message, Does.Not.Contain("read_file"),
             "Message must not reference the non-existent read_file tool.");
-        Assert.That(largeResult.Message, Does.Contain(largeResult.OperationId),
-            "Message must embed the OperationId so the agent can copy it directly.");
+        Assert.That(largeResult.Message, Does.Contain(largeResult.ScanId),
+            "Message must embed the ScanId so the agent can copy it directly.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -702,7 +702,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, minScore: 80);
-        var result = rawResult as MigrationResult<MigrationScanSummary>;
+        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -754,7 +754,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _qualityTools.ScanMigrationCandidates(minScore: 85, limit: 20);
-        var result = rawResult as MigrationResult<List<MigrationCandidateFinding>>;
+        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);

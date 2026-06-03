@@ -585,9 +585,9 @@ public enum Status { Active = 1, Pending = 2 }
             ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
             ("Owner.cs", "namespace App; public class Owner {}"));
         var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
-        Assert.That(result, Does.ContainKey("Owner.cs"));
-        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Value"));
-        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Go"));
+        Assert.That(result.Data, Does.ContainKey("Owner.cs"));
+        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Value"));
+        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Go"));
     }
 
     // --- IntroduceVariable ---

@@ -1,6 +1,5 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
+
 using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
@@ -56,8 +55,9 @@ public class MassiveRefactoringTests
     public async Task ExtractInterface_ShouldCreateInterface(int id)
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = (Dictionary<string, string>)await _refactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
-        Assert.That(result.Count, Is.GreaterThan(0));
+        var result = await _refactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
+        var data = (Dictionary<string, string>?)result.Data;
+        Assert.That(data?.Count, Is.GreaterThan(0));
     }
 
     [Test]
@@ -85,7 +85,8 @@ public class MassiveRefactoringTests
     public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = (Dictionary<string, string>)await _refactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
-        Assert.That(result.Count, Is.GreaterThan(1));
+        var result = await _refactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
+        var data = (Dictionary<string, string>?)result.Data;
+        Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }

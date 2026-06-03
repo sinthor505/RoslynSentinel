@@ -150,7 +150,7 @@ public class ComprehensiveToolTests
     public async Task LoadSolution_ShouldReturnSuccess()
     {
         var result = await _workspaceTools.LoadSolution("fake.sln");
-        Assert.That(result, Contains.Substring("Solution loaded successfully") | Contains.Substring("Error"));
+        Assert.That(result.Data, Contains.Substring("Solution loaded successfully") | Contains.Substring("Error"));
     }
 
     [Test]

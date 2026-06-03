@@ -690,7 +690,6 @@ public class SentinelWorkspaceTools
                 _logger.LogInformation("Method character length: {Length} characters", methodCharLength);
             }
 
-
             var thresholdBytes = 8 * 1024; // 8 KB threshold for logging warnings
             if (methodBytes > thresholdBytes)
             {

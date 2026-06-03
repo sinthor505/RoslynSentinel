@@ -86,21 +86,21 @@ public class BatteryTwentyTests
     public async Task List_Projects_WithLoadedSolution_ReturnsList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.List("projects");
+        var result = await _tools.ListSolutionItems("projects");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public void List_Projects_NoSolution_Throws()
     {
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.List("projects"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListSolutionItems("projects"));
     }
 
     [Test]
     public async Task List_Files_KnownProject_ReturnsFileList()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.List("files", "TestProj");
+        var result = await _tools.ListSolutionItems("files", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -108,14 +108,14 @@ public class BatteryTwentyTests
     public void List_Files_UnknownProject_ThrowsException()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.List("files", "NoSuchProject"));
+        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListSolutionItems("files", "NoSuchProject"));
     }
 
     [Test]
     public async Task List_Dependencies_KnownProject_ReturnsReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.List("dependencies", "TestProj");
+        var result = await _tools.ListSolutionItems("dependencies", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -157,9 +157,9 @@ public class BatteryTwentyTests
     // --- AcknowledgeSync (void sync) ---
 
     [Test]
-    public void AcknowledgeSync_Always_DoesNotThrow()
+    public void ClearExternalDrift_Always_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => _tools.AcknowledgeSync());
+        Assert.DoesNotThrow(() => _tools.ClearExternalDrift());
     }
 
     // --- ProposedChange (consolidated: format × action) ---

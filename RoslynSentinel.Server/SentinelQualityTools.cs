@@ -2285,17 +2285,17 @@ public class SentinelQualityTools
 
     private static ToolOptionsResult ScanOptions()
     {
-        // Single source of truth: derived from SentinelScanTools.s_descriptors.
-        // Adding, removing, or reclassifying a detector in s_descriptors automatically
+        // Single source of truth: derived from SentinelScanTools.scan_descriptors.
+        // Adding, removing, or reclassifying a detector in scan_descriptors automatically
         // propagates here — no manual sync required.
-        var byDomain = SentinelScanTools.s_descriptors
+        var byDomain = SentinelScanTools.scan_descriptors
             .GroupBy(d => d.Domain)
             .OrderBy(g => g.Key)
             .ToDictionary(
                 g => g.Key,
                 g => g.Select(d => d.Id).ToArray());
 
-        int total = SentinelScanTools.s_descriptors.Length;
+        int total = SentinelScanTools.scan_descriptors.Length;
 
         var sb = new StringBuilder();
         sb.AppendLine($"scan — valid detector IDs grouped by domain ({total} total):");
@@ -2309,11 +2309,11 @@ public class SentinelQualityTools
             var line = new StringBuilder(new string(' ', Indent));
             foreach (var id in ids)
             {
-                string candidate = line.Length == Indent ? id : ", " + id;
+                string candidate = line.Length == Indent ? id.ToString() : ", " + id.ToString();
                 if (line.Length + candidate.Length > WrapAt && line.Length > Indent)
                 {
                     sb.AppendLine(line.ToString());
-                    line.Clear().Append(new string(' ', Indent)).Append(id);
+                    line.Clear().Append(new string(' ', Indent)).Append(id.ToString());
                 }
                 else
                 {
@@ -2341,4 +2341,4 @@ public class SentinelQualityTools
         };
     }
 }
-// v2 — ScanOptions() now derived from SentinelScanTools.s_descriptors (single source of truth)
+// v2 — ScanOptions() now derived from SentinelScanTools.scan_descriptors (single source of truth)

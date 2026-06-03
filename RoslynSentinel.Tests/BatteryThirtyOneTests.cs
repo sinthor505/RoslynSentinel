@@ -95,7 +95,7 @@ public class Owner {}";
         var result = await _tools.InlineClass("SameFile.cs", "SameFile.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("SameFile.cs"), "Should produce updated file");
-        var content = ((Dictionary<string, string>)result)["SameFile.cs"];
+        var content = ((Dictionary<string, string>)result.Data)["SameFile.cs"];
         Assert.That(content, Does.Contain("Value"), "Owner should contain the inlined field");
         Assert.That(content, Does.Contain("Go"), "Owner should contain the inlined method");
         Assert.That(content, Does.Not.Contain("class Helper"), "Helper class should be removed");
@@ -114,7 +114,8 @@ public class Consumer {}";
         Dictionary<string, string>? result = null;
         Assert.DoesNotThrowAsync(async () =>
         {
-            result = (Dictionary<string, string>?)await _tools.InlineClass("File.cs", "File.cs", "HelperClass");
+            var rawResult = await _tools.InlineClass("File.cs", "File.cs", "HelperClass");
+            result = (Dictionary<string, string>?)rawResult.Data;
         });
         Assert.That(result, Is.Not.Null);
     }
@@ -132,7 +133,7 @@ public class DataClass {
 public class Target {}";
         SetSource(src, "Multi.cs");
         var result = await _tools.InlineClass("Multi.cs", "Multi.cs", "DataClass");
-        var content = ((Dictionary<string, string>)result)["Multi.cs"];
+        var content = ((Dictionary<string, string>)result.Data)["Multi.cs"];
         Assert.That(content, Does.Contain("Alpha"));
         Assert.That(content, Does.Contain("Beta"));
         Assert.That(content, Does.Contain("Gamma"));
@@ -149,7 +150,7 @@ public class Target {}";
         var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("Target.cs"), "Target file should be updated");
-        var targetContent = ((Dictionary<string, string>)result)["Target.cs"];
+        var targetContent = ((Dictionary<string, string>)result.Data)["Target.cs"];
         Assert.That(targetContent, Does.Contain("Value"), "Value field should be in target");
         Assert.That(targetContent, Does.Contain("Act"), "Act method should be in target");
     }
@@ -163,7 +164,7 @@ public class Target {}";
         var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
 
         Assert.That(result, Does.ContainKey("Source.cs"), "Source file should also be returned");
-        var sourceContent = ((Dictionary<string, string>)result)["Source.cs"];
+        var sourceContent = ((Dictionary<string, string>)result.Data)["Source.cs"];
         Assert.That(sourceContent, Does.Not.Contain("class Helper"), "Helper should be removed from source");
     }
 
@@ -175,7 +176,7 @@ public class Target {}";
         var result = await _tools.InlineClass("File.cs", "File.cs", "NonExistent");
 
         Assert.That(result, Does.ContainKey("__error__"), "Should return __error__ key");
-        var errorContent = ((Dictionary<string, string>)result)["__error__"];
+        var errorContent = ((Dictionary<string, string>)result.Data)["__error__"];
         Assert.That(errorContent, Does.Contain("NonExistent"), "Error should mention the missing class");
     }
 
@@ -218,7 +219,7 @@ public class Recipient { public int Existing; }";
 
         // Empty class inlined — should succeed, Recipient should still exist, Empty removed
         Assert.That(result, Does.ContainKey("F.cs"));
-        var updatedContent = ((Dictionary<string, string>)result)["F.cs"];
+        var updatedContent = ((Dictionary<string, string>)result.Data)["F.cs"];
         Assert.That(updatedContent, Does.Contain("class Recipient"));
         Assert.That(updatedContent, Does.Not.Contain("class Empty"));
     }
@@ -241,12 +242,12 @@ public class Recipient { public int Existing; }";
 
         // Primary files updated
         Assert.That(result, Does.ContainKey("Owner.cs"), "Target file should be in result");
-        Assert.That(((Dictionary<string, string>)result)["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
+        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
 
         // Third file should also be updated: 'Helper' → 'Owner'
         Assert.That(result, Does.ContainKey("Consumer.cs"), "Third file with type reference should also be updated");
-        Assert.That(((Dictionary<string, string>)result)["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
-        Assert.That(((Dictionary<string, string>)result)["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
+        Assert.That(((Dictionary<string, string>)result.Data)["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
+        Assert.That(((Dictionary<string, string>)result.Data)["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
     }
 
     [Test]
@@ -261,7 +262,8 @@ public class Service
     public string Name { get; set; }
 }";
         SetSource(src, "Service.cs");
-        var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
+        var rawResult = await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
+        var result = (Dictionary<string, string>?)rawResult.Data;
 
         Assert.That(result, Does.ContainKey("Service.cs"), "Updated source should be in result");
         var updatedSource = ((Dictionary<string, string>)result)["Service.cs"];
@@ -279,7 +281,8 @@ public class Service
             ("Service.cs", "namespace App; public class Service { public void Process() {} public void Validate() {} public string Name { get; set; } }"),
             ("Client.cs", "namespace App; public class Client { public void Run(Service s) { s.Process(); s.Validate(); } }"));
 
-        var result = (Dictionary<string, string>)await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
+        var rawResult = await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
+        var result = (Dictionary<string, string>?)rawResult.Data;
 
         Assert.That(result, Does.ContainKey("Client.cs"), "Client file should be updated with new call sites");
         var clientContent = ((Dictionary<string, string>)result)["Client.cs"];
