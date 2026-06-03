@@ -1,6 +1,6 @@
 {
   "servers": {
-    "roslyn-sentinel": {
+    "roslyn-sentinel-internal": {
       "type": "stdio",
       "command": "dotnet",
       "args": ["${workspaceFolder}\\publish\\RoslynSentinel.Server.dll", "--mode=all"],

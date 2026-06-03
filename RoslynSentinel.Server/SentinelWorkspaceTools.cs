@@ -138,13 +138,58 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Description("""
+    Lists all solution files (*.sln, *.slnx) under a given directory.
+    Call this before load_solution when the solution path is not known.
+    Pass the workspace folder path from your workspace_info context.
+    Returns absolute paths suitable for passing directly to load_solution.
+    If HasLoadedSolution is false in get_workspace_health, call this tool first.
+    """)]
+    public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(string workspacePath)
+    {
+        if (!Directory.Exists(workspacePath))
+        {
+            return new ToolResult<List<SolutionFileInfo>>
+            {
+                Success = false,
+                Error = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
+            };
+        }
+
+        var files = Directory.EnumerateFiles(workspacePath, "*.sln", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(workspacePath, "*.slnx", SearchOption.AllDirectories))
+            .OrderBy(p => p)
+            .Select(p => new SolutionFileInfo(
+                Path: p,
+                Format: Path.GetExtension(p).TrimStart('.').ToLowerInvariant()))
+            .ToList();
+
+        return new ToolResult<List<SolutionFileInfo>>
+        {
+            Success = true,
+            Data = files,
+            TotalRecords = files.Count
+        };
+    }
+
+    public sealed record SolutionFileInfo(string Path, string Format);
+
+    [McpServerTool]
     [Description("Loads a .NET solution into memory for persistent analysis.")]
     public async Task<ToolResult<object>> LoadSolution(string solutionPath)
     {
         try
         {
             await _workspaceManager.LoadSolutionAsync(solutionPath);
-            return new ToolResult<object>() { Success = true, Data = $"Solution loaded: {solutionPath}" };
+
+            if (_workspaceManager.GetSolutionRoot() != null)
+            {
+                return new ToolResult<object>() { Success = true, Data = $"Solution loaded: {solutionPath}" };
+            }
+            else
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.") };
+            }
         }
         catch (Exception ex)
         {
@@ -204,9 +249,9 @@ public class SentinelWorkspaceTools
                 Healthy: false,
                 Components: new HealthComponents(false, "", false, null, false, null),
                 Workspace: new WorkspaceStatus(0, false, null, 0, 0),
-                Capabilities: [],
-                Errors: [new HealthIssue("E9000", "Diagnose failed", $"{ex.GetType().Name}: {ex.Message}")],
-                Warnings: []
+                Capabilities: new List<string>(),
+                Errors: new List<HealthIssue> { new HealthIssue("E9000", "Diagnose failed", $"{ex.GetType().Name}: {ex.Message}") },
+                Warnings: new List<HealthIssue>()
             );
         }
     }

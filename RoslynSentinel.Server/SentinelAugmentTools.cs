@@ -250,7 +250,10 @@ public class SentinelAugmentTools
           • Summary             — human-readable status
 
         Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
-        been loaded yet — this is a normal state, not an error.
+        been loaded yet — this is a normal state, not an error. 
+        
+        If HasLoadedSolution is false, call list_workspace_solutions to discover available
+        solution files, then call load_solution with the returned path.
         """)]
     public async Task<ToolResult<object>> GetWorkspaceHealth()
     {
