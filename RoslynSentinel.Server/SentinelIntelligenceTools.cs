@@ -137,12 +137,40 @@ public class SentinelIntelligenceTools
         {
             //return await _inventoryEngine.GetCodeInventoryAsync(filePath);
             var results = await _inventoryEngine.GetCodeInventoryAsync(filePath);
-            var summary = await ScanResultOffloadHelper.TryOffloadAsync(results, _workspaceManager.SolutionPath);
-            return new ToolResult<object>
+
+            // convert results to json
+            var jsonResults = System.Text.Json.JsonSerializer.Serialize(results);
+
+            if (jsonResults.Length < ScanResultOffloadHelper.ThresholdBytes)
             {
-                Success = true,
-                Data = summary
-            };
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = results,
+                    TotalRecords = results.Methods.Count
+                };
+            }
+            else
+            {
+
+                var summary = await ScanResultOffloadHelper.TryOffloadAsync(results, _workspaceManager.SolutionPath);
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = summary,
+                    TotalRecords = results.Methods.Count,
+                    LargeResult = new LargeResultInfo(
+                        WrittenToFile: summary.offloaded,
+                        FilePath: summary.filePath,
+                        OperationId: summary.operationId,
+                        SizeBytes: summary.jsonBytes.Length,
+                        TotalRecords: results.Methods.Count,
+                        Message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +
+                                   $"Use get_scan_result(changeId: \"{summary.operationId}\") to page through results. " +
+                                   "Pass limit and offset to control page size (default limit: 50).")
+
+                };
+            }
         }
         catch (Exception ex)
         {

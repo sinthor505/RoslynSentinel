@@ -689,7 +689,31 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Method '{methodName}' not found in '{filePath}'.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
+            // convert result to json
+            var jsonResult = System.Text.Json.JsonSerializer.Serialize(method);
+
+            if (jsonResult.Length > ScanResultOffloadHelper.ThresholdBytes)
+            {
+                var summary = await ScanResultOffloadHelper.TryOffloadAsync(jsonResult, _workspaceManager.GetSolutionRoot());
+                return new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = new LargeResultInfo(
+                    WrittenToFile: summary.offloaded,
+                    FilePath: summary.filePath,
+                    OperationId: summary.operationId,
+                    SizeBytes: summary.jsonBytes.Length,
+                    TotalRecords: 1,
+                    Message: $"Result written to file ({summary.jsonBytes.Length} bytes, 1 record). " +
+                             $"Use get_scan_result(changeId: \"{summary.operationId}\") to page through results. " +
+                             "Pass limit and offset to control page size (default limit: 50)."
+                )
+                };
+            }
+            else
+            {
+                return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
+            }
         }
         catch (Exception ex)
         {
@@ -871,7 +895,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("SearchSolutionTextFailed", $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -960,7 +984,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetOperationDetailFailed", $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -975,7 +999,7 @@ public class SentinelWorkspaceTools
 
             if (blobPath == null)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"No operation blob found for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("NoOperationBlobFound", $"No operation blob found for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
 
             }
 
@@ -989,7 +1013,7 @@ public class SentinelWorkspaceTools
 
             if (revertable.Count == 0)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"No reversible items in blob for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("NoReversibleItems", $"No reversible items in blob for changeId '{changeId}'. Ensure the apply completed successfully and a solution is loaded.") };
             }
 
             var reverted = new List<string>();
@@ -1022,7 +1046,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("UndoLastApplyFailed", $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
