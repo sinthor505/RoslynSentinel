@@ -162,11 +162,11 @@ public class SentinelIntelligenceTools
                     LargeResult = new LargeResultInfo(
                         WrittenToFile: summary.offloaded,
                         FilePath: summary.filePath,
-                        OperationId: summary.operationId,
+                        ScanId: summary.scanId,
                         SizeBytes: summary.jsonBytes.Length,
                         TotalRecords: results.Methods.Count,
                         Message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +
-                                   $"Use get_scan_result(changeId: \"{summary.operationId}\") to page through results. " +
+                                   $"Use get_scan_result(scanId: \"{summary.scanId}\") to page through results. " +
                                    "Pass limit and offset to control page size (default limit: 50).")
 
                 };
@@ -485,11 +485,11 @@ public class SentinelIntelligenceTools
                     LargeResult = new LargeResultInfo(
                         WrittenToFile: true,
                         FilePath: summaryResults.filePath,
-                        OperationId: summaryResults.operationId,
+                        ScanId: summaryResults.scanId,
                         SizeBytes: summaryResults.jsonBytes.Length,
                         TotalRecords: result.Count,
                         Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {result.Count} records). " +
-                                       $"Use get_scan_result(changeId: \"{summaryResults.operationId}\") to page through results. " +
+                                       $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
                                        "Pass limit and offset to control page size (default limit: 50).")
                 };
                 return apiResult;

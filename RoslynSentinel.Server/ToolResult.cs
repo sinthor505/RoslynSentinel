@@ -37,7 +37,7 @@ public record ToolResult<T>
 
     /// <summary>
     /// Present when the result exceeded the inline-size threshold and was written to disk.
-    /// Use <c>get_scan_result</c> with <see cref="LargeResultInfo.OperationId"/> to page through it.
+    /// Use <c>get_scan_result</c> with <see cref="LargeResultInfo.ScanId"/> to page through it.
     /// </summary>
     public LargeResultInfo? LargeResult
     {
@@ -77,7 +77,7 @@ public record ResultError(
 public record LargeResultInfo(
     bool WrittenToFile,
     string FilePath,
-    string OperationId,
+    string ScanId,
     long SizeBytes,
     int TotalRecords,
     string? Message = null

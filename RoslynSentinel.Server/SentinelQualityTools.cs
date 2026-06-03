@@ -243,7 +243,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate. Syntax-level — no compilation needed. pattern: call describe_advanced_tool_options("scan_migration_candidates") for valid values. summarize=true → guaranteed ≤2KB dashboard (byClass capped at 10, TopCandidates capped at 5 regardless of topN; ByClassTruncated=true when truncated). summarize=false + limit/offset → full paged candidate records. minScore filters in both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice. When results exceed the inline threshold, LargeResultInfo is populated instead of Data — call get_scan_result(changeId) to read in pages.
+        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate. Syntax-level — no compilation needed. pattern: call describe_advanced_tool_options("scan_migration_candidates") for valid values. summarize=true → guaranteed ≤2KB dashboard (byClass capped at 10, TopCandidates capped at 5 regardless of topN; ByClassTruncated=true when truncated). summarize=false + limit/offset → full paged candidate records. minScore filters in both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice. When results exceed the inline threshold, LargeResultInfo is populated instead of Data — call get_scan_result(scanId) to read in pages.
         """)]
     public async Task<ToolResult<object>> ScanMigrationCandidates(
         string? filePath = null,
@@ -381,14 +381,14 @@ public class SentinelQualityTools
                                        summaryJson.Length);
                 }
 
-                var operationId = Guid.NewGuid().ToString("N");
+                var scanId = Guid.NewGuid().ToString("N");
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
                 if (!string.IsNullOrEmpty(solutionRoot))
                 {
                     var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
                     Directory.CreateDirectory(dir);
                     var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-                    var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{operationId}.json");
+                    var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
                     await File.WriteAllTextAsync(fp,
                         System.Text.Json.JsonSerializer.Serialize(summary, _jsonOptions),
                         new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -398,11 +398,11 @@ public class SentinelQualityTools
                         LargeResult = new LargeResultInfo(
                             WrittenToFile: true,
                             FilePath: fp,
-                            OperationId: operationId,
+                            ScanId: scanId,
                             SizeBytes: summaryJson.Length,
                             TotalRecords: aggregateFindings.Count,
                             Message: $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
-                                           $"Use get_scan_result(changeId: \"{operationId}\") to page through results.")
+                                           $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
                     };
                 }
             }
@@ -454,7 +454,7 @@ public class SentinelQualityTools
 
         if (jsonBytes.Length > ThresholdBytes)
         {
-            var operationId = Guid.NewGuid().ToString("N");
+            var scanId = Guid.NewGuid().ToString("N");
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             string scanFilePath;
             bool written = false;
@@ -464,7 +464,7 @@ public class SentinelQualityTools
                 var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
                 Directory.CreateDirectory(dir);
                 var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-                scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{operationId}.json");
+                scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
                 await File.WriteAllTextAsync(
                     scanFilePath,
                     JsonSerializer.Serialize(page, _jsonOptions),
@@ -484,11 +484,11 @@ public class SentinelQualityTools
                 LargeResult = new LargeResultInfo(
                     WrittenToFile: written,
                     FilePath: scanFilePath,
-                    OperationId: operationId,
+                    ScanId: scanId,
                     SizeBytes: jsonBytes.Length,
                     TotalRecords: totalCount,
                     Message: $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
-                                   $"Use get_scan_result(changeId: \"{operationId}\") to page through results. " +
+                                   $"Use get_scan_result(scanId: \"{scanId}\") to page through results. " +
                                    "Pass limit and offset to control page size (default limit: 50).")
             };
         }
@@ -531,10 +531,10 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Pages through a large scan result written to disk when scan_migration_candidates payload exceeded the inline size threshold. Supply either changeId (resolves to .roslynsentinel/operations/scan_*_{changeId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
+        Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
     public async Task<ToolResult<object>> GetScanResult(
-        string? changeId = null,
+        string? scanId = null,
         string? filePath = null,
         int limit = 50,
         int offset = 0)
@@ -542,26 +542,26 @@ public class SentinelQualityTools
         string? resolvedPath = null;
         var solutionRoot = _workspaceManager.GetSolutionRoot();
 
-        if (!string.IsNullOrEmpty(changeId) && !string.IsNullOrEmpty(solutionRoot))
+        if (!string.IsNullOrEmpty(scanId) && !string.IsNullOrEmpty(solutionRoot))
         {
-            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
             if (Directory.Exists(dir))
             {
                 resolvedPath = Directory
-                    .EnumerateFiles(dir, $"scan_*_{changeId}.json")
+                    .EnumerateFiles(dir, $"scan_*_{scanId}.json")
                     .FirstOrDefault();
             }
         }
         else if (!string.IsNullOrEmpty(filePath))
         {
-            // Validate: path must be inside the operations directory and match the scan_*.json pattern.
+            // Validate: path must be inside the scans directory and match the scan_*.json pattern.
             var fileName = System.IO.Path.GetFileName(filePath);
             if (!string.IsNullOrEmpty(solutionRoot))
             {
-                var opsDir = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations"));
+                var scansDir = System.IO.Path.GetFullPath(
+                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans"));
                 var candidate = System.IO.Path.GetFullPath(filePath);
-                if (candidate.StartsWith(opsDir, StringComparison.OrdinalIgnoreCase)
+                if (candidate.StartsWith(scansDir, StringComparison.OrdinalIgnoreCase)
                     && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
                     && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
                     && File.Exists(candidate))
@@ -577,7 +577,7 @@ public class SentinelQualityTools
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.InvalidArgument,
-                              "Scan file not found. Supply a valid changeId or filePath pointing to a scan_*.json file in the operations directory.")
+                              "Scan file not found. Supply a valid scanId or filePath pointing to a scan_*.json file in the scans directory.")
             };
         }
 

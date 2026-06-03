@@ -11,7 +11,7 @@ internal static class ScanResultOffloadHelper
     };
     internal const int ThresholdBytes = 30 * 1024;
 
-    internal static async Task<(bool offloaded, string filePath, string operationId, byte[] jsonBytes)> TryOffloadAsync<T>(T data, string? solutionRoot)
+    internal static async Task<(bool offloaded, string filePath, string scanId, byte[] jsonBytes)> TryOffloadAsync<T>(T data, string? solutionRoot)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= ThresholdBytes || string.IsNullOrEmpty(solutionRoot))
@@ -19,12 +19,12 @@ internal static class ScanResultOffloadHelper
             return (false, string.Empty, string.Empty, jsonBytes);
         }
 
-        var operationId = Guid.NewGuid().ToString("N");
+        var scanId = Guid.NewGuid().ToString("N");
         var dir = Path.Combine(solutionRoot, ".roslynsentinel", "operations");
         Directory.CreateDirectory(dir);
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-        var filePath = Path.Combine(dir, $"scan_{timestamp}_{operationId}.json");
+        var filePath = Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
         await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(data, _jsonOption), new UTF8Encoding(false));
-        return (true, filePath, operationId, jsonBytes);
+        return (true, filePath, scanId, jsonBytes);
     }
 }

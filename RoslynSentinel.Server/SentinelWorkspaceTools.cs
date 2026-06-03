@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -661,11 +662,14 @@ public class SentinelWorkspaceTools
 
             if (document == null)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
             }
 
             var root = await document.GetSyntaxRootAsync();
-            if (root == null) return new ToolResult<object>() { Success = false, Error = new ResultError("", "Syntax root not found.") };
+            if (root == null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("SyntaxRootNotFound", "Syntax root not found.") };
+            }
 
             var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
                              .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
@@ -674,39 +678,60 @@ public class SentinelWorkspaceTools
 
             if (method == null)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Method '{methodName}' not found in '{filePath}'.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("MethodNotFound", $"Method '{methodName}' not found in '{filePath}'.") };
             }
 
-            // convert result to json
-            var jsonResult = System.Text.Json.JsonSerializer.Serialize(method);
+            var methodBytes = System.Text.Encoding.UTF8.GetByteCount(method.ToFullString());
+            var methodCharLength = method.ToFullString().Length;
 
-            if (jsonResult.Length > ScanResultOffloadHelper.ThresholdBytes)
+            if (_logger.IsEnabled(LogLevel.Information))
             {
-                var summary = await ScanResultOffloadHelper.TryOffloadAsync(jsonResult, _workspaceManager.GetSolutionRoot());
-                return new ToolResult<object>()
+                _logger.LogInformation("Method body size: {SizeBytes} bytes", methodBytes);
+                _logger.LogInformation("Method character length: {Length} characters", methodCharLength);
+            }
+
+
+            var thresholdBytes = 8 * 1024; // 8 KB threshold for logging warnings
+            if (methodBytes > thresholdBytes)
+            {
+                _logger.LogWarning("Method body size {SizeBytes} bytes exceeds expected limits. " +
+                                   "This may indicate an issue with the summarization logic or unusually large data. " +
+                                   "Consider reviewing the summary generation and applying stricter caps if necessary.",
+                                   methodBytes);
+            }
+
+            var scanId = Guid.NewGuid().ToString("N");
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                Directory.CreateDirectory(dir);
+                var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+                var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
+                await File.WriteAllTextAsync(fp,
+                    method.ToFullString(),
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                return new ToolResult<object>
                 {
                     Success = true,
-                    Data = new LargeResultInfo(
-                    WrittenToFile: summary.offloaded,
-                    FilePath: summary.filePath,
-                    OperationId: summary.operationId,
-                    SizeBytes: summary.jsonBytes.Length,
-                    TotalRecords: 1,
-                    Message: $"Result written to file ({summary.jsonBytes.Length} bytes, 1 record). " +
-                             $"Use get_scan_result(changeId: \"{summary.operationId}\") to page through results. " +
-                             "Pass limit and offset to control page size (default limit: 50)."
-                )
+                    LargeResult = new LargeResultInfo(
+                        WrittenToFile: true,
+                        FilePath: fp,
+                        ScanId: scanId,
+                        SizeBytes: methodBytes,
+                        TotalRecords: 1,
+                        Message: $"Summary exceeded {thresholdBytes} bytes ({methodBytes} bytes). " +
+                                       $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
                 };
             }
-            else
-            {
-                return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
-            }
+
+            return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
+
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetMethodSourceFailed", $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -730,11 +755,14 @@ public class SentinelWorkspaceTools
 
             if (document == null)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
             }
 
             var root = await document.GetSyntaxRootAsync();
-            if (root == null) return new ToolResult<object>() { Success = false, Error = new ResultError("", "Syntax root not found.") };
+            if (root == null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("SyntaxRootNotFound", "Syntax root not found.") };
+            }
 
             var items = new List<OutlineItem>();
 
@@ -797,7 +825,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetFileOutline failed for '{FilePath}'", filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetFileOutlineFailed", $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
