@@ -85,20 +85,9 @@ public class SentinelScanTools
 
     [McpServerTool]
     [Description("""
-        Dispatches a named detector across a file, project, or entire solution.
-
-        detector:  one of 94 detector IDs \u2014 call describe_advanced_tool_options("scan") for the full
-                   list grouped by domain (async, concurrency, config, convention, correctness,
-                   dead-code, misc, performance, security, structure).
-        scope:     "file" | "project" | "solution"
-        scopeName: filePath when scope=file; projectName when scope=project; omit for solution.
-                   For duplicate_blocks_in_hierarchy, scopeName is the root type name.
-
-        File-scope-only detectors require scope="file" and a valid scopeName (filePath).
-        unused_references requires scope="project".
-        Call describe_scan_detectors for per-detector scope hints and descriptions.
+        Dispatches a named detector across a file, project, or solution. detector: one of 94 detector IDs — call describe_advanced_tool_options("scan") for the full list grouped by domain. scope: file | project | solution. scopeName: filePath when scope=file; projectName when scope=project; root type name for duplicate_blocks_in_hierarchy. File-scope-only detectors require scope=file. unused_references requires scope=project. Call describe_scan_detectors for per-detector scope hints.
         """)]
-    public async Task<ToolResult<object>> Scan(
+    public async Task<ToolResult<object>> RunScanDetector(
         string detector,
         string scope,
         string? scopeName = null,
@@ -444,14 +433,7 @@ public class SentinelScanTools
 
     [McpServerTool]
     [Description("""
-        Returns the catalogue of available scan detectors.
-
-        domain:   filter by domain — async | concurrency | config | convention | correctness |
-                  dead-code | misc | performance | security | structure
-        detector: return info for a single detector by exact id.
-        If both are omitted, all 94 detectors are returned.
-
-        Each entry has: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
+        Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
         """)]
     public Task<ToolResult<object>> DescribeScanDetectors(string? domain = null, string? detector = null)
     {
@@ -479,13 +461,7 @@ public class SentinelScanTools
 
     [McpServerTool]
     [Description("""
-        Analyses a specific method from multiple angles.
-
-        aspect:
-          controlFlow    — return paths, throw sites, infinite loop detection (returns ControlFlowSummary)
-          dataFlow       — unassigned reads, written/read variables, closure captures (returns DataFlowSummary)
-          pathCoverage   — execution paths for test coverage analysis (returns PathCoverageReport)
-          unreachableCode— statements after unconditional return/throw (returns List<string>)
+        Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(string filePath, string methodName, string aspect)
     {

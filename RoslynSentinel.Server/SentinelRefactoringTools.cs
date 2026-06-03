@@ -109,7 +109,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Reorders parameters in a method signature and updates all call sites globally.")]
+    [Description("Reorders method parameters and updates all call sites across the solution. newParameterOrder: zero-based index array specifying the new parameter order. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true)
     {
         try
@@ -162,7 +162,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Generates a mapping method between two types.")]
+    [Description("Generates a mapping method between fromType and toType.")]
     public async Task<ToolResult<object>> GenerateMapping(string filePath, string fromType, string toType)
     {
         try
@@ -178,7 +178,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Converts an anonymous object creation to a formal named class.")]
+    [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration.")]
     public async Task<ToolResult<object>> ConvertAnonymousToNamed(string filePath, string newClassName)
     {
         try
@@ -194,7 +194,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Moves all members of a class into a target class and removes the source class declaration. Works within the same file (sourceFilePath == targetFilePath) or across files. Automatically updates ALL type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution, renaming them to the target class. Returns a dictionary of filePath→updatedContent for every affected file.")]
+    [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution. Returns a filePath → updatedContent dictionary for every affected file.")]
     public async Task<ToolResult<object>> InlineClass(string sourceFilePath, string targetFilePath, string className)
     {
         try
@@ -211,14 +211,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Atomically moves all secondary types to their own files.
-        scope="file"     — moves types in a single file. Requires scopeName (the file path).
-                           Returns a ChangeId plus first-15-line content previews.
-        scope="project"  — moves types in every file in a project. Requires scopeName (project name).
-                           Returns a ChangeId and the list of affected files.
-        scope="solution" — moves types in every file across the entire solution. scopeName is ignored.
-                           Returns a ChangeId and the list of affected files.
-        autoStage=false  — returns the raw changes dictionary without staging.
+        Moves all secondary types to their own files. scope=file → requires scopeName (file path), returns ChangeId + first-15-line content previews. scope=project → requires scopeName (project name), returns ChangeId + affected file list. scope=solution → scopeName ignored. autoStage=false → returns raw changes dictionary without staging.
         """)]
     public async Task<ToolResult<object>> MoveAllTypesToFiles(
         string scope,
@@ -399,7 +392,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Swaps left and right sides of all assignment statements within a line range.")]
+    [Description("Swaps left and right sides of all assignment statements within a 1-based line range.")]
     public async Task<ToolResult<object>> InvertAssignments(string filePath, int startLine, int endLine)
     {
         try
@@ -416,14 +409,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("""
-        Pulls a member (method or property) up from a derived class to its base class.
-
-        Removes the 'override' modifier and adds 'virtual' (if not already abstract/virtual),
-        then moves the declaration from the derived class into the base class. Returns a two-file
-        change dict: derived class file (with member removed) + base class file (with member added).
-
-        Requires: the source class has a base class with accessible source code in the solution.
-        If autoStage is true (default), returns a ChangeId for use with ApplyStagedChanges.
+        Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
         """)]
     public async Task<ToolResult<object>> PullUpMember(string filePath, string className, string memberName, bool autoStage = true)
     {
@@ -536,7 +522,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only those specified in parameterNames) into a 'public record {NewTypeName}(...)'. Rewrites parameter references in the method body to 'request.PropertyName'. Appends the record to the end of the file. Adds a TODO comment in the method body reminding to update call sites.")]
+    [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only parameterNames if specified) into public record {NewTypeName}(...). Rewrites parameter references in the method body to request.PropertyName. Appends the record to end of file. Adds a TODO comment to update call sites — call sites must be updated manually.")]
     public async Task<ToolResult<object>> IntroduceParameterObject(
         string filePath,
         string methodName,
@@ -592,7 +578,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Modifies an attribute on a named type or member. action: add (add attributeSource to targetName), remove (remove attributeName from targetName). attributeSource/attributeName: attribute text with or without brackets or 'Attribute' suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). Use autoStage=true (default) for ChangeId.")]
+    [Description("Adds or removes an attribute on a type or member. action: add or remove. attribute/attributeSource/attributeName accept the attribute with or without brackets or Attribute suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ModifyAttribute(string filePath, string targetName, string attribute, string action, bool autoStage = true)
     {
         try
@@ -627,7 +613,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Modifies a modifier keyword on a type or member. action: add or remove. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Use autoStage=true (default) for ChangeId.")]
+    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. action: add or remove. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ModifyModifier(string filePath, string targetName, string modifier, string action, bool autoStage = true)
     {
         try
@@ -662,7 +648,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Modifies the base type/interface list of a type. action: add or remove. baseTypeName: the type to add or remove (e.g. \"IDisposable\", \"BaseController\"). Use autoStage=true (default) for ChangeId.")]
+    [Description("Adds or removes a base type or interface from a type declaration. action: add or remove. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ModifyBaseType(string filePath, string typeName, string baseTypeName, string action, bool autoStage = true)
     {
         try
@@ -697,7 +683,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Introduces a new named symbol from an expression. as: localVariable (local variable), field (private readonly field), parameter (method parameter, single-file), constant (extract to const — returns MsAugmentResult). contextSnippet: verbatim substring identifying the expression. newName: name for the new symbol. lineBefore/lineAfter for disambiguation.")]
+    [Description("Introduces a named symbol from an expression. as values: localVariable, field (private readonly), parameter (single-file), constant (→ MsAugmentResult). contextSnippet: verbatim substring identifying the expression. lineBefore/lineAfter disambiguate.")]
     public async Task<ToolResult<object>> Introduce(string filePath, string contextSnippet, string newName, string @as, string? lineBefore = null, string? lineAfter = null)
     {
         try
@@ -728,7 +714,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Extracts members from a class into a new type. as: interface (public API → new interface file, newTypeName required), class (named members → new class, memberNames + newTypeName required), partial (named members → new partial file, memberNames required), superclass (common members → new base class, newTypeName required; for multiple classes supply filePaths[] + classNames[]). Use autoStage=true (default) for ChangeId where applicable.")]
+    [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
         string filePath,
         string className,
@@ -819,7 +805,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Manages interface/class synchronization. action: implement (generate stub implementations for all unimplemented interface members on className — returns updated file content), sync (add to interface any public members in className missing from interfaceName — returns updated interface file), verify (report coverage of all implementing classes — requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync; interfaceName is always required.")]
+    [Description("Manages interface/class synchronization. action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
     public async Task<ToolResult<object>> SyncInterface(string filePath, string interfaceName, string action, string? className = null, string? projectName = null)
     {
         try
@@ -865,7 +851,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline method body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
+    [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
     public async Task<ToolResult<object>> Inline(string filePath, string targetName, string kind, string? methodName = null)
     {
         try
@@ -912,7 +898,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Adds a new member to a type. containerName: target class/struct/interface. newMemberSource: full member declaration text. position: null or 'end' (append at end), 'after:MemberName' (insert after named member), 'before:MemberName' (insert before named member). Use autoStage=true (default) for ChangeId.")]
+    [Description("Adds a new member to a type. position: null/end (append), after:MemberName, or before:MemberName. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> AddMember(string filePath, string containerName, string newMemberSource, string? position = null, bool autoStage = true)
     {
         try
@@ -957,7 +943,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. containerName: target class/struct. name: member name. type: C# type. For property: hasSetter (default true), isInit, accessibility (default 'public'). For field: isReadonly, isStatic, initializer (optional expression), accessibility (default 'private'). Use autoStage=true (default) for ChangeId.")]
+    [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. Property defaults: hasSetter=true, accessibility=public. Field defaults: isReadonly=false, isStatic=false, accessibility=private; initializer sets optional field initializer expression. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> AddMemberTyped(
         string filePath,
         string containerName,
@@ -1007,7 +993,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Wraps a line range. wrapper: tryCatch (wrap in try/catch — name is exceptionType default 'Exception'; also use catchVariableName default 'ex', catchBody optional), using (wrap in using statement — name is disposalName, required), region (wrap in #region — name is region label, required). startLine and endLine are 1-based. Use autoStage=true (default) for ChangeId (tryCatch/region only; using returns content string directly).")]
+    [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly.")]
     public async Task<ToolResult<object>> WrapRange(
         string filePath,
         int startLine,
@@ -1071,7 +1057,7 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool]
-    [Description("Moves a type to a new location. destination: ownFile (move to its own '.cs' file — returns ChangeId + content previews; use autoStage=false for raw file dict), outerScope (move nested type to containing namespace scope — returns updated file content).")]
+    [Description("Moves a type to a new location. destination: ownFile (move to its own .cs file → ChangeId + content previews; autoStage=false → raw file dict) or outerScope (move nested type to containing namespace scope → updated file content).")]
     public async Task<ToolResult<object>> MoveType(string filePath, string typeName, string destination, bool autoStage = true)
     {
         try

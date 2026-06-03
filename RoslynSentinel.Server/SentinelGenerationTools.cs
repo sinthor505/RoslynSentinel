@@ -30,7 +30,7 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
-    [Description("Generates C# classes from a JSON string.")]
+    [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public object GenerateClassesFromJson(string json, string rootClassName, string @namespace)
     {
         try
@@ -45,7 +45,7 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
-    [Description("Generates a typed HttpClient for a Web API controller.")]
+    [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(string filePath, string controllerName)
     {
         try
@@ -68,7 +68,7 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
-    [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and generates a JSON skeleton with all keys and inferred default values.")]
+    [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(string projectName)
     {
         try

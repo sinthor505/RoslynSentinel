@@ -76,7 +76,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Generates a paged comprehensive health report. engines: Structure, Modernization, Performance, Safety, Architecture. offset/limit for project paging.")]
+    [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture. Null engines → all engines. projectName/filePath narrow scope. offset/limit page project results. timeoutSeconds defaults to 25.")]
     public async Task<ToolResult<object>> GetComprehensiveHealthReport(
         List<HealthEngineType>? engines = null,
         string? projectName = null,
@@ -106,7 +106,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Gets deep metrics for the entire solution or a specific project.")]
+    [Description("Returns deep metrics for the entire solution or a single project. projectName=null → solution-wide.")]
     public async Task<ToolResult<object>> GetSolutionMetrics(string? projectName = null)
     {
         try
@@ -130,7 +130,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Generates a structured report of all namespaces, classes, methods, and properties in a file.")]
+    [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
     public async Task<ToolResult<object>> GetCodeInventory(string filePath)
     {
         try
@@ -184,7 +184,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation — returns SymbolHoverInfo) or blastRadius (all call sites and affected projects if the symbol is changed — returns ImpactReport). Provide contextSnippet: a verbatim substring identifying the symbol. Provide lineBefore/lineAfter to disambiguate.")]
+    [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate.")]
     public async Task<ToolResult<object>> InspectSymbol(
         string filePath,
         string contextSnippet,
@@ -235,7 +235,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a specific project/file. Returns service type, implementation type, lifetime, and source location for each registration. Use lifetimeFilter to narrow results ('Singleton', 'Scoped', 'Transient').")]
+    [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location. lifetimeFilter: Singleton, Scoped, or Transient.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
         string? projectName = null,
         string? filePath = null,
@@ -262,7 +262,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Builds a call graph for a method. direction: forward (what the method calls, returns CallGraphNode tree), reverse (who calls this method, returns ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth: traversal depth (default 3).")]
+    [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3.")]
     public async Task<ToolResult<object>> GetCallGraph(
         string filePath,
         string methodName,
@@ -360,7 +360,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Finds symbols by name using various lookup strategies. kind: implementorsOf (all types implementing or deriving from the named type), attributeUsages (all usages of a named attribute across the solution), objectCreations (all new T() sites for a type name), extensionsFor (extension methods for a target type), typesWithAttribute (types decorated with a specific attribute), methodsByReturnType (methods returning a specific type). projectName and filePath narrow the scope where supported. sortByFrequency ranks results by frequency (supported for kind=objectCreations).")]
+    [Description("Finds symbols by name using various lookup strategies. kind values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType. projectName/filePath narrow scope where supported. sortByFrequency=true ranks by frequency (supported for objectCreations).")]
     public async Task<ToolResult<object>> FindByName(
         string name,
         string kind,
@@ -442,7 +442,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Returns the public API surface of a project. persistBaseline=false (default): returns full List<ApiSurfaceEntry> with type/member signatures, virtuality, and XML doc — use for SDK documentation or API review. persistBaseline=true: returns compact List<PublicApiMember> baseline suitable for passing to scan_breaking_changes to detect removed or renamed members. filePath scopes to a single file (only used when persistBaseline=true). includeMethods/includeProperties/includeTypes filter the output (only used when persistBaseline=false).")]
+    [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only).")]
     public async Task<ToolResult<object>> GetPublicApiSurface(
         string? projectName = null,
         bool persistBaseline = false,
@@ -515,7 +515,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Returns the best 1-based line number where a new member of the given kind should be inserted in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
+    [Description("Returns the best 1-based line number for inserting a new member of memberKind in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(string filePath, string containerName, string memberKind)
     {
         try
@@ -539,7 +539,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. symbolName: the current name. contextSnippet: optional verbatim substring to disambiguate. Provide lineBefore and/or lineAfter when the snippet could match multiple locations.")]
+    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
     {
         try
@@ -563,7 +563,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Finds all call sites (kind=callers) or implementing members/overrides (kind=implementations) for a symbol, without requiring line/column coordinates. symbolName: the method/property/field name. contextSnippet: optional verbatim substring of the declaration to disambiguate overloads. Provide lineBefore/lineAfter for further disambiguation. Returns List<CallerInfo> for callers, List<ImplementationInfo> for implementations.")]
+    [Description("Finds all call sites or implementations for a symbol without requiring line/column. kind: callers (→ List<CallerInfo>) or implementations (→ List<ImplementationInfo>). contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
     public async Task<ToolResult<object>> FindReferences(
         string filePath,
         string symbolName,
@@ -611,15 +611,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("""
-        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass,
-        return, and closure capture, across all code paths (loops, conditionals, try/catch) in the
-        enclosing scope.
-        filePath: file containing the variable declaration.
-        variableName: the exact identifier name.
-        lineNumber: 1-based line of the declaration (used to disambiguate variables with the same name).
-        Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned,
-        IsCapturedInClosure, and an Accesses list with Line, Column, AccessKind (Declaration/Read/Write/
-        Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
+        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
         """)]
     public async Task<ToolResult<object>> TraceVariableLifetime(string filePath, string variableName, int lineNumber)
     {
@@ -644,7 +636,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Returns type information for a named type. include: hierarchy (base class chain, interfaces, derived types — returns TypeHierarchyReport), members (all public/protected members with full metadata — returns List<TypeMemberDetail>), both (returns object with Hierarchy and Members properties). projectName scopes the lookup. includeInherited controls whether inherited members appear (default true; used for include=members and both).")]
+    [Description("Returns type information. include: hierarchy (base class chain, interfaces, derived types → TypeHierarchyReport), members (all public/protected members with full metadata → List<TypeMemberDetail>), both (default → object with Hierarchy and Members). includeInherited=false excludes inherited members (applies to members and both).")]
     public async Task<ToolResult<object>> GetTypeInfo(
         string typeName,
         string include = "both",
@@ -705,8 +697,8 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Returns a summary of every project's TargetFramework value. Use this before check_project_consistency to see the full framework landscape across the solution.")]
-    public async Task<ToolResult<object>> GetProjectFrameworkSummary()
+    [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
+    public async Task<ToolResult<object>> ListProjectFrameworkTargets()
     {
         try
         {
@@ -729,7 +721,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Compares a previously captured API surface (baseline) against the current code and reports breaking changes: removed types, removed/renamed members, and signature changes. Workflow: (1) call get_public_api_surface_snapshot to capture the baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName or filePath as in step 1.")]
+    [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. Workflow: (1) call get_public_api_surface with persistBaseline=true to capture baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName/filePath matching step 1.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
         List<PublicApiMember> baseline,
         string? projectName = null,
@@ -757,22 +749,7 @@ public class SentinelIntelligenceTools
 
     [McpServerTool]
     [Description("""
-        Finds duplicate statement sequences within the methods of a single class.
-        Uses structural hashing (SyntaxKind-based) so blocks match regardless of
-        variable names or literal values — the same control-flow shape is a clone.
-
-        Returns groups of matching block locations including:
-        • StatementCount — how many statements the clone spans
-        • HasControlFlowExit — true if any statement is a return/break/continue/throw
-          (flag only; does not block the finding)
-        • SnippetPreview — first 120 chars of the first statement
-        • CapturedVariables — variables that would need to become parameters if extracted
-        • ProducedVariables — variables that would need to be returned if extracted
-        • Occurrences — method name, start line, end line, file path for each copy
-
-        Use this to find Extract-Method candidates within a single class before the
-        duplication spreads. Set minStatements lower (e.g. 3) for aggressive detection,
-        higher (e.g. 6) for only substantial clones.
+        Finds duplicate statement sequences within the methods of a single class using structural hashing (SyntaxKind-based — matches regardless of variable names or literal values). Returns clone groups with: StatementCount, HasControlFlowExit (flag only, does not block finding), SnippetPreview, CapturedVariables (would become parameters if extracted), ProducedVariables (would need to be returned if extracted), and Occurrences (method, start line, end line, file). minStatements=3 for aggressive detection, 6+ for substantial clones only.
         """)]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
         string filePath,

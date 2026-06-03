@@ -31,25 +31,7 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        Encapsulates a public field into a private backing field + public property.
-
-        FIXES standard 'encapsulate_field' BUG: The standard tool generates code like
-          private int SuccessCount;
-          public int SuccessCount { get { return SuccessCount; } }
-        which causes infinite recursion / a compile error because the backing field and
-        property share the same name.
-
-        This tool always renames the backing field to _camelCase:
-          private int _successCount;
-          public int SuccessCount { get => _successCount; set => _successCount = value; }
-
-        Parameters:
-          filePath            - Absolute path to the .cs file.
-          fieldName           - Exact name of the field to encapsulate (e.g. "SuccessCount").
-          overridePropertyName - Optional: provide a custom property name if the default
-                                 (PascalCase of fieldName) would conflict.
-
-        Returns: UpdatedContent with the corrected encapsulation applied.
+        Encapsulates a public field into a private backing field + public property. FIXES standard encapsulate_field BUG: the standard tool creates a backing field and property with the same name, causing infinite recursion/compile error. This tool always renames the backing field to _camelCase. overridePropertyName provides a custom property name when the default PascalCase would conflict. Returns UpdatedContent.
         """)]
     public async Task<ToolResult<object>> EncapsulateFieldSafe(
         string filePath,
@@ -85,19 +67,7 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        Pre-flight analysis: checks whether a switch statement is safe to convert to a
-        switch expression using the standard 'convert_to_pattern_matching' tool.
-
-        WHY YOU NEED THIS: The standard tool silently drops variable assignments in switch
-        cases that assign to multiple variables, producing broken code without any warning.
-
-        If IsSafeToConvert is true, the standard tool (or ConvertSwitchToPatternSafe) will
-        produce correct output. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion")
-        for the full output field reference and case-by-case safety rules.
-
-        filePath:      absolute path to the .cs file.
-        contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
-        lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
+        Pre-flight safety check before converting a switch statement to a switch expression. FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion") for full output field reference.
         """)]
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
         string filePath,
@@ -133,22 +103,7 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        Converts a switch statement to a switch expression safely.
-
-        FIXES standard 'convert_to_pattern_matching' BUG: The standard tool silently drops
-        variable assignments for cases that set more than one variable, generating incorrect
-        code. This tool rejects those cases with a clear error message instead.
-
-        Call describe_advanced_tool_options("convert_switch_to_pattern_safe") for the supported switch
-        forms, rejection rules, and usage guidance.
-        Run analyze_switch_for_pattern_conversion first if you are unsure.
-
-        filePath:      absolute path to the .cs file.
-        contextSnippet: verbatim substring from the switch keyword line, e.g. "switch (unit)".
-        lineBefore/lineAfter: optional disambiguation when the snippet matches multiple locations.
-
-        Returns MsAugmentResult with UpdatedContent on success, or Error describing why
-        conversion was rejected.
+        Converts a switch statement to a switch expression, rejecting unsafe cases instead of silently producing broken code. FIXES MS BUG: the standard tool drops variable assignments when a case sets more than one variable. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate multiple matches. Run analyze_switch_for_pattern_conversion first if unsure. Returns MsAugmentResult with UpdatedContent on success or Error on rejection. Call describe_advanced_tool_options("convert_switch_to_pattern_safe") for supported switch forms and rejection rules.
         """)]
     public async Task<ToolResult<object>> ConvertSwitchToPatternSafe(
         string filePath,
@@ -186,18 +141,7 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        Pre-flight safety analysis for convert_foreach_linq.
-
-        FIXES MS BUG: The standard convert_foreach_linq tool silently destroys data when a
-        collection is modified before the foreach. ALWAYS call this before convert_foreach_linq;
-        only proceed if IsSafeToConvert=true.
-
-        Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for the full output
-        field reference and safety rules.
-
-        filePath:       absolute path to the .cs file.
-        contextSnippet: short snippet of the foreach statement (e.g., "foreach (var item in").
-        lineBefore/lineAfter: optional disambiguation.
+        Pre-flight safety check before convert_foreach_linq. FIXES MS BUG: the standard tool silently destroys data when a collection is modified before the foreach. Only proceed with conversion if IsSafeToConvert=true. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for full output field reference and safety rules.
         """)]
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
         string filePath, string contextSnippet,
@@ -231,29 +175,7 @@ public class SentinelAugmentTools
 
     [McpServerTool]
     [Description("""
-        GET_WORKSPACE_HEALTH — Targeted workspace health check that fixes false negatives.
-
-        Call this tool directly — no prior tool_search step is required to use RoslynSentinel tools.
-
-        FIXES MS BUG: The standard diagnose tool reports healthy:false even when all projects
-        load successfully, because it tests MSBuild path existence rather than actual workspace
-        state. A workspace with 86/86 projects loaded correctly can be falsely reported as
-        unhealthy.
-
-        This tool reads actual solution state directly:
-          • IsOperational       — true if workspace itself is functional (not throwing)
-          • HasLoadedSolution   — true if a .sln or .csproj is currently loaded
-          • LoadedSolutionPath  — absolute path to the loaded .sln file; null when no solution
-                                  is loaded
-          • ProjectCount/DocumentCount — actual loaded counts from the workspace
-          • LoadErrors          — non-fatal warnings that occurred during solution loading
-          • Summary             — human-readable status
-
-        Note: IsOperational=true + HasLoadedSolution=false simply means no solution has
-        been loaded yet — this is a normal state, not an error. 
-        
-        If HasLoadedSolution is false, call list_workspace_solutions to discover available
-        solution files, then call load_solution with the returned path.
+        Targeted workspace health check. FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly. Returns: IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false is normal — no solution loaded yet, not an error.
         """)]
     public async Task<ToolResult<object>> GetWorkspaceHealth()
     {
@@ -284,25 +206,7 @@ public class SentinelAugmentTools
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
 
     [McpServerTool, Description("""
-        extract_method_safe— extracts selected statements into a new method with the CORRECT return type.
-
-        Fixes a bug in the standard extract_method tool where selections ending with `return <expression>`
-        are extracted into a method declared `private void MethodName(...)`. The void return type is
-        incorrect and causes a compile error. This tool uses Roslyn's SemanticModel to determine the
-        actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list.
-
-        Requires a solution to be loaded first (via set_solution_path or equivalent), because semantic
-        analysis is needed to determine types.
-
-        Parameters:
-          filePath        — absolute path to the .cs file (must be in the loaded solution)
-          newMethodName   — valid C# identifier for the new extracted method
-          contextSnippet  — a short unique code snippet that identifies the selection
-          lineBefore      — optional: the line immediately before contextSnippet (for disambiguation)
-          lineAfter       — optional: the line immediately after contextSnippet (for disambiguation)
-
-        Returns: MsAugmentResult with Success=true and UpdatedContent=the rewritten file,
-                 or Success=false and Error with a human-readable explanation.
+        extract_method_safe—extracts selected statements into a new method with the CORRECT return type. Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent). newMethodName must be a valid C# identifier. contextSnippet: short unique code snippet identifying the selection. lineBefore/lineAfter disambiguate. Returns MsAugmentResult with extracted method code or error on rejection.
         """)]
     public async Task<ToolResult<object>> ExtractMethodSafe(
         string filePath, string newMethodName, string contextSnippet,

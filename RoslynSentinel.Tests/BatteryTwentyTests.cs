@@ -150,7 +150,7 @@ public class BatteryTwentyTests
     [Test]
     public void GetExternalChanges_Always_ReturnsList()
     {
-        var result = _tools.GetExternalChanges();
+        var result = _tools.ListExternalDiskChanges();
         Assert.That(result, Is.Not.Null);
     }
 

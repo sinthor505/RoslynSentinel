@@ -107,19 +107,7 @@ public class SentinelCodemodTools
 
     [McpServerTool]
     [Description("""
-        Applies a file-wide code transformation. Most transforms return the updated file content
-        as a string; pass the result to apply_proposed_changes to write to disk.
-
-        filePath:  the .cs file to transform.
-        transform: the codemod to apply — call describe_advanced_tool_options("apply_file_codemod") for
-                   valid values and per-transform notes.
-        libraryMode: for add_configure_await_false — true (default) adds .ConfigureAwait(false) to all awaits.
-        preview: for format_document_safe and sort_and_deduplicate_usings — false (default) writes to disk;
-                 true returns updated content without writing.
-
-        Returns the updated file content as a string, or a type-specific result for some transforms
-        (SourceTransformResult, UsingsCleanupResult, FormatPreviewResult, AddUsingsPreview).
-        Throws InvalidOperationException when the file is not found or no changes are needed.
+        Applies a file-wide code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
         string filePath,
@@ -394,20 +382,7 @@ public class SentinelCodemodTools
 
     [McpServerTool]
     [Description("""
-        Applies a method-scoped code transformation. Most transforms return the updated file
-        content as a string; pass the result to apply_proposed_changes to write to disk.
-
-        filePath:   the .cs file containing the method.
-        methodName: the method to transform.
-        transform:  the codemod to apply — call describe_advanced_tool_options("apply_method_codemod") for
-                    valid values and per-transform notes.
-        direction: required for convert_expression_body — "ToExpression" or "ToBlock".
-        contextSnippet/lineBefore/lineAfter: for convert_expression_body disambiguation.
-        lockFieldName: for make_method_thread_safe — name for the lock field (default "_lock").
-
-        Returns the updated file content as a string, or a type-specific result for some transforms
-        (SourceTransformResult, OutParamConversionResult).
-        Throws InvalidOperationException when the file or method is not found.
+        Applies a method-scoped code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
         string filePath,
@@ -747,19 +722,7 @@ public class SentinelCodemodTools
 
     [McpServerTool]
     [Description("""
-        Applies a class-scoped code transformation and returns the updated file content as a string.
-        Pass the result to apply_proposed_changes to write to disk.
-
-        filePath:  the .cs file containing the class.
-        className: the target class name.
-        transform: the codemod to apply — call describe_advanced_tool_options("apply_class_codemod") for
-                   valid values and per-transform notes.
-        propertyName: for convert_property_safe and convert_property_to_methods — the property name.
-        direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty".
-        contextSnippet/lineBefore/lineAfter: for convert_property_safe disambiguation.
-
-        Returns the updated file content as a string.
-        Throws InvalidOperationException when the file or class is not found.
+        Applies a class-scoped code transformation; returns updated file content as a string — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
         string filePath,
@@ -1083,18 +1046,7 @@ public class SentinelCodemodTools
 
     [McpServerTool]
     [Description("""
-        Generates new code for a type or method. Returns a kind-specific result object.
-
-        kind:      the artefact to generate — call describe_advanced_tool_options("generate") for valid
-                   values, required parameters per kind, and return types.
-        filePath:  required for all kinds except generate_decorator_class.
-        className: target class name; for generate_decorator_class, pass the interface name.
-        methodName: required for add_benchmark_stub and generate_path_driven_tests.
-        members:   for generate_to_string_safe — optional comma-separated member list.
-        decoratorPrefix: for generate_decorator_class (default "Logging").
-        projectName: for generate_decorator_class — optional project scope.
-        framework: for generate_path_driven_tests — "NUnit" (default), "xunit", or "mstest".
-        disambiguateLine: for generate_path_driven_tests — disambiguates overloaded methods.
+        Generates new code for a type or method. kind: call describe_advanced_tool_options("generate") for valid values, required parameters per kind, and return types. filePath required for all kinds except generate_decorator_class. decoratorPrefix defaults to "Logging". framework for test generation: "NUnit" (default), "xunit", or "mstest". disambiguateLine resolves overloaded method targets for generate_path_driven_tests.
         """)]
     public async Task<ToolResult<object>> Generate(
         string kind,

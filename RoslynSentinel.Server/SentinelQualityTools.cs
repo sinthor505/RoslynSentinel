@@ -218,7 +218,7 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
-    [Description("Extends path coverage analysis with a cross-reference to test methods that exercise the given production method. Finds covering tests by name convention (test method name contains the production method name) and by direct call-site presence in the test body. Returns BranchesToTest (execution paths to cover) and CoveringTests (test file, test method name, line) with HasAnyCoverage flag.")]
+    [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<ToolResult<object>> GetTestCoverageMap(string filePath, string methodName)
     {
         try
@@ -243,28 +243,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate.
-        Uses syntax-level analysis — no compilation needed.
-
-        filePath:    restrict to one file (full or partial path suffix).
-        projectName: restrict to one project (case-insensitive).
-        pattern:     restrict to one pattern — call describe_advanced_tool_options("scan_migration_candidates")
-                     for valid pattern values.
-        summarize:   when true, return a guaranteed ≤2KB dashboard view. byClass is capped at 10
-                     entries (highest-count classes); ByClassTruncated=true when truncated.
-                     TopCandidates is capped at 5 entries regardless of topN.
-                     To get full candidate records, use summarize=false with limit/offset.
-        topN:        when summarize=true, include this many top-scored candidates in TopCandidates.
-                     Capped at 5 regardless of value supplied. e.g. topN=5, minScore=70 returns
-                     the 5 highest-scoring candidates alongside the summary counts in a single call.
-        minScore:    filters candidates in both paged and summary modes. TotalRecords reflects
-                     the post-filter count. Ignored when not supplied.
-        limit/offset: page the full candidate list (summarize=false only). Ignored when summarize=true.
-
-        Returns ToolResult<List<MigrationCandidateFinding>> or ToolResult<MigrationScanSummary>.
-        A method flagged for two patterns appears twice. Each finding includes a Summary field.
-        When results exceed the inline threshold, LargeResultInfo is populated instead of Data —
-        call get_scan_result(changeId) to read back the offloaded result in pages.
+        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate. Syntax-level — no compilation needed. pattern: call describe_advanced_tool_options("scan_migration_candidates") for valid values. summarize=true → guaranteed ≤2KB dashboard (byClass capped at 10, TopCandidates capped at 5 regardless of topN; ByClassTruncated=true when truncated). summarize=false + limit/offset → full paged candidate records. minScore filters in both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice. When results exceed the inline threshold, LargeResultInfo is populated instead of Data — call get_scan_result(changeId) to read in pages.
         """)]
     public async Task<ToolResult<object>> ScanMigrationCandidates(
         string? filePath = null,
@@ -525,7 +504,7 @@ public class SentinelQualityTools
     }
 
     [McpServerTool]
-    [Description("Calculates the cyclomatic complexity of a method: 1 + one for each if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns the complexity score and the list of conditionals that contribute to it. Complexity guide: 1–4 = Low (easy to understand and test), 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High (split required). Use before modifying a method to gauge how risky the change is.")]
+    [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<ToolResult<object>> GetMethodComplexity(string filePath, string methodName)
     {
         try
@@ -552,17 +531,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Pages through a large scan result that was previously written to disk by
-        scan_migration_candidates when the payload exceeded the inline size threshold.
-
-        changeId: the OperationId returned in LargeResult.OperationId — resolves to
-                  .roslynsentinel/operations/scan_*_{changeId}.json.
-        filePath: full path to the scan file (alternative to changeId).
-                  Must match the scan_*.json pattern inside the operations directory.
-        limit:    max findings per page (default 50).
-        offset:   zero-based page offset (default 0).
-
-        Returns ToolResult<object> with TotalRecords and HasMore.
+        Pages through a large scan result written to disk when scan_migration_candidates payload exceeded the inline size threshold. Supply either changeId (resolves to .roslynsentinel/operations/scan_*_{changeId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
     public async Task<ToolResult<object>> GetScanResult(
         string? changeId = null,
@@ -647,14 +616,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Returns async migration progress statistics for the solution or a single project.
-        Reports: total async Task/ValueTask methods, how many already have a CancellationToken
-        parameter (and how many still need one), percentage coverage, number of Asyncify-bridge
-        wrapper methods ([Obsolete("Asyncify-bridge:...")]), number of call sites that still
-        invoke those bridge wrappers (CS0618 sites pending migration), and count of async void
-        event handlers (informational — their signatures cannot be extended).
-
-        projectName: restrict statistics to a single project; null = entire solution.
+        Returns async migration progress statistics for the solution or a single project. Reports: total async Task/ValueTask methods, how many have a CancellationToken parameter (and how many still need one), percentage coverage, Asyncify-bridge wrapper count ([Obsolete("Asyncify-bridge:...")]), bridge call sites pending migration (CS0618), and async void event handlers (informational — their signatures cannot be extended). projectName=null → entire solution.
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         string? projectName = null,
@@ -1796,18 +1758,7 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-        Unified dispatcher for six async-migration operations. Dispatches to the appropriate
-        engine based on the operation string; all operations check the circuit breaker first
-        and return BatchResultSummary.
-
-        operation: one of six values — call describe_advanced_tool_options("async_migrate") for valid
-                   values and required input fields per operation.
-        input:     AsyncMigrateInput — fields vary by operation; see describe_advanced_tool_options.
-
-        Returns ToolResult<BatchResultSummary>. Use get_operation_detail(changeId) for per-item details.
-        Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
-        ErrorCode="SolutionNotLoaded" — no solution is loaded; call load_solution first.
-        ErrorCode="InvalidArgument" — unknown operation name; see Message for valid values.
+        Unified dispatcher for six async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
         """)]
     public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
         string operation,
@@ -1931,19 +1882,8 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("""
-    Returns reference documentation for a named tool's valid input values: operation names,
-    transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid
-    values cannot be inferred from the parameter schema alone (e.g. enum-like string parameters
-    with many valid values).
-
-    Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod,
-    apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe,
-    analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion.
-
-    toolName: the MCP tool name. Returns ErrorCode = "NoFurtherDocumentation" if the tool is not in the
-    covered set — this does not mean the tool is invalid, only that its valid values are fully
-    described by its parameter schema and no separate reference table is needed.
-    """)]
+        Returns reference documentation for a named tool's valid input values — operation names, transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set — this does not mean the tool is invalid, only that its schema is self-describing.
+        """)]
     public ToolOptionsResult DescribeAdvancedToolOptions(string toolName)
     {
         return toolName switch

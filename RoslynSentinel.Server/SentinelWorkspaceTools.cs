@@ -52,11 +52,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("""
-        Query or update analysis/refactoring feature flags.
-        action="list"   — returns all features and their current enabled status. names and enabled are ignored.
-        action="get"    — returns enabled status of specific features by name. Requires names.
-        action="update" — batch-updates the enabled status of one or more features. Requires enabled
-                          as a list of { Key: featureName, Value: true|false } pairs.
+        Queries or updates analysis/refactoring feature flags. action values: list (all features and current status; names/enabled ignored), get (enabled status of specific features by names), update (batch-update via enabled as [{ Key: featureName, Value: bool }] pairs).
         """)]
     public object Features(
         string action,
@@ -87,8 +83,8 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects in the solution), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
-    public async Task<ToolResult<object>> List(string kind, string? projectName = null)
+    [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
+    public async Task<ToolResult<object>> ListSolutionItems(string kind, string? projectName = null)
     {
         try
         {
@@ -175,7 +171,7 @@ public class SentinelWorkspaceTools
     public sealed record SolutionFileInfo(string Path, string Format);
 
     [McpServerTool]
-    [Description("Loads a .NET solution into memory for persistent analysis.")]
+    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\".")]
     public async Task<ToolResult<object>> LoadSolution(string solutionPath)
     {
         try
@@ -199,7 +195,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Checks the health of the Roslyn MCP server environment and workspace status.")]
+    [Description("Checks Roslyn MCP server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Prefer get_workspace_health — this tool has a known false-negative bug where healthy workspaces are reported as unhealthy.")]
     public async Task<HealthReport> Diagnose(string? solutionPath = null, bool verbose = false)
     {
         try
@@ -257,24 +253,16 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Returns a list of files that have been modified externally (on disk) since the AI last synced.")]
-    public List<string> GetExternalChanges() => _workspaceManager.GetExternalDrift();
+    [Description("Returns files modified on disk since the AI last synced. No parameters.")]
+    public List<string> ListExternalDiskChanges() => _workspaceManager.GetExternalDrift();
 
     [McpServerTool]
-    [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters..")]
+    [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift() => _workspaceManager.ClearDrift();
 
     [McpServerTool]
     [Description("""
-        Applies or validates a proposed change set.
-        format: files (dictionary of filePath→newContent) or diff (unified diff string for one file).
-        action: apply (write to disk) or validate (dry-run compiler diagnostics).
-        For format=files: supply the changes dict. retryCount controls retry on file locks (apply only, default 3).
-        For format=diff: supply filePath and unifiedDiff.
-        validateOnApply: when true (default), runs a delta compile before writing and returns validation
-        errors without touching disk if new errors are introduced. Set false only for intentional
-        intermediate-broken-state edits that are part of a multi-step refactor.
-        On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
+        Applies or validates a proposed change set. format=files → supply changes dict (filePath → newContent). format=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
         """)]
     public async Task<ToolResult<object>> ProposedChange(
         string format,
@@ -393,7 +381,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Retries committing previously failed file changes using server-side cached content. Token-efficient: no need to re-send file contents.")]
+    [Description("Retries committing previously failed file changes using server-side cached content — no need to re-send file contents. specificFiles limits the retry to a subset of files. retryCount defaults to 3.")]
     public async Task<ToolResult<object>> RetryFailedChanges(List<string>? specificFiles = null, int retryCount = 3)
     {
         try
@@ -604,7 +592,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Safely deletes a symbol (method, property, class) only if it has zero usages in the entire codebase.")]
+    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
     public async Task<ToolResult<object>> SafeDelete(string filePath, int line, int column)
     {
         try
@@ -620,7 +608,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Creates a new project and adds it to the current solution.")]
+    [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
     public async Task<ToolResult<object>> CreateProject(string projectName, string projectType = "console")
     {
         try
@@ -654,7 +642,7 @@ public class SentinelWorkspaceTools
     // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
 
     [McpServerTool]
-    [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match when names are overloaded.")]
+    [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(string filePath, string methodName)
     {
         try
@@ -723,7 +711,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Returns a structural outline of a file: namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Does not include member bodies.")]
+    [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(string filePath)
     {
         try
@@ -814,7 +802,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. Solution-scoped grep. maxResults caps total matches.")]
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
         string pattern,
         bool isRegex = false,
@@ -909,7 +897,7 @@ public class SentinelWorkspaceTools
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
 
     [McpServerTool]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter: 'failures', 'skipped', 'rolledback', 'file:<path>', or null for all items. maxItems caps the returned slice — never dumps the full document.")]
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, rolledback, file:<path>, or null for all items. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<ToolResult<object>> GetOperationDetail(
         string changeId,
         string? filter = null,
@@ -989,7 +977,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
-    [Description("Reverts files from a previously applied batch operation to their pre-apply state, using the forensic blob written at apply time. Available for all apply operations (proposed_change, staged_change, and batch-first tools).")]
+    [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply(string changeId)
     {
         try
