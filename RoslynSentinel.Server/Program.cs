@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -35,7 +37,7 @@ if (args.Contains("--list-tools"))
     return;
 }
 
-Console.Error.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
+Debug.WriteLine($"--- BUILD STAMP: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC ---");
 
 // --- Interactive-mode pipe setup (streams must exist before host build) ---
 var isInteractive = args.Contains("--interactive");

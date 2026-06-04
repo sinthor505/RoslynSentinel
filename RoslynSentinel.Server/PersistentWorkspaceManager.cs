@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text.Json;
 
 using Microsoft.Build.Locator;
@@ -82,8 +83,8 @@ public class PersistentWorkspaceManager : IDisposable
         {
             _logger.LogInformation("Registering MSBuild defaults...");
             var instance = MSBuildLocator.RegisterDefaults();
-            Console.WriteLine($"MSBuild: {instance.MSBuildPath}");
-            Console.WriteLine($"Version: {instance.Version}");
+            Debug.WriteLine($"MSBuild: {instance.MSBuildPath}");
+            Debug.WriteLine($"Version: {instance.Version}");
         }
     }
 
