@@ -78,6 +78,38 @@ public record ExtensionMethodInfo(
     int? Line
 );
 
+/// <summary>
+/// A single declaration site returned by LocateSymbolAsync.
+/// All fields required by filePath-gated tools (filePath, contextSnippet, line) are included
+/// so callers can feed results directly into inspect_symbol / find_references / get_call_graph
+/// without a separate text-search step.
+/// </summary>
+public record SymbolLocation(
+    /// <summary>Fully-qualified name, e.g. "RoslynSentinel.Server.DiscoveryEngine.FindAttributeUsagesAsync".</summary>
+    string FullyQualifiedName,
+    /// <summary>Simple name without namespace or type prefix.</summary>
+    string Name,
+    /// <summary>Roslyn symbol kind: Method, Property, Field, NamedType, Event, etc.</summary>
+    string SymbolKind,
+    /// <summary>Full signature string suitable for display and disambiguation.</summary>
+    string Signature,
+    /// <summary>Declaring type simple name, null for top-level types.</summary>
+    string? ContainingType,
+    /// <summary>Declaring namespace, null for global namespace.</summary>
+    string? ContainingNamespace,
+    /// <summary>Absolute path to the declaring file. Feed directly to filePath parameters.</summary>
+    string? FilePath,
+    /// <summary>1-based declaration line number.</summary>
+    int? Line,
+    /// <summary>
+    /// Pre-built contextSnippet: the declaration line text, ready to pass to
+    /// inspect_symbol / find_references / rename_symbol contextSnippet parameters.
+    /// </summary>
+    string? ContextSnippet,
+    /// <summary>Declared accessibility: Public, Internal, Private, Protected, etc.</summary>
+    string Accessibility
+);
+
 public record VariableAccess(
     string FilePath,
     int Line,
@@ -148,6 +180,174 @@ public class SymbolNavigationEngine
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Locates all declaration sites for a symbol by name without requiring a file path.
+    /// Returns structured SymbolLocation records whose FilePath and ContextSnippet fields
+    /// can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol,
+    /// and all other filePath-gated tools — eliminating the search_solution_text bootstrap step.
+    ///
+    /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.Data.Repo.GetById").
+    /// symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
+    /// projectName: optional — restricts the search to a single project.
+    /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery mode).
+    ///
+    /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
+    /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
+    /// then supply the chosen FilePath + ContextSnippet to the next tool call.
+    /// </summary>
+    public async Task<List<SymbolLocation>> LocateSymbolAsync(
+        string symbolName,
+        string symbolKind = "any",
+        string? projectName = null,
+        bool exactMatch = true,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        var searchProjects = projectName != null
+            ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            : solution.Projects;
+
+        // Determine the Roslyn SymbolFilter from the caller's symbolKind string.
+        var filter = symbolKind.ToLowerInvariant() switch
+        {
+            "type" => SymbolFilter.Type,
+            "method" or "property" or "field" or "event" => SymbolFilter.Member,
+            _ => SymbolFilter.TypeAndMember
+        };
+
+        var results = new List<SymbolLocation>();
+        var seen = new HashSet<string>();
+
+        // Strip any namespace prefix from the simple name for GetSymbolsWithName,
+        // which matches only on the unqualified identifier.
+        var simpleName = symbolName.Contains('.')
+            ? symbolName.Split('.').Last()
+            : symbolName;
+
+        foreach (var project in searchProjects)
+        {
+            Compilation? compilation = null;
+            try
+            {
+                compilation = await project.GetCompilationAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LocateSymbol: could not compile project '{Project}'", project.Name);
+            }
+
+            if (compilation == null)
+            {
+                continue;
+            }
+
+            var candidates = exactMatch
+                ? compilation.GetSymbolsWithName(simpleName, filter, ct)
+                : compilation.GetSymbolsWithName(
+                    n => n.Contains(simpleName, StringComparison.OrdinalIgnoreCase),
+                    filter,
+                    ct);
+
+            foreach (var symbol in candidates)
+            {
+                // Apply the fine-grained kind filter that SymbolFilter alone cannot express.
+                if (!MatchesKindFilter(symbol, symbolKind))
+                {
+                    continue;
+                }
+
+                // When the caller supplied a fully-qualified name, verify the full display string.
+                if (symbolName.Contains('.') &&
+                    !symbol.ToDisplayString().Contains(symbolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                foreach (var location in symbol.Locations.Where(l => l.IsInSource))
+                {
+                    var filePath = location.SourceTree?.FilePath;
+                    if (filePath == null)
+                    {
+                        continue;
+                    }
+
+                    var lineSpan = location.GetLineSpan();
+                    var line = lineSpan.StartLinePosition.Line + 1;
+                    var dedupeKey = filePath + ":" + line + ":" + symbol.ToDisplayString();
+                    if (!seen.Add(dedupeKey))
+                    {
+                        continue;
+                    }
+
+                    // Build ContextSnippet from the source text — the exact declaration line.
+                    string? contextSnippet = null;
+                    try
+                    {
+                        var sourceText = location.SourceTree?.GetText(ct);
+                        if (sourceText != null && line <= sourceText.Lines.Count)
+                        {
+                            contextSnippet = sourceText.Lines[line - 1].ToString().Trim();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "LocateSymbol: could not read source text for context snippet");
+                    }
+
+                    var sig = symbol switch
+                    {
+                        IMethodSymbol m => m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+                        IPropertySymbol p => p.Type.ToDisplayString() + " " + p.ToDisplayString(),
+                        IFieldSymbol f => f.Type.ToDisplayString() + " " + f.ToDisplayString(),
+                        INamedTypeSymbol t => t.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+                        _ => symbol.ToDisplayString()
+                    };
+
+                    results.Add(new SymbolLocation(
+                        FullyQualifiedName: symbol.ToDisplayString(),
+                        Name: symbol.Name,
+                        SymbolKind: symbol.Kind.ToString(),
+                        Signature: sig,
+                        ContainingType: symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                        ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
+                            ? null
+                            : symbol.ContainingNamespace?.ToDisplayString(),
+                        FilePath: filePath,
+                        Line: line,
+                        ContextSnippet: contextSnippet,
+                        Accessibility: symbol.DeclaredAccessibility.ToString()
+                    ));
+                }
+            }
+        }
+
+        return results
+            .OrderBy(r => r.ContainingNamespace)
+            .ThenBy(r => r.ContainingType)
+            .ThenBy(r => r.Name)
+            .ThenBy(r => r.FilePath)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Returns true when symbol matches the caller-supplied symbolKind string.
+    /// SymbolFilter handles coarse type vs member filtering; this handles the fine
+    /// sub-kinds (method vs property vs field vs event) that SymbolFilter cannot express.
+    /// </summary>
+    private static bool MatchesKindFilter(ISymbol symbol, string symbolKind)
+    {
+        return symbolKind.ToLowerInvariant() switch
+        {
+            "type" => symbol is INamedTypeSymbol,
+            "method" => symbol is IMethodSymbol { MethodKind: MethodKind.Ordinary or MethodKind.ExplicitInterfaceImplementation },
+            "property" => symbol is IPropertySymbol,
+            "field" => symbol is IFieldSymbol,
+            "event" => symbol is IEventSymbol,
+            _ => true   // "any" or unrecognised — include everything
+        };
     }
 
     public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
@@ -1103,9 +1303,13 @@ public class SymbolNavigationEngine
     /// symbolName: the member name to search for. contextSnippet: optional verbatim substring
     /// of the declaration to disambiguate overloads (e.g. the method signature line).
     /// Returns one CallerInfo per call site with the enclosing method, file, line, and code snippet.
+    ///
+    /// filePath is optional. When omitted, the symbol is resolved by name across the solution
+    /// using GetSymbolsWithName. If the name is ambiguous, all candidate locations are searched.
+    /// Supply filePath to pin the resolution to a specific declaring file.
     /// </summary>
     public async Task<List<CallerInfo>> FindCallersAsync(
-        string filePath,
+        string? filePath,
         string symbolName,
         string? contextSnippet = null,
         string? lineBefore = null,
@@ -1113,43 +1317,54 @@ public class SymbolNavigationEngine
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new List<CallerInfo>();
-        }
-
-        var root = await document.GetSyntaxRootAsync(ct);
-        var model = await document.GetSemanticModelAsync(ct);
-        if (root == null || model == null)
-        {
-            return new List<CallerInfo>();
-        }
 
         ISymbol? symbol = null;
-        if (contextSnippet != null)
+
+        if (filePath != null)
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+            // Original path: resolve from the declaring file.
+            var document = solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+            if (document == null)
+            {
+                return new List<CallerInfo>();
+            }
+
+            var root = await document.GetSyntaxRootAsync(ct);
+            var model = await document.GetSemanticModelAsync(ct);
+            if (root == null || model == null)
+            {
+                return new List<CallerInfo>();
+            }
+
+            if (contextSnippet != null)
+            {
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+            }
+            else
+            {
+                var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                    .Where(m => m switch
+                    {
+                        MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                        PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                        FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
+                        _ => false
+                    }).ToList();
+                var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
+                    ?? decls.FirstOrDefault();
+                if (decl != null)
+                {
+                    symbol = model.GetDeclaredSymbol(decl, ct);
+                }
+            }
         }
         else
         {
-            // Collect all matching declarations, preferring class members over interface members
-            // to avoid returning empty results when the same method exists in both IFoo and Foo.
-            var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .Where(m => m switch
-                {
-                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                    FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
-                    _ => false
-                }).ToList();
-            var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
-                ?? decls.FirstOrDefault();
-            if (decl != null)
-            {
-                symbol = model.GetDeclaredSymbol(decl, ct);
-            }
+            // Defect-3 fix: no filePath supplied — resolve by name across the solution.
+            // When multiple overloads exist, contextSnippet is used to pick one if supplied;
+            // otherwise all matching symbols are searched (union of references).
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, ct);
         }
 
         if (symbol == null)
@@ -1228,9 +1443,12 @@ public class SymbolNavigationEngine
     /// Unlike the built-in find_implementations (which requires line numbers), this uses symbolName
     /// with an optional contextSnippet to locate the symbol without coordinates.
     /// Returns ImplementationInfo with type name, file, line, and kind.
+    ///
+    /// filePath is optional. When omitted, the symbol is resolved by name across the solution.
+    /// Supply filePath to pin resolution to a specific declaring file.
     /// </summary>
     public async Task<List<ImplementationInfo>> FindImplementationsForMemberAsync(
-        string filePath,
+        string? filePath,
         string symbolName,
         string? contextSnippet = null,
         string? lineBefore = null,
@@ -1238,43 +1456,54 @@ public class SymbolNavigationEngine
         CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new List<ImplementationInfo>();
-        }
-
-        var root = await document.GetSyntaxRootAsync(ct);
-        var model = await document.GetSemanticModelAsync(ct);
-        if (root == null || model == null)
-        {
-            return new List<ImplementationInfo>();
-        }
 
         ISymbol? symbol = null;
-        if (contextSnippet != null)
+
+        if (filePath != null)
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+            // Original path: resolve from the declaring file.
+            var document = solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+            if (document == null)
+            {
+                return new List<ImplementationInfo>();
+            }
+
+            var root = await document.GetSyntaxRootAsync(ct);
+            var model = await document.GetSemanticModelAsync(ct);
+            if (root == null || model == null)
+            {
+                return new List<ImplementationInfo>();
+            }
+
+            if (contextSnippet != null)
+            {
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+            }
+            else
+            {
+                var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                    .FirstOrDefault(m => m switch
+                    {
+                        MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                        PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                        _ => false
+                    });
+                if (decl != null)
+                {
+                    symbol = model.GetDeclaredSymbol(decl, ct);
+                }
+            }
         }
         else
         {
-            var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .FirstOrDefault(m => m switch
-                {
-                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                    _ => false
-                });
-            if (decl != null)
-            {
-                symbol = model.GetDeclaredSymbol(decl, ct);
-            }
+            // Defect-3 fix: no filePath — resolve by name across the solution.
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, ct);
         }
 
         if (symbol == null)
         {
-            // Fallback: try to find as a named type (e.g., user passed an interface name, not a member name)
+            // Fallback: try to find as a named type (e.g., user passed an interface name, not a member name).
             foreach (var project in solution.Projects)
             {
                 var compilation = await project.GetCompilationAsync(ct);
@@ -1612,6 +1841,94 @@ public class SymbolNavigationEngine
             a is IfStatementSyntax or
             SwitchStatementSyntax or
             ConditionalExpressionSyntax) == true;
+
+    /// <summary>
+    /// Resolves a member symbol by name across the solution without requiring a file path.
+    /// Used by FindCallersAsync and FindImplementationsForMemberAsync when filePath is null.
+    /// Prefers class members over interface members to match original disambiguation logic.
+    /// When contextSnippet is supplied, it is used to identify the specific overload.
+    /// </summary>
+    private async Task<ISymbol?> ResolveSymbolByNameAsync(
+        Solution solution,
+        string symbolName,
+        string? contextSnippet,
+        CancellationToken ct)
+    {
+        foreach (var project in solution.Projects)
+        {
+            Compilation? compilation = null;
+            try
+            {
+                compilation = await project.GetCompilationAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ResolveSymbolByName: could not compile project '{Project}'", project.Name);
+            }
+
+            if (compilation == null)
+            {
+                continue;
+            }
+
+            var candidates = compilation
+                .GetSymbolsWithName(symbolName, SymbolFilter.Member, ct)
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                continue;
+            }
+
+            if (contextSnippet != null)
+            {
+                // Use context snippet to pick the right overload: find the declaring document,
+                // then resolve via ContextHelper exactly as the filePath path does.
+                foreach (var candidate in candidates)
+                {
+                    foreach (var loc in candidate.Locations.Where(l => l.IsInSource))
+                    {
+                        var declFilePath = loc.SourceTree?.FilePath;
+                        if (declFilePath == null)
+                        {
+                            continue;
+                        }
+
+                        var doc = solution.Projects.SelectMany(p => p.Documents)
+                            .FirstOrDefault(d => d.FilePath == declFilePath);
+                        if (doc == null)
+                        {
+                            continue;
+                        }
+
+                        try
+                        {
+                            var found = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, ct);
+                            if (found != null)
+                            {
+                                return found;
+                            }
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // snippet not found in this document — continue
+                        }
+                    }
+                }
+            }
+
+            // No contextSnippet or snippet resolution failed — prefer class members over interface members.
+            var preferred = candidates.FirstOrDefault(s =>
+                s.ContainingType?.TypeKind == TypeKind.Class) ?? candidates.FirstOrDefault();
+
+            if (preferred != null)
+            {
+                return preferred;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Returns the full type hierarchy for a named type: base class chain, implemented interfaces,

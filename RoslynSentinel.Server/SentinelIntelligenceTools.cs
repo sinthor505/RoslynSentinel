@@ -236,6 +236,60 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Description("""
+        Locates all declaration sites for a symbol by name — no file path required.
+        Returns structured results whose FilePath and ContextSnippet fields can be passed directly
+        to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
+        filePath-gated tools, eliminating the need for search_solution_text as a bootstrap step.
+
+        symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.Data.Repo.GetById").
+        symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
+        projectName: optional — restricts search to a single project.
+        exactMatch: true (default) for exact name match; false for prefix/contains search (discovery mode).
+
+        When multiple results are returned (overloads, partial classes), inspect Signature and
+        ContainingType to identify the target, then pass the chosen FilePath + ContextSnippet
+        to the next tool call.
+        """)]
+    public async Task<ToolResult<object>> LocateSymbol(
+        string symbolName,
+        string symbolKind = "any",
+        string? projectName = null,
+        bool exactMatch = true)
+    {
+        try
+        {
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, exactMatch);
+            if (result.Count == 0)
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError("", $"Symbol '{symbolName}' not found in the solution" +
+                        (projectName != null ? $" (project: {projectName})" : "") +
+                        ". Try exactMatch=false for a broader search, or verify the symbol name and kind.")
+                };
+            }
+
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result,
+                TotalRecords = result.Count
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
+            };
+        }
+    }
+
+    [McpServerTool]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location. lifetimeFilter: Singleton, Scoped, or Transient.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
         string? projectName = null,
@@ -361,8 +415,22 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Finds symbols by name using various lookup strategies. kind values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType. projectName/filePath narrow scope where supported. sortByFrequency=true ranks by frequency (supported for objectCreations).")]
-    public async Task<ToolResult<object>> FindByName(
+    [Description("""
+        Queries symbol relationships by name. Use locate_symbol instead when you want to find
+        where a symbol is declared and get its file path.
+
+        kind values and what they return:
+          implementorsOf     — all classes/structs implementing a named interface or deriving from a class
+          attributeUsages    — all sites where a named attribute is applied
+          objectCreations    — all instantiation sites for a named type (new T(...))
+          extensionsFor      — all extension methods defined for a named type
+          typesWithAttribute — all types decorated with a named attribute (syntax-level; faster than attributeUsages)
+          methodsByReturnType — all methods whose return type matches the given name
+
+        projectName/filePath narrow scope where supported.
+        sortByFrequency=true ranks by frequency (supported for objectCreations).
+        """)]
+    public async Task<ToolResult<object>> FindUsages(
         string name,
         string kind,
         string? projectName = null,
@@ -433,11 +501,11 @@ public class SentinelIntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "FindByName ({Kind}) failed for '{Name}'", kind, name);
+            _logger.LogError(ex, "FindUsages ({Kind}) failed for '{Name}'", kind, name);
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"FindByName failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError("", $"FindUsages failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -565,11 +633,21 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Description("Finds all call sites or implementations for a symbol without requiring line/column. kind: callers (→ List<CallerInfo>) or implementations (→ List<ImplementationInfo>). contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
+    [Description("""
+        Finds all call sites or implementations for a symbol.
+        kind: callers (→ List<CallerInfo>) or implementations (→ List<ImplementationInfo>).
+
+        filePath is optional. When omitted, the symbol is resolved by name across the solution —
+        use this when you don't yet have the file path (e.g. before calling locate_symbol).
+        Supply filePath to pin resolution to a specific declaring file (required when symbolName
+        is ambiguous across multiple files).
+
+        contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.
+        """)]
     public async Task<ToolResult<object>> FindReferences(
-        string filePath,
         string symbolName,
         string kind,
+        string? filePath = null,
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null)

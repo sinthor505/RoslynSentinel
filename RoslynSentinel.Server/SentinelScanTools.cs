@@ -538,13 +538,13 @@ public class SentinelScanTools
     [Description("""
         Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
-    public static async Task<ToolResult<object>> GetScanResult(
+    public async Task<ToolResult<object>> GetScanResult(
         string? scanId = null,
-        string? solutionRoot = null,
         string? filePath = null,
         int limit = 50,
         int offset = 0)
     {
+        var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
 
         if (!string.IsNullOrEmpty(scanId) && !string.IsNullOrEmpty(solutionRoot))
