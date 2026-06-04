@@ -74,7 +74,38 @@ public record ResultError(
 /// <summary>
 /// Metadata for a scan result written to <c>.roslynsentinel/scans/scan_*.json</c>.
 /// </summary>
-public record LargeResultInfo(
+public record LargeResultInfo
+{
+    public string ResultType
+    {
+        get; init;
+    }
+    public bool WrittenToFile
+    {
+        get; init;
+    }
+    public string FilePath
+    {
+        get; init;
+    }
+    public string ScanId
+    {
+        get; init;
+    }
+    public long SizeBytes
+    {
+        get; init;
+    }
+    public int TotalRecords
+    {
+        get; init;
+    }
+    public string? Message
+    {
+        get; init;
+    }
+
+    public LargeResultInfo(
     string ResultType,
     bool WrittenToFile,
     string FilePath,
@@ -82,7 +113,17 @@ public record LargeResultInfo(
     long SizeBytes,
     int TotalRecords,
     string? Message = null
-);
+)
+    {
+        this.ResultType = ResultType ?? throw new ArgumentNullException(nameof(ResultType));
+        this.WrittenToFile = WrittenToFile;
+        this.FilePath = FilePath ?? throw new ArgumentNullException(nameof(FilePath));
+        this.ScanId = ScanId ?? throw new ArgumentNullException(nameof(ScanId));
+        this.SizeBytes = SizeBytes == 0 ? throw new ArgumentOutOfRangeException(nameof(SizeBytes)) : SizeBytes;
+        this.TotalRecords = TotalRecords < 0 ? throw new ArgumentOutOfRangeException(nameof(TotalRecords)) : TotalRecords;
+        this.Message = Message;
+    }
+}
 
 // ── Tool options (describe_advanced_tool_options return type) ─────────────────────────
 

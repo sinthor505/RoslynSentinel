@@ -522,56 +522,90 @@ public class SentinelIntelligenceTools
     {
         try
         {
+            ToolResult<object> toolResult = new ToolResult<object>() { Success = false };
+
             if (persistBaseline)
             {
                 var apiResult = await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
-                return new ToolResult<object>
+
+                var summaryResults = await SentinelScanTools.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+
+                if (summaryResults.offloaded)
                 {
-                    Success = true,
-                    Data = apiResult
-                };
+                    toolResult = new ToolResult<object>
+                    {
+                        Success = true,
+                        TotalRecords = apiResult.Count,
+                        HasMore = false,
+                        LargeResult = new LargeResultInfo(
+                            ResultType: typeof(ApiSurfaceEntry).Name,
+                            WrittenToFile: true,
+                            FilePath: summaryResults.filePath,
+                            ScanId: summaryResults.scanId,
+                            SizeBytes: summaryResults.jsonBytes.Length,
+                            TotalRecords: apiResult.Count,
+                            Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
+                                           $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
+                                           "Pass limit and offset to control page size (default limit: 50).")
+                    };
+                }
+                else
+                {
+                    return new ToolResult<object>
+                    {
+                        Success = true,
+                        Data = apiResult,
+                        TotalRecords = apiResult.Count
+                    };
+                }
             }
-            if (string.IsNullOrEmpty(projectName))
+            else
             {
-                return new ToolResult<object>
+                if (string.IsNullOrEmpty(projectName))
                 {
-                    Success = false,
-                    Error = new ResultError("", "projectName is required when persistBaseline=false.")
-                };
+                    toolResult = new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError("", "projectName is required when persistBaseline=false.")
+                    };
+                    return toolResult;
+                }
+
+                var apiResult = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
+
+                var summaryResults = await SentinelScanTools.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+
+                if (summaryResults.offloaded)
+                {
+                    toolResult = new ToolResult<object>
+                    {
+                        Success = true,
+                        TotalRecords = apiResult.Count,
+                        HasMore = false,
+                        LargeResult = new LargeResultInfo(
+                            ResultType: typeof(ApiSurfaceEntry).Name,
+                            WrittenToFile: true,
+                            FilePath: summaryResults.filePath,
+                            ScanId: summaryResults.scanId,
+                            SizeBytes: summaryResults.jsonBytes.Length,
+                            TotalRecords: apiResult.Count,
+                            Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
+                                           $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
+                                           "Pass limit and offset to control page size (default limit: 50).")
+                    };
+                }
+                else
+                {
+                    return new ToolResult<object>
+                    {
+                        Success = true,
+                        Data = apiResult,
+                        TotalRecords = apiResult.Count
+                    };
+                }
             }
 
-            //return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
-            var result = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
-            var summaryResults = await SentinelScanTools.StoreScanResultAsync(result, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
-
-            if (summaryResults.offloaded)
-            {
-                var apiResult = new ToolResult<object>
-                {
-                    Success = true,
-                    TotalRecords = result.Count,
-                    HasMore = false,
-                    LargeResult = new LargeResultInfo(
-                        ResultType: typeof(ApiSurfaceEntry).Name,
-                        WrittenToFile: true,
-                        FilePath: summaryResults.filePath,
-                        ScanId: summaryResults.scanId,
-                        SizeBytes: summaryResults.jsonBytes.Length,
-                        TotalRecords: result.Count,
-                        Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {result.Count} records). " +
-                                       $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
-                                       "Pass limit and offset to control page size (default limit: 50).")
-                };
-                return apiResult;
-            }
-
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result,
-                TotalRecords = result.Count,
-                HasMore = false,
-            };
+            return toolResult;
         }
         catch (Exception ex)
         {
