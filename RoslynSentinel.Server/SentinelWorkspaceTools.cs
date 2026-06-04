@@ -703,7 +703,7 @@ public class SentinelWorkspaceTools
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (!string.IsNullOrEmpty(solutionRoot))
             {
-                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
                 Directory.CreateDirectory(dir);
                 var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
                 var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
@@ -714,6 +714,7 @@ public class SentinelWorkspaceTools
                 {
                     Success = true,
                     LargeResult = new LargeResultInfo(
+                        ResultType: "MethodSource",
                         WrittenToFile: true,
                         FilePath: fp,
                         ScanId: scanId,

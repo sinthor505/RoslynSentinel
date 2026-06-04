@@ -141,7 +141,7 @@ public class SentinelIntelligenceTools
             // convert results to json
             var jsonResults = System.Text.Json.JsonSerializer.Serialize(results);
 
-            if (jsonResults.Length < ScanResultOffloadHelper.ThresholdBytes)
+            if (jsonResults.Length < ScanResultHelper.ThresholdBytes)
             {
                 return new ToolResult<object>
                 {
@@ -153,13 +153,14 @@ public class SentinelIntelligenceTools
             else
             {
 
-                var summary = await ScanResultOffloadHelper.TryOffloadAsync(results, _workspaceManager.SolutionPath);
+                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
                 return new ToolResult<object>
                 {
                     Success = true,
                     Data = summary,
                     TotalRecords = results.Methods.Count,
                     LargeResult = new LargeResultInfo(
+                        ResultType: typeof(CodeInventoryReport).Name,
                         WrittenToFile: summary.offloaded,
                         FilePath: summary.filePath,
                         ScanId: summary.scanId,
@@ -473,7 +474,7 @@ public class SentinelIntelligenceTools
 
             //return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
             var result = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
-            var summaryResults = await ScanResultOffloadHelper.TryOffloadAsync(result, _workspaceManager.GetSolutionRoot());
+            var summaryResults = await ScanResultHelper.StoreScanResultAsync(result, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
 
             if (summaryResults.offloaded)
             {
@@ -483,6 +484,7 @@ public class SentinelIntelligenceTools
                     TotalRecords = result.Count,
                     HasMore = false,
                     LargeResult = new LargeResultInfo(
+                        ResultType: typeof(ApiSurfaceEntry).Name,
                         WrittenToFile: true,
                         FilePath: summaryResults.filePath,
                         ScanId: summaryResults.scanId,

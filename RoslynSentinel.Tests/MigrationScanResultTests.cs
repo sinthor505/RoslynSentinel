@@ -284,7 +284,7 @@ public class Svc
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _qualityTools.GetScanResult(scanId: operationId, limit: 10, offset: 0)).Data;
+        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await ScanResultHelper.GetScanResult(solutionRoot: _workspaceManager.GetSolutionRoot(), scanId: operationId, limit: 10, offset: 0)).Data;
         Assert.That(page1Result.Success, Is.True);
         Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
@@ -300,7 +300,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
-        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _qualityTools.GetScanResult(scanId: operationId, limit: 10, offset: 10)).Data;
+        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await ScanResultHelper.GetScanResult(solutionRoot: _workspaceManager.GetSolutionRoot(), scanId: operationId, limit: 10, offset: 10)).Data;
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.Data!.Select(f => f.MethodName).ToHashSet();

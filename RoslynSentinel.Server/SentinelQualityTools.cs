@@ -385,7 +385,7 @@ public class SentinelQualityTools
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
                 if (!string.IsNullOrEmpty(solutionRoot))
                 {
-                    var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                    var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
                     Directory.CreateDirectory(dir);
                     var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
                     var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
@@ -396,6 +396,7 @@ public class SentinelQualityTools
                     {
                         Success = true,
                         LargeResult = new LargeResultInfo(
+                            ResultType: typeof(MigrationScanSummary).Name,
                             WrittenToFile: true,
                             FilePath: fp,
                             ScanId: scanId,
@@ -461,7 +462,7 @@ public class SentinelQualityTools
 
             if (!string.IsNullOrEmpty(solutionRoot))
             {
-                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "operations");
+                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
                 Directory.CreateDirectory(dir);
                 var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
                 scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
@@ -482,6 +483,7 @@ public class SentinelQualityTools
                 TotalRecords = totalCount,
                 HasMore = hasMore,
                 LargeResult = new LargeResultInfo(
+                    ResultType: typeof(MigrationScanSummary).Name,
                     WrittenToFile: written,
                     FilePath: scanFilePath,
                     ScanId: scanId,
@@ -525,91 +527,6 @@ public class SentinelQualityTools
                 Error = new ResultError("", $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
-    }
-
-    // ── get_scan_result ────────────────────────────────────────────────────────
-
-    [McpServerTool]
-    [Description("""
-        Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
-        """)]
-    public async Task<ToolResult<object>> GetScanResult(
-        string? scanId = null,
-        string? filePath = null,
-        int limit = 50,
-        int offset = 0)
-    {
-        string? resolvedPath = null;
-        var solutionRoot = _workspaceManager.GetSolutionRoot();
-
-        if (!string.IsNullOrEmpty(scanId) && !string.IsNullOrEmpty(solutionRoot))
-        {
-            var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
-            if (Directory.Exists(dir))
-            {
-                resolvedPath = Directory
-                    .EnumerateFiles(dir, $"scan_*_{scanId}.json")
-                    .FirstOrDefault();
-            }
-        }
-        else if (!string.IsNullOrEmpty(filePath))
-        {
-            // Validate: path must be inside the scans directory and match the scan_*.json pattern.
-            var fileName = System.IO.Path.GetFileName(filePath);
-            if (!string.IsNullOrEmpty(solutionRoot))
-            {
-                var scansDir = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans"));
-                var candidate = System.IO.Path.GetFullPath(filePath);
-                if (candidate.StartsWith(scansDir, StringComparison.OrdinalIgnoreCase)
-                    && fileName.StartsWith("scan_", StringComparison.OrdinalIgnoreCase)
-                    && fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
-                    && File.Exists(candidate))
-                {
-                    resolvedPath = candidate;
-                }
-            }
-        }
-
-        if (resolvedPath == null)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.InvalidArgument,
-                              "Scan file not found. Supply a valid scanId or filePath pointing to a scan_*.json file in the scans directory.")
-            };
-        }
-
-        List<MigrationCandidateFinding> all;
-        try
-        {
-            var json = await File.ReadAllTextAsync(resolvedPath);
-            all = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(
-                      json,
-                      _jsonOptions)
-                  ?? new List<MigrationCandidateFinding>();
-        }
-        catch (Exception ex)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "Failed to read scan file.", ex.Message)
-            };
-        }
-
-        var page = all.Skip(offset).Take(limit).ToList();
-        bool hasMore = (offset + limit) < all.Count;
-
-        return new ToolResult<object>
-        {
-            Success = true,
-            Data = page,
-            TotalRecords = all.Count,
-            HasMore = hasMore,
-        };
     }
 
     // ── Phase 8: get_async_migration_progress ─────────────────────────────────

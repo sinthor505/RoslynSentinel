@@ -72,9 +72,10 @@ public record ResultError(
 // ── Large-result descriptor ───────────────────────────────────────────────────
 
 /// <summary>
-/// Metadata for a scan result written to <c>.roslynsentinel/operations/scan_*.json</c>.
+/// Metadata for a scan result written to <c>.roslynsentinel/scans/scan_*.json</c>.
 /// </summary>
 public record LargeResultInfo(
+    string ResultType,
     bool WrittenToFile,
     string FilePath,
     string ScanId,

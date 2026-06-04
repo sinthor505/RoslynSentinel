@@ -22,7 +22,8 @@ public record BreakingChange(
 
 /// <summary>
 /// Captures public API surfaces and detects breaking changes between snapshots.
-/// Workflow: (1) call GetPublicApiSurface to capture a baseline JSON string,
+/// Workflow: (1) call Get
+/// to capture a baseline JSON string,
 /// (2) make code changes, (3) call DetectBreakingChanges with the baseline to see what broke.
 /// </summary>
 public class BreakingChangeEngine

@@ -1,4 +1,4 @@
 {
-    "editor.occurrencesHighlight": false,
+    "editor.occurrencesHighlight": "off",
     "editor.selectionHighlight": false
 }
