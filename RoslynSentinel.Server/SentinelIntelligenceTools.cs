@@ -153,7 +153,7 @@ public class SentinelIntelligenceTools
             else
             {
 
-                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
+                var summary = await SentinelScanTools.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -474,7 +474,7 @@ public class SentinelIntelligenceTools
 
             //return await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
             var result = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
-            var summaryResults = await ScanResultHelper.StoreScanResultAsync(result, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+            var summaryResults = await SentinelScanTools.StoreScanResultAsync(result, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
 
             if (summaryResults.offloaded)
             {
