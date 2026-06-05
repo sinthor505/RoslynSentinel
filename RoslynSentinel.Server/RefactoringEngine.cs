@@ -1205,7 +1205,7 @@ public class RefactoringEngine
 
     public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
-        if (!_config.IsFeatureEnabled("SafeDelete"))
+        if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
         {
             return new Dictionary<string, string>();
         }
@@ -1263,7 +1263,7 @@ public class RefactoringEngine
         // If we have ANY references (including implicit ones), refuse deletion
         if (totalRefCount > 0)
         {
-            _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
+            _logger.LogWarning("SafeDeleteUnusedSymbol blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
             return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {totalRefCount} location(s)." } };
         }
 
@@ -1296,7 +1296,7 @@ public class RefactoringEngine
                             if (idSymbol != null && SymbolEqualityComparer.Default.Equals(idSymbol, symbol))
                             {
                                 // This is a usage of our symbol (not the declaration)
-                                _logger.LogWarning("SafeDelete blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
+                                _logger.LogWarning("SafeDeleteUnusedSymbol blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
                                 return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used and cannot be safely removed." } };
                             }
                         }

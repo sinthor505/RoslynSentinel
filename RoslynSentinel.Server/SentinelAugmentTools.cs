@@ -34,8 +34,8 @@ public class SentinelAugmentTools
         Encapsulates a public field into a private backing field + public property. FIXES standard encapsulate_field BUG: the standard tool creates a backing field and property with the same name, causing infinite recursion/compile error. This tool always renames the backing field to _camelCase. overridePropertyName provides a custom property name when the default PascalCase would conflict. Returns UpdatedContent.
         """)]
     public async Task<ToolResult<object>> EncapsulateFieldSafe(
-        string filePath,
-        string fieldName,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string fieldName,
         string? overridePropertyName = null)
     {
         if (_logger.IsEnabled(LogLevel.Information))
@@ -70,10 +70,10 @@ public class SentinelAugmentTools
         Pre-flight safety check before converting a switch statement to a switch expression. FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion") for full output field reference.
         """)]
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
-        string filePath,
-        string contextSnippet,
-        string? lineBefore = null,
-        string? lineAfter = null)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -106,10 +106,10 @@ public class SentinelAugmentTools
         Converts a switch statement to a switch expression, rejecting unsafe cases instead of silently producing broken code. FIXES MS BUG: the standard tool drops variable assignments when a case sets more than one variable. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate multiple matches. Run analyze_switch_for_pattern_conversion first if unsure. Returns MsAugmentResult with UpdatedContent on success or Error on rejection. Call describe_advanced_tool_options("convert_switch_to_pattern_safe") for supported switch forms and rejection rules.
         """)]
     public async Task<ToolResult<object>> ConvertSwitchToPatternSafe(
-        string filePath,
-        string contextSnippet,
-        string? lineBefore = null,
-        string? lineAfter = null)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -144,8 +144,10 @@ public class SentinelAugmentTools
         Pre-flight safety check before convert_foreach_linq. FIXES MS BUG: the standard tool silently destroys data when a collection is modified before the foreach. Only proceed with conversion if IsSafeToConvert=true. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for full output field reference and safety rules.
         """)]
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
-        string filePath, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -209,8 +211,11 @@ public class SentinelAugmentTools
         extract_method_safe—extracts selected statements into a new method with the CORRECT return type. Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent). newMethodName must be a valid C# identifier. contextSnippet: short unique code snippet identifying the selection. lineBefore/lineAfter disambiguate. Returns MsAugmentResult with extracted method code or error on rejection.
         """)]
     public async Task<ToolResult<object>> ExtractMethodSafe(
-        string filePath, string newMethodName, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        string newMethodName,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {

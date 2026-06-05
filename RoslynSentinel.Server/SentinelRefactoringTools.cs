@@ -95,7 +95,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename(string filePath)
+    public async Task<string> SyncTypeAndFilename([Consumes(DataTag.SourceFilepath, required: true)] string filePath)
     {
         try
         {
@@ -110,7 +110,8 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Reorders method parameters and updates all call sites across the solution. newParameterOrder: zero-based index array specifying the new parameter order. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ChangeSignature(string filePath, string methodName, int[] newParameterOrder, bool autoStage = true)
+    public async Task<ToolResult<object>> ChangeSignature([Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string methodName, int[] newParameterOrder, bool autoStage = true)
     {
         try
         {
@@ -137,7 +138,14 @@ public class SentinelRefactoringTools
                  "Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. " +
                  "Returns an error if the snippet matches zero or multiple locations. " +
                  "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
-    public async Task<ToolResult<object>> RenameSymbol(string filePath, string symbolName, string contextSnippet, string newName, bool autoStage = true, string? lineBefore = null, string? lineAfter = null)
+    public async Task<ToolResult<object>> RenameSymbol(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string symbolName,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        string newName,
+        bool autoStage = true,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {
@@ -163,7 +171,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Generates a mapping method between fromType and toType.")]
-    public async Task<ToolResult<object>> GenerateMapping(string filePath, string fromType, string toType)
+    public async Task<ToolResult<object>> GenerateMapping([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string fromType, string toType)
     {
         try
         {
@@ -179,7 +187,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration.")]
-    public async Task<ToolResult<object>> ConvertAnonymousToNamed(string filePath, string newClassName)
+    public async Task<ToolResult<object>> ConvertAnonymousToNamed([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string newClassName)
     {
         try
         {
@@ -195,7 +203,10 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution. Returns a filePath → updatedContent dictionary for every affected file.")]
-    public async Task<ToolResult<object>> InlineClass(string sourceFilePath, string targetFilePath, string className)
+    public async Task<ToolResult<object>> InlineClass(
+        [Consumes(DataTag.SourceFilepath, required: true)] string sourceFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string targetFilePath,
+        [Consumes(DataTag.SymbolName, required: true)] string className)
     {
         try
         {
@@ -308,7 +319,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
-    public async Task<string> ReplaceMember(string filePath, string memberName, string newSource)
+    public async Task<string> ReplaceMember([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string memberName, string newSource)
     {
         try
         {
@@ -323,7 +334,9 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Removes a specific member from a class or interface by name.")]
-    public async Task<string> RemoveMember(string filePath, string memberName)
+    public async Task<string> RemoveMember(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string memberName)
     {
         try
         {
@@ -345,7 +358,7 @@ public class SentinelRefactoringTools
         If the directive already exists, the file is returned unchanged.
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> AddUsingDirective(string filePath, string namespaceName, bool autoStage = true)
+    public async Task<ToolResult<object>> AddUsingDirective([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string namespaceName, bool autoStage = true)
     {
         try
         {
@@ -370,7 +383,7 @@ public class SentinelRefactoringTools
     [Description("""
         Adds a new value to an existing enum. `explicitValue=99` → `Archived = 99`. If the enum is not found, the file is returned unchanged. `autoStage=true` → ChangeId for `staged_change`.
         """)]
-    public async Task<ToolResult<object>> AddEnumValue(string filePath, string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
+    public async Task<ToolResult<object>> AddEnumValue([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
     {
         try
         {
@@ -393,7 +406,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Swaps left and right sides of all assignment statements within a 1-based line range.")]
-    public async Task<ToolResult<object>> InvertAssignments(string filePath, int startLine, int endLine)
+    public async Task<ToolResult<object>> InvertAssignments([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.StartLine)] int startLine, [Consumes(DataTag.EndLine)] int endLine)
     {
         try
         {
@@ -411,7 +424,7 @@ public class SentinelRefactoringTools
     [Description("""
         Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
         """)]
-    public async Task<ToolResult<object>> PullUpMember(string filePath, string className, string memberName, bool autoStage = true)
+    public async Task<ToolResult<object>> PullUpMember([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string className, string memberName, bool autoStage = true)
     {
         try
         {
@@ -445,7 +458,7 @@ public class SentinelRefactoringTools
         "protected internal", or "private protected".
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> ChangeAccessibility(string filePath, string targetName, string accessibility, bool autoStage = true)
+    public async Task<ToolResult<object>> ChangeAccessibility([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string accessibility, bool autoStage = true)
     {
         try
         {
@@ -475,7 +488,7 @@ public class SentinelRefactoringTools
         If a summary already exists it will be replaced.
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> AddSummaryComment(string filePath, string targetName, string summaryText, bool autoStage = true)
+    public async Task<ToolResult<object>> AddSummaryComment([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string summaryText, bool autoStage = true)
     {
         try
         {
@@ -500,7 +513,12 @@ public class SentinelRefactoringTools
     [Description("""
         Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. `fieldName` overrides the derived field name (defaults to `_camelCase` of `paramName`). Creates a constructor if none exists; converts expression-bodied constructors to block bodies. `autoStage=true` → ChangeId for `staged_change`
         """)]
-    public async Task<ToolResult<object>> AddConstructorParameter(string filePath, string className, string paramName, string paramType, string? fieldName = null, bool autoStage = true)
+    public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string className,
+        string paramName,
+        string paramType,
+        string? fieldName = null,
+        bool autoStage = true)
     {
         try
         {
@@ -524,8 +542,8 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only parameterNames if specified) into public record {NewTypeName}(...). Rewrites parameter references in the method body to request.PropertyName. Appends the record to end of file. Adds a TODO comment to update call sites — call sites must be updated manually.")]
     public async Task<ToolResult<object>> IntroduceParameterObject(
-        string filePath,
-        string methodName,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string methodName,
         string? newTypeName = null,
         string[]? parameterNames = null)
     {
@@ -558,7 +576,12 @@ public class SentinelRefactoringTools
         Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns the updated file content with the expression extracted to a variable.
         """)]
-    public async Task<ToolResult<object>> ExtractLocalVariable(string filePath, string contextSnippet, string variableName, string? lineBefore = null, string? lineAfter = null)
+    public async Task<ToolResult<object>> ExtractLocalVariable(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.SymbolName)] string variableName,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {
@@ -579,7 +602,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Adds or removes an attribute on a type or member. action: add or remove. attribute/attributeSource/attributeName accept the attribute with or without brackets or Attribute suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyAttribute(string filePath, string targetName, string attribute, string action, bool autoStage = true)
+    public async Task<ToolResult<object>> ModifyAttribute([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string attribute, string action, bool autoStage = true)
     {
         try
         {
@@ -614,7 +637,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. action: add or remove. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyModifier(string filePath, string targetName, string modifier, string action, bool autoStage = true)
+    public async Task<ToolResult<object>> ModifyModifier(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string targetName,
+        string modifier,
+        string action,
+        bool autoStage = true)
     {
         try
         {
@@ -649,7 +677,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Adds or removes a base type or interface from a type declaration. action: add or remove. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyBaseType(string filePath, string typeName, string baseTypeName, string action, bool autoStage = true)
+    public async Task<ToolResult<object>> ModifyBaseType(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string typeName,
+        string baseTypeName,
+        string action,
+        bool autoStage = true)
     {
         try
         {
@@ -684,7 +717,13 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Introduces a named symbol from an expression. as values: localVariable, field (private readonly), parameter (single-file), constant (→ MsAugmentResult). contextSnippet: verbatim substring identifying the expression. lineBefore/lineAfter disambiguate.")]
-    public async Task<ToolResult<object>> Introduce(string filePath, string contextSnippet, string newName, string @as, string? lineBefore = null, string? lineAfter = null)
+    public async Task<ToolResult<object>> Introduce(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.SymbolName)] string newName,
+        string @as,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {
@@ -716,13 +755,13 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
-        string filePath,
-        string className,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string className,
         string @as,
         string? newTypeName = null,
-        string[]? memberNames = null,
-        string[]? filePaths = null,
-        string[]? classNames = null,
+        [Consumes(DataTag.SymbolName)] string[]? memberNames = null,
+        [Consumes(DataTag.SourceFilepath)] string[]? filePaths = null,
+        [Consumes(DataTag.ContainerName)] string[]? classNames = null,
         bool autoStage = true)
     {
         try
@@ -806,7 +845,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Manages interface/class synchronization. action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
-    public async Task<ToolResult<object>> SyncInterface(string filePath, string interfaceName, string action, string? className = null, string? projectName = null)
+    public async Task<ToolResult<object>> SyncInterface(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string interfaceName,
+        string action,
+        [Consumes(DataTag.SymbolName)] string? className = null,
+        [Consumes(DataTag.ProjectName)] string? projectName = null)
     {
         try
         {
@@ -852,7 +896,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
-    public async Task<ToolResult<object>> Inline(string filePath, string targetName, string kind, string? methodName = null)
+    public async Task<ToolResult<object>> Inline(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string targetName,
+        string kind,
+        [Consumes(DataTag.SymbolName)] string? methodName = null)
     {
         try
         {
@@ -899,7 +947,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Adds a new member to a type. position: null/end (append), after:MemberName, or before:MemberName. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> AddMember(string filePath, string containerName, string newMemberSource, string? position = null, bool autoStage = true)
+    public async Task<ToolResult<object>> AddMember(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string containerName,
+        [Consumes(DataTag.ContainerName)] string newMemberSource,
+        string? position = null,
+        bool autoStage = true)
     {
         try
         {
@@ -945,9 +998,9 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. Property defaults: hasSetter=true, accessibility=public. Field defaults: isReadonly=false, isStatic=false, accessibility=private; initializer sets optional field initializer expression. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> AddMemberTyped(
-        string filePath,
-        string containerName,
-        string name,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string containerName,
+        [Consumes(DataTag.SymbolName)] string name,
         string type,
         string kind,
         string accessibility = "public",
@@ -995,9 +1048,9 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly.")]
     public async Task<ToolResult<object>> WrapRange(
-        string filePath,
-        int startLine,
-        int endLine,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.StartLine)] int startLine,
+        [Consumes(DataTag.EndLine)] int endLine,
         string wrapper,
         string? name = null,
         string catchVariableName = "ex",
@@ -1058,7 +1111,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Moves a type to a new location. destination: ownFile (move to its own .cs file → ChangeId + content previews; autoStage=false → raw file dict) or outerScope (move nested type to containing namespace scope → updated file content).")]
-    public async Task<ToolResult<object>> MoveType(string filePath, string typeName, string destination, bool autoStage = true)
+    public async Task<ToolResult<object>> MoveType(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string typeName,
+        string destination,
+        bool autoStage = true)
     {
         try
         {

@@ -110,7 +110,7 @@ public class SentinelCodemodTools
         Applies a file-wide code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
-        string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         string transform,
         bool libraryMode = true,
         bool preview = false)
@@ -385,13 +385,13 @@ public class SentinelCodemodTools
         Applies a method-scoped code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
-        string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         string methodName,
         string transform,
         string? direction = null,
-        string? contextSnippet = null,
-        string? lineBefore = null,
-        string? lineAfter = null,
+        [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         string lockFieldName = "_lock")
     {
         try
@@ -725,14 +725,14 @@ public class SentinelCodemodTools
         Applies a class-scoped code transformation; returns updated file content as a string — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
-        string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         string className,
         string transform,
         string? propertyName = null,
         string? direction = null,
-        string? contextSnippet = null,
-        string? lineBefore = null,
-        string? lineAfter = null)
+        [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {

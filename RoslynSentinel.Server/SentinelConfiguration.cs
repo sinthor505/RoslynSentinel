@@ -53,7 +53,7 @@ public class SentinelConfiguration
         _features["PullMembersUp"] = true;
         _features["PushMembersDown"] = true;
         _features["Rename"] = true;
-        _features["SafeDelete"] = true;
+        _features["SafeDeleteUnusedSymbol"] = true;
         _features["AddRemoveParams"] = true;
         _features["TransformParameters"] = true;
         _features["UseBaseTypeWherePossible"] = true;

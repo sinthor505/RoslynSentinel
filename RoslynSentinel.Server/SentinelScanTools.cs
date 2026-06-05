@@ -106,7 +106,7 @@ public class SentinelScanTools
     public async Task<ToolResult<object>> RunScanDetector(
     DetectorId detector,
     string scope,
-    string? scopeName = null,
+    [Consumes(DataTag.Scope)] string? scopeName = null,
     CancellationToken cancellationToken = default)
     {
         string? filePath = scope == "file" ? scopeName : null;
@@ -485,7 +485,10 @@ public class SentinelScanTools
     [Description("""
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
-    public async Task<ToolResult<object>> AnalyzeMethod(string filePath, string methodName, string aspect)
+    public async Task<ToolResult<object>> AnalyzeMethod(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string methodName,
+        string aspect)
     {
         try
         {
@@ -539,10 +542,10 @@ public class SentinelScanTools
         Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
     public async Task<ToolResult<object>> GetScanResult(
-        string? scanId = null,
-        string? filePath = null,
-        int limit = 50,
-        int offset = 0)
+        [Consumes(DataTag.ScanId)] string? scanId = null,
+        [Consumes(DataTag.SourceFilepath)] string? filePath = null,
+        [Consumes(DataTag.Limit)] int limit = 50,
+        [Consumes(DataTag.Offset)] int offset = 0)
     {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;

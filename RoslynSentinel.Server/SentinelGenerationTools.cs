@@ -46,7 +46,7 @@ public class SentinelGenerationTools
 
     [McpServerTool]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
-    public async Task<string> GenerateHttpClient(string filePath, string controllerName)
+    public async Task<string> GenerateHttpClient([Consumes(DataTag.SourceFilepath, required: true)] string filePath, string controllerName)
     {
         try
         {
@@ -69,7 +69,7 @@ public class SentinelGenerationTools
 
     [McpServerTool]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
-    public async Task<string> GenerateDefaultConfigJson(string projectName)
+    public async Task<string> GenerateDefaultConfigJson([Consumes(DataTag.ProjectName, required: true)] string projectName)
     {
         try
         {
@@ -100,7 +100,11 @@ public class SentinelGenerationTools
         Provide lineBefore and/or lineAfter when the snippet could match multiple locations.
         Returns the updated file content.
         """)]
-    public async Task<string> InterpolateStringSafe(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null)
+    public async Task<string> InterpolateStringSafe(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {

@@ -61,7 +61,9 @@ public class SentinelModernizationTools
 
     [McpServerTool]
     [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with ! and removes double negations. Returns a file → content map of changed files.")]
-    public async Task<ToolResult<object>> InvertBooleanLogic(string filePath, string boolName)
+    public async Task<ToolResult<object>> InvertBooleanLogic(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string boolName)
     {
         try
         {

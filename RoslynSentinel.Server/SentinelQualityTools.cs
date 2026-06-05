@@ -219,7 +219,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
-    public async Task<ToolResult<object>> GetTestCoverageMap(string filePath, string methodName)
+    public async Task<ToolResult<object>> GetTestCoverageMap(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string methodName)
     {
         try
         {
@@ -252,8 +254,8 @@ public class SentinelQualityTools
         bool summarize = false,
         int? topN = null,
         int? minScore = null,
-        int limit = 50,
-        int offset = 0)
+        [Consumes(DataTag.Limit)] int limit = 50,
+        [Consumes(DataTag.Offset)] int offset = 0)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -507,7 +509,9 @@ public class SentinelQualityTools
 
     [McpServerTool]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
-    public async Task<ToolResult<object>> GetMethodComplexity(string filePath, string methodName)
+    public async Task<ToolResult<object>> GetMethodComplexity(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SymbolName, required: true)] string methodName)
     {
         try
         {
