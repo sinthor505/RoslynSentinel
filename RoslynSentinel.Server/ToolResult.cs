@@ -1,4 +1,6 @@
-﻿namespace RoslynSentinel.Server;
+﻿using System.Text.Json;
+
+namespace RoslynSentinel.Server;
 
 // ── Error codes ───────────────────────────────────────────────────────────────
 public static class ToolErrorCode
@@ -17,6 +19,9 @@ public static class ToolErrorCode
 /// </summary>
 public record ToolResult<T>
 {
+    /// <summary>Threshold in bytes for inlining scan results. Results exceeding this size are written to disk.</summary>
+    internal const int ThresholdBytes = 30 * 1024;
+
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
     {
@@ -26,7 +31,22 @@ public record ToolResult<T>
     /// <summary>Inline payload. Non-null on success when the result fit below the size threshold.</summary>
     public T? Data
     {
-        get; init;
+        get;
+        init
+        {
+            if (value is null) { return; }
+            string json = JsonSerializer.Serialize(value);
+            if (json.Length > ThresholdBytes)
+            {
+                // TODO: write to disk, set _largeResult
+                // For now just set the field to the value, but in a real implementation this would be null and the LargeResult property would be populated instead.
+                field = value;
+            }
+            else
+            {
+                field = value;
+            }
+        }
     }
 
     /// <summary>Error details. Non-null when <see cref="Success"/> is false.</summary>
