@@ -13,6 +13,7 @@ public class SentinelGenerationTools
     private readonly ApiAutomationEngine _apiAutomationEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ApiIntegrationEngine _apiIntegrationEngine;
+    private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelGenerationTools> _logger;
 
     public SentinelGenerationTools(
@@ -20,21 +21,24 @@ public class SentinelGenerationTools
         ApiAutomationEngine apiAutomationEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         ApiIntegrationEngine apiIntegrationEngine,
+        PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelGenerationTools> logger)
     {
         _codeGenerationEngine = codeGenerationEngine;
         _apiAutomationEngine = apiAutomationEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _apiIntegrationEngine = apiIntegrationEngine;
+        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public object GenerateClassesFromJson(
-        [ExternalInputRequired(DataTag.Other)] string json,
+        [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
-        [ExternalInputRequired(DataTag.Other)] string @namespace)
+        [ExternalInputRequired(DataTag.Namespace)] string @namespace)
     {
         try
         {
@@ -48,9 +52,14 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
-    public async Task<string> GenerateHttpClient([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string controllerName)
+    public async Task<string> GenerateHttpClient(
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [ExternalInputRequired(DataTag.ClassName)] string controllerName)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
@@ -71,8 +80,10 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
-    public async Task<string> GenerateDefaultConfigJson([Consumes(DataTag.ProjectName, required: true)] string projectName)
+    public async Task<string> GenerateDefaultConfigJson(
+        [Consumes(DataTag.ProjectName, required: true)] string projectName)
     {
         try
         {
@@ -94,6 +105,7 @@ public class SentinelGenerationTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("""
         Converts a string.Format(...) call to an interpolated string ($"...").
         Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments

@@ -76,15 +76,18 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture. Null engines → all engines. projectName/filePath narrow scope. offset/limit page project results. timeoutSeconds defaults to 25.")]
     public async Task<ToolResult<object>> GetComprehensiveHealthReport(
         List<HealthEngineType>? engines = null,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [ToolControlAttribute(DataTag.Offset)] int offset = 0,
-        [ToolControlAttribute(DataTag.Limit)] int limit = 10,
-        [ToolControlAttribute(DataTag.Other)] int timeoutSeconds = 25)
+        [Consumes(DataTag.SourceFilepath)] string? rawFilePath = null,
+        [ToolControl(ToolControlTag.Offset)] int offset = 0,
+        [ToolControl(ToolControlTag.ResultLimit)] int limit = 10,
+        [ToolControl(ToolControlTag.Timeout)] int timeoutSeconds = 25)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
@@ -106,8 +109,10 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns deep metrics for the entire solution or a single project. projectName=null → solution-wide.")]
-    public async Task<ToolResult<object>> GetSolutionMetrics([ExternalInputRequired(DataTag.ProjectName)] string? projectName = null)
+    public async Task<ToolResult<object>> GetSolutionMetrics(
+        [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null)
     {
         try
         {
@@ -130,9 +135,13 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
-    public async Task<ToolResult<object>> GetCodeInventory([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
+    public async Task<ToolResult<object>> GetCodeInventory(
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             //return await _inventoryEngine.GetCodeInventoryAsync(filePath);
@@ -185,14 +194,17 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate.")]
     public async Task<ToolResult<object>> InspectSymbol(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [ExternalInputRequired(DataTag.Other)] string aspect,
+        [ToolControl(ToolControlTag.Aspect)] string aspect,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             if (aspect == "info")
@@ -236,6 +248,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("""
         Locates all declaration sites for a symbol by name — no file path required.
         Returns structured results whose FilePath and ContextSnippet fields can be passed directly
@@ -252,10 +265,10 @@ public class SentinelIntelligenceTools
         to the next tool call.
         """)]
     public async Task<ToolResult<object>> LocateSymbol(
-        [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        string symbolKind = "any",
+        [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
+        [ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        bool exactMatch = true)
+        [ToolControl(ToolControlTag.MatchType)] bool exactMatch = true)
     {
         try
         {
@@ -290,11 +303,12 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location. lifetimeFilter: Singleton, Scoped, or Transient.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        string? lifetimeFilter = null)
+        [ToolControl(ToolControlTag.Filter)] string? lifetimeFilter = null)
     {
         try
         {
@@ -317,13 +331,16 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3.")]
     public async Task<ToolResult<object>> GetCallGraph(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        string direction = "forward",
-        int maxDepth = 3)
+        [ToolControl(ToolControlTag.Direction)] string direction = "forward",
+        [ToolControl(ToolControlTag.MaxDepth)] int maxDepth = 3)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             if (direction == "forward")
@@ -391,9 +408,13 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
-    public async Task<ToolResult<string>> MoveFileToNamespaceFolder([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
+    public async Task<ToolResult<string>> MoveFileToNamespaceFolder(
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
@@ -415,6 +436,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Queries symbol relationships by name. Use locate_symbol instead when you want to find
         where a symbol is declared and get its file path.
@@ -431,11 +453,11 @@ public class SentinelIntelligenceTools
         sortByFrequency=true ranks by frequency (supported for objectCreations).
         """)]
     public async Task<ToolResult<object>> FindUsages(
-        [Consumes(DataTag.SymbolName, required: true)] string name,
-        string kind,
+        [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
+        [ExternalInputRequired(DataTag.SymbolKind)] string kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        bool sortByFrequency = false)
+        [ToolControl(ToolControlTag.Sort)] bool sortByFrequency = false)
     {
         try
         {
@@ -511,14 +533,15 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a scanId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_scan_result(scanId) to retrieve the results.")]
     public async Task<ToolResult<object>> GetPublicApiSurface(
         [Consumes(DataTag.ProjectName, required: true)] string? projectName = null,
-        bool persistBaseline = false,
+        [ToolControl(ToolControlTag.PersistBaseline)] bool persistBaseline = false,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        bool includeMethods = true,
-        bool includeProperties = true,
-        bool includeTypes = true)
+        [ToolControl(ToolControlTag.IncludeMethods)] bool includeMethods = true,
+        [ToolControl(ToolControlTag.IncludeProperties)] bool includeProperties = true,
+        [ToolControl(ToolControlTag.IncludeTypes)] bool includeTypes = true)
     {
         try
         {
@@ -619,12 +642,15 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member of memberKind in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [ExternalInputRequired(DataTag.MemberKind)] string memberKind)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind);
@@ -646,14 +672,17 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.SymbolName)] string symbolName,
         [Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
@@ -675,6 +704,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Finds all call sites or implementations for a symbol.
         kind: callers (→ List<CallerInfo>) or implementations (→ List<ImplementationInfo>).
@@ -688,7 +718,7 @@ public class SentinelIntelligenceTools
         """)]
     public async Task<ToolResult<object>> FindReferences(
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        string kind,
+        [Consumes(DataTag.SymbolKind)] string kind,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
@@ -732,14 +762,17 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
         """)]
     public async Task<ToolResult<object>> TraceVariableLifetime(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.SymbolName)] string variableName,
         [Consumes(DataTag.StartLine)] int lineNumber)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber);
@@ -761,12 +794,13 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns type information. include: hierarchy (base class chain, interfaces, derived types → TypeHierarchyReport), members (all public/protected members with full metadata → List<TypeMemberDetail>), both (default → object with Hierarchy and Members). includeInherited=false excludes inherited members (applies to members and both).")]
     public async Task<ToolResult<object>> GetTypeInfo(
-        [Consumes(DataTag.Other)] string typeName,
-        [ToolControlAttribute(DataTag.Other)] string include = "both",
+        [Consumes(DataTag.DataType)] string typeName,
+        [ToolControlAttribute(ToolControlTag.Filter)] string include = "both",
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [ToolControlAttribute(DataTag.Other)] bool includeInherited = true)
+        [ToolControlAttribute(ToolControlTag.Filter)] bool includeInherited = true)
     {
         try
         {
@@ -822,6 +856,7 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets()
     {
@@ -846,9 +881,10 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ApiBaseline)]
     [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. Workflow: (1) call get_public_api_surface with persistBaseline=true to capture baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName/filePath matching step 1.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
-        [ExternalInputRequired(DataTag.Other)] List<PublicApiMember> baseline,
+        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null)
     {
@@ -873,14 +909,17 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Finds duplicate statement sequences within the methods of a single class using structural hashing (SyntaxKind-based — matches regardless of variable names or literal values). Returns clone groups with: StatementCount, HasControlFlowExit (flag only, does not block finding), SnippetPreview, CapturedVariables (would become parameters if extracted), ProducedVariables (would need to be returned if extracted), and Occurrences (method, start line, end line, file). minStatements=3 for aggressive detection, 6+ for substantial clones only.
         """)]
     public async Task<ToolResult<object>> ScanDuplicateBlocksInClass(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.ClassName)] string className,
-        int minStatements = 4)
+        [ToolControl(ToolControlTag.Filter)] int minStatements = 4)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _cloneDetectionEngine.FindDuplicateBlocksInClassAsync(filePath, className, minStatements);

@@ -2,30 +2,59 @@
 
 public readonly struct FilePath : IEquatable<FilePath>
 {
-    public string? Path
+    private readonly string absolute;   // canonical internal form
+    private readonly bool validated;  // whether the path has been validated as absolute and normalized
+
+    public string? Absolute
     {
-        get;
+        get
+        {
+            if (field == null)
+            {
+                throw new InvalidOperationException("FilePath was default-constructed and has no value.");
+            }
+            return field;
+        }
     }
 
-    public FilePath(string path)
+    public FilePath(string path, bool validated = false)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
             throw new ArgumentException("File path cannot be null or empty.", nameof(path));
         }
-        Path = path;
+        absolute = path;
     }
-    public override string ToString() => Path;
+
+    // construct from whatever the wire sent, against the known root
+    public static FilePath FromWire(string pathArg, string solutionRoot)
+    {
+        if (string.IsNullOrWhiteSpace(pathArg))
+        {
+            throw new ArgumentException("File path cannot be null or empty.", nameof(pathArg));
+        }
+        string abs = Path.IsPathRooted(pathArg)
+            ? Path.GetFullPath(pathArg)
+            : Path.GetFullPath(Path.Combine(solutionRoot, pathArg));
+        return new FilePath(abs, validated: true);
+    }
+
+    public string RelativeTo(string solutionRoot)
+    {
+        return Path.GetRelativePath(solutionRoot, this.absolute);
+    }
+
+    public override string ToString() => absolute;
     public override bool Equals(object? obj)
     {
-        return obj is FilePath other && string.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase);
+        return obj is FilePath other && string.Equals(absolute, other.absolute, StringComparison.OrdinalIgnoreCase);
     }
 
     // implicit conversion from string to FilePath for convenience
     public static implicit operator FilePath(string path) => new FilePath(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath filePath) => filePath.Path!;
+    public static implicit operator string(FilePath filePath) => filePath.absolute!;
 
     //Equality operators for convenience
     public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);
@@ -37,23 +66,23 @@ public readonly struct FilePath : IEquatable<FilePath>
     public static bool operator ==(string left, FilePath right) => new FilePath(left).Equals(right);
     public static bool operator !=(string left, FilePath right) => !new FilePath(left).Equals(right);
 
-    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Path ?? string.Empty);
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(absolute ?? string.Empty);
 
     // startswith for convenience
-    public bool StartsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Path?.StartsWith(value, comparisonType) ?? false;
+    public bool StartsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.StartsWith(value, comparisonType) ?? false;
 
     //endswith for convenience
-    public bool EndsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Path?.EndsWith(value, comparisonType) ?? false;
+    public bool EndsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.EndsWith(value, comparisonType) ?? false;
 
-    public static bool operator <(FilePath left, string right) => !(left.Path?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false);
+    public static bool operator <(FilePath left, string right) => !(left.absolute?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false);
 
-    public static bool operator >(FilePath left, string right) => left.Path?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false;
+    public static bool operator >(FilePath left, string right) => left.absolute?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false;
 
     // contains operator for convenience
-    public bool Contains(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Path?.Contains(value, comparisonType) ?? false;
+    public bool Contains(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.Contains(value, comparisonType) ?? false;
 
     public bool Equals(FilePath other)
     {
-        return StringComparer.OrdinalIgnoreCase.Equals(Path, other.Path);
+        return StringComparer.OrdinalIgnoreCase.Equals(absolute, other.absolute);
     }
 }

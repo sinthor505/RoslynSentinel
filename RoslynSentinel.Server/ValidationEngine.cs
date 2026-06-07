@@ -108,7 +108,7 @@ public class ValidationEngine
                 _logger.LogInformation("Compiling project {ProjectName} (baseline + candidate)...", baselineProject.Name);
             }
 
-            // Baseline compile — errors that already exist before our changes.
+            // ApiBaseline compile — errors that already exist before our changes.
             var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
             if (baselineCompilation == null)
             {

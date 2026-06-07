@@ -52,6 +52,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Queries or updates analysis/refactoring feature flags. action values: list (all features and current status; names/enabled ignored), get (enabled status of specific features by names), update (batch-update via enabled as [{ Key: featureName, Value: bool }] pairs).
         """)]
@@ -84,9 +85,12 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.FileList)]
+    [Produces(DataTag.ProjectList)]
+    [Produces(DataTag.DependencyList)]
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
     public async Task<ToolResult<object>> ListSolutionItems(
-        [ExternalInputRequired(DataTag.Other)] string kind,
+        [ExternalInputRequired(DataTag.Scope)] string kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null)
     {
         try
@@ -137,6 +141,8 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.FileList)]
+    [Produces(DataTag.SolutionList)]
     [Description("""
     Lists all solution files (*.sln, *.slnx) under a given directory.
     Call this before load_solution when the solution path is not known.
@@ -174,6 +180,7 @@ public class SentinelWorkspaceTools
     public sealed record SolutionFileInfo(string Path, string Format);
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\".")]
     public async Task<ToolResult<object>> LoadSolution([Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath)
     {
@@ -198,6 +205,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Checks Roslyn MCP server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Prefer get_workspace_health — this tool has a known false-negative bug where healthy workspaces are reported as unhealthy.")]
     public async Task<HealthReport> Diagnose([Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false)
     {
@@ -256,33 +264,36 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
     public List<string> ListExternalDiskChanges() => _workspaceManager.GetExternalDrift();
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift() => _workspaceManager.ClearDrift();
 
     [McpServerTool]
+    [Produces(DataTag.ChangeId)]
     [Description("""
-        Applies or validates a proposed change set. format=files → supply changes dict (filePath → newContent). format=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
+        Applies or validates a proposed change set. changesetFormat=files → supply changes dict (filePath → newContent). changesetFormat=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
         """)]
     public async Task<ToolResult<object>> ProposedChange(
-        [ExternalInputRequired(DataTag.Other)] string format,
-        [ExternalInputRequired(DataTag.Other)] string action,
+        [ExternalInputRequired(DataTag.ChangeseFormat)] string changesetFormat,
+        [ExternalInputRequired(DataTag.Action)] string action,
         [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [ExternalInputRequired(DataTag.Other)] string? unifiedDiff = null,
-        [ToolControlAttribute(DataTag.Other)] int retryCount = 3,
-        [ToolControlAttribute(DataTag.Other)] bool validateOnApply = true)
+        [ToolControl(ToolControlTag.UnifiedDiff)] string? unifiedDiff = null,
+        [ToolControl(ToolControlTag.RetryCount)] int retryCount = 3,
+        [ToolControl(ToolControlTag.ValidateOnApply)] bool validateOnApply = true)
     {
         try
         {
-            if (format == "files")
+            if (changesetFormat == "files")
             {
                 if (changes == null)
                 {
-                    return new ToolResult<object>() { Success = false, Data = "changes is required when format=files." };
+                    return new ToolResult<object>() { Success = false, Data = "changes is required when changesetFormat=files." };
                 }
                 if (action == "apply")
                 {
@@ -326,11 +337,11 @@ public class SentinelWorkspaceTools
                     }
                 }
             }
-            else if (format == "diff")
+            else if (changesetFormat == "diff")
             {
                 if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "filePath and unifiedDiff are required when format=diff.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "filePath and unifiedDiff are required when changesetFormat=diff.") };
                 }
                 if (action == "apply")
                 {
@@ -374,16 +385,17 @@ public class SentinelWorkspaceTools
                     return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange diff validate failed: {validationResult}") };
                 }
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown format '{format}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown changesetFormat '{changesetFormat}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ProposedChange ({Format}/{Action}) failed", format, action);
+            _logger.LogError(ex, "ProposedChange ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Retries committing previously failed file changes using server-side cached content — no need to re-send file contents. specificFiles limits the retry to a subset of files. retryCount defaults to 3.")]
     public async Task<ToolResult<object>> RetryFailedChanges([Consumes(DataTag.SourceFilepath)] List<string>? specificFiles = null, int retryCount = 3)
     {
@@ -399,6 +411,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ChangeId)]
     [Description("""
         Manages a staged change set produced by a refactoring tool.
         action: apply (write to disk), get (return file contents dict), validate (dry-run compiler diagnostics), discard (remove without applying).
@@ -409,7 +422,11 @@ public class SentinelWorkspaceTools
         intermediate-broken-state edits that are part of a multi-step refactor.
         On successful apply, the same changeId can be passed to undo_last_apply to revert.
         """)]
-    public async Task<ToolResult<object>> StagedChange(string action, [Consumes(DataTag.OperationId, required: true)] string changeId, int retryCount = 3, bool validateOnApply = true)
+    public async Task<ToolResult<object>> StagedChange(
+        [Consumes(DataTag.Action, required: true)] string action,
+        [Consumes(DataTag.ChangeId, required: true)] string changeId,
+        [ToolControl(ToolControlTag.RetryCount)] int retryCount = 3,
+        [ToolControl(ToolControlTag.ValidateOnApply)] bool validateOnApply = true)
     {
         try
         {
@@ -511,6 +528,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Gets compiler diagnostics for a file, project, or the entire solution.
         scope: file|project|solution.
@@ -522,8 +540,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> GetDiagnostics([Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath)] string scope,
         string? scopeName = null,
         bool summarize = false,
-        [ToolControlAttribute(DataTag.Limit)] int maxDetails = 50,
-        [ToolControlAttribute(DataTag.Other)] int topN = 20)
+        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxDetails = 50,
+        [ToolControlAttribute(ToolControlTag.TopN)] int topN = 20)
     {
         try
         {
@@ -599,8 +617,12 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
-    public async Task<ToolResult<object>> SafeDeleteUnusedSymbol([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.StartLine, required: true)] int line, [Consumes(DataTag.Offset, required: true)] int column)
+    public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.StartLine, required: true)] int line,
+        [Consumes(DataTag.Offset, required: true)] int column)
     {
         try
         {
@@ -615,10 +637,11 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
     public async Task<ToolResult<object>> CreateProject(
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
-        [ExternalInputRequired(DataTag.Other)] string projectType = "console")
+        [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console")
     {
         try
         {
@@ -633,6 +656,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
     public async Task<ToolResult<object>> SplitProjectByFolder(
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
@@ -654,8 +678,11 @@ public class SentinelWorkspaceTools
     // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
-    public async Task<ToolResult<object>> GetMethodSource([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string methodName)
+    public async Task<ToolResult<object>> GetMethodSource(
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.MethodName, required: true)] string methodName)
     {
         try
         {
@@ -747,8 +774,10 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
-    public async Task<ToolResult<object>> GetFileOutline([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
+    public async Task<ToolResult<object>> GetFileOutline(
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
     {
         try
         {
@@ -841,12 +870,14 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
+    [Produces(DataTag.FileList)]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
-        string pattern,
-        bool isRegex = false,
+        [ToolControl(ToolControlTag.Pattern, required: true)] string pattern,
+        [ToolControl(ToolControlTag.IsRegex)] bool isRegex = false,
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
-        [ToolControlAttribute(DataTag.Limit)] int maxResults = 200)
+        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxResults = 200)
     {
         try
         {
@@ -936,11 +967,12 @@ public class SentinelWorkspaceTools
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, rolledback, file:<path>, or null for all items. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<ToolResult<object>> GetOperationDetail(
-        [Consumes(DataTag.OperationId, required: true)] string changeId,
-        string? filter = null,
-        [ToolControlAttribute(DataTag.Limit)] int maxItems = 50)
+        [Consumes(DataTag.ChangeId, required: true)] string changeId,
+        [ToolControlAttribute(ToolControlTag.Filter)] string? filter = null,
+        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxItems = 50)
     {
         try
         {
@@ -1016,6 +1048,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply([Consumes(DataTag.OperationId, required: true)] string changeId)
     {
@@ -1080,6 +1113,7 @@ public class SentinelWorkspaceTools
     // ── Phase 3 — Circuit breaker tools ────────────────────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
     public ToolResult<object> ResetBreaker()
     {
@@ -1088,6 +1122,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
     public ToolResult<object> GetBreakerStatus()
     {

@@ -3,12 +3,12 @@
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = true)]
 public sealed class ToolControlAttribute : Attribute
 {
-    public DataTag Tag
+    public ToolControlTag Tag
     {
         get;
     }
 
-    public ToolControlAttribute(DataTag tag, bool required = false)
+    public ToolControlAttribute(ToolControlTag tag, bool required = false)
     {
         this.Tag = tag;
         this.Required = required;
@@ -18,4 +18,33 @@ public sealed class ToolControlAttribute : Attribute
     {
         get;
     }
+}
+
+public enum ToolControlTag
+{
+    Offset,
+    ResultLimit,
+    AutoStage,
+    Timeout,
+    MatchType,
+    Filter,
+    Pattern,
+    MaxDepth,
+    Sort,
+    Domain,
+    Detector,
+    Aspect,
+    ToolName,
+    UnifiedDiff,
+    RetryCount,
+    ValidateOnApply,
+    IsRegex,
+    Direction,
+    OverrideSymbolName,
+    IncludeMethods,
+    IncludeProperties,
+    IncludeTypes,
+    PersistBaseline,
+    Preview,
+    TopN
 }

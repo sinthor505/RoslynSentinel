@@ -41,6 +41,8 @@ public class SentinelCodemodTools
     private readonly AnalysisEngine _analysisEngine;
     private readonly TestingEngine _testingEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
+
+    private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelCodemodTools> _logger;
 
     public SentinelCodemodTools(
@@ -71,6 +73,7 @@ public class SentinelCodemodTools
         AnalysisEngine analysisEngine,
         TestingEngine testingEngine,
         PathDrivenTestEngine pathDrivenTestEngine,
+        PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelCodemodTools> logger)
     {
         _refactoringEngine = refactoringEngine;
@@ -100,6 +103,7 @@ public class SentinelCodemodTools
         _analysisEngine = analysisEngine;
         _testingEngine = testingEngine;
         _pathDrivenTestEngine = pathDrivenTestEngine;
+        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 
@@ -111,13 +115,14 @@ public class SentinelCodemodTools
         Applies a file-wide code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
-        [ExternalInputRequired(DataTag.Other)] string transform,
-        [ExternalInputRequired(DataTag.Other)] bool libraryMode = true,
-        [ToolControl(DataTag.Other)] bool preview = false)
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [ExternalInputRequired(DataTag.DataType)] string transform,
+        [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
+        [ToolControl(ToolControlTag.Preview)] bool preview = false)
     {
         try
         {
+            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_braces":
@@ -387,17 +392,18 @@ public class SentinelCodemodTools
         Applies a method-scoped code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
-        [ExternalInputRequired(DataTag.Other)] string transform,
-        [ExternalInputRequired(DataTag.Other)] string? direction = null,
+        [ExternalInputRequired(DataTag.Transform)] string transform,
+        [ToolControl(ToolControlTag.Direction)] string? direction = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        [ExternalInputRequired(DataTag.Other)] string lockFieldName = "_lock")
+        [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock")
     {
         try
         {
+            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_guard_clauses":
@@ -728,17 +734,19 @@ public class SentinelCodemodTools
         Applies a class-scoped code transformation; returns updated file content as a string — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
-        [ExternalInputRequired(DataTag.Other)] string className,
-        [ExternalInputRequired(DataTag.Other)] string transform,
-        [ExternalInputRequired(DataTag.Other)] string? propertyName = null,
-        [ExternalInputRequired(DataTag.Other)] string? direction = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [ExternalInputRequired(DataTag.ClassName)] string className,
+        [ExternalInputRequired(DataTag.Transform)] string transform,
+        [ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null,
+        [ToolControl(ToolControlTag.Direction)] string? direction = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {
+            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
             switch (transform)
             {
                 case "add_validation_to_poco":
@@ -1048,6 +1056,7 @@ public class SentinelCodemodTools
     // ── 4. generate ───────────────────────────────────────────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.ResultOnly)]
     [Description("""
         Generates new code for a type or method. kind: call describe_advanced_tool_options("generate") for valid values, required parameters per kind, and return types. filePath required for all kinds except generate_decorator_class. decoratorPrefix defaults to "Logging". framework for test generation: "NUnit" (default), "xunit", or "mstest". disambiguateLine resolves overloaded method targets for generate_path_driven_tests.
         """)]
@@ -1056,11 +1065,11 @@ public class SentinelCodemodTools
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
         [Consumes(DataTag.ClassName)] string? className = null,
         [Consumes(DataTag.MethodName)] string? methodName = null,
-        [Consumes(DataTag.Other)] string? members = null,
-        [ExternalInputRequired(DataTag.Other)] string decoratorPrefix = "Logging",
+        [Consumes(DataTag.MemberName)] string? members = null,
+        [ExternalInputRequired(DataTag.DecoratorPrefix)] string decoratorPrefix = "Logging",
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
-        [ExternalInputRequired(DataTag.Other)] string framework = "NUnit",
-        [ExternalInputRequired(DataTag.Other)] int? disambiguateLine = null)
+        [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
+        [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null)
     {
         try
         {

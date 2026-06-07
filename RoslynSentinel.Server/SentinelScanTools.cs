@@ -96,6 +96,7 @@ public class SentinelScanTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.ScanId)]
     [Description("""
     Dispatches a named detector across a file, project, or solution.
     scope: file | project | solution. scopeName: filePath when scope=file;
@@ -448,10 +449,13 @@ public class SentinelScanTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
         """)]
-    public Task<ToolResult<object>> DescribeScanDetectors(string? domain = null, string? detector = null)
+    public Task<ToolResult<object>> DescribeScanDetectors(
+        [ToolControl(ToolControlTag.Domain)] string? domain = null,
+        [ToolControl(ToolControlTag.Detector)] string? detector = null)
     {
         try
         {
@@ -482,13 +486,14 @@ public class SentinelScanTools
     }
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(
         [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        string aspect)
+        [ToolControl(ToolControlTag.Aspect)] string aspect)
     {
         try
         {
@@ -538,14 +543,15 @@ public class SentinelScanTools
     // ── get_scan_result ────────────────────────────────────────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.Report)]
     [Description("""
         Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
         """)]
     public async Task<ToolResult<object>> GetScanResult(
         [Consumes(DataTag.ScanId)] string? scanId = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [ToolControlAttribute(DataTag.Limit)] int limit = 50,
-        [ToolControlAttribute(DataTag.Offset)] int offset = 0)
+        [ToolControl(ToolControlTag.ResultLimit)] int limit = 50,
+        [ToolControl(ToolControlTag.Offset)] int offset = 0)
     {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
