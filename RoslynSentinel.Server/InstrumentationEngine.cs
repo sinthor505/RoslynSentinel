@@ -16,7 +16,7 @@ public class InstrumentationEngine
     /// <summary>
     /// Wraps a method's body in a try/catch/finally block.
     /// </summary>
-    public async Task<string> AddTryCatchToMethodAsync(string filePath, string methodName, string exceptionType = "Exception", bool addFinally = false, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddTryCatchToMethodAsync(FilePath filePath, string methodName, string exceptionType = "Exception", bool addFinally = false, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -47,13 +47,18 @@ public class InstrumentationEngine
 
         var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(tryStatement));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
     /// Wraps all public methods in a class in try/catch blocks.
     /// </summary>
-    public async Task<string> AddTryCatchToClassAsync(string filePath, string className, string exceptionType = "Exception", CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddTryCatchToClassAsync(FilePath filePath, string className, string exceptionType = "Exception", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -90,13 +95,18 @@ public class InstrumentationEngine
             return newMethod.WithBody(SyntaxFactory.Block(tryStatement));
         });
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
     /// Adds Stopwatch diagnostics (prefix start, postfix stop and log) to a method.
     /// </summary>
-    public async Task<string> AddStopwatchDiagnosticsAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddStopwatchDiagnosticsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -144,6 +154,11 @@ public class InstrumentationEngine
         var newMethodNode = methodNode.WithBody(newBody);
 
         var newRoot = root.ReplaceNode(methodNode, newMethodNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 }

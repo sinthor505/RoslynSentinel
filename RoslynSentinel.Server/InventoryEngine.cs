@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynSentinel.Server;
 
 public record CodeInventoryReport(
-    string FilePath,
+    FilePath filePath,
     List<string> Namespaces,
     List<string> Classes,
     List<string> Interfaces,
@@ -21,7 +21,7 @@ public class InventoryEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<CodeInventoryReport> GetCodeInventoryAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
@@ -62,7 +62,7 @@ public class InventoryEngine
         return new CodeInventoryReport(filePath, namespaces, classes, interfaces, methods, properties);
     }
 
-    public async Task<CodeInventoryReport> GetCodeInventoryAsync2(string filePath, CancellationToken cancellationToken = default)
+    public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);

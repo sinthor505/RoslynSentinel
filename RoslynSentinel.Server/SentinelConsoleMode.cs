@@ -484,8 +484,8 @@ public static partial class SentinelConsoleMode
         {
             var modeSuffix = "_" + modeArg.ToLowerInvariant()
                                          .Replace(", ", "_")
-                                         .Replace(",",  "_")
-                                         .Replace(" ",  "_");
+                                         .Replace(",", "_")
+                                         .Replace(" ", "_");
 
             var tools = services.GetServices<McpServerTool>()
                 .Select(t => t.ProtocolTool)
@@ -554,8 +554,8 @@ public static partial class SentinelConsoleMode
         {
             var modeSuffix = "_" + modeArg.ToLowerInvariant()
                                          .Replace(", ", "_")
-                                         .Replace(",",  "_")
-                                         .Replace(" ",  "_");
+                                         .Replace(",", "_")
+                                         .Replace(" ", "_");
 
             var solutionRoot = FindSolutionRoot(outputDir) ?? outputDir;
             var serverSrcDir = Path.Combine(solutionRoot, "RoslynSentinel.Server");

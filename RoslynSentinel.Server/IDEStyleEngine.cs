@@ -16,13 +16,18 @@ public class IDEStyleEngine
     /// <summary>
     /// Simplifies member access by removing unnecessary 'this.' or base qualifiers.
     /// </summary>
-    public async Task<string> SimplifyMemberAccessAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyMemberAccessAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -31,33 +36,58 @@ public class IDEStyleEngine
 
         if (thisAccesses == null || thisAccesses.Count == 0)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// No member accesses to simplify."
+            };
         }
 
         var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name);
-        return newRoot.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
     /// Converts standard assignments to object initializers.
     /// </summary>
-    public async Task<string> UseObjectInitializersAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseObjectInitializersAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private static SyntaxNode RewriteBlocksWithObjectInitializers(SyntaxNode root)
@@ -157,24 +187,39 @@ public class IDEStyleEngine
     /// To:        x?.Method(args);
     /// Only transforms standalone expression-statement bodies with no else clause.
     /// </summary>
-    public async Task<string> UseNullPropagationAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseNullPropagationAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new NullPropagationRewriter();
         var newRoot = rewriter.Visit(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private class NullPropagationRewriter : CSharpSyntaxRewriter
@@ -194,14 +239,14 @@ public class IDEStyleEngine
             }
 
             bool rightIsNull = bin.Right.IsKind(SyntaxKind.NullLiteralExpression);
-            bool leftIsNull  = bin.Left.IsKind(SyntaxKind.NullLiteralExpression);
+            bool leftIsNull = bin.Left.IsKind(SyntaxKind.NullLiteralExpression);
             if (!rightIsNull && !leftIsNull)
             {
                 return base.VisitIfStatement(node);
             }
 
             var checkedExpr = rightIsNull ? bin.Left : bin.Right;
-            var checkedStr  = checkedExpr.ToString();
+            var checkedStr = checkedExpr.ToString();
 
             // Unwrap single-statement block
             StatementSyntax body = node.Statement;

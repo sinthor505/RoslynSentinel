@@ -1,6 +1,4 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace RoslynSentinel.Server;
 
@@ -19,7 +17,7 @@ public class ExhaustiveAnalyzerEngine
     /// For compiler rules (CS*) the semantic model diagnostics are used directly.
     /// Pass an empty or null <paramref name="ruleId"/> to return ALL diagnostics.
     /// </summary>
-    public async Task<List<AnalyzerIssue>> RunDiagnosticRuleAsync(string filePath, string ruleId, CancellationToken cancellationToken = default)
+    public async Task<List<AnalyzerIssue>> RunDiagnosticRuleAsync(FilePath filePath, string ruleId, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

@@ -15,7 +15,7 @@ public class ProjectStructureEngine
         _config = config;
     }
 
-    public async Task<string> FixMismatchedNamespacesAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -26,18 +26,23 @@ public class ProjectStructureEngine
 
         var project = document.Project;
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
-        
+
         var projectDir = Path.GetDirectoryName(project.FilePath);
         var fileDir = Path.GetDirectoryName(filePath);
-        
+
         if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// File is outside the project directory."
+            };
         }
 
         var relativePath = fileDir.Substring(projectDir.Length).Trim(Path.DirectorySeparatorChar);
-        var expectedNamespace = string.IsNullOrEmpty(relativePath) 
-            ? defaultNamespace 
+        var expectedNamespace = string.IsNullOrEmpty(relativePath)
+            ? defaultNamespace
             : $"{defaultNamespace}.{relativePath.Replace(Path.DirectorySeparatorChar, '.')}";
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -48,37 +53,62 @@ public class ProjectStructureEngine
             var newNsName = SyntaxFactory.ParseName(expectedNamespace).WithTriviaFrom(nsNode.Name);
             var newNsNode = nsNode.WithName(newNsName);
             var newRoot = root!.ReplaceNode(nsNode, newNsNode);
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = newRoot.NormalizeWhitespace().ToFullString()
+            };
         }
 
-        return root?.ToFullString() ?? "";
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.TargetNotFound,
+            FilePath = filePath,
+            Message = "// Namespace is already correct."
+        };
     }
 
-    public async Task<string> MoveFileToNamespaceFolderAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MoveFileToNamespaceFolderAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var nsNode = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsNode == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Namespace not found."
+            };
         }
 
         var ns = nsNode.Name.ToString();
         var project = document.Project;
         var projectDir = Path.GetDirectoryName(project.FilePath);
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
-        
+
         if (projectDir == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Project directory not found."
+            };
         }
 
         // Strip the default namespace from the beginning of the file's namespace
@@ -90,17 +120,27 @@ public class ProjectStructureEngine
         }
 
         var relativePath = relativeFolderNamespace.Replace('.', Path.DirectorySeparatorChar);
-        var expectedDir = relativePath.Length > 0 
-            ? Path.Combine(projectDir, relativePath) 
+        var expectedDir = relativePath.Length > 0
+            ? Path.Combine(projectDir, relativePath)
             : projectDir;
         var expectedPath = Path.Combine(expectedDir, Path.GetFileName(filePath));
 
         if (filePath != expectedPath)
         {
-            return $"MOVE_REQUIRED: {filePath} -> {expectedPath}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = $"MOVE_REQUIRED: {filePath} -> {expectedPath}"
+            };
         }
 
-        return "File is already in the correct folder.";
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.CannotMove,
+            FilePath = filePath,
+            Message = "// File is already in the correct folder."
+        };
     }
 
     public enum StructuralSmellType
@@ -216,14 +256,14 @@ public class ProjectStructureEngine
                     var ifs = root.DescendantNodes().OfType<IfStatementSyntax>();
                     foreach (var ifStmt in ifs)
                     {
-                        var throwStmt = ifStmt.Statement is ThrowStatementSyntax t ? t : 
+                        var throwStmt = ifStmt.Statement is ThrowStatementSyntax t ? t :
                                         ifStmt.Statement is BlockSyntax b && b.Statements.Count == 1 && b.Statements[0] is ThrowStatementSyntax t2 ? t2 : null;
 
                         if (throwStmt != null && throwStmt.Expression is ObjectCreationExpressionSyntax oce)
                         {
                             var type = oce.Type.ToString();
                             bool isLegacy = false;
-                            
+
                             if (type == "ArgumentNullException")
                             {
                                 isLegacy = true;
@@ -256,7 +296,7 @@ public class ProjectStructureEngine
                         }
                     }
                 }
-                
+
                 if (typeFilter == StructuralSmellType.All || typeFilter == StructuralSmellType.Verbosity)
                 {
                     // Target-typed new
@@ -277,8 +317,8 @@ public class ProjectStructureEngine
                         .Where(a => a.Initializer?.Expressions.Count == 0);
                     foreach (var ace in arrayCreations)
                     {
-                         var line = ace.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                         results.Add($"[VERBOSITY] Empty array creation in '{document.Name}' (Line {line}). Use '[]' (collection expression) instead.");
+                        var line = ace.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        results.Add($"[VERBOSITY] Empty array creation in '{document.Name}' (Line {line}). Use '[]' (collection expression) instead.");
                     }
 
                     var ifs = root.DescendantNodes().OfType<IfStatementSyntax>();

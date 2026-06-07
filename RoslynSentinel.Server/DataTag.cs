@@ -6,6 +6,9 @@ public enum DataTag
     SolutionFilepath,
     ProjectName,
     SymbolName,
+    ClassName,
+    MethodName,
+    DataType,
     ScanId,
     OperationId,
     ContextSnippet,
@@ -17,25 +20,9 @@ public enum DataTag
     MemberKind,
     Offset,
     Limit,
-    Scope
-}
-
-[AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = true)]
-public sealed class ConsumesAttribute : Attribute
-{
-    public DataTag Tag
-    {
-        get;
-    }
-
-    public ConsumesAttribute(DataTag tag, bool required = false)
-    {
-        this.Tag = tag;
-        this.Required = required;
-    }
-
-    public bool Required
-    {
-        get;
-    }
+    Scope,
+    Other,
+    DetectorName,
+    Documentation,
+    ResultOnly
 }

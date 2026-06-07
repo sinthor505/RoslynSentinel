@@ -23,7 +23,7 @@ public record PathDrivenTestCase(
 
 public record PathDrivenTestReport(
     string MethodName,
-    string FilePath,
+    FilePath filePath,
     string ClassName,
     int PathCount,
     List<PathDrivenTestCase> TestCases,
@@ -47,7 +47,7 @@ public class PathDrivenTestEngine
     /// loop body writes to a variable that appears in a return statement (outgoing path).
     /// </summary>
     public async Task<PathDrivenTestReport> GeneratePathDrivenTestsAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         string framework = "NUnit",
         int? disambiguateLine = null,
@@ -749,7 +749,7 @@ public class PathDrivenTestEngine
             "Guid" => "Guid.NewGuid()",
             "DateTime" => "DateTime.UtcNow",
             "DateTimeOffset" => "DateTimeOffset.UtcNow",
-            "CancellationToken" => "CancellationToken.None",
+            "CancellationToken" => "CancellationToken.NoOutput",
             var t when t.StartsWith("List<") => $"new {t}()",
             var t when t.StartsWith("IEnumerable<") ||
                        t.StartsWith("IReadOnlyList<") =>

@@ -1,7 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Linq;
 
 namespace RoslynSentinel.Server;
 
@@ -23,7 +22,7 @@ public class SemanticRefactoringLibrary
     /// - No variable shadowing in nested scopes
     /// - Complex expressions will be parenthesized if needed
     /// </summary>
-    public async Task<string> InlineVariableAsync(string filePath, string variableName, CancellationToken cancellationToken = default)
+    public async Task<string> InlineVariableAsync(FilePath filePath, string variableName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -99,7 +98,7 @@ public class SemanticRefactoringLibrary
         {
             try
             {
-                var replacement = needsParens 
+                var replacement = needsParens
                     ? SyntaxFactory.ParenthesizedExpression(value.WithoutTrivia())
                     : value.WithoutTrivia();
 
@@ -146,13 +145,19 @@ public class SemanticRefactoringLibrary
     /// <summary>
     /// Converts a simple property into a get/set method pair.
     /// </summary>
-    public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string className, string propertyName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string className, string propertyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult()
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                Message = "// Error: File not found in the loaded solution.",
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -161,7 +166,13 @@ public class SemanticRefactoringLibrary
 
         if (classNode == null || propNode == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = root?.ToFullString() ?? "",
+                Message = "// Error: Class or property not found.",
+                FilePath = filePath
+            };
         }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
@@ -180,30 +191,29 @@ public class SemanticRefactoringLibrary
 
         var newClass = classNode.ReplaceNode(propNode, new MemberDeclarationSyntax[] { field, getter, setter });
         var newRoot = root!.ReplaceNode(classNode, newClass);
-        
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
     /// Wraps a block of code in a using statement for an IDisposable object.
     /// </summary>
-    public async Task<string> WrapInUsingAsync(string filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInUsingAsync(FilePath filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
-        
+
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, Message = "// Error: No statements found in the specified range.", FilePath = filePath };
         }
 
         var firstNode = nodes[0];
@@ -220,15 +230,15 @@ public class SemanticRefactoringLibrary
         // with the single using statement. ReplaceNodes(delegate returning null) would crash Roslyn.
         var origStatements = parentBlock.Statements.ToList();
         int startIdx = origStatements.IndexOf(nodes[0]);
-        int endIdx   = origStatements.IndexOf(nodes[^1]);
+        int endIdx = origStatements.IndexOf(nodes[^1]);
         var newStatements = new List<StatementSyntax>();
         newStatements.AddRange(origStatements.Take(startIdx));
         newStatements.Add(usingStatement);
         newStatements.AddRange(origStatements.Skip(endIdx + 1));
 
         var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
-        var newRoot  = root!.ReplaceNode(parentBlock, newBlock);
-        
-        return newRoot.NormalizeWhitespace().ToFullString();
+        var newRoot = root!.ReplaceNode(parentBlock, newBlock);
+
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 }

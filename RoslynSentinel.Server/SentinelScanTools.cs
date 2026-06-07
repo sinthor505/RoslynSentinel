@@ -104,10 +104,10 @@ public class SentinelScanTools
     Call describe_scan_detectors(domain?) for descriptions and scope hints.
     """)]
     public async Task<ToolResult<object>> RunScanDetector(
-    DetectorId detector,
-    string scope,
-    [Consumes(DataTag.Scope)] string? scopeName = null,
-    CancellationToken cancellationToken = default)
+        [Consumes(DataTag.DetectorName)] DetectorId detector,
+        [ExternalInputRequired(DataTag.Scope)] string scope,
+        [Consumes(DataTag.SourceFilepath)][Consumes(DataTag.ProjectName)] string? scopeName = null,
+        CancellationToken cancellationToken = default)
     {
         string? filePath = scope == "file" ? scopeName : null;
         string? projectName = scope == "project" ? scopeName : null;
@@ -486,7 +486,7 @@ public class SentinelScanTools
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         string aspect)
     {
@@ -544,8 +544,8 @@ public class SentinelScanTools
     public async Task<ToolResult<object>> GetScanResult(
         [Consumes(DataTag.ScanId)] string? scanId = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [Consumes(DataTag.Limit)] int limit = 50,
-        [Consumes(DataTag.Offset)] int offset = 0)
+        [ToolControlAttribute(DataTag.Limit)] int limit = 50,
+        [ToolControlAttribute(DataTag.Offset)] int offset = 0)
     {
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
@@ -669,7 +669,7 @@ public class SentinelScanTools
         };
     }
 
-    internal static async Task<(bool offloaded, string filePath, string scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
+    internal static async Task<(bool offloaded, FilePath filePath, string scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot))

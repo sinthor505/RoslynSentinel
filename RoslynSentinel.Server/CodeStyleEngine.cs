@@ -15,24 +15,39 @@ public class CodeStyleEngine
         _config = config;
     }
 
-    public async Task<string> FixDangerousLockAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> FixDangerousLockAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("LockModernization"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature LockModernization is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new DangerousLockRewriter();
@@ -69,35 +84,60 @@ public class CodeStyleEngine
             }
         }
 
-        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+        };
     }
 
-    public async Task<string> ConvertPropertyToMethodsAsync(string filePath, string propertyName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string propertyName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ConvertPropertyToMethod"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature ConvertPropertyToMethod is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
         if (prop == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Property '{propertyName}' not found."
+            };
         }
 
         // Only works for properties declared directly inside a class (not an interface or struct)
         var classNode = prop.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (classNode == null)
         {
-            return $"// ERROR: '{propertyName}' must be in a class — this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// ERROR: '{propertyName}' must be in a class — this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "")
+            };
         }
 
         var type = prop.Type;
@@ -118,77 +158,137 @@ public class CodeStyleEngine
         var newClass = classNode.RemoveNode(prop, SyntaxRemoveOptions.KeepNoTrivia)!
             .AddMembers(field, getter, setter);
 
-        return root!.ReplaceNode(classNode, newClass).NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = root!.ReplaceNode(classNode, newClass).NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> SimplifyVerbosityAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SimplifyVerbosityAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("SimplifyVerbosity"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature SimplifyVerbosity is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new VerbosityRewriter(_config);
         var newRoot = rewriter.Visit(root);
-        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+        };
     }
 
-    public async Task<string> UseCollectionExpressionsAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseCollectionExpressionsAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("CollectionExpressions"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature CollectionExpressions is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new CollectionExpressionRewriter();
         var newRoot = rewriter.Visit(root);
-        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+        };
     }
 
-    public async Task<string> UseTimeProviderAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseTimeProviderAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("TimeProviderInjection"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature TimeProviderInjection is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -200,7 +300,12 @@ public class CodeStyleEngine
         var cu = rewriter.Visit(root) as CompilationUnitSyntax;
         if (cu == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var newClassNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -209,55 +314,102 @@ public class CodeStyleEngine
             var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("TimeProvider")).AddVariables(SyntaxFactory.VariableDeclarator(fieldName))).AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
             cu = cu.ReplaceNode(newClassNode, newClassNode.WithMembers(newClassNode.Members.Insert(0, field)));
         }
-        return cu.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = cu.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> SimplifyAllNamesAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SimplifyAllNamesAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("IDE0001"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature IDE0001 is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new NameSimplifierRewriter();
-        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
+        var newRoot = rewriter.Visit(root);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> UseIndexFromEndAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseIndexFromEndAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("LengthMinusOneToIndex"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature LengthMinusOneToIndex is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var rewriter = new IndexFromEndRewriter();
-        return rewriter.Visit(root).NormalizeWhitespace().ToFullString();
+        var newRoot = rewriter.Visit(root);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     public async Task<List<AntiPatternFinding>> FindUseFrozenCollectionsAsync(

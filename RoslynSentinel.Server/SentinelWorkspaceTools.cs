@@ -14,7 +14,7 @@ namespace RoslynSentinel.Server;
 public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
 
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
-public record TextSearchMatch(string FilePath, int Line, int Column, string Preview);
+public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview);
 
 [McpServerToolType]
 public class SentinelWorkspaceTools
@@ -86,7 +86,7 @@ public class SentinelWorkspaceTools
     [McpServerTool]
     [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
     public async Task<ToolResult<object>> ListSolutionItems(
-        [Consumes(DataTag.Scope, required: true)] string kind,
+        [ExternalInputRequired(DataTag.Other)] string kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null)
     {
         try
@@ -268,13 +268,13 @@ public class SentinelWorkspaceTools
         Applies or validates a proposed change set. format=files → supply changes dict (filePath → newContent). format=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
         """)]
     public async Task<ToolResult<object>> ProposedChange(
-        string format,
-        string action,
-        Dictionary<string, string>? changes = null,
+        [ExternalInputRequired(DataTag.Other)] string format,
+        [ExternalInputRequired(DataTag.Other)] string action,
+        [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null,
         [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        string? unifiedDiff = null,
-        int retryCount = 3,
-        bool validateOnApply = true)
+        [ExternalInputRequired(DataTag.Other)] string? unifiedDiff = null,
+        [ToolControlAttribute(DataTag.Other)] int retryCount = 3,
+        [ToolControlAttribute(DataTag.Other)] bool validateOnApply = true)
     {
         try
         {
@@ -346,7 +346,7 @@ public class SentinelWorkspaceTools
                         var oldText = await document.GetTextAsync();
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
                         var targetPath = document.FilePath ?? filePath;
-                        var diffChanges = new Dictionary<string, string> { [targetPath] = newContent };
+                        var diffChanges = new Dictionary<FilePath, string> { [targetPath] = newContent };
 
                         // ── Validate-on-apply gate (diff path) ───────────────────
                         if (validateOnApply)
@@ -519,7 +519,11 @@ public class SentinelWorkspaceTools
         maxDetails: caps the raw detail list (default 50); error/warning counts are always full totals. Only used when summarize=false.
         topN: max groups to return sorted by count descending (default 20). Only used when summarize=true.
         """)]
-    public async Task<ToolResult<object>> GetDiagnostics([Consumes(DataTag.Scope, required: true)] string scope, string? scopeName = null, bool summarize = false, [Consumes(DataTag.Limit)] int maxDetails = 50, int topN = 20)
+    public async Task<ToolResult<object>> GetDiagnostics([Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath)] string scope,
+        string? scopeName = null,
+        bool summarize = false,
+        [ToolControlAttribute(DataTag.Limit)] int maxDetails = 50,
+        [ToolControlAttribute(DataTag.Other)] int topN = 20)
     {
         try
         {
@@ -596,7 +600,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
-    public async Task<ToolResult<object>> SafeDeleteUnusedSymbol([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.StartLine, required: true)] int line, [Consumes(DataTag.Offset, required: true)] int column)
+    public async Task<ToolResult<object>> SafeDeleteUnusedSymbol([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.StartLine, required: true)] int line, [Consumes(DataTag.Offset, required: true)] int column)
     {
         try
         {
@@ -612,7 +616,9 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
-    public async Task<ToolResult<object>> CreateProject([Consumes(DataTag.ProjectName, required: true)] string projectName, string projectType = "console")
+    public async Task<ToolResult<object>> CreateProject(
+        [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
+        [ExternalInputRequired(DataTag.Other)] string projectType = "console")
     {
         try
         {
@@ -630,8 +636,8 @@ public class SentinelWorkspaceTools
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
     public async Task<ToolResult<object>> SplitProjectByFolder(
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
-        [Consumes(DataTag.ContainerName, required: true)] string folderName,
-        [Consumes(DataTag.ProjectName, required: true)] string targetProjectName)
+        [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
+        [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName)
     {
         try
         {
@@ -649,7 +655,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
-    public async Task<ToolResult<object>> GetMethodSource([Consumes(DataTag.SourceFilepath, required: true)] string filePath, string methodName)
+    public async Task<ToolResult<object>> GetMethodSource([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string methodName)
     {
         try
         {
@@ -742,7 +748,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool]
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
-    public async Task<ToolResult<object>> GetFileOutline([Consumes(DataTag.SourceFilepath, required: true)] string filePath)
+    public async Task<ToolResult<object>> GetFileOutline([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
     {
         try
         {
@@ -839,8 +845,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> SearchSolutionText(
         string pattern,
         bool isRegex = false,
-        [Consumes(DataTag.SourceFilepath)] string? fileGlob = null,
-        [Consumes(DataTag.Limit)] int maxResults = 200)
+        [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
+        [ToolControlAttribute(DataTag.Limit)] int maxResults = 200)
     {
         try
         {
@@ -920,7 +926,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    private static bool GlobMatchesFileName([Consumes(DataTag.SourceFilepath, required: true)] string filePath, string glob)
+    private static bool GlobMatchesFileName([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string glob)
     {
         var fileName = Path.GetFileName(filePath);
         var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
@@ -934,7 +940,7 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> GetOperationDetail(
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         string? filter = null,
-        [Consumes(DataTag.Limit)] int maxItems = 50)
+        [ToolControlAttribute(DataTag.Limit)] int maxItems = 50)
     {
         try
         {

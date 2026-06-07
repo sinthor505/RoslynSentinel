@@ -10,7 +10,7 @@ public record DiRegistration(
     string Lifetime,
     string ServiceType,
     string? ImplementationType,
-    string FilePath,
+    FilePath filePath,
     int Line,
     string CallSite);
 
@@ -33,7 +33,7 @@ public class DependencyInjectionEngine
     /// <summary>
     /// Analyzes a class to find what it needs in its constructor and checks if those are likely registered.
     /// </summary>
-    public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -253,7 +253,7 @@ public class DependencyInjectionEngine
     /// <summary>
     /// Injects a new dependency into a class constructor and adds the corresponding private field.
     /// </summary>
-    public async Task<string> AddDependencyAsync(string filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddDependencyAsync(FilePath filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -305,7 +305,12 @@ public class DependencyInjectionEngine
         newClassNode = newClassNode.InsertNodesBefore(newClassNode.Members.First(), new[] { fieldDecl });
 
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.ToFullString(),
+            FilePath = filePath
+        };
     }
 
     private static readonly HashSet<string> _frameworkProvidedTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -508,7 +513,7 @@ public class DependencyInjectionEngine
         string ConsumerLifetime,
         string DependencyType,
         string DependencyLifetime,
-        string FilePath,
+        FilePath filePath,
         int Line
     );
 
@@ -525,7 +530,7 @@ public class DependencyInjectionEngine
         var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
 
         // Also parse lambda factory registrations (task 13)
-        var lifetimeMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var lifetimeMap = new Dictionary<FilePath, string>();
         foreach (var reg in registrations)
         {
             var svc = SimpleName(reg.ServiceType);

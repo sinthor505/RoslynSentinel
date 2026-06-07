@@ -13,7 +13,7 @@ public class DocumentationEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<string> GenerateXmlDocumentationStubsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var normalizedPath = Path.GetFullPath(filePath);
@@ -26,7 +26,12 @@ public class DocumentationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
@@ -35,6 +40,7 @@ public class DocumentationEngine
                             t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
                             t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
 
+        // newRoot
         var newRoot = root.ReplaceNodes(methods, (oldMethod, newMethod) =>
         {
             var sb = new System.Text.StringBuilder();
@@ -56,28 +62,48 @@ public class DocumentationEngine
             return newMethod.WithLeadingTrivia(newMethod.GetLeadingTrivia().AddRange(xmlTrivia));
         });
 
-        return newRoot.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> DocumentPocoFieldsAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> DocumentPocoFieldsAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Class not found."
+            };
         }
 
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel"))
@@ -97,6 +123,11 @@ public class DocumentationEngine
         });
 
         var newRoot = root.ReplaceNode(classNode, newClassNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 }

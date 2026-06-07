@@ -16,7 +16,7 @@ public class ThreadSafetyEngine
     /// <summary>
     /// Adds a private lock object and wraps a method's body in a lock statement.
     /// </summary>
-    public async Task<string> MakeMethodThreadSafeAsync(string filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MakeMethodThreadSafeAsync(FilePath filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
     {
         try
         {
@@ -24,25 +24,45 @@ public class ThreadSafetyEngine
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
-                return $"// Error: File '{filePath}' not found.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: File '{filePath}' not found."
+                };
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
-                return $"// Error: Failed to get syntax root for '{filePath}'.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                };
             }
 
             var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
             if (method == null || method.Body == null)
             {
-                return $"// Error: Method '{methodName}' not found or has no body.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: Method '{methodName}' not found or has no body."
+                };
             }
 
             var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
             if (typeNode == null)
             {
-                return $"// Error: Containing type not found for method '{methodName}'.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: Containing type not found for method '{methodName}'."
+                };
             }
 
             // Check if a field with lockFieldName already exists
@@ -60,7 +80,12 @@ public class ThreadSafetyEngine
                 }
                 else
                 {
-                    return $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName.";
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.TargetNotFound,
+                        FilePath = filePath,
+                        Message = $"// Error: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName."
+                    };
                 }
             }
             else
@@ -89,11 +114,21 @@ public class ThreadSafetyEngine
             }
 
             var newRoot = root.ReplaceNode(typeNode, newTypeNode);
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = newRoot.NormalizeWhitespace().ToFullString()
+            };
         }
         catch (Exception ex)
         {
-            return $"// Error: {ex.Message}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Error,
+                FilePath = filePath,
+                Message = $"// Error: {ex.Message}"
+            };
         }
     }
 
@@ -101,7 +136,7 @@ public class ThreadSafetyEngine
     /// Converts lock statements inside a method and ALL other methods to async-safe SemaphoreSlim pattern.
     /// Adds a SemaphoreSlim field and replaces all lock statements with await _semaphore.WaitAsync() + try/finally.
     /// </summary>
-    public async Task<string> ConvertLockToSemaphoreSlimAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertLockToSemaphoreSlimAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -135,7 +170,12 @@ public class ThreadSafetyEngine
             var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
             if (lockStatements.Count == 0)
             {
-                return root.ToFullString();
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = root.ToFullString()
+                };
             }
 
             // Get the lock object identifier (e.g., "_lock")
@@ -148,7 +188,12 @@ public class ThreadSafetyEngine
 
             if (allLockStatementsInType.Count == 0)
             {
-                return root.ToFullString();
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = root.ToFullString()
+                };
             }
 
             const string semaphoreName = "_semaphore";
@@ -245,11 +290,21 @@ public class ThreadSafetyEngine
             }
 
             var newRoot = root.ReplaceNode(typeNode, newTypeNode);
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = newRoot.NormalizeWhitespace().ToFullString()
+            };
         }
         catch (Exception ex)
         {
-            return $"// Error converting lock to SemaphoreSlim: {ex.Message}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Error,
+                FilePath = filePath,
+                Message = $"// Error converting lock to SemaphoreSlim: {ex.Message}"
+            };
         }
     }
 

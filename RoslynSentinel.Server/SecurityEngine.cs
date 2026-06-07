@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
-public record SecurityIssueReport(string FilePath, int Line, int Column, string IssueType, string Description);
+public record SecurityIssueReport(FilePath filePath, int Line, int Column, string IssueType, string Description);
 
 public class SecurityEngine
 {
@@ -24,7 +24,7 @@ public class SecurityEngine
         "accesskey", "credential", "passphrase", "apisecret"
     ];
 
-    public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
@@ -393,7 +393,7 @@ public class SecurityEngine
     /// the pattern string literal contains known dangerous constructs.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindReDoSPatternsAsync(
-        string filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
@@ -500,7 +500,7 @@ public class SecurityEngine
     /// Regex injection and ReDoS attacks.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSourceAsync(
-        string filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var issues = new List<SecurityIssueReport>();
@@ -640,7 +640,7 @@ public class SecurityEngine
     /// from user input, a ReDoS amplification vector.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindRegexNewInLoopAsync(
-        string filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var issues = new List<SecurityIssueReport>();
@@ -701,7 +701,7 @@ public class SecurityEngine
     ///   4. JsonSerializer.Deserialize without null check on result — can silently return null.
     /// </summary>
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
-        string filePath, CancellationToken cancellationToken = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();

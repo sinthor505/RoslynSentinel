@@ -16,7 +16,7 @@ public class ModernLoggingEngine
     /// <summary>
     /// Converts a standard logger call (e.g. _logger.LogInformation("Msg {Param}", p)) into a source-generated [LoggerMessage] method.
     /// </summary>
-    public async Task<string> ConvertToSourceGeneratedLoggingAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -41,7 +41,12 @@ public class ModernLoggingEngine
 
         if (invocations.Count == 0)
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// No logging invocations found."
+            };
         }
 
         int eventId = 1;
@@ -126,6 +131,11 @@ public class ModernLoggingEngine
 
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 }

@@ -7,7 +7,7 @@ namespace RoslynSentinel.Server;
 // SearchResult now includes Line and ContextSnippet so callers can feed results
 // directly into filePath-gated tools without a separate text-search step.
 public record SearchResult(
-    string FilePath,
+    FilePath FilePath,
     string MemberName,
     string Detail,
     int? Line = null,

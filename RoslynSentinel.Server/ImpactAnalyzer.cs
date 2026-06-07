@@ -14,7 +14,7 @@ public record ImpactReport(
 );
 
 public record ReferenceInfo(
-    string FilePath,
+    FilePath filePath,
     int Line,
     int Column,
     string Preview
@@ -31,7 +31,7 @@ public class ImpactAnalyzer
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<ImpactReport> AnalyzeImpactAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<ImpactReport> AnalyzeImpactAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -122,7 +122,7 @@ public class ImpactAnalyzer
         }
     }
 
-    public async Task<ImpactReport> FindDerivedTypesAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
+    public async Task<ImpactReport> FindDerivedTypesAsync(FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
     {
         return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) =>
         {
@@ -135,7 +135,7 @@ public class ImpactAnalyzer
         }, cancellationToken);
     }
 
-    public async Task<ImpactReport> FindImplementationsAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
+    public async Task<ImpactReport> FindImplementationsAsync(FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
     {
         return await FindSymbolRelationsAsync(filePath, line, column, async (symbol, sol, ct) =>
         {
@@ -144,7 +144,7 @@ public class ImpactAnalyzer
         }, cancellationToken);
     }
 
-    public async Task<List<string>> GetDataFlowAsync(string filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
+    public async Task<List<string>> GetDataFlowAsync(FilePath filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -196,7 +196,7 @@ public class ImpactAnalyzer
         return report;
     }
 
-    private async Task<ImpactReport> FindSymbolRelationsAsync(string filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken)
+    private async Task<ImpactReport> FindSymbolRelationsAsync(FilePath filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath)

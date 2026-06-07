@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynSentinel.Server;
 
 public record DuplicateBlockLocation(
-    string FilePath,
+    FilePath filePath,
     string MethodName,
     string ContainingType,
     int StartLine,
@@ -34,7 +34,7 @@ public class CloneDetectionEngine
     // ── Within a single class ─────────────────────────────────────────────────
 
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClassAsync(
-        string filePath, string className, int minStatements = 4, CancellationToken ct = default)
+        FilePath filePath, string className, int minStatements = 4, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
@@ -189,7 +189,7 @@ public class CloneDetectionEngine
                     continue;
                 }
 
-                var filePath = document.FilePath ?? document.Name;
+                var FilePath = document.FilePath ?? document.Name;
 
                 foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
@@ -199,7 +199,7 @@ public class CloneDetectionEngine
                     }
 
                     var methods = classDecl.Members.OfType<MethodDeclarationSyntax>().ToList();
-                    var windows = CollectWindows(methods, filePath, classDecl.Identifier.Text, minStatements);
+                    var windows = CollectWindows(methods, FilePath, classDecl.Identifier.Text, minStatements);
                     allWindows.AddRange(windows);
                 }
             }
@@ -220,7 +220,7 @@ public class CloneDetectionEngine
     private record StatementWindow(
         string Hash,
         StatementSyntax[] Statements,
-        string FilePath,
+        FilePath FilePath,
         string MethodName,
         string ContainingType,
         SemanticModel? Model
@@ -228,7 +228,7 @@ public class CloneDetectionEngine
 
     private List<(string Hash, StatementWindow Window)> CollectWindows(
         List<MethodDeclarationSyntax> methods,
-        string filePath,
+        FilePath FilePath,
         string typeName,
         int minStatements)
     {
@@ -264,7 +264,7 @@ public class CloneDetectionEngine
 
                     var window = stmts[start..(end + 1)];
                     var hash = ComputeStructuralHash(window);
-                    result.Add((hash, new StatementWindow(hash, window, filePath, method.Identifier.Text, typeName, null)));
+                    result.Add((hash, new StatementWindow(hash, window, FilePath, method.Identifier.Text, typeName, null)));
                 }
             }
         }
@@ -293,7 +293,10 @@ public class CloneDetectionEngine
         int minStatements)
     {
         var windowsWithModel = windows.Select(w =>
-            (w.Hash, Window: w.Window with { Model = semanticModel })).ToList();
+            (w.Hash, Window: w.Window with
+            {
+                Model = semanticModel
+            })).ToList();
         return GroupDuplicatesFromWindows(windowsWithModel, minStatements);
     }
 

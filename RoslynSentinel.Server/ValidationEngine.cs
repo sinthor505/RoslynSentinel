@@ -17,7 +17,7 @@ public class ValidationEngine
         _diffEngine = diffEngine;
     }
 
-    public async Task<DiagnosticReport> ValidateDiffAsync(string filePath, string unifiedDiff, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticReport> ValidateDiffAsync(FilePath filePath, string unifiedDiff, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
@@ -36,7 +36,7 @@ public class ValidationEngine
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
-            return await ValidateChangesAsync(new Dictionary<string, string> { { filePath, newText.ToString() } }, cancellationToken);
+            return await ValidateChangesAsync(new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -58,7 +58,7 @@ public class ValidationEngine
     /// Files not found in the solution (RS001) are treated as pass-through: the tool
     /// cannot validate new files in-memory, so it allows them rather than blocking.
     /// </summary>
-    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<string, string> fileChanges, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var candidateSolution = solution;
@@ -100,7 +100,7 @@ public class ValidationEngine
 
         foreach (var projectId in affectedProjectIds)
         {
-            var baselineProject  = solution.GetProject(projectId)!;
+            var baselineProject = solution.GetProject(projectId)!;
             var candidateProject = candidateSolution.GetProject(projectId)!;
 
             if (_logger.IsEnabled(LogLevel.Information))

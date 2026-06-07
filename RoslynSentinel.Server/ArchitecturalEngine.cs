@@ -22,7 +22,7 @@ public class ArchitecturalEngine
     /// <summary>
     /// Converts a class into a .NET BackgroundService.
     /// </summary>
-    public async Task<string> ConvertToBackgroundServiceAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -77,7 +77,12 @@ public class ArchitecturalEngine
         newClass = newClass.AddMembers(executeAsync);
 
         var newRoot = root.ReplaceNode(classNode, newClass);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 
     public async Task<List<CircularDependencyChain>> FindCircularDependenciesAsync(
@@ -410,7 +415,7 @@ public class ArchitecturalEngine
         string Description,
         string SourceLayer,
         string ForbiddenDependency,
-        string FilePath,
+        FilePath FilePath,
         int Line
     );
 

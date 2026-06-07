@@ -34,7 +34,7 @@ public record TestCoverageMap(
     bool HasAnyCoverage);
 
 public record EnumSwitchGap(
-    string FilePath,
+    FilePath filePath,
     int Line,
     string EnumTypeName,
     List<string> MissingMembers,
@@ -52,7 +52,7 @@ public class ControlFlowEngine
     /// <summary>
     /// Analyzes a method and returns a list of all logic paths that need test coverage.
     /// </summary>
-    public async Task<PathCoverageReport> AnalyzePathCoverageAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<PathCoverageReport> AnalyzePathCoverageAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -114,7 +114,7 @@ public class ControlFlowEngine
     /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
     /// </summary>
     public async Task<ControlFlowAnalysisResult> AnalyzeMethodControlFlowAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         int? disambiguateLine = null,
         CancellationToken ct = default)
@@ -210,7 +210,7 @@ public class ControlFlowEngine
     /// If multiple overloads exist, provide disambiguateLine (any line inside the desired overload).
     /// </summary>
     public async Task<DataFlowAnalysisResult> AnalyzeMethodDataFlowAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         int? disambiguateLine = null,
         CancellationToken ct = default)
@@ -417,7 +417,7 @@ public class ControlFlowEngine
     /// the production method name) and by direct call-site presence in the test body.
     /// </summary>
     public async Task<TestCoverageMap> GetTestCoverageMapAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         CancellationToken ct = default)
     {

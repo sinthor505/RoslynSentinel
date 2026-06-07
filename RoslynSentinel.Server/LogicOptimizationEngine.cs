@@ -16,36 +16,56 @@ public class LogicOptimizationEngine
     /// <summary>
     /// Simplifies redundant logic like 'if (x == true)' to 'if (x)'.
     /// </summary>
-    public async Task<string> SimplifyBooleanExpressionsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SimplifyBooleanExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         var rewriter = new BooleanSimplifierRewriter();
         var newRoot = rewriter.Visit(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
     /// Adds ArgumentNullException.ThrowIfNull checks to all reference type parameters in a method.
     /// </summary>
-    public async Task<string> AddGuardClausesAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddGuardClausesAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -54,7 +74,12 @@ public class LogicOptimizationEngine
 
         if (method == null || method.Body == null || semanticModel == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Method or body not found."
+            };
         }
 
         var guards = new List<StatementSyntax>();
@@ -81,10 +106,20 @@ public class LogicOptimizationEngine
         {
             var newBody = method.Body.WithStatements(method.Body.Statements.InsertRange(0, guards));
             var newRoot = root!.ReplaceNode(method, method.WithBody(newBody));
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = newRoot.NormalizeWhitespace().ToFullString()
+            };
         }
 
-        return root!.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.NoChange,
+            FilePath = filePath,
+            Message = "// No reference type parameters found."
+        };
     }
 
     /// <summary>
@@ -92,24 +127,39 @@ public class LogicOptimizationEngine
     /// Converts patterns like 'if (x == null) x = y;' to 'x ??= y;'
     /// and 'x == null ? y : x' to 'x ?? y'.
     /// </summary>
-    public async Task<string> ConvertToNullCoalescingAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToNullCoalescingAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         var rewriter = new NullCoalescingRewriter();
         var newRoot = rewriter.Visit(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
@@ -125,24 +175,39 @@ public class LogicOptimizationEngine
     /// - No float/double comparisons (precision issues)
     /// - No string comparisons without case sensitivity handling
     /// </summary>
-    public async Task<string> ConvertToSwitchAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToSwitchAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         var rewriter = new SwitchConversionRewriter();
         var newRoot = rewriter.Visit(root);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private class BooleanSimplifierRewriter : CSharpSyntaxRewriter

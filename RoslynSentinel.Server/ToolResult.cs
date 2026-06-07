@@ -104,7 +104,7 @@ public record LargeResultInfo
     {
         get; init;
     }
-    public string FilePath
+    public FilePath FilePath
     {
         get; init;
     }
@@ -128,7 +128,7 @@ public record LargeResultInfo
     public LargeResultInfo(
     string ResultType,
     bool WrittenToFile,
-    string FilePath,
+    FilePath FilePath,
     string ScanId,
     long SizeBytes,
     int TotalRecords,
@@ -137,7 +137,7 @@ public record LargeResultInfo
     {
         this.ResultType = ResultType ?? throw new ArgumentNullException(nameof(ResultType));
         this.WrittenToFile = WrittenToFile;
-        this.FilePath = FilePath ?? throw new ArgumentNullException(nameof(FilePath));
+        this.FilePath = FilePath.Path ?? throw new ArgumentNullException(nameof(FilePath));
         this.ScanId = ScanId ?? throw new ArgumentNullException(nameof(ScanId));
         this.SizeBytes = SizeBytes == 0 ? throw new ArgumentOutOfRangeException(nameof(SizeBytes)) : SizeBytes;
         this.TotalRecords = TotalRecords < 0 ? throw new ArgumentOutOfRangeException(nameof(TotalRecords)) : TotalRecords;

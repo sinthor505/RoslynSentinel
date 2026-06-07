@@ -111,7 +111,7 @@ public record SymbolLocation(
 );
 
 public record VariableAccess(
-    string FilePath,
+    FilePath FilePath,
     int Line,
     int Column,
     string AccessKind,
@@ -122,15 +122,30 @@ public record VariableAccess(
 
 public record VariableLifetimeReport
 {
-    public string? Error { get; init; }
+    public string? Error
+    {
+        get; init;
+    }
     public string VariableName { get; init; } = "";
     public string TypeName { get; init; } = "";
     public string DeclarationFile { get; init; } = "";
-    public int DeclarationLine { get; init; }
+    public int DeclarationLine
+    {
+        get; init;
+    }
     public string ScopeDescription { get; init; } = "";
-    public bool IsDefinitelyAssigned { get; init; }
-    public bool IsAlwaysAssigned { get; init; }
-    public bool IsCapturedInClosure { get; init; }
+    public bool IsDefinitelyAssigned
+    {
+        get; init;
+    }
+    public bool IsAlwaysAssigned
+    {
+        get; init;
+    }
+    public bool IsCapturedInClosure
+    {
+        get; init;
+    }
     public List<VariableAccess> Accesses { get; init; } = new();
 }
 
@@ -143,16 +158,31 @@ public record TypeHierarchyEntry(
 
 public record TypeHierarchyReport
 {
-    public string? Error { get; init; }
+    public string? Error
+    {
+        get; init;
+    }
     public string TypeName { get; init; } = "";
-    public string? BaseClass { get; init; }
+    public string? BaseClass
+    {
+        get; init;
+    }
     public List<string> BaseClassChain { get; init; } = new();
     public List<string> ImplementedInterfaces { get; init; } = new();
     public List<TypeHierarchyEntry> DerivedTypes { get; init; } = new();
     public List<TypeHierarchyEntry> ImplementingTypes { get; init; } = new();
-    public bool IsInterface { get; init; }
-    public bool IsAbstract { get; init; }
-    public bool IsSealed { get; init; }
+    public bool IsInterface
+    {
+        get; init;
+    }
+    public bool IsAbstract
+    {
+        get; init;
+    }
+    public bool IsSealed
+    {
+        get; init;
+    }
 }
 
 public record CallGraphNode(
@@ -350,7 +380,7 @@ public class SymbolNavigationEngine
         };
     }
 
-    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -944,7 +974,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidatesAsync(
-        string filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1007,7 +1037,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<CallGraphNode?> GetCallGraphAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         int maxDepth = 3,
         CancellationToken ct = default)
@@ -1146,7 +1176,7 @@ public class SymbolNavigationEngine
     }
 
     public async Task<ReverseCallGraphNode?> GetReverseCallGraphAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         int maxDepth = 3,
         CancellationToken ct = default)
@@ -1550,7 +1580,7 @@ public class SymbolNavigationEngine
     /// across all code paths (loops, conditionals, try/catch) in the enclosing method.
     /// </summary>
     public async Task<VariableLifetimeReport> TraceVariableLifetimeAsync(
-        string filePath,
+        FilePath filePath,
         string variableName,
         int lineNumber,
         CancellationToken ct = default)

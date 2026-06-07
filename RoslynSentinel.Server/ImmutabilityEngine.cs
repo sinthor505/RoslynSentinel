@@ -16,20 +16,30 @@ public class ImmutabilityEngine
     /// <summary>
     /// Converts a class to be immutable by making fields readonly and properties init-only.
     /// </summary>
-    public async Task<string> MakeClassImmutableAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MakeClassImmutableAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Class not found."
+            };
         }
 
         var newMembers = classNode.Members.Select(member =>
@@ -65,6 +75,11 @@ public class ImmutabilityEngine
 
         var newClass = classNode.WithMembers(SyntaxFactory.List(newMembers));
         var newRoot = root!.ReplaceNode(classNode, newClass);
-        return newRoot.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 }

@@ -13,19 +13,29 @@ public class ApiIntegrationEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<string> AddValidationToPocoAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddValidationToPocoAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new FileNotFoundException($"File not found: {filePath}");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            throw new InvalidOperationException("Could not parse syntax root.");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         // First add the using directive if not present
@@ -38,7 +48,12 @@ public class ApiIntegrationEngine
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            throw new InvalidOperationException("Class not found.");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)
@@ -93,6 +108,11 @@ public class ApiIntegrationEngine
         });
 
         var newRoot = root.ReplaceNode(classNode, newClassNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 }

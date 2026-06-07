@@ -17,7 +17,7 @@ public class AsyncOptimizationEngine
     /// Analyzes methods returning Task/Task<T> and converts them to ValueTask/ValueTask<T> if they frequently complete synchronously.
     /// Also updates interface signatures if the method implements an interface.
     /// </summary>
-    public async Task<string> OptimizeToValueTaskAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -37,13 +37,23 @@ public class AsyncOptimizationEngine
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
         if (awaitCount > 1)
         {
-            return $"// WARNING: Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.\n{root!.ToFullString()}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotOptimize,
+                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.\n{root!.ToFullString()}",
+                FilePath = filePath
+            };
         }
 
         var hasTryCatch = methodNode.DescendantNodes().OfType<TryStatementSyntax>().Any();
         if (hasTryCatch)
         {
-            return $"// WARNING: Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.\n{root!.ToFullString()}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotOptimize,
+                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.\n{root!.ToFullString()}",
+                FilePath = filePath
+            };
         }
 
         var returnTypeStr = methodNode.ReturnType.ToString();
@@ -60,7 +70,12 @@ public class AsyncOptimizationEngine
         }
         else
         {
-            return root!.ToFullString(); // Not a Task returning method
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotOptimize,
+                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method does not return Task.\n{root!.ToFullString()}",
+                FilePath = filePath
+            };
         }
 
         var newMethodNode = methodNode.WithReturnType(newReturnType);
@@ -78,29 +93,29 @@ public class AsyncOptimizationEngine
         if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
         {
             var interfaceNames = string.Join(", ", methodSymbol.ContainingType.Interfaces.Select(i => i.Name));
-            return $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}";
+            return new DocumentEditResult { Outcome = EditOutcome.CannotOptimize, UpdatedText = null, Message = $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}", FilePath = filePath };
         }
 
-        return newRoot.ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
     /// Finds sequences of independent awaits and converts them to Task.WhenAll.
     /// </summary>
-    public async Task<string> OptimizeIndependentAwaitsAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeIndependentAwaitsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "// Error: File not found in the loaded solution.";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            return $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).";
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, Message = $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
         }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
@@ -230,7 +245,7 @@ public class AsyncOptimizationEngine
 
         var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(newStatements));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -275,7 +290,7 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Creates an async version of a synchronous method.
     /// </summary>
-    public async Task<string> GenerateAsyncOverloadAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -333,7 +348,7 @@ public class AsyncOptimizationEngine
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
@@ -364,8 +379,8 @@ public class AsyncOptimizationEngine
     /// method name ends with "Async", method is abstract, method is an event handler,
     /// method has ref/out parameters, or the async overload already exists.
     /// </exception>
-    public async Task<string> ConvertToAsyncBridgeAsync(
-        string filePath,
+    public async Task<DocumentEditResult> ConvertToAsyncBridgeAsync(
+        FilePath filePath,
         string methodName,
         CancellationToken cancellationToken = default)
     {
@@ -567,13 +582,13 @@ public class AsyncOptimizationEngine
         var classWithBoth = classWithBridge.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
 
         var newRoot = root.ReplaceNode(classNode, classWithBoth);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
     /// Adds .ConfigureAwait(false) (or true) to all await expressions that don't already have it.
     /// </summary>
-    public async Task<string> AddConfigureAwaitFalseAsync(string filePath, bool libraryMode = true, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(FilePath filePath, bool libraryMode = true, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -596,7 +611,13 @@ public class AsyncOptimizationEngine
 
         if (awaitExprs.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = root.ToFullString(),
+                FilePath = filePath,
+                Message = "// No await expressions found that require ConfigureAwait."
+            };
         }
 
         var newRoot = root.ReplaceNodes(awaitExprs, (orig, _) =>
@@ -613,13 +634,13 @@ public class AsyncOptimizationEngine
             return orig.WithExpression(configureAwait);
         });
 
-        return newRoot.ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
     /// Removes all .ConfigureAwait(x) calls, leaving the bare awaited expression.
     /// </summary>
-    public async Task<string> RemoveConfigureAwaitFalseAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveConfigureAwaitFalseAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -641,7 +662,13 @@ public class AsyncOptimizationEngine
 
         if (configureAwaitInvocations.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = root.ToFullString(),
+                FilePath = filePath,
+                Message = "// No ConfigureAwait invocations found."
+            };
         }
 
         var newRoot = root.ReplaceNodes(configureAwaitInvocations, (orig, _) =>
@@ -650,14 +677,14 @@ public class AsyncOptimizationEngine
             return baseExpr.WithTriviaFrom(orig);
         });
 
-        return newRoot.ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     /// <summary>
     /// Converts a method returning Task&lt;List&lt;T&gt;&gt; or List&lt;T&gt; to IAsyncEnumerable&lt;T&gt;.
     /// Transforms results.Add(x) patterns to yield return x. Falls back to scaffold for complex bodies.
     /// </summary>
-    public async Task<string> ConvertToAsyncEnumerableAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToAsyncEnumerableAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -665,27 +692,48 @@ public class AsyncOptimizationEngine
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
-                return $"// Error: File '{filePath}' not found.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.DocumentNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: File '{filePath}' not found."
+                };
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
-                return $"// Error: Failed to get syntax root for '{filePath}'.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.SourceInvalid,
+                    FilePath = filePath,
+                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                };
             }
 
             var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
             if (methodNode == null)
             {
-                return $"// Error: Method '{methodName}' not found.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: Method '{methodName}' not found."
+                };
             }
 
             var returnTypeStr = methodNode.ReturnType.ToString().Trim();
 
             if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
             {
-                return root.ToFullString();
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.NoChange,
+                    UpdatedText = root.ToFullString(),
+                    FilePath = filePath,
+                    Message = "// Method already returns IAsyncEnumerable."
+                };
             }
 
             string? innerType = null;
@@ -704,7 +752,12 @@ public class AsyncOptimizationEngine
 
             if (innerType == null)
             {
-                return $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = $"// Error: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
+                };
             }
 
             var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
@@ -798,41 +851,71 @@ public class AsyncOptimizationEngine
             }
 
             var newRoot = root.ReplaceNode(methodNode, newMethod);
-            return newRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+                FilePath = filePath
+            };
         }
         catch (Exception ex)
         {
-            return $"// Error: {ex.Message}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Error: {ex.Message}"
+            };
         }
     }
 
-    public async Task<string> AddCancellationTokenToMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "// Error: File not found in the loaded solution.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Error: File not found in the loaded solution."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "// Error: Failed to get syntax root.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Error: Failed to get syntax root."
+            };
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null)
         {
-            return $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source."
+            };
         }
 
         // Check if method already has a CancellationToken parameter
         if (methodNode.ParameterList.Parameters.Any(p =>
             p.Type?.ToString().Contains("CancellationToken") == true))
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// Info: Method already has a CancellationToken parameter."
+            };
         }
 
         // Build CancellationToken parameter (trailing space is intentional: it becomes
@@ -956,7 +1039,12 @@ public class AsyncOptimizationEngine
         }
 
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return newRoot.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 
     // ── ApplyCancellationTokenToFile ──────────────────────────────────────────
@@ -975,7 +1063,7 @@ public class AsyncOptimizationEngine
     /// </returns>
     public async Task<(string UpdatedSource, List<string> Modified, List<string> Skipped)>
         ApplyCancellationTokenToFileAsync(
-            string filePath,
+            FilePath filePath,
             string[]? methodNames = null,
             CancellationToken cancellationToken = default)
     {
@@ -1219,7 +1307,7 @@ public class AsyncOptimizationEngine
     /// <summary>Engine-internal result from <see cref="FlagMigrationCandidateAsync"/>.</summary>
     public record FlagMigrationCandidateEngineResult(
         /// <summary>File path → updated source for every file that must be written to disk.</summary>
-        Dictionary<string, string> Changes,
+        Dictionary<FilePath, string> Changes,
         /// <summary><c>true</c> if the method already carried a <c>[MigrationCandidate]</c> for this pattern.</summary>
         bool WasAlreadyFlagged,
         /// <summary>The pattern string from the previous attribute, or <c>null</c> if the method was not previously flagged.</summary>
@@ -1352,7 +1440,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// Thrown when the file or method is not found in the loaded solution.
     /// </exception>
     public async Task<FlagMigrationCandidateEngineResult> FlagMigrationCandidateAsync(
-        string filePath,
+        FilePath filePath,
         string methodName,
         string pattern,
         int score = 0,
@@ -1505,7 +1593,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
         var newSource = newRoot.NormalizeWhitespace().ToFullString();
 
-        var result = new Dictionary<string, string> { { filePath, newSource } };
+        var result = new Dictionary<FilePath, string> { { filePath, newSource } };
 
         // ── Inject MigrationCandidateAttribute.cs if not yet in the solution ─
         var alreadyDefined = solution.Projects
@@ -1558,7 +1646,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </returns>
     public async Task<(List<FlagMigrationCandidateEngineResult> Results, List<(int Index, string Error)> Errors)>
         FlagMultipleMigrationCandidatesAsync(
-            IReadOnlyList<(string FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
+            IReadOnlyList<(FilePath FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
             CancellationToken cancellationToken = default)
     {
         // Group by file so we rewrite each file once.
@@ -1620,7 +1708,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     errors.Add((idx, $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive."));
                     resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                        new Dictionary<string, string>(), false, null, false, -1);
+                        new Dictionary<FilePath, string>(), false, null, false, -1);
                     continue;
                 }
 
@@ -1713,7 +1801,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 root = root.ReplaceNode(methodNode, updatedMethod);
 
                 resultSlots[idx] = new FlagMigrationCandidateEngineResult(
-                    Changes: new Dictionary<string, string>(), // populated below after all methods in file
+                    Changes: new Dictionary<FilePath, string>(), // populated below after all methods in file
                     WasAlreadyFlagged: wasAlreadyFlagged,
                     PreviousPattern: previousPattern,
                     AttributeClassInjected: false, // set on first item for this file
@@ -1722,7 +1810,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
             // Write final combined source once for all methods in this file.
             var finalSource = root.NormalizeWhitespace().ToFullString();
-            var fileChanges = new Dictionary<string, string> { { filePath, finalSource } };
+            var fileChanges = new Dictionary<FilePath, string> { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).
             var alreadyDefined = solution.Projects.SelectMany(p => p.Documents)
@@ -1918,7 +2006,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>Internal per-method scoring output used by <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record CandidateScoredItem(
-        string FilePath,
+        FilePath FilePath,
         string MethodName,
         string ClassName,
         int Line,
@@ -1941,7 +2029,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <summary>Engine-internal result from <see cref="FlagCandidatesInProjectAsync"/>.</summary>
     public record FlagCandidatesInProjectEngineResult(
         /// <summary>All file paths → updated source that must be written to disk.</summary>
-        Dictionary<string, string> Changes,
+        Dictionary<FilePath, string> Changes,
         /// <summary>Details for every method that was flagged.</summary>
         IReadOnlyList<CandidateScoredItem> Flagged,
         /// <summary>Details for every method that was scored but fell below <c>minScore</c>.</summary>
@@ -2023,7 +2111,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var flagged = new List<CandidateScoredItem>();
         var skipped = new List<CandidateScoredItem>();
         var alreadyFlagged = new List<CandidateScoredItem>();
-        var fileChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var fileChanges = new Dictionary<FilePath, string>();
         int totalExamined = 0;
         bool attrClassInjected = false;
 
@@ -2418,9 +2506,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// A tuple of the full updated source string and per-call-site forward/skip lists.
     /// The source is identical to the input when no call sites were rewritten.
     /// </returns>
-    public async Task<(string UpdatedSource, PropagateCtResult Result)>
+    public async Task<DocumentEditResult>
         PropagateCancellationTokenInMethodAsync(
-            string filePath,
+            FilePath filePath,
             string methodName,
             CancellationToken cancellationToken = default)
     {
@@ -2433,14 +2521,24 @@ internal sealed class MigrationCandidateAttribute : Attribute
         if (document == null)
         {
             result.Error = $"File '{filePath}' not found in the loaded solution.";
-            return ("", result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = result.Error
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             result.Error = "Failed to get syntax root.";
-            return ("", result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Error,
+                FilePath = filePath,
+                Message = result.Error
+            };
         }
 
         var methodNode = root.DescendantNodes()
@@ -2450,7 +2548,12 @@ internal sealed class MigrationCandidateAttribute : Attribute
         if (methodNode == null)
         {
             result.MethodFound = false;
-            return (root.ToFullString(), result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"Method '{methodName}' not found in file '{filePath}'."
+            };
         }
 
         result.MethodFound = true;
@@ -2466,7 +2569,12 @@ internal sealed class MigrationCandidateAttribute : Attribute
         if (ctParam == null)
         {
             result.Error = "Method does not have a CancellationToken parameter";
-            return (root.ToFullString(), result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Error,
+                FilePath = filePath,
+                Message = result.Error
+            };
         }
 
         var ctParamName = ctParam.Identifier.Text;
@@ -2478,7 +2586,12 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
         if (body == null)
         {
-            return (root.ToFullString(), result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Error,
+                FilePath = filePath,
+                Message = "Method body not found."
+            };
         }
 
         var invocations = body.DescendantNodes()
@@ -2662,12 +2775,22 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (replacements.Count == 0)
         {
-            return (root.ToFullString(), result);
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "No eligible call sites found."
+            };
         }
 
         // Apply all replacements in one pass
         var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
-        return (newRoot.ToFullString(), result);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = "Call sites updated successfully."
+        };
     }
 
     /// <summary>
@@ -2678,7 +2801,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// </summary>
     public async Task<(string UpdatedSource, PropagateCtFileResult Result)>
         PropagateCancellationTokenInFileAsync(
-            string filePath,
+            FilePath filePath,
             string[]? methodNames = null,
             CancellationToken cancellationToken = default)
     {
@@ -2911,7 +3034,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     public Task<(string UpdatedSource, PropagateCtFileResult Result)>
         PropagateCancellationTokenInSourceAsync(
             string source,
-            string filePath,
+            FilePath filePath,
             string methodName,
             CancellationToken cancellationToken = default)
     {

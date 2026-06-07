@@ -19,19 +19,29 @@ public class ModernizationUpgradeEngine
     /// and:      str.Substring(start)         → str.AsSpan(start).ToString()
     /// Scoped to the named method when methodName is provided; otherwise transforms entire file.
     /// </summary>
-    public async Task<string> UseSpanForParsingAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseSpanForParsingAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         SyntaxNode scope = root;
@@ -42,7 +52,12 @@ public class ModernizationUpgradeEngine
                 .FirstOrDefault(m => m.Identifier.Text == methodName);
             if (method == null)
             {
-                return root.ToFullString();
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Method '{methodName}' not found."
+                };
             }
 
             scope = method;
@@ -54,7 +69,12 @@ public class ModernizationUpgradeEngine
             ? newScope
             : root.ReplaceNode(scope, newScope);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private class SpanParsingRewriter : CSharpSyntaxRewriter
@@ -91,25 +111,40 @@ public class ModernizationUpgradeEngine
     /// <summary>
     /// Upgrades code to use modern pattern matching (is Type t) instead of casts.
     /// </summary>
-    public async Task<string> UpgradePatternMatchingAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         var rewriter = new PatternMatchingRewriter();
         var newRoot = rewriter.Visit(root);
-        
-        return newRoot.NormalizeWhitespace().ToFullString();
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
@@ -119,25 +154,40 @@ public class ModernizationUpgradeEngine
     /// After:   var x = GetValue() ?? throw new ArgumentNullException(nameof(x));
     /// Only transforms cases where the assignment and null check are consecutive statements in the same block.
     /// </summary>
-    public async Task<string> UseThrowExpressionsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseThrowExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
         }
 
         var rewriter = new ThrowExpressionRewriter();
         var newRoot = rewriter.Visit(root);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private class ThrowExpressionRewriter : CSharpSyntaxRewriter
@@ -189,7 +239,7 @@ public class ModernizationUpgradeEngine
                 }
 
                 bool rightIsNull = condBin.Right.IsKind(SyntaxKind.NullLiteralExpression);
-                bool leftIsNull  = condBin.Left.IsKind(SyntaxKind.NullLiteralExpression);
+                bool leftIsNull = condBin.Left.IsKind(SyntaxKind.NullLiteralExpression);
                 if (!rightIsNull && !leftIsNull)
                 {
                     continue;
@@ -268,15 +318,15 @@ public class ModernizationUpgradeEngine
             {
                 var block = node.Statement as BlockSyntax;
                 var firstStatement = block?.Statements.FirstOrDefault() as LocalDeclarationStatementSyntax;
-                
+
                 if (firstStatement?.Declaration.Variables.Count == 1)
                 {
                     var variable = firstStatement.Declaration.Variables[0];
                     if (variable.Initializer?.Value is CastExpressionSyntax cast && cast.Type.ToString() == bin.Right.ToString())
                     {
-                        var newCondition = SyntaxFactory.IsPatternExpression(bin.Left, 
+                        var newCondition = SyntaxFactory.IsPatternExpression(bin.Left,
                             SyntaxFactory.DeclarationPattern(cast.Type, SyntaxFactory.SingleVariableDesignation(variable.Identifier)));
-                        
+
                         var newBlock = block!.WithStatements(block.Statements.RemoveAt(0));
                         return node.WithCondition(newCondition).WithStatement(newBlock);
                     }

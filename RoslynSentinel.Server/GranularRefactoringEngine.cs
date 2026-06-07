@@ -17,19 +17,29 @@ public class GranularRefactoringEngine
     /// Dispatches a named micro-refactoring against a specific line in a file.
     /// </summary>
     /// <param name="refactoringId">One of: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant</param>
-    public async Task<string> RunMicroRefactoringAsync(string filePath, string refactoringId, int line, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RunMicroRefactoringAsync(FilePath filePath, string refactoringId, int line, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         SyntaxNode? newRoot = refactoringId.ToLowerInvariant() switch
@@ -44,7 +54,12 @@ public class GranularRefactoringEngine
                 "Known IDs: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant.")
         };
 
-        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private static SyntaxNode ApplyTypeToVar(SyntaxNode root, int line)
@@ -180,13 +195,18 @@ public class GranularRefactoringEngine
         return newRoot.ReplaceNode(newType, updatedType);
     }
 
-    public async Task<string> InlineFieldAsync(string filePath, string fieldName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InlineFieldAsync(FilePath filePath, string fieldName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -196,12 +216,22 @@ public class GranularRefactoringEngine
         // If field not found or has no initializer, return error
         if (field == null)
         {
-            return $"// ERROR: Field '{fieldName}' not found.\n" + (root?.ToFullString() ?? "");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Field '{fieldName}' not found."
+            };
         }
 
         if (field.Declaration.Variables[0].Initializer == null)
         {
-            return $"// ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment.\n" + root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment."
+            };
         }
 
         var value = field.Declaration.Variables[0].Initializer!.Value;
@@ -216,16 +246,26 @@ public class GranularRefactoringEngine
         {
             newRoot = newRoot.RemoveNode(newField, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
         }
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> InlineParameterAsync(string filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InlineParameterAsync(FilePath filePath, string methodName, string parameterName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -234,25 +274,45 @@ public class GranularRefactoringEngine
 
         if (method == null || semanticModel == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var parameter = method.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == parameterName);
         if (parameter == null)
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Parameter '{parameterName}' not found in method '{methodName}'."
+            };
         }
 
-        return root!.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = root!.ToFullString()
+        };
     }
 
-    public async Task<string> ConvertMethodToIndexerAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertMethodToIndexerAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -260,18 +320,33 @@ public class GranularRefactoringEngine
 
         if (method == null)
         {
-            return $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.\n" + (root?.ToFullString() ?? "");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}."
+            };
         }
 
         if (method.ParameterList.Parameters.Count != 1)
         {
-            return $"// ERROR: Cannot convert '{methodName}' to an indexer — it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).\n" + root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer — it must have exactly one parameter (has {method.ParameterList.Parameters.Count})."
+            };
         }
 
         // C# does not support static indexers
         if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
         {
-            return $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers.\n" + root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Cannot convert static method '{methodName}' to an indexer — C# does not support static indexers."
+            };
         }
 
         // Build getter body from block body or expression body
@@ -288,7 +363,12 @@ public class GranularRefactoringEngine
         else
         {
             // Abstract/extern methods have no body — cannot create indexer
-            return $"// ERROR: Cannot convert '{methodName}' to an indexer — method has no body.\n" + root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer — method has no body."
+            };
         }
 
         // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
@@ -304,22 +384,37 @@ public class GranularRefactoringEngine
                 SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithBody(getterBody))));
 
         var newRoot = root!.ReplaceNode(method, indexer);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> IntroduceFieldAsync(string filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceFieldAsync(FilePath filePath, string contextSnippet, string newFieldName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -328,13 +423,23 @@ public class GranularRefactoringEngine
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Expression not found."
+            };
         }
 
         var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (containingClass == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Containing class not found."
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -375,7 +480,12 @@ public class GranularRefactoringEngine
         var newClass = currentClass.WithMembers(currentClass.Members.Insert(0, fieldDeclaration));
         newRoot = newRoot.ReplaceNode(currentClass, newClass);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private static bool IsExpressionClassScopeSafe(ExpressionSyntax expression, SemanticModel? semanticModel, CancellationToken cancellationToken)
@@ -412,40 +522,65 @@ public class GranularRefactoringEngine
         return true;
     }
 
-    public async Task<string> IntroduceParameterAsync(string filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceParameterAsync(FilePath filePath, string contextSnippet, string newParamName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // NOTE: Single-file only — call sites in other files are not updated.
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = ContextHelper.TryFindSnippetPosition(sourceText, contextSnippet, out var paramSnippetError, lineBefore, lineAfter);
         if (position < 0)
         {
-            return $"// Error: {paramSnippetError}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: {paramSnippetError}"
+            };
         }
 
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Expression not found."
+            };
         }
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Containing method not found."
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -470,35 +605,60 @@ public class GranularRefactoringEngine
         var currentExpression = trackedRoot.GetCurrentNode(expression);
         if (currentExpression == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Expression not found."
+            };
         }
 
         var newRoot = trackedRoot.ReplaceNode(currentExpression, paramRef);
         var currentMethod = newRoot.GetCurrentNode(containingMethod);
         if (currentMethod == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Containing method not found."
+            };
         }
 
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
         newRoot = newRoot.ReplaceNode(currentMethod, updatedMethod);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> IntroduceVariableAsync(string filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> IntroduceVariableAsync(FilePath filePath, string contextSnippet, string newVariableName, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// Source invalid."
+            };
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -516,18 +676,33 @@ public class GranularRefactoringEngine
 
         if (expression == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Expression not found."
+            };
         }
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Containing statement not found."
+            };
         }
 
         if (containingStatement.Parent is not BlockSyntax block)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Containing block not found."
+            };
         }
 
         // If the expression IS the entire initializer of an existing local var declaration, the
@@ -537,7 +712,12 @@ public class GranularRefactoringEngine
             existingDecl.Declaration.Variables[0].Initializer?.Value?.IsEquivalentTo(expression) == true)
         {
             var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
-            return $"// '{existingName}' is already a local variable — nothing to introduce.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// '{existingName}' is already a local variable — nothing to introduce."
+            };
         }
 
         var varDecl = SyntaxFactory.LocalDeclarationStatement(
@@ -565,28 +745,48 @@ public class GranularRefactoringEngine
         var idx = currentBlock.Statements.IndexOf(currentStatement);
         if (idx < 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Statement not found in block."
+            };
         }
 
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
         newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> MoveTypeToOuterScopeAsync(string filePath, string nestedTypeName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePath filePath, string nestedTypeName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return $"// Error: File '{filePath}' not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: File '{filePath}' not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return $"// Error: Failed to get syntax root.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Failed to get syntax root."
+            };
         }
 
         // Find the type
@@ -595,21 +795,36 @@ public class GranularRefactoringEngine
 
         if (nestedType == null)
         {
-            return $"// Error: Type '{nestedTypeName}' not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Type '{nestedTypeName}' not found."
+            };
         }
 
         // Check if type is actually nested (parent is a type, not namespace/file scope)
         var parentType = nestedType.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (parentType == null)
         {
-            return $"// Error: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope."
+            };
         }
 
         // Type is nested, move it out
         var newRoot = root.RemoveNode(nestedType, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         if (newRoot == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Failed to remove nested type '{nestedTypeName}'."
+            };
         }
 
         // Find the namespace or file scope and add the type there
@@ -636,16 +851,21 @@ public class GranularRefactoringEngine
             }
         }
 
-        return newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+        };
     }
 
-    public async Task<Dictionary<string, string>> ExtractMembersToPartialAsync(string filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> ExtractMembersToPartialAsync(FilePath filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -699,13 +919,13 @@ public class GranularRefactoringEngine
                 formattedCode = formattedCode.Replace(";namespace", ";\n\nnamespace");
             }
 
-            return new Dictionary<string, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), formattedCode } };
+            return new Dictionary<FilePath, string> { { Path.Combine(Path.GetDirectoryName(filePath)!, $"{className}.Partial.cs"), formattedCode } };
         }
-        return new Dictionary<string, string>();
+        return new Dictionary<FilePath, string>();
     }
 
-    public async Task<string> IntroduceParameterObjectAsync(
-        string filePath,
+    public async Task<DocumentEditResult> IntroduceParameterObjectAsync(
+        FilePath filePath,
         string methodName,
         string? newTypeName = null,
         string[]? parameterNames = null,
@@ -715,20 +935,35 @@ public class GranularRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "// File not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// File not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "// Could not parse file.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null)
         {
-            return "// Method not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Method not found."
+            };
         }
 
         // Check if method implements an interface
@@ -759,7 +994,12 @@ public class GranularRefactoringEngine
 
         if (groupedParams.Count == 0)
         {
-            return "// No parameters to group.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// No parameters to group."
+            };
         }
 
         // Generate record name
@@ -838,7 +1078,13 @@ public class GranularRefactoringEngine
                 newRoot = root.ReplaceNode(methodNode, newMethodNode);
                 // Append warning comment
                 var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";
-                return warning + newRoot.NormalizeWhitespace().ToFullString();
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.Modified,
+                    FilePath = filePath,
+                    Message = warning,
+                    UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+                };
             }
             else
             {
@@ -878,7 +1124,12 @@ public class GranularRefactoringEngine
             }
         }
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private class ParamToPropertyRewriter : CSharpSyntaxRewriter

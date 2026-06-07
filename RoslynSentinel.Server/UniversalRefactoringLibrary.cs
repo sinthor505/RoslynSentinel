@@ -17,7 +17,7 @@ public class UniversalRefactoringLibrary
     /// Executes a specific structural refactoring on a symbol.
     /// This allows us to scale to 300+ total tool endpoints.
     /// </summary>
-    public async Task<string> RunRefactoringAsync(string filePath, string refactoringId, CancellationToken cancellationToken = default)
+    public async Task<string> RunRefactoringAsync(FilePath filePath, string refactoringId, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

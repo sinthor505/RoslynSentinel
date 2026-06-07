@@ -4,20 +4,20 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
-public record BestInsertionResult(string FilePath, string ContainerName, string MemberKind, int InsertBeforeLine, string Reason);
+public record BestInsertionResult(FilePath FilePath, string ContainerName, string MemberKind, int InsertBeforeLine, string Reason);
 
 public record AttributeUsageSite(
     string AttributeName,
     string TargetKind,
     string TargetName,
     string ContainingType,
-    string FilePath,
+    FilePath FilePath,
     int Line);
-public record TodoCommentFinding(string FilePath, int Line, string Kind, string Text);
+public record TodoCommentFinding(FilePath FilePath, int Line, string Kind, string Text);
 public record RenameImpactPreview(string SymbolName, int TotalReferences, int FilesAffected, bool HasTestReferences, List<string> AffectedFiles);
 
 public record ThrowSiteInfo(
-    string FilePath,
+    FilePath FilePath,
     int Line,
     int Column,
     string ExceptionType,
@@ -26,7 +26,7 @@ public record ThrowSiteInfo(
     string? MessageLiteral);
 
 public record ObjectCreationSite(
-    string FilePath,
+    FilePath FilePath,
     int Line,
     int Column,
     string TypeName,
@@ -501,7 +501,7 @@ public class DiscoveryEngine
     }
 
     public async Task<BestInsertionResult> FindBestInsertionPointAsync(
-        string filePath, string containerName, string memberKind, CancellationToken ct = default)
+        FilePath filePath, string containerName, string memberKind, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -661,7 +661,7 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        FilePath filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

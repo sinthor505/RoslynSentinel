@@ -11,26 +11,50 @@ namespace RoslynSentinel.Server;
 
 public class DocReadResult
 {
-    public bool    Found    { get; set; }
-    public string  Filename { get; set; } = "";
-    public string? Content  { get; set; }
-    public string? Error    { get; set; }
+    public bool Found
+    {
+        get; set;
+    }
+    public string Filename { get; set; } = "";
+    public string? Content
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 public class DocWriteResult
 {
-    public bool    Success      { get; set; }
-    public string  Filename     { get; set; } = "";
-    public string  FullPath     { get; set; } = "";
-    public int     BytesWritten { get; set; }
-    public string? Error        { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
+    public string Filename { get; set; } = "";
+    public string FullPath { get; set; } = "";
+    public int BytesWritten
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 public class DocListResult
 {
     public List<string> Files { get; set; } = [];
-    public int          Count { get; set; }
-    public string?      Error { get; set; }
+    public int Count
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 // ─── Tool class ──────────────────────────────────────────────────────────────
@@ -80,9 +104,9 @@ public class DocumentationTools
 
         return new DocReadResult
         {
-            Found    = true,
+            Found = true,
             Filename = filename,
-            Content  = File.ReadAllText(fullPath)
+            Content = File.ReadAllText(fullPath)
         };
     }
 
@@ -96,9 +120,9 @@ public class DocumentationTools
         if (bytes > MaxDocBytes)
             return new DocWriteResult
             {
-                Success  = false,
+                Success = false,
                 Filename = filename,
-                Error    = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
+                Error = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
             };
 
         Directory.CreateDirectory(subdir);
@@ -110,9 +134,9 @@ public class DocumentationTools
 
         return new DocWriteResult
         {
-            Success      = true,
-            Filename     = filename,
-            FullPath     = fullPath,
+            Success = true,
+            Filename = filename,
+            FullPath = fullPath,
             BytesWritten = bytes
         };
     }
@@ -120,6 +144,7 @@ public class DocumentationTools
     // ── project_doc ──────────────────────────────────────────────────────────
 
     [McpServerTool]
+    [Produces(DataTag.Documentation)]
     [Description("""
         Unified documentation accessor for all project doc files stored under docs/.
 
@@ -143,102 +168,102 @@ public class DocumentationTools
         content : required for write and append.
         """)]
     public object ProjectDoc(
-        string  action,
-        string  docType,
-        string? name    = null,
+        string action,
+        string docType,
+        string? name = null,
         string? content = null)
     {
         try
         {
-        var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
-        if (rateLimitError is not null)
-        {
-            return action is "read" or "list"
-                ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
-                : new DocWriteResult { Success = false, Filename = name ?? "", Error = rateLimitError };
-        }
-
-        var docsRoot = TryGetDocsRoot(out var error);
-        if (docsRoot is null)
-        {
-            return action is "read" or "list"
-                ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
-                : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
-        }
-
-        // ── list ─────────────────────────────────────────────────────────────
-        if (action == "list")
-        {
-            if (!Directory.Exists(docsRoot))
-                return new DocListResult { Files = [], Count = 0 };
-
-            var files = Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
-                .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
-                .OrderBy(f => f)
-                .ToList();
-            return new DocListResult { Files = files, Count = files.Count };
-        }
-
-        // ── state (special: fixed path, no filename) ─────────────────────────
-        if (docType == "state")
-        {
-            if (action == "read")
+            var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
+            if (rateLimitError is not null)
             {
-                var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
-                if (!File.Exists(fullPath))
-                    return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
-                return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
+                return action is "read" or "list"
+                    ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
+                    : new DocWriteResult { Success = false, Filename = name ?? "", Error = rateLimitError };
             }
-            if (action == "write")
+
+            var docsRoot = TryGetDocsRoot(out var error);
+            if (docsRoot is null)
             {
-                if (content is null)
-                    return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "content is required for action=write." };
-                int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
-                if (bytes > MaxDocBytes)
-                    return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
-                var stateDir  = Path.Combine(docsRoot);
-                var statePath = Path.Combine(stateDir, "migration-state.yaml");
-                Directory.CreateDirectory(stateDir);
-                File.WriteAllText(statePath, content);
-                return new DocWriteResult { Success = true, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
+                return action is "read" or "list"
+                    ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
+                    : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
             }
-            return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
-        }
 
-        // ── file-based doc types ──────────────────────────────────────────────
-        if (name is null)
-            return action is "read"
-                ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
-                : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
+            // ── list ─────────────────────────────────────────────────────────────
+            if (action == "list")
+            {
+                if (!Directory.Exists(docsRoot))
+                    return new DocListResult { Files = [], Count = 0 };
 
-        var subdir = docType switch
-        {
-            "plan"           => Path.Combine(docsRoot, "plans"),
-            "handoff"        => Path.Combine(docsRoot, "handoffs"),
-            "completed_work" => Path.Combine(docsRoot, "completed"),
-            "documentation"  => Path.Combine(docsRoot, "documentation"),
-            _ => null
-        };
+                var files = Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
+                    .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
+                    .OrderBy(f => f)
+                    .ToList();
+                return new DocListResult { Files = files, Count = files.Count };
+            }
 
-        if (subdir is null)
-            return action is "read"
-                ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
-                : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
+            // ── state (special: fixed path, no filename) ─────────────────────────
+            if (docType == "state")
+            {
+                if (action == "read")
+                {
+                    var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
+                    if (!File.Exists(fullPath))
+                        return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
+                    return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
+                }
+                if (action == "write")
+                {
+                    if (content is null)
+                        return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "content is required for action=write." };
+                    int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
+                    if (bytes > MaxDocBytes)
+                        return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
+                    var stateDir = Path.Combine(docsRoot);
+                    var statePath = Path.Combine(stateDir, "migration-state.yaml");
+                    Directory.CreateDirectory(stateDir);
+                    File.WriteAllText(statePath, content);
+                    return new DocWriteResult { Success = true, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
+                }
+                return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
+            }
 
-        if (action == "write" && content is null)
-            return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
-        if (action == "append" && content is null)
-            return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
+            // ── file-based doc types ──────────────────────────────────────────────
+            if (name is null)
+                return action is "read"
+                    ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
+                    : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
 
-        return action switch
-        {
-            "read"   => (object)ReadFile(subdir, name),
-            "write"  => WriteFile(subdir, name, content!),
-            "append" => docType == "completed_work"
-                ? WriteFile(subdir, name, content!, append: true)
-                : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
-            _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unknown action '{action}'. Valid: read, write, append, list." }
-        };
+            var subdir = docType switch
+            {
+                "plan" => Path.Combine(docsRoot, "plans"),
+                "handoff" => Path.Combine(docsRoot, "handoffs"),
+                "completed_work" => Path.Combine(docsRoot, "completed"),
+                "documentation" => Path.Combine(docsRoot, "documentation"),
+                _ => null
+            };
+
+            if (subdir is null)
+                return action is "read"
+                    ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
+                    : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
+
+            if (action == "write" && content is null)
+                return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
+            if (action == "append" && content is null)
+                return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
+
+            return action switch
+            {
+                "read" => (object)ReadFile(subdir, name),
+                "write" => WriteFile(subdir, name, content!),
+                "append" => docType == "completed_work"
+                    ? WriteFile(subdir, name, content!, append: true)
+                    : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
+                _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unknown action '{action}'. Valid: read, write, append, list." }
+            };
         }
         catch (Exception ex)
         {

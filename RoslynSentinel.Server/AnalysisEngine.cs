@@ -8,31 +8,40 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Server;
 
-public record LargeTypeReport(string FilePath, string TypeName, int LineCount);
-public record LargeMethodReport(string FilePath, string TypeName, string MethodName, int LineCount);
+public record LargeTypeReport(FilePath filePath, string TypeName, int LineCount);
+public record LargeMethodReport(FilePath filePath, string TypeName, string MethodName, int LineCount);
 public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
-public record MethodLocation(string FilePath, string TypeName, string MethodName);
-public record InterfaceCandidateReport(string FilePath, string ClassName, List<string> PublicMethods);
+public record MethodLocation(FilePath filePath, string TypeName, string MethodName);
+public record InterfaceCandidateReport(FilePath filePath, string ClassName, List<string> PublicMethods);
 
 public class NamespacePathMismatch
 {
-    public string        FilePath          { get; set; } = "";
-    public string        ProjectName       { get; set; } = "";
-    public string        DeclaredNamespace { get; set; } = "";
-    public string        ExpectedNamespace { get; set; } = "";
-    public string        Severity          { get; set; } = "";
-    public string        Reason            { get; set; } = "";
-    public List<string>  ConflictingFiles  { get; set; } = [];
+    public string FilePath { get; set; } = "";
+    public string ProjectName { get; set; } = "";
+    public string DeclaredNamespace { get; set; } = "";
+    public string ExpectedNamespace { get; set; } = "";
+    public string Severity { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public List<string> ConflictingFiles { get; set; } = [];
 }
 
 public class NamespacePathMismatchReport
 {
-    public List<NamespacePathMismatch> Errors        { get; set; } = [];
-    public List<NamespacePathMismatch> Warnings      { get; set; } = [];
-    public int    TotalFiles    { get; set; }
-    public int    MismatchCount { get; set; }
-    public bool   IsClean       { get; set; }
-    public string Summary       { get; set; } = "";
+    public List<NamespacePathMismatch> Errors { get; set; } = [];
+    public List<NamespacePathMismatch> Warnings { get; set; } = [];
+    public int TotalFiles
+    {
+        get; set;
+    }
+    public int MismatchCount
+    {
+        get; set;
+    }
+    public bool IsClean
+    {
+        get; set;
+    }
+    public string Summary { get; set; } = "";
 }
 
 public class AnalysisEngine
@@ -266,7 +275,7 @@ public class AnalysisEngine
             .Select(t => $"Type '{t.Name}' in {t.Document} is never instantiated.").ToList();
     }
 
-    public async Task<List<string>> DetectUnreachableCodeAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<List<string>> DetectUnreachableCodeAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -343,13 +352,18 @@ public class AnalysisEngine
         return false;
     }
 
-    public async Task<string> GenerateCallTreeAsync(string filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePath filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "File not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -402,18 +416,33 @@ public class AnalysisEngine
         var methodNode = candidateMethods.FirstOrDefault();
         if (methodNode == null || semanticModel == null)
         {
-            return "Method not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (methodSymbol == null)
         {
-            return "Symbol not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var sb = new StringBuilder();
         await BuildCallTree(methodSymbol, 0, depth, sb, new HashSet<ISymbol>(SymbolEqualityComparer.Default), cancellationToken);
-        return sb.ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = sb.ToString(),
+            FilePath = filePath
+        };
     }
 
     private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken ct)
@@ -454,14 +483,19 @@ public class AnalysisEngine
         }
     }
 
-    public async Task<string> GenerateEqualityOverridesAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateEqualityOverridesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            throw new FileNotFoundException($"File '{filePath}' not found in solution.");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -469,7 +503,12 @@ public class AnalysisEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (root == null || classNode == null)
         {
-            throw new InvalidOperationException($"Class '{className}' not found.");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         // Gather fields with their types (private instance fields only — skip const, static, backing fields)
@@ -493,7 +532,12 @@ public class AnalysisEngine
 
         if (fieldsWithTypes.Count == 0)
         {
-            throw new InvalidOperationException($"Class '{className}' has no fields or properties to generate equality from.");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var fieldNames = fieldsWithTypes.Select(f => f.Name).ToList();
@@ -592,7 +636,12 @@ public class AnalysisEngine
 
             var newClassForBlock = classNode.AddMembers(equalsMethod, getHashBlockBody);
             var updatedRootBlock = root.ReplaceNode(classNode, newClassForBlock);
-            return updatedRootBlock.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                UpdatedText = updatedRootBlock.NormalizeWhitespace().ToFullString(),
+                FilePath = filePath
+            };
         }
 
         var getHashMethod = SyntaxFactory.MethodDeclaration(
@@ -606,7 +655,12 @@ public class AnalysisEngine
 
         var newClass = classNode.AddMembers(equalsMethod, getHashMethod);
         var updatedRoot = root.ReplaceNode(classNode, newClass);
-        return updatedRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = updatedRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 
     private static bool IsCollectionType(string typeName)
@@ -642,7 +696,7 @@ public class AnalysisEngine
         return "object";
     }
 
-    public async Task<List<string>> DetectMemoryLeaksAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> DetectMemoryLeaksAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MemoryLeaks"))
         {
@@ -844,7 +898,7 @@ public class AnalysisEngine
             || typeName.StartsWith("Queue<") || typeName.StartsWith("Stack<");
     }
 
-    public async Task<List<string>> AnalyzeSemaphoreUsageAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> AnalyzeSemaphoreUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SemaphoreLeaks"))
         {
@@ -932,7 +986,7 @@ public class AnalysisEngine
         return results;
     }
 
-    public async Task<List<string>> FindPossibleInfiniteLoopsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<string>> FindPossibleInfiniteLoopsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
@@ -2074,7 +2128,7 @@ public class AnalysisEngine
         string? projectName,
         CancellationToken cancellationToken = default)
     {
-        var errors   = new List<NamespacePathMismatch>();
+        var errors = new List<NamespacePathMismatch>();
         var warnings = new List<NamespacePathMismatch>();
         int totalFiles = 0;
 
@@ -2094,7 +2148,7 @@ public class AnalysisEngine
         foreach (var project in projects)
         {
             var rootNamespace = GetRootNamespace(project);
-            var projectRoot   = project.FilePath is not null
+            var projectRoot = project.FilePath is not null
                 ? Path.GetDirectoryName(project.FilePath)
                 : null;
 
@@ -2107,9 +2161,9 @@ public class AnalysisEngine
 
                 // Skip generated files.
                 var fileName = Path.GetFileName(filePath);
-                if (fileName.EndsWith(".g.cs",         StringComparison.OrdinalIgnoreCase) ||
+                if (fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
                     fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
-                    fileName.EndsWith(".Designer.cs",  StringComparison.OrdinalIgnoreCase))
+                    fileName.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 totalFiles++;
@@ -2140,7 +2194,7 @@ public class AnalysisEngine
                 {
                     declaredNs = nsDecls[0] switch
                     {
-                        NamespaceDeclarationSyntax ns    => ns.Name.ToString().Trim(),
+                        NamespaceDeclarationSyntax ns => ns.Name.ToString().Trim(),
                         FileScopedNamespaceDeclarationSyntax fns => fns.Name.ToString().Trim(),
                         _ => null
                     };
@@ -2150,7 +2204,7 @@ public class AnalysisEngine
                     // Multiple namespace declarations — report as a warning, use first for path check.
                     declaredNs = nsDecls[0] switch
                     {
-                        NamespaceDeclarationSyntax ns    => ns.Name.ToString().Trim(),
+                        NamespaceDeclarationSyntax ns => ns.Name.ToString().Trim(),
                         FileScopedNamespaceDeclarationSyntax fns => fns.Name.ToString().Trim(),
                         _ => null
                     };
@@ -2161,13 +2215,13 @@ public class AnalysisEngine
 
                     warnings.Add(new NamespacePathMismatch
                     {
-                        FilePath          = filePath,
-                        ProjectName       = project.Name,
+                        FilePath = filePath,
+                        ProjectName = project.Name,
                         DeclaredNamespace = declaredNs ?? "",
                         ExpectedNamespace = expectedNsMulti,
-                        Severity          = "Warning",
-                        Reason            = "MultipleNamespacesInFile",
-                        ConflictingFiles  = []
+                        Severity = "Warning",
+                        Reason = "MultipleNamespacesInFile",
+                        ConflictingFiles = []
                     });
                     continue;
                 }
@@ -2201,13 +2255,13 @@ public class AnalysisEngine
                 {
                     warnings.Add(new NamespacePathMismatch
                     {
-                        FilePath          = filePath,
-                        ProjectName       = projName,
+                        FilePath = filePath,
+                        ProjectName = projName,
                         DeclaredNamespace = "",
                         ExpectedNamespace = expectedNs,
-                        Severity          = "Warning",
-                        Reason            = "GlobalNamespace",
-                        ConflictingFiles  = []
+                        Severity = "Warning",
+                        Reason = "GlobalNamespace",
+                        ConflictingFiles = []
                     });
                 }
                 continue;
@@ -2230,26 +2284,26 @@ public class AnalysisEngine
             {
                 errors.Add(new NamespacePathMismatch
                 {
-                    FilePath          = filePath,
-                    ProjectName       = projName,
+                    FilePath = filePath,
+                    ProjectName = projName,
                     DeclaredNamespace = declaredNs,
                     ExpectedNamespace = expectedNs,
-                    Severity          = "Error",
-                    Reason            = "DuplicateTypeAtMismatchedPath",
-                    ConflictingFiles  = conflicting.Distinct().ToList()
+                    Severity = "Error",
+                    Reason = "DuplicateTypeAtMismatchedPath",
+                    ConflictingFiles = conflicting.Distinct().ToList()
                 });
             }
             else
             {
                 warnings.Add(new NamespacePathMismatch
                 {
-                    FilePath          = filePath,
-                    ProjectName       = projName,
+                    FilePath = filePath,
+                    ProjectName = projName,
                     DeclaredNamespace = declaredNs,
                     ExpectedNamespace = expectedNs,
-                    Severity          = "Warning",
-                    Reason            = "NamespaceFolderMismatch",
-                    ConflictingFiles  = []
+                    Severity = "Warning",
+                    Reason = "NamespaceFolderMismatch",
+                    ConflictingFiles = []
                 });
             }
         }
@@ -2294,13 +2348,13 @@ public class AnalysisEngine
                     {
                         warnings.Add(new NamespacePathMismatch
                         {
-                            FilePath          = first,
-                            ProjectName       = findings.First(f => f.Doc.FilePath == first).ProjectName,
+                            FilePath = first,
+                            ProjectName = findings.First(f => f.Doc.FilePath == first).ProjectName,
                             DeclaredNamespace = string.Join(", ", namespaces),
                             ExpectedNamespace = "",
-                            Severity          = "Warning",
-                            Reason            = "PartialClassAcrossNamespaces",
-                            ConflictingFiles  = involvedFiles.Skip(1).ToList()
+                            Severity = "Warning",
+                            Reason = "PartialClassAcrossNamespaces",
+                            ConflictingFiles = involvedFiles.Skip(1).ToList()
                         });
                     }
                 }
@@ -2315,22 +2369,22 @@ public class AnalysisEngine
 
         return new NamespacePathMismatchReport
         {
-            Errors        = errors,
-            Warnings      = warnings,
-            TotalFiles    = totalFiles,
+            Errors = errors,
+            Warnings = warnings,
+            TotalFiles = totalFiles,
             MismatchCount = mismatchCount,
-            IsClean       = mismatchCount == 0,
-            Summary       = summary
+            IsClean = mismatchCount == 0,
+            Summary = summary
         };
     }
 
     /// <summary>
     /// Derives the expected namespace for a file based on its path relative to the project root.
     /// </summary>
-    private static string DeriveExpectedNamespace(string filePath, string projectRoot, string rootNamespace)
+    private static string DeriveExpectedNamespace(FilePath filePath, string projectRoot, string rootNamespace)
     {
         // Get the directory containing the file, relative to the project root.
-        var fileDir    = Path.GetDirectoryName(filePath) ?? "";
+        var fileDir = Path.GetDirectoryName(filePath) ?? "";
         var relativeDir = Path.GetRelativePath(projectRoot, fileDir);
 
         if (relativeDir == ".")
@@ -2360,7 +2414,7 @@ public class AnalysisEngine
             try
             {
                 var xdoc = System.Xml.Linq.XDocument.Load(project.FilePath);
-                var ns   = xdoc.Descendants()
+                var ns = xdoc.Descendants()
                     .FirstOrDefault(e => string.Equals(e.Name.LocalName, "RootNamespace",
                                                         StringComparison.OrdinalIgnoreCase))
                     ?.Value;

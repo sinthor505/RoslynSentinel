@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynSentinel.Server;
 
 public record TestComplexityReport(string MethodName, int CyclomaticComplexity, List<string> ConditionalsToTest);
-public record TestSkeletonReport(string FilePath, string Content);
+public record TestSkeletonReport(FilePath filePath, string Content);
 public record TestScaffoldResult(
     string ClassName,
     string TestClassName,
@@ -25,7 +25,7 @@ public class TestingEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<TestComplexityReport> CalculateComplexityAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<TestComplexityReport> CalculateComplexityAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -71,7 +71,7 @@ public class TestingEngine
         return new TestComplexityReport(methodName, complexity, conditionals);
     }
 
-    public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(string filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
+    public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(FilePath filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -186,7 +186,7 @@ public class TestingEngine
         return new TestSkeletonReport(testFilePath, sb.ToString());
     }
 
-    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(string filePath, string className, CancellationToken ct = default)
+    public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePath filePath, string className, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects
@@ -312,19 +312,29 @@ public class TestingEngine
         return $"_mock{withoutI}";
     }
 
-    public async Task<string> AddBenchmarkStubAsync(string filePath, string className, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBenchmarkStubAsync(FilePath filePath, string className, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult()
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"File not found: {filePath}"
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult()
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"Failed to get syntax root for file: {filePath}"
+            };
         }
 
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -350,6 +360,11 @@ public class TestingEngine
         }
         sb.AppendLine("}");
 
-        return sb.ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = sb.ToString()
+        };
     }
 }

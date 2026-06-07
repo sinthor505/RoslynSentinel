@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
-public record PerformanceIssueReport(string FilePath, int Line, int Column, string IssueType, string Description);
+public record PerformanceIssueReport(FilePath FilePath, int Line, int Column, string IssueType, string Description);
 
 public class PerformanceEngine
 {
@@ -15,7 +15,7 @@ public class PerformanceEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -34,7 +34,7 @@ public class PerformanceEngine
 
         // 1. Find String Concatenations (especially in loops) — literal-based: "str" + x
         var stringConcats = root.DescendantNodes().OfType<BinaryExpressionSyntax>()
-            .Where(b => b.IsKind(SyntaxKind.AddExpression) && 
+            .Where(b => b.IsKind(SyntaxKind.AddExpression) &&
                        (b.Left.IsKind(SyntaxKind.StringLiteralExpression) || b.Right.IsKind(SyntaxKind.StringLiteralExpression)));
 
         foreach (var concat in stringConcats)
@@ -780,7 +780,7 @@ public class PerformanceEngine
         return deduped;
     }
 
-    public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -825,7 +825,7 @@ public class PerformanceEngine
         return issues;
     }
 
-    public async Task<List<PerformanceIssueReport>> DetectInefficientStringComparisonsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<PerformanceIssueReport>> DetectInefficientStringComparisonsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -849,7 +849,7 @@ public class PerformanceEngine
             var left = bin.Left.ToString();
             var right = bin.Right.ToString();
 
-            if (left.Contains(".ToLowerInvariant()") || left.Contains(".ToUpperInvariant()") || 
+            if (left.Contains(".ToLowerInvariant()") || left.Contains(".ToUpperInvariant()") ||
                 right.Contains(".ToLowerInvariant()") || right.Contains(".ToUpperInvariant()"))
             {
                 var loc = bin.GetLocation().GetLineSpan().StartLinePosition;
@@ -860,7 +860,7 @@ public class PerformanceEngine
         return issues;
     }
 
-    public async Task<List<PerformanceIssueReport>> FindBoxingAllocationsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<PerformanceIssueReport>> FindBoxingAllocationsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -889,7 +889,7 @@ public class PerformanceEngine
                 {
                     var arg = inv.ArgumentList.Arguments[i];
                     var param = methodSymbol.Parameters[i];
-                    
+
                     if (param.Type.SpecialType == SpecialType.System_Object)
                     {
                         var argType = semanticModel.GetTypeInfo(arg.Expression, cancellationToken).Type;

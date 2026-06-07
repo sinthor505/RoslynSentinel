@@ -30,7 +30,7 @@ public sealed class ClassCandidateSummary
 {
     public string ClassName { get; set; } = string.Empty;
     public string ProjectName { get; set; } = string.Empty;  // .csproj name, not full path
-    public string FilePath { get; set; } = string.Empty;  // absolute path to the source file
+    public FilePath filePath { get; set; } = string.Empty;  // absolute path to the source file
     public int Count
     {
         get; set;

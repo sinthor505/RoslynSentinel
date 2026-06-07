@@ -95,11 +95,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename([Consumes(DataTag.SourceFilepath, required: true)] string filePath)
+    public async Task<string> SyncTypeAndFilename([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
     {
         try
         {
-            return await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
+            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
+            return result.Outcome.ToString();
         }
         catch (Exception ex)
         {
@@ -110,7 +111,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Reorders method parameters and updates all call sites across the solution. newParameterOrder: zero-based index array specifying the new parameter order. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ChangeSignature([Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+    public async Task<ToolResult<object>> ChangeSignature([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName, int[] newParameterOrder, bool autoStage = true)
     {
         try
@@ -139,7 +140,7 @@ public class SentinelRefactoringTools
                  "Returns an error if the snippet matches zero or multiple locations. " +
                  "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
     public async Task<ToolResult<object>> RenameSymbol(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         string newName,
@@ -171,7 +172,10 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Generates a mapping method between fromType and toType.")]
-    public async Task<ToolResult<object>> GenerateMapping([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string fromType, string toType)
+    public async Task<ToolResult<object>> GenerateMapping(
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [ExternalInputRequired(DataTag.DataType, required: true)] string fromType,
+        [ExternalInputRequired(DataTag.DataType)] string toType)
     {
         try
         {
@@ -187,7 +191,9 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration.")]
-    public async Task<ToolResult<object>> ConvertAnonymousToNamed([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string newClassName)
+    public async Task<ToolResult<object>> ConvertAnonymousToNamed(
+        [ExternalInputRequired(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [ExternalInputRequired(DataTag.ClassName, required: true)] string newClassName)
     {
         try
         {
@@ -275,7 +281,7 @@ public class SentinelRefactoringTools
     }
 
     private Task<ToolResult<object>> MoveAllTypesToFilesCore(
-        Dictionary<string, string> changes,
+        Dictionary<FilePath, string> changes,
         bool autoStage,
         string description,
         bool previewFiles)
@@ -301,7 +307,7 @@ public class SentinelRefactoringTools
                 {
                     ChangeId = id,
                     Description = $"{description}. Call ApplyStagedChanges(\"{id}\") to apply.",
-                    AffectedFiles = changes.Keys.Select(Path.GetFileName).ToList(),
+                    AffectedFiles = changes.Keys.Select(kvp => Path.GetFileName(kvp)).ToList(),
                     ContentPreviews = changes.ToDictionary(
                         kvp => Path.GetFileName(kvp.Key)!,
 
@@ -319,11 +325,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
-    public async Task<string> ReplaceMember([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string memberName, string newSource)
+    public async Task<string> ReplaceMember([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string memberName, string newSource)
     {
         try
         {
-            return await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
+            var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
+            return result.Outcome.ToString();
         }
         catch (Exception ex)
         {
@@ -335,12 +342,13 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Removes a specific member from a class or interface by name.")]
     public async Task<string> RemoveMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName)
     {
         try
         {
-            return await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
+            var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
+            return result.Outcome.ToString();
         }
         catch (Exception ex)
         {
@@ -358,17 +366,17 @@ public class SentinelRefactoringTools
         If the directive already exists, the file is returned unchanged.
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> AddUsingDirective([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string namespaceName, bool autoStage = true)
+    public async Task<ToolResult<object>> AddUsingDirective([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string namespaceName, bool autoStage = true)
     {
         try
         {
             var updated = await _refactoringEngine.AddUsingDirectiveAsync(filePath, namespaceName);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
 
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
         }
@@ -383,17 +391,17 @@ public class SentinelRefactoringTools
     [Description("""
         Adds a new value to an existing enum. `explicitValue=99` → `Archived = 99`. If the enum is not found, the file is returned unchanged. `autoStage=true` → ChangeId for `staged_change`.
         """)]
-    public async Task<ToolResult<object>> AddEnumValue([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
+    public async Task<ToolResult<object>> AddEnumValue([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string enumName, string valueName, int? explicitValue = null, bool autoStage = true)
     {
         try
         {
             var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
 
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
         }
@@ -406,7 +414,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Swaps left and right sides of all assignment statements within a 1-based line range.")]
-    public async Task<ToolResult<object>> InvertAssignments([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.StartLine)] int startLine, [Consumes(DataTag.EndLine)] int endLine)
+    public async Task<ToolResult<object>> InvertAssignments([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.StartLine)] int startLine, [Consumes(DataTag.EndLine)] int endLine)
     {
         try
         {
@@ -424,7 +432,7 @@ public class SentinelRefactoringTools
     [Description("""
         Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
         """)]
-    public async Task<ToolResult<object>> PullUpMember([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string className, string memberName, bool autoStage = true)
+    public async Task<ToolResult<object>> PullUpMember([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string className, string memberName, bool autoStage = true)
     {
         try
         {
@@ -458,17 +466,17 @@ public class SentinelRefactoringTools
         "protected internal", or "private protected".
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> ChangeAccessibility([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string accessibility, bool autoStage = true)
+    public async Task<ToolResult<object>> ChangeAccessibility([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string accessibility, bool autoStage = true)
     {
         try
         {
             var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
 
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
         }
@@ -488,17 +496,17 @@ public class SentinelRefactoringTools
         If a summary already exists it will be replaced.
         Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
         """)]
-    public async Task<ToolResult<object>> AddSummaryComment([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string summaryText, bool autoStage = true)
+    public async Task<ToolResult<object>> AddSummaryComment([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string summaryText, bool autoStage = true)
     {
         try
         {
             var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
 
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
         }
@@ -513,7 +521,7 @@ public class SentinelRefactoringTools
     [Description("""
         Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. `fieldName` overrides the derived field name (defaults to `_camelCase` of `paramName`). Creates a constructor if none exists; converts expression-bodied constructors to block bodies. `autoStage=true` → ChangeId for `staged_change`
         """)]
-    public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+    public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string className,
         string paramName,
         string paramType,
@@ -525,10 +533,10 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
 
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
         }
@@ -542,7 +550,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only parameterNames if specified) into public record {NewTypeName}(...). Rewrites parameter references in the method body to request.PropertyName. Appends the record to end of file. Adds a TODO comment to update call sites — call sites must be updated manually.")]
     public async Task<ToolResult<object>> IntroduceParameterObject(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         string? newTypeName = null,
         string[]? parameterNames = null)
@@ -550,12 +558,12 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
-            if (string.IsNullOrEmpty(result))
+            if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"IntroduceParameterObject failed for '{methodName}' in '{filePath}': file not found in workspace or method not found. Ensure the solution is loaded.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = result };
+            return new ToolResult<object>() { Success = true, Data = result.Outcome };
         }
         catch (Exception ex)
         {
@@ -577,7 +585,7 @@ public class SentinelRefactoringTools
         Returns the updated file content with the expression extracted to a variable.
         """)]
     public async Task<ToolResult<object>> ExtractLocalVariable(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.SymbolName)] string variableName,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
@@ -586,12 +594,12 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
-            if (string.IsNullOrEmpty(result))
+            if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = result };
+            return new ToolResult<object>() { Success = true, Data = result.Outcome };
         }
         catch (Exception ex)
         {
@@ -602,11 +610,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool]
     [Description("Adds or removes an attribute on a type or member. action: add or remove. attribute/attributeSource/attributeName accept the attribute with or without brackets or Attribute suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyAttribute([Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string attribute, string action, bool autoStage = true)
+    public async Task<ToolResult<object>> ModifyAttribute([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, [Consumes(DataTag.SymbolName, required: true)] string targetName, string attribute, string action, bool autoStage = true)
     {
         try
         {
-            string updated;
+            DocumentEditResult updated;
             if (action == "add")
             {
                 updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attribute);
@@ -621,9 +629,9 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{attribute}' on '{targetName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{attribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -638,7 +646,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. action: add or remove. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         string modifier,
         string action,
@@ -646,7 +654,7 @@ public class SentinelRefactoringTools
     {
         try
         {
-            string updated;
+            DocumentEditResult updated;
             if (action == "add")
             {
                 updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
@@ -661,9 +669,9 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -678,7 +686,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Adds or removes a base type or interface from a type declaration. action: add or remove. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ModifyBaseType(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         string baseTypeName,
         string action,
@@ -686,7 +694,7 @@ public class SentinelRefactoringTools
     {
         try
         {
-            string updated;
+            DocumentEditResult updated;
             if (action == "add")
             {
                 updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
@@ -701,9 +709,9 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -718,10 +726,10 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Introduces a named symbol from an expression. as values: localVariable, field (private readonly), parameter (single-file), constant (→ MsAugmentResult). contextSnippet: verbatim substring identifying the expression. lineBefore/lineAfter disambiguate.")]
     public async Task<ToolResult<object>> Introduce(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Consumes(DataTag.SymbolName)] string newName,
-        string @as,
+        [ExternalInputRequired(DataTag.SymbolName)] string newName,
+        [ExternalInputRequired(DataTag.Other)] string @as,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
@@ -755,14 +763,14 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string className,
-        string @as,
-        string? newTypeName = null,
-        [Consumes(DataTag.SymbolName)] string[]? memberNames = null,
-        [Consumes(DataTag.SourceFilepath)] string[]? filePaths = null,
-        [Consumes(DataTag.ContainerName)] string[]? classNames = null,
-        bool autoStage = true)
+        [ExternalInputRequired(DataTag.Other)] string @as,
+        [ExternalInputRequired(DataTag.SymbolName)] string? newTypeName = null,
+        [ExternalInputRequired(DataTag.SymbolName)] string[]? memberNames = null,
+        [ExternalInputRequired(DataTag.SourceFilepath)] FilePath[]? filePaths = null,
+        [ExternalInputRequired(DataTag.ClassName)] string[]? classNames = null,
+        [ToolControlAttribute(DataTag.Other)] bool autoStage = true)
     {
         try
         {
@@ -846,7 +854,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Manages interface/class synchronization. action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
     public async Task<ToolResult<object>> SyncInterface(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string interfaceName,
         string action,
         [Consumes(DataTag.SymbolName)] string? className = null,
@@ -861,11 +869,11 @@ public class SentinelRefactoringTools
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", "className is required when action=implement.") };
                 }
                 var result = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
-                if (string.IsNullOrEmpty(result))
+                if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SyncInterface implement failed for '{className}' implementing '{interfaceName}' in '{filePath}': file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.") };
                 }
-                return new ToolResult<object>() { Success = true, Data = result };
+                return new ToolResult<object>() { Success = true, Data = result.Outcome };
             }
             if (action == "sync")
             {
@@ -874,7 +882,7 @@ public class SentinelRefactoringTools
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", "className is required when action=sync.") };
                 }
                 var result = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
-                if (string.IsNullOrEmpty(result))
+                if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SyncInterface sync failed for '{className}' implementing '{interfaceName}' in '{filePath}': file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.") };
                 }
@@ -897,7 +905,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
     public async Task<ToolResult<object>> Inline(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         string kind,
         [Consumes(DataTag.SymbolName)] string? methodName = null)
@@ -948,15 +956,15 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Adds a new member to a type. position: null/end (append), after:MemberName, or before:MemberName. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> AddMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string containerName,
-        [Consumes(DataTag.ContainerName)] string newMemberSource,
-        string? position = null,
-        bool autoStage = true)
+        [ExternalInputRequired(DataTag.ClassName)] string newMemberSource,
+        [ExternalInputRequired(DataTag.Other)] string? position = null,
+        [ToolControlAttribute(DataTag.Other)] bool autoStage = true)
     {
         try
         {
-            string updated;
+            DocumentEditResult updated;
             string description;
             if (string.IsNullOrEmpty(position) || position == "end")
             {
@@ -981,9 +989,9 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, description);
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -998,22 +1006,22 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. Property defaults: hasSetter=true, accessibility=public. Field defaults: isReadonly=false, isStatic=false, accessibility=private; initializer sets optional field initializer expression. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> AddMemberTyped(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Consumes(DataTag.SymbolName, required: true)] string containerName,
-        [Consumes(DataTag.SymbolName)] string name,
-        string type,
-        string kind,
-        string accessibility = "public",
-        bool hasSetter = true,
-        bool isInit = false,
-        bool isReadonly = false,
-        bool isStatic = false,
-        string? initializer = null,
-        bool autoStage = true)
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.ClassName, required: true)] string containerName,
+        [ExternalInputRequired(DataTag.SymbolName)] string name,
+        [ExternalInputRequired(DataTag.Other)] string type,
+        [ExternalInputRequired(DataTag.Other)] string kind,
+        [ExternalInputRequired(DataTag.Other)] string accessibility = "public",
+        [ExternalInputRequired(DataTag.Other)] bool hasSetter = true,
+        [ExternalInputRequired(DataTag.Other)] bool isInit = false,
+        [ExternalInputRequired(DataTag.Other)] bool isReadonly = false,
+        [ExternalInputRequired(DataTag.Other)] bool isStatic = false,
+        [ExternalInputRequired(DataTag.Other)] string? initializer = null,
+        [ToolControlAttribute(DataTag.Other)] bool autoStage = true)
     {
         try
         {
-            string updated;
+            DocumentEditResult updated;
             string description;
             if (kind == "property")
             {
@@ -1031,9 +1039,9 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated };
+                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<string, string> { [filePath] = updated };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, description);
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -1048,7 +1056,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly.")]
     public async Task<ToolResult<object>> WrapRange(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.StartLine)] int startLine,
         [Consumes(DataTag.EndLine)] int endLine,
         string wrapper,
@@ -1065,9 +1073,9 @@ public class SentinelRefactoringTools
                 var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated };
+                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
                 }
-                var changes = new Dictionary<string, string> { [filePath] = updated };
+                var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
                 var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
                 var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
                 return new ToolResult<object>() { Success = true, Data = summary };
@@ -1081,7 +1089,7 @@ public class SentinelRefactoringTools
                 var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated };
+                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
                 }
             }
             if (wrapper == "region")
@@ -1093,9 +1101,9 @@ public class SentinelRefactoringTools
                 var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated };
+                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
                 }
-                var changes = new Dictionary<string, string> { [filePath] = updated };
+                var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
                 var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.");
                 var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(filePath)}.");
                 return new ToolResult<object>() { Success = true, Data = summary };
@@ -1112,7 +1120,7 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Description("Moves a type to a new location. destination: ownFile (move to its own .cs file → ChangeId + content previews; autoStage=false → raw file dict) or outerScope (move nested type to containing namespace scope → updated file content).")]
     public async Task<ToolResult<object>> MoveType(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         string destination,
         bool autoStage = true)

@@ -16,20 +16,30 @@ public class ApiAutomationEngine
     /// <summary>
     /// Scans a Web API controller and generates a typed HttpClient for it.
     /// </summary>
-    public async Task<string> GenerateHttpClientForControllerAsync(string filePath, string controllerName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateHttpClientForControllerAsync(FilePath filePath, string controllerName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
         if (controller == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var sb = new System.Text.StringBuilder();
@@ -59,7 +69,12 @@ public class ApiAutomationEngine
         }
 
         sb.AppendLine("}");
-        return sb.ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = sb.ToString(),
+            FilePath = filePath
+        };
     }
 
     private static string ExtractClientReturnType(string rawReturn)

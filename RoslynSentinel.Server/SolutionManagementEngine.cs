@@ -14,7 +14,7 @@ public class SolutionManagementEngine
     /// <summary>
     /// Creates a new project within the solution.
     /// </summary>
-    public async Task<string> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
@@ -39,13 +39,18 @@ public class SolutionManagementEngine
         });
 
         await process!.WaitForExitAsync(cancellationToken);
-        return $"Project {projectName} created and added to solution.";
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = null,
+            Message = $"Project {projectName} created and added to solution."
+        };
     }
 
     /// <summary>
     /// Splits a project by moving a folder's contents into a new project and updating references.
     /// </summary>
-    public async Task<string> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
     {
         // 1. Create target project
         await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
@@ -61,6 +66,11 @@ public class SolutionManagementEngine
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 
         // 3. Physically move files and update solution (simulated for expansion)
-        return $"Moved {filesToMove.Count} files from {sourceProjectName}/{folderName} to {targetProjectName}. References will need manual updating.";
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = null,
+            Message = $"Moved {filesToMove.Count} files from {sourceProjectName}/{folderName} to {targetProjectName}. References will need manual updating."
+        };
     }
 }

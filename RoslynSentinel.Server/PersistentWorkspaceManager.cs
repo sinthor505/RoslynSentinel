@@ -19,8 +19,8 @@ public class PersistentWorkspaceManager : IDisposable
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _disposed = false;
-    private readonly ConcurrentDictionary<string, string> _failedChangesCache = new();
-    private readonly ConcurrentDictionary<string, Dictionary<string, string>> _stagedChanges = new();
+    private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
+    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
@@ -54,7 +54,7 @@ public class PersistentWorkspaceManager : IDisposable
 
     public record StagedChangeSummary(
         string ChangeId,
-        List<string> AffectedFiles,
+        List<FilePath> AffectedFiles,
         string Description
     );
 
@@ -432,7 +432,7 @@ public class PersistentWorkspaceManager : IDisposable
     /// <summary>
     /// Stores proposed changes in memory and returns a unique ID for later application or inspection.
     /// </summary>
-    public string StageChanges(Dictionary<string, string> changes, string description)
+    public string StageChanges(Dictionary<FilePath, string> changes, string description)
     {
         var id = Guid.NewGuid().ToString("n")[..8];
         _stagedChanges[id] = changes;
@@ -446,7 +446,7 @@ public class PersistentWorkspaceManager : IDisposable
     /// <summary>
     /// Retrieves the content of staged changes by ID.
     /// </summary>
-    public Dictionary<string, string> GetStagedChanges(string changeId)
+    public Dictionary<FilePath, string> GetStagedChanges(string changeId)
     {
         if (_stagedChanges.TryGetValue(changeId, out var changes))
         {
@@ -567,7 +567,7 @@ public class PersistentWorkspaceManager : IDisposable
     public record ApplyChangesResult(
         bool Success,
         List<string> SucceededFiles,
-        Dictionary<string, string> FailedFiles,
+        Dictionary<FilePath, string> FailedFiles,
         string Summary,
         bool WorkspaceInSync = false,
         int WorkspaceVersion = 0,
@@ -580,11 +580,11 @@ public class PersistentWorkspaceManager : IDisposable
     /// BeforeSource on OperationItemRecords for undo support.
     /// Retries on IOExceptions (e.g. file locks).
     /// </summary>
-    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<string, string> changes, int retryCount = 3)
+    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3)
     {
         await _solutionLock.WaitAsync();
         var succeeded = new List<string>();
-        var failed = new Dictionary<string, string>();
+        var failed = new Dictionary<FilePath, string>();
 
         // Clear retry cache for this specific batch
         foreach (var key in changes.Keys)
@@ -757,7 +757,7 @@ public class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3)
     {
-        var toRetry = new Dictionary<string, string>();
+        var toRetry = new Dictionary<FilePath, string>();
 
         if (specificFiles == null || specificFiles.Count == 0)
         {
@@ -779,7 +779,7 @@ public class PersistentWorkspaceManager : IDisposable
 
         if (toRetry.Count == 0)
         {
-            return new ApplyChangesResult(true, new List<string>(), new Dictionary<string, string>(), "No matching failed changes found in cache to retry.");
+            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), "No matching failed changes found in cache to retry.");
         }
 
         return await ApplyProposedChangesAsync(toRetry, retryCount);

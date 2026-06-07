@@ -18,7 +18,7 @@ public class CodeSmellAndStyleEngine
     /// <summary>
     /// Scans a file for a massive range of IDE style and code smell rules (IDE0xxx, EPCxxx).
     /// </summary>
-    public async Task<List<CodeSmell>> ScanForSmellsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<CodeSmell>> ScanForSmellsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -47,15 +47,15 @@ public class CodeSmellAndStyleEngine
 
         // 2. Detect IDE0017: Simplify Object Initialization
         // (Heuristic: consecutive assignments to same variable after new)
-        
+
         // 3. Detect IDE0031: Use Null Propagation
         var binaryExprs = root.DescendantNodes().OfType<BinaryExpressionSyntax>();
         foreach (var bin in binaryExprs)
         {
-             if (bin.IsKind(SyntaxKind.NotEqualsExpression) && (bin.Right.IsKind(SyntaxKind.NullLiteralExpression) || bin.Left.IsKind(SyntaxKind.NullLiteralExpression)))
-             {
-                 // Potential candidates for ?. 
-             }
+            if (bin.IsKind(SyntaxKind.NotEqualsExpression) && (bin.Right.IsKind(SyntaxKind.NullLiteralExpression) || bin.Left.IsKind(SyntaxKind.NullLiteralExpression)))
+            {
+                // Potential candidates for ?. 
+            }
         }
 
         return smells;
@@ -64,19 +64,29 @@ public class CodeSmellAndStyleEngine
     /// <summary>
     /// Implements IDE0066: Use switch expression.
     /// </summary>
-    public async Task<string> UseSwitchExpressionAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> UseSwitchExpressionAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var switchStatements = root.DescendantNodes().OfType<SwitchStatementSyntax>().ToList();
@@ -110,10 +120,20 @@ public class CodeSmellAndStyleEngine
 
         if (replaceMap.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 }

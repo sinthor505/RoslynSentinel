@@ -18,12 +18,12 @@ public record ExtractMethodResult(
 
 public record RenameHunk(int LineNumber, string Before, string After, string? ContextBefore, string? ContextAfter);
 
-public record RenameFileChange(string FilePath, List<RenameHunk> Hunks);
+public record RenameFileChange(FilePath filePath, List<RenameHunk> Hunks);
 
 public record RenameSymbolResult(
     string OldName,
     string NewName,
-    Dictionary<string, string> PendingChanges,
+    Dictionary<FilePath, string> PendingChanges,
     List<RenameFileChange> FileChanges,
     string? Error = null);
 
@@ -76,63 +76,73 @@ public class RefactoringEngine
         _config = config;
     }
 
-    public async Task<string> FormatDocumentAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> FormatDocumentAsync(FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var formatted = await Formatter.FormatAsync(document, null, ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = (await formatted.GetTextAsync(ct)).ToString()
+        };
     }
 
-    public async Task<Dictionary<string, string>> ChangeSignatureAsync(string filePath, string methodName, int[] newParameterOrder, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> ChangeSignatureAsync(FilePath filePath, string methodName, int[] newParameterOrder, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(ct);
         if (root == null || semanticModel == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodDecl == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var parameters = methodDecl.ParameterList.Parameters.ToList();
         if (parameters.Count == 0)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         // Validate order array
         if (newParameterOrder.Length != parameters.Count)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         if (newParameterOrder.Distinct().Count() != parameters.Count)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
@@ -141,7 +151,7 @@ public class RefactoringEngine
         var updatedRoot = root.ReplaceNode(methodDecl, updatedMethodDecl);
         var updatedDoc = document.WithSyntaxRoot(updatedRoot);
 
-        var pendingChanges = new Dictionary<string, string>
+        var pendingChanges = new Dictionary<FilePath, string>
         {
             [filePath] = (await updatedDoc.GetTextAsync(ct)).ToString()
         };
@@ -203,7 +213,7 @@ public class RefactoringEngine
         }
 
         // Format all changed files
-        var result = new Dictionary<string, string>();
+        var result = new Dictionary<FilePath, string>();
         foreach (var kvp in pendingChanges)
         {
             var doc = solution.Projects.SelectMany(p => p.Documents)
@@ -223,7 +233,7 @@ public class RefactoringEngine
     }
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(
-        string filePath, int startLine, string startLineText, int endLine, string endLineText,
+        FilePath filePath, int startLine, string startLineText, int endLine, string endLineText,
         string newMethodName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractMethod"))
@@ -497,25 +507,25 @@ public class RefactoringEngine
         return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
 
-    public async Task<Dictionary<string, string>> MoveTypeToFileAsync(string filePath, string typeName, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> MoveTypeToFileAsync(FilePath filePath, string typeName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         var typeNode = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == typeName);
         if (typeNode == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
@@ -539,7 +549,7 @@ public class RefactoringEngine
         // Guard: if the type's name already matches the source file name, it's already in its own file — nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
@@ -552,15 +562,15 @@ public class RefactoringEngine
         var formattedOrigDoc = await Formatter.FormatAsync(updatedOrigDoc, null, ct);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(ct)).ToString();
 
-        return new Dictionary<string, string> { { filePath, updatedOrigContent }, { newPath, newContent } };
+        return new Dictionary<FilePath, string> { { filePath, updatedOrigContent }, { newPath, newContent } };
     }
 
-    private async Task<Dictionary<string, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken ct)
+    private async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken ct)
     {
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var allTypes = root.DescendantNodes()
@@ -570,7 +580,7 @@ public class RefactoringEngine
 
         if (allTypes.Count <= 1)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var fileBaseName = Path.GetFileNameWithoutExtension(document.FilePath ?? document.Name);
@@ -579,10 +589,10 @@ public class RefactoringEngine
 
         if (typesToMove.Count == 0)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
-        var changes = new Dictionary<string, string>();
+        var changes = new Dictionary<FilePath, string>();
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
 
         foreach (var typeNode in typesToMove)
@@ -686,11 +696,11 @@ public class RefactoringEngine
             : (CompilationUnitSyntax)root.ReplaceTrivia(toRemove, (_, _) => SyntaxFactory.Whitespace(""));
     }
 
-    public async Task<Dictionary<string, string>> MoveAllTypesToFilesAsync(string filePath, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -698,24 +708,24 @@ public class RefactoringEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         return await MoveAllTypesToFilesForDocumentAsync(document, ct);
     }
 
-    public async Task<Dictionary<string, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesInProjectAsync(string projectName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
             ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
 
-        var allChanges = new Dictionary<string, string>();
+        var allChanges = new Dictionary<FilePath, string>();
         foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
@@ -726,16 +736,16 @@ public class RefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<string, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesInSolutionAsync(CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
-        var allChanges = new Dictionary<string, string>();
+        var allChanges = new Dictionary<FilePath, string>();
         foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
@@ -746,11 +756,11 @@ public class RefactoringEngine
         return allChanges;
     }
 
-    public async Task<Dictionary<string, string>> ExtractInterfaceAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> ExtractInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractInterface"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -764,7 +774,7 @@ public class RefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         // Extract public instance methods (exclude static, constructors)
@@ -850,13 +860,13 @@ public class RefactoringEngine
         var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, ct);
         var origContent = (await formattedOrigDoc.GetTextAsync(ct)).ToString();
 
-        return new Dictionary<string, string> { { filePath, origContent }, { ifacePath, ifaceContent } };
+        return new Dictionary<FilePath, string> { { filePath, origContent }, { ifacePath, ifaceContent } };
     }
 
-    public async Task<RenameSymbolResult> RenameSymbolAsync(string filePath, string symbolName, string contextSnippet, string newName, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<RenameSymbolResult> RenameSymbolAsync(FilePath filePath, string symbolName, string contextSnippet, string newName, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         static RenameSymbolResult Err(string msg, string n) =>
-            new("", n, new Dictionary<string, string>(), new List<RenameFileChange>(), msg);
+            new("", n, new Dictionary<FilePath, string>(), new List<RenameFileChange>(), msg);
 
         if (!_config.IsFeatureEnabled("Rename"))
         {
@@ -912,7 +922,7 @@ public class RefactoringEngine
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(
             solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, ct);
 
-        var pendingChanges = new Dictionary<string, string>();
+        var pendingChanges = new Dictionary<FilePath, string>();
         var fileChanges = new List<RenameFileChange>();
         foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
         {
@@ -983,25 +993,40 @@ public class RefactoringEngine
 
     private static bool IsIdentChar(char c) => char.IsLetterOrDigit(c) || c == '_';
 
-    public async Task<string> ConvertIndexerToMethodAsync(string filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertIndexerToMethodAsync(FilePath filePath, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ConvertIndexerToMethod"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var indexer = root?.DescendantNodes().OfType<IndexerDeclarationSyntax>().FirstOrDefault();
         if (indexer == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Indexer not found."
+            };
         }
 
         var blockBody = indexer.AccessorList?.Accessors
@@ -1028,32 +1053,57 @@ public class RefactoringEngine
         }
         else
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Indexer not found."
+            };
         }
 
         var newRoot = root!.ReplaceNode(indexer, getter);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> AddRemoveParamsAsync(string filePath, string methodName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddRemoveParamsAsync(FilePath filePath, string methodName, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("AddRemoveParams"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null || !method.ParameterList.Parameters.Any())
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Method not found or has no parameters."
+            };
         }
 
         var lastParam = method.ParameterList.Parameters.Last();
@@ -1065,16 +1115,26 @@ public class RefactoringEngine
 
         var newParam = lastParam.WithModifiers(newModifiers);
         var newRoot = root!.ReplaceNode(lastParam, newParam);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> ReplaceMemberAsync(string filePath, string memberName, string newSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
@@ -1082,38 +1142,68 @@ public class RefactoringEngine
             .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
         if (member == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Member not found."
+            };
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
         if (newMember == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Failed to parse new member."
+            };
         }
 
-        return root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> AddMemberAsync(string filePath, string containerName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Container not found."
+            };
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Failed to parse new member."
+            };
         }
 
         var newContainer = container switch
@@ -1124,16 +1214,26 @@ public class RefactoringEngine
             StructDeclarationSyntax s => (BaseTypeDeclarationSyntax)s.AddMembers(newMember),
             _ => container
         };
-        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> RemoveMemberAsync(string filePath, string memberName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
@@ -1141,7 +1241,12 @@ public class RefactoringEngine
             .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
         if (member == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Member not found."
+            };
         }
 
         // Check for usages using SymbolFinder before removing
@@ -1156,39 +1261,69 @@ public class RefactoringEngine
 
                 if (usageCount > 0)
                 {
-                    return $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}";
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.CannotRemove,
+                        FilePath = filePath,
+                        Message = $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}"
+                    };
                 }
             }
         }
 
-        return root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> ConvertToPrimaryConstructorAsync(string filePath, string className, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertToPrimaryConstructorAsync(FilePath filePath, string className, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("PrimaryConstructors"))
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature 'PrimaryConstructors' is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Class not found."
+            };
         }
 
         var ctor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         if (ctor == null || ctor.ParameterList.Parameters.Count == 0)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Constructor not found or has no parameters."
+            };
         }
 
         // Minimal implementation for tests: convert to class C(int x) and remove fields/ctor
@@ -1200,21 +1335,26 @@ public class RefactoringEngine
         newClass = newClass.WithMembers(SyntaxFactory.List(members));
 
         var newRoot = root!.ReplaceNode(classNode, newClass);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<Dictionary<string, string>> SafeDeleteSymbolAsync(string filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> SafeDeleteSymbolAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
@@ -1223,7 +1363,7 @@ public class RefactoringEngine
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
         if (pos < 0)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var node = root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0));
@@ -1234,7 +1374,7 @@ public class RefactoringEngine
             ?? model!.GetSymbolInfo(node, ct).Symbol;
         if (symbol == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         // Check for reflection usage
@@ -1264,7 +1404,7 @@ public class RefactoringEngine
         if (totalRefCount > 0)
         {
             _logger.LogWarning("SafeDeleteUnusedSymbol blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
-            return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {totalRefCount} location(s)." } };
+            return new Dictionary<FilePath, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used in {totalRefCount} location(s)." } };
         }
 
         // Additional safety check: scan syntax tree for any identifier matching the symbol name
@@ -1297,7 +1437,7 @@ public class RefactoringEngine
                             {
                                 // This is a usage of our symbol (not the declaration)
                                 _logger.LogWarning("SafeDeleteUnusedSymbol blocked: symbol '{SymbolName}' has usages and cannot be safely deleted.", symbol.Name);
-                                return new Dictionary<string, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used and cannot be safely removed." } };
+                                return new Dictionary<FilePath, string> { { "ERROR", $"Cannot delete '{symbol.Name}': symbol is used and cannot be safely removed." } };
                             }
                         }
                         catch { }
@@ -1309,17 +1449,22 @@ public class RefactoringEngine
         var member = node.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
         if (member == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
-        return new Dictionary<string, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
+        return new Dictionary<FilePath, string> { { filePath, root.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.ToFullString() } };
     }
 
-    public async Task<string> ConvertExpressionBodyAsync(string filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertExpressionBodyAsync(FilePath filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature 'ConvertExpressionBody' is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1327,7 +1472,12 @@ public class RefactoringEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
@@ -1339,7 +1489,12 @@ public class RefactoringEngine
             var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
             if (pos < 0)
             {
-                return $"Error: {snippetError}";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// {snippetError}"
+                };
             }
 
             target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
@@ -1358,7 +1513,12 @@ public class RefactoringEngine
 
         if (target == null)
         {
-            return $"Error: Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Member '{memberName}' not found in '{Path.GetFileName(filePath)}'."
+            };
         }
 
         SyntaxNode newTarget;
@@ -1376,7 +1536,12 @@ public class RefactoringEngine
                 }
                 else
                 {
-                    return $"Error: Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted.";
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.CannotConvert,
+                        FilePath = filePath,
+                        Message = $"// Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted."
+                    };
                 }
             }
             else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
@@ -1391,12 +1556,22 @@ public class RefactoringEngine
                 }
                 else
                 {
-                    return $"Error: Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement.";
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.CannotConvert,
+                        FilePath = filePath,
+                        Message = $"// Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement."
+                    };
                 }
             }
             else
             {
-                return $"Error: Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotConvert,
+                    FilePath = filePath,
+                    Message = $"// Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body."
+                };
             }
         }
         else // ToBlockBody
@@ -1423,21 +1598,36 @@ public class RefactoringEngine
             }
             else
             {
-                return $"Error: Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property).";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotConvert,
+                    FilePath = filePath,
+                    Message = $"// Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property)."
+                };
             }
         }
 
         var newRoot = root.ReplaceNode(target, newTarget.NormalizeWhitespace());
         var doc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(doc, null, ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = (await formatted.GetTextAsync(ct)).ToString()
+        };
     }
 
-    public async Task<string> ExtractConstantAsync(string filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ExtractConstantAsync(FilePath filePath, string contextSnippet, string constantName, string visibility = "private", string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractConstant"))
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// ExtractConstant feature is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1445,7 +1635,12 @@ public class RefactoringEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
@@ -1453,7 +1648,12 @@ public class RefactoringEngine
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
         {
-            return $"Error: {snippetError}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// Error: {snippetError}"
+            };
         }
 
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
@@ -1461,13 +1661,23 @@ public class RefactoringEngine
             ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
         if (literal == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: literal not found."
+            };
         }
 
         var containingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (containingType == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: containing type not found."
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
@@ -1517,16 +1727,26 @@ public class RefactoringEngine
         var newType = currentType.WithMembers(((TypeDeclarationSyntax)currentType).Members.Insert(0, constDecl));
         trackedRoot = trackedRoot.ReplaceNode(currentType, newType);
 
-        return trackedRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = trackedRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> ExtractLocalVariableAsync(
-        string filePath, string contextSnippet, string? newVariableName = null,
+    public async Task<DocumentEditResult> ExtractLocalVariableAsync(
+        FilePath filePath, string contextSnippet, string? newVariableName = null,
         string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         if (!_config.IsFeatureEnabled("ExtractLocalVariable"))
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// ExtractLocalVariable feature is disabled."
+            };
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1534,7 +1754,12 @@ public class RefactoringEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = (await document.GetSyntaxRootAsync(ct))!;
@@ -1543,7 +1768,12 @@ public class RefactoringEngine
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
         {
-            return $"Error: {snippetError}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// Error: {snippetError}"
+            };
         }
 
         // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync
@@ -1557,27 +1787,47 @@ public class RefactoringEngine
 
         if (expression == null)
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: expression not found."
+            };
         }
 
         // Find the containing method
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null || containingMethod.Body == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: containing method not found."
+            };
         }
 
         // Find the containing statement and block
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: containing statement not found."
+            };
         }
 
         var containingBlock = containingStatement.Parent as BlockSyntax;
         if (containingBlock == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: containing block not found."
+            };
         }
 
         // Skip if expression is already a standalone variable declaration
@@ -1586,13 +1836,23 @@ public class RefactoringEngine
             existingDecl.Declaration.Variables[0].Initializer?.Value?.IsEquivalentTo(expression) == true)
         {
             var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
-            return $"// '{existingName}' is already a local variable — nothing to extract.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = $"// '{existingName}' is already a local variable — nothing to extract."
+            };
         }
 
         // Skip if expression has potential side effects (method calls, assignments)
         if (HasSideEffects(expression))
         {
-            return "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: expression has potential side effects."
+            };
         }
 
         // Generate or validate variable name
@@ -1651,14 +1911,24 @@ public class RefactoringEngine
         var idx = currentBlock.Statements.IndexOf(currentStatement);
         if (idx < 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Cannot convert: statement index not found."
+            };
         }
 
         // Insert variable declaration before the statement
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
         newRoot = newRoot.ReplaceNode(currentBlock, newBlock);
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
     private static bool HasSideEffects(ExpressionSyntax expression)
@@ -1725,7 +1995,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<ControlFlowSummary> AnalyzeControlFlowAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1786,7 +2056,7 @@ public class RefactoringEngine
         );
     }
 
-    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(string filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<DataFlowSummary> AnalyzeDataFlowAsync(FilePath filePath, string methodName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -1844,26 +2114,41 @@ public class RefactoringEngine
         );
     }
 
-    public async Task<string> AddUsingDirectiveAsync(string filePath, string namespaceName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePath filePath, string namespaceName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         // Idempotency check
         var targetName = namespaceName.StartsWith("static ") ? namespaceName[7..] : namespaceName;
         if (root.Usings.Any(u => u.Name?.ToString() == targetName))
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// Using directive already exists."
+            };
         }
 
         UsingDirectiveSyntax newUsing;
@@ -1882,23 +2167,38 @@ public class RefactoringEngine
         }
 
         var newRoot = root.AddUsings(newUsing);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> AddEnumValueAsync(string filePath, string enumName, string valueName, int? explicitValue = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddEnumValueAsync(FilePath filePath, string enumName, string valueName, int? explicitValue = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var enumNode = root?.DescendantNodes().OfType<EnumDeclarationSyntax>().FirstOrDefault(e => e.Identifier.Text == enumName);
         if (enumNode == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Enum not found."
+            };
         }
 
         var newMember = SyntaxFactory.EnumMemberDeclaration(valueName);
@@ -1912,29 +2212,50 @@ public class RefactoringEngine
         }
 
         var newEnumNode = enumNode.AddMembers(newMember);
-        return root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace().ToFullString();
+        var newRoot = root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> InsertMemberAfterAsync(string filePath, string containerName, string afterMemberName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Container not found."
+            };
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid member source."
+            };
         }
 
         if (container is TypeDeclarationSyntax typeDecl)
@@ -1952,33 +2273,54 @@ public class RefactoringEngine
             }
 
             var newContainer = typeDecl.WithMembers(newMembers);
-            return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+            var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
         }
 
         // Fallback: append
         return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
     }
 
-    public async Task<string> InsertMemberBeforeAsync(string filePath, string containerName, string beforeMemberName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePath filePath, string containerName, string beforeMemberName, string newMemberSource, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Container not found."
+            };
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid member source."
+            };
         }
 
         if (container is TypeDeclarationSyntax typeDecl)
@@ -1996,25 +2338,41 @@ public class RefactoringEngine
             }
 
             var newContainer = typeDecl.WithMembers(newMembers);
-            return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+            var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
         }
 
         return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
     }
 
-    public async Task<string> AddAttributeAsync(string filePath, string targetName, string attributeSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid member source."
+            };
         }
 
         var normalizedSource = attributeSource.Trim();
@@ -2027,7 +2385,12 @@ public class RefactoringEngine
         var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
         if (attrList == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid attribute source."
+            };
         }
 
         // Try member first, then type declaration
@@ -2036,7 +2399,13 @@ public class RefactoringEngine
         if (memberNode != null)
         {
             var newMember = memberNode.AddAttributeLists(attrList);
-            return root.ReplaceNode(memberNode, newMember).NormalizeWhitespace().ToFullString();
+            var newRoot = root.ReplaceNode(memberNode, newMember).NormalizeWhitespace();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
         }
 
         var typeNode = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
@@ -2044,52 +2413,94 @@ public class RefactoringEngine
         if (typeNode != null)
         {
             var newType = typeNode.AddAttributeLists(attrList);
-            return root.ReplaceNode(typeNode, newType).NormalizeWhitespace().ToFullString();
+            var newRoot = root.ReplaceNode(typeNode, newType).NormalizeWhitespace();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
         }
 
-        return root.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.CannotEdit,
+            FilePath = filePath,
+            Message = "// Cannot edit: target not found."
+        };
     }
 
-    public async Task<string> AddBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: type not found."
+            };
         }
 
         // Idempotency check
         if (container.BaseList?.Types.Any(t => t.ToString().Contains(baseTypeName)) == true)
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: base type already exists."
+            };
         }
 
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(baseTypeName));
         var newContainer = container.AddBaseListTypes(baseType);
-        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> RemoveAttributeAsync(string filePath, string targetName, string attributeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var attrCore = attributeName.EndsWith("Attribute") ? attributeName[..^9] : attributeName;
@@ -2107,7 +2518,12 @@ public class RefactoringEngine
 
         if (target is not MemberDeclarationSyntax memberTarget)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
         }
 
         var newAttrLists = memberTarget.AttributeLists
@@ -2116,28 +2532,49 @@ public class RefactoringEngine
             .ToList();
 
         var newMember = memberTarget.WithAttributeLists(SyntaxFactory.List(newAttrLists));
-        return root.ReplaceNode(memberTarget, newMember).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(memberTarget, newMember).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> RemoveBaseTypeAsync(string filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: type not found."
+            };
         }
 
         if (container.BaseList == null)
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: base type not found."
+            };
         }
 
         var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
@@ -2145,22 +2582,38 @@ public class RefactoringEngine
             ? container.WithBaseList(null)
             : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
 
-        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> ChangeAccessibilityAsync(string filePath, string targetName, string accessibility, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         SyntaxKind[] newKinds = accessibility.ToLowerInvariant() switch
@@ -2184,35 +2637,61 @@ public class RefactoringEngine
             .FirstOrDefault(m => GetMemberName(m) == targetName);
         if (target == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
         }
 
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
-        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> AddModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
         if (target == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -2223,34 +2702,60 @@ public class RefactoringEngine
 
         if (target.Modifiers.Any(m => m.IsKind(kind)))
         {
-            return root.ToFullString(); // idempotent
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: modifier already exists."
+            };
         }
 
         var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
         var newModifiers = target.Modifiers.Add(token);
-        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> RemoveModifierAsync(string filePath, string targetName, string modifier, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
         if (target == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -2261,33 +2766,59 @@ public class RefactoringEngine
 
         if (!target.Modifiers.Any(m => m.IsKind(kind)))
         {
-            return root.ToFullString(); // idempotent
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: modifier not found."
+            };
         }
 
         var newModifiers = SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind)));
-        return root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> AddSummaryCommentAsync(string filePath, string targetName, string summaryText, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .FirstOrDefault(m => GetMemberName(m) == targetName);
         if (target == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
         }
 
         var docText = $"/// <summary>\n/// {summaryText}\n/// </summary>\nvoid __Dummy__() {{}}";
@@ -2301,17 +2832,23 @@ public class RefactoringEngine
             .ToList();
 
         var newTrivia = SyntaxFactory.TriviaList(docTrivia.Concat(stripped));
-        return root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia)).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia)).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> AddPropertyAsync(string filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, CancellationToken ct = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
         return await AddMemberAsync(filePath, containerName, source, ct);
     }
 
-    public async Task<string> AddFieldAsync(string filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, CancellationToken ct = default)
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
@@ -2335,20 +2872,30 @@ public class RefactoringEngine
         return await AddMemberAsync(filePath, containerName, parts.ToString(), ct);
     }
 
-    public async Task<string> SortMembersAsync(string filePath, string containerName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
         if (container == null)
         {
-            return root?.ToFullString() ?? "";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: container not found."
+            };
         }
 
         static int CategoryOf(MemberDeclarationSyntax m) => m switch
@@ -2377,22 +2924,38 @@ public class RefactoringEngine
             .ToList();
 
         var newContainer = container.WithMembers(SyntaxFactory.List(sorted));
-        return root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString();
+        var newRoot = root!.ReplaceNode(container, newContainer).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> WrapInTryCatchAsync(string filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var tree = root.SyntaxTree;
@@ -2415,7 +2978,12 @@ public class RefactoringEngine
             .FirstOrDefault();
         if (block == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not find a suitable block."
+            };
         }
 
         var targeted = block.Statements
@@ -2423,7 +2991,12 @@ public class RefactoringEngine
             .ToList();
         if (targeted.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not find any statements in the specified range."
+            };
         }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
@@ -2464,29 +3037,50 @@ public class RefactoringEngine
             .ToList();
 
         var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
-        return root.ReplaceNode(block, newBlock).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(block, newBlock).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> AddConstructorParameterAsync(string filePath, string className, string paramName, string paramType, string? fieldName = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: class not found."
+            };
         }
 
         var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
@@ -2549,16 +3143,27 @@ public class RefactoringEngine
         }
 
         var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers));
-        return root.ReplaceNode(classNode, newClassNode).NormalizeWhitespace().ToFullString();
+        var newRoot = root.ReplaceNode(classNode, newClassNode).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
     }
 
-    public async Task<string> WrapInRegionAsync(string filePath, int startLine, int endLine, string regionName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, int startLine, int endLine, string regionName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var text = await document.GetTextAsync(ct);
@@ -2579,7 +3184,12 @@ public class RefactoringEngine
                 sb.AppendLine("#endregion");
             }
         }
-        return sb.ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = sb.ToString()
+        };
     }
 
     private string? GetMemberName(MemberDeclarationSyntax member)
@@ -2596,7 +3206,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<string> SyncInterfaceToImplementationAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePath filePath, string className, string interfaceName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
@@ -2605,20 +3215,35 @@ public class RefactoringEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (classDocument == null)
         {
-            return "// Class file not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Class file not found."
+            };
         }
 
         var classRoot = await classDocument.GetSyntaxRootAsync(ct);
         if (classRoot == null)
         {
-            return "// Could not parse class file.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse class file."
+            };
         }
 
         var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return "// Class not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Class not found."
+            };
         }
 
         // Collect public non-static non-override methods and properties from the class
@@ -2677,7 +3302,12 @@ public class RefactoringEngine
 
         if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
         {
-            return "// Interface not found.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Interface not found."
+            };
         }
 
         // Collect existing interface member signatures (for deduplication)
@@ -2752,7 +3382,12 @@ public class RefactoringEngine
 
         if (newMembers.Count == 0)
         {
-            return interfaceRoot.ToFullString(); // Already up to date
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
+                UpdatedText = interfaceRoot.ToFullString() // Already up to date
+            };
         }
 
         var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
@@ -2762,33 +3397,58 @@ public class RefactoringEngine
         if (interfaceDocument != classDocument)
         {
             var updatedPath = interfaceDocument.FilePath ?? interfaceDocument.Name;
-            return $"// Updated file: {updatedPath}\n" + newInterfaceRoot.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = updatedPath,
+                UpdatedText = "// Updated file: " + updatedPath + "\n" + newInterfaceRoot.NormalizeWhitespace().ToFullString()
+            };
         }
 
-        return newInterfaceRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
+            UpdatedText = newInterfaceRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 
-    public async Task<string> UpdateXmlDocsFromSignatureAsync(string filePath, string methodName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UpdateXmlDocsFromSignatureAsync(FilePath filePath, string methodName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse document."
+            };
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Method not found."
+            };
         }
 
         var currentParams = method.ParameterList.Parameters
@@ -2833,14 +3493,24 @@ public class RefactoringEngine
             var newLeadingTrivia = method.GetLeadingTrivia().Insert(0, newTrivia);
             var newMethod = method.WithLeadingTrivia(newLeadingTrivia);
             var newRoot = root.ReplaceNode(method, newMethod);
-            return newRoot.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
         }
 
         // XML doc exists — update it
         var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
         if (xmlDoc == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse XML documentation."
+            };
         }
 
         // Find existing param tags
@@ -2867,7 +3537,12 @@ public class RefactoringEngine
 
         if (toAdd.Count == 0 && toRemove.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// No changes needed."
+            };
         }
 
         // Build updated XML doc content
@@ -2898,7 +3573,12 @@ public class RefactoringEngine
         var updatedLeadingTrivia = method.GetLeadingTrivia().Replace(xmlTrivia, updatedTrivia);
         var updatedMethod = method.WithLeadingTrivia(updatedLeadingTrivia);
         var updatedRoot = root.ReplaceNode(method, updatedMethod);
-        return updatedRoot.ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = updatedRoot.ToFullString()
+        };
     }
 
     /// <summary>
@@ -2906,7 +3586,7 @@ public class RefactoringEngine
     /// Shows changed line ranges with ±3 lines of context (like a unified diff).
     /// Returns Changed=false and an empty hunks list if the file is already formatted correctly.
     /// </summary>
-    public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(string filePath, CancellationToken ct = default)
+    public async Task<FormatPreviewResult> FormatDocumentPreviewAsync(FilePath filePath, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)

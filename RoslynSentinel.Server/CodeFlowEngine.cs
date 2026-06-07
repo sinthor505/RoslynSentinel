@@ -16,28 +16,43 @@ public class CodeFlowEngine
     /// <summary>
     /// Reduces block depth by finding if statements that encompass the whole method body and inverting them to return early.
     /// </summary>
-    public async Task<string> ReduceBlockDepthAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReduceBlockDepthAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         try
         {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
+            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+            if (document == null)
             {
-                return $"// Error: File '{filePath}' not found.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.DocumentNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: File '{filePath}' not found."
+                };
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+            if (root == null)
             {
-                return $"// Error: Failed to get syntax root for '{filePath}'.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = $"// Error: Failed to get syntax root for '{filePath}'."
+                };
             }
 
             var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        
-        if (methodNode == null || methodNode.Body == null)
+
+            if (methodNode == null || methodNode.Body == null)
             {
-                return $"// Error: Method '{methodName}' not found or has no body.";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: Method '{methodName}' not found or has no body."
+                };
             }
 
             // Look for: 
@@ -53,38 +68,53 @@ public class CodeFlowEngine
             // }
 
             if (methodNode.Body.Statements.Count == 1 && methodNode.Body.Statements[0] is IfStatementSyntax ifStmt)
-        {
-            if (ifStmt.Else == null) // Must not have an else
             {
-                var invertedCondition = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(ifStmt.Condition));
-                var earlyReturn = SyntaxFactory.IfStatement(
-                    invertedCondition,
-                    SyntaxFactory.ReturnStatement()
-                );
-
-                var newStatements = new List<StatementSyntax> { earlyReturn };
-                
-                if (ifStmt.Statement is BlockSyntax block)
+                if (ifStmt.Else == null) // Must not have an else
                 {
-                    newStatements.AddRange(block.Statements);
-                }
-                else
-                {
-                    newStatements.Add(ifStmt.Statement);
-                }
+                    var invertedCondition = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(ifStmt.Condition));
+                    var earlyReturn = SyntaxFactory.IfStatement(
+                        invertedCondition,
+                        SyntaxFactory.ReturnStatement()
+                    );
 
-                var newBody = SyntaxFactory.Block(newStatements);
-                var newMethodNode = methodNode.WithBody(newBody);
-                var newRoot = root.ReplaceNode(methodNode, newMethodNode);
-                return newRoot.NormalizeWhitespace().ToFullString();
+                    var newStatements = new List<StatementSyntax> { earlyReturn };
+
+                    if (ifStmt.Statement is BlockSyntax block)
+                    {
+                        newStatements.AddRange(block.Statements);
+                    }
+                    else
+                    {
+                        newStatements.Add(ifStmt.Statement);
+                    }
+
+                    var newBody = SyntaxFactory.Block(newStatements);
+                    var newMethodNode = methodNode.WithBody(newBody);
+                    var newRoot = root.ReplaceNode(methodNode, newMethodNode);
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.Modified,
+                        UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+                        FilePath = filePath
+                    };
+                }
             }
-        }
 
-        return root.ToFullString(); // No optimization could be safely applied
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// Info: No optimization could be safely applied."
+            };
         }
         catch (Exception ex)
         {
-            return $"// Error: {ex.Message}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Error: {ex.Message}"
+            };
         }
     }
 }

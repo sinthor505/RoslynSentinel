@@ -12,7 +12,7 @@ public enum StackOverflowRisk
 public sealed record StackOverflowFinding(
     string Kind,
     StackOverflowRisk Risk,
-    string FilePath,
+    FilePath FilePath,
     int LineNumber,
     string ContainingMember,
     string Description,
@@ -20,7 +20,7 @@ public sealed record StackOverflowFinding(
     string? Recommendation = null);
 
 public sealed record StackOverflowReport(
-    string FilePath,
+    FilePath FilePath,
     int DefiniteCount,
     int SuspiciousCount,
     int InformationalCount,
@@ -35,7 +35,7 @@ public sealed class StackOverflowEngine
         => _workspaceManager = workspaceManager;
 
     public async Task<StackOverflowReport> AnalyzeStackOverflowRisksAsync(
-        string filePath,
+        FilePath filePath,
         bool includeInformational = false)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -104,7 +104,7 @@ public sealed class StackOverflowEngine
     // ── Direct unconditional / conditional recursion ──────────────────────────
 
     private static List<StackOverflowFinding> DetectDirectRecursion(
-        SyntaxNode root, string filePath, SemanticModel? model = null)
+        SyntaxNode root, FilePath filePath, SemanticModel? model = null)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -189,7 +189,7 @@ public sealed class StackOverflowEngine
 
     // ── Property getter / setter reads / writes itself ─────────────────────────
 
-    private static List<StackOverflowFinding> DetectPropertySelfReference(SyntaxNode root, string filePath)
+    private static List<StackOverflowFinding> DetectPropertySelfReference(SyntaxNode root, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -250,7 +250,7 @@ public sealed class StackOverflowEngine
 
     // ── Override calls itself instead of base ─────────────────────────────────
 
-    private static List<StackOverflowFinding> DetectOverrideCallingSelf(SyntaxNode root, string filePath)
+    private static List<StackOverflowFinding> DetectOverrideCallingSelf(SyntaxNode root, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -293,7 +293,7 @@ public sealed class StackOverflowEngine
     //
     // Works purely syntactically — both classes must be in the same file.
 
-    private static List<StackOverflowFinding> DetectInFileInheritanceCycles(SyntaxNode root, string filePath)
+    private static List<StackOverflowFinding> DetectInFileInheritanceCycles(SyntaxNode root, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -308,7 +308,7 @@ public sealed class StackOverflowEngine
         }
 
         // Single-level inheritance map for classes defined in this file
-        var inheritance = new Dictionary<string, string>();
+        var inheritance = new Dictionary<FilePath, string>();
         foreach (var (name, decl) in classMap)
         {
             var baseTypeName = decl.BaseList?.Types.FirstOrDefault()?.Type switch
@@ -442,7 +442,7 @@ public sealed class StackOverflowEngine
     // ── Cross-file inheritance cycles (semantic model + solution navigation) ──
 
     private static async Task<List<StackOverflowFinding>> DetectCrossFileInheritanceCyclesAsync(
-        SyntaxNode root, SemanticModel model, Solution solution, string filePath)
+        SyntaxNode root, SemanticModel model, Solution solution, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -544,7 +544,7 @@ public sealed class StackOverflowEngine
     // ── Argument not decreasing in conditional recursion ─────────────────────
 
     private static List<StackOverflowFinding> DetectArgumentNotDecreasing(
-        SyntaxNode root, SemanticModel model, string filePath)
+        SyntaxNode root, SemanticModel model, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -640,7 +640,7 @@ public sealed class StackOverflowEngine
 
     // ── Mutual recursion via in-file call graph ───────────────────────────────
 
-    private static List<StackOverflowFinding> DetectCallGraphCycles(SyntaxNode root, string filePath)
+    private static List<StackOverflowFinding> DetectCallGraphCycles(SyntaxNode root, FilePath filePath)
     {
         var methods = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
@@ -689,7 +689,7 @@ public sealed class StackOverflowEngine
         HashSet<string> reported,
         List<StackOverflowFinding> findings,
         MethodDeclarationSyntax startSyntax,
-        string filePath)
+        FilePath filePath)
     {
         if (!callMap.TryGetValue(current, out var callees))
         {
@@ -749,7 +749,7 @@ public sealed class StackOverflowEngine
     // ── Deep static call chain (informational) ────────────────────────────────
 
     private static List<StackOverflowFinding> DetectDeepCallChain(
-        SyntaxNode root, string filePath, int threshold = 40)
+        SyntaxNode root, FilePath filePath, int threshold = 40)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -816,7 +816,7 @@ public sealed class StackOverflowEngine
     //   OverloadCycle         — two overloads delegate to each other (mutual recursion)
 
     internal static List<StackOverflowFinding> DetectMisboundOverloadChains(
-        SyntaxNode root, SemanticModel model, string filePath)
+        SyntaxNode root, SemanticModel model, FilePath filePath)
     {
         var findings = new List<StackOverflowFinding>();
 
@@ -1084,7 +1084,7 @@ public sealed class StackOverflowEngine
         argText.StartsWith($"{param}+", StringComparison.Ordinal);
 
     private static StackOverflowFinding PropertyFinding(
-        string kind, string filePath, int line, string member, string description) =>
+        string kind, FilePath filePath, int line, string member, string description) =>
         new(kind, StackOverflowRisk.Definite, filePath, line, member, description,
             Recommendation: "Introduce a private backing field (e.g. '_fieldName') and use it instead of the property name");
 
@@ -1180,7 +1180,7 @@ public sealed class StackOverflowEngine
             _ => null
         };
 
-    private static string BuildSummary(List<StackOverflowFinding> findings, string filePath)
+    private static string BuildSummary(List<StackOverflowFinding> findings, FilePath filePath)
     {
         if (findings.Count == 0)
         {

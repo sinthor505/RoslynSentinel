@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 namespace RoslynSentinel.Server;
 
-public record DeadCodeReport(string FilePath, string SymbolName, int Line, int Column, string Type);
+public record DeadCodeReport(FilePath filePath, string SymbolName, int Line, int Column, string Type);
 
 public class DeadCodeEngine
 {
@@ -16,7 +16,7 @@ public class DeadCodeEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(string filePath, string className, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -77,7 +77,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFieldsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> DetectUnusedPrivateFieldsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -130,7 +130,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariablesAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> DetectUnusedLocalVariablesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -188,7 +188,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> FindUnusedConstructorsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> FindUnusedConstructorsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -240,7 +240,7 @@ public class DeadCodeEngine
         return reports;
     }
 
-    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptionsAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

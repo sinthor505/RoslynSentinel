@@ -16,13 +16,18 @@ public class MappingEngine
     /// <summary>
     /// Generates a mapping method between two types based on property names.
     /// </summary>
-    public async Task<string> GenerateMappingAsync(string filePath, string fromType, string toType, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateMappingAsync(FilePath filePath, string fromType, string toType, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new FileNotFoundException($"File not found: {filePath}");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var compilation = await document.Project.GetCompilationAsync(cancellationToken);
@@ -37,9 +42,14 @@ public class MappingEngine
 
         if (fromSymbol == null || toSymbol == null)
         {
-            return $"// Could not resolve symbols for '{fromType}' or '{toType}'.\n" +
-                   $"// Tip: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified metadata name\n" +
-                   $"// (e.g. 'MyApp.Commands.CreateRecipeCommand').  Ensure the types are in the loaded solution.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Could not resolve symbols for '{fromType}' or '{toType}'.\n" +
+                          $"// Tip: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified metadata name\n" +
+                          $"// (e.g. 'MyApp.Commands.CreateRecipeCommand').  Ensure the types are in the loaded solution."
+            };
         }
 
         var fromProps = fromSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
@@ -66,19 +76,29 @@ public class MappingEngine
                 SyntaxFactory.Parameter(SyntaxFactory.Identifier("dest")).WithType(SyntaxFactory.ParseTypeName(toSymbol.Name)))
             .WithBody(SyntaxFactory.Block(assignments));
 
-        return mappingMethod.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = mappingMethod.NormalizeWhitespace().ToFullString()
+        };
     }
 
     /// <summary>
     /// Inverts the direction of all assignments in a selected block of code.
     /// </summary>
-    public async Task<string> InvertAssignmentsAsync(string filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePath filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new FileNotFoundException($"File not found: {filePath}");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -88,12 +108,22 @@ public class MappingEngine
         var nodes = root?.DescendantNodes(span).OfType<AssignmentExpressionSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            throw new InvalidOperationException($"No assignment expressions found in the specified range: {startLine}-{endLine}");
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// No assignment expressions found in the specified range: {startLine}-{endLine}"
+            };
         }
 
         var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
             newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left));
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
     }
 }

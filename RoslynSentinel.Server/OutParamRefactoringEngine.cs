@@ -25,7 +25,7 @@ public class OutParamRefactoringEngine
     }
 
     public async Task<OutParamConversionResult> ConvertOutParamsToValueTupleAsync(
-        string filePath, string methodName, CancellationToken ct = default)
+        FilePath filePath, string methodName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 

@@ -17,7 +17,7 @@ public class RefinementEngine
     /// <summary>
     /// Pulls a member (method/property) up to the base class or interface.
     /// </summary>
-    public async Task<Dictionary<string, string>> PullUpMemberAsync(string filePath, string className, string memberName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -25,19 +25,19 @@ public class RefinementEngine
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
-                return new Dictionary<string, string> { { "error", $"File '{filePath}' not found." } };
+                return new Dictionary<FilePath, string> { { "error", $"File '{filePath}' not found." } };
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
-                return new Dictionary<string, string> { { "error", $"Failed to get syntax root for '{filePath}'." } };
+                return new Dictionary<FilePath, string> { { "error", $"Failed to get syntax root for '{filePath}'." } };
             }
 
             var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
             if (classNode == null)
             {
-                return new Dictionary<string, string> { { "error", $"Class '{className}' not found." } };
+                return new Dictionary<FilePath, string> { { "error", $"Class '{className}' not found." } };
             }
 
             var member = classNode.Members.FirstOrDefault(m =>
@@ -46,7 +46,7 @@ public class RefinementEngine
 
             if (member == null)
             {
-                return new Dictionary<string, string> { { "error", $"Member '{memberName}' not found in class '{className}'." } };
+                return new Dictionary<FilePath, string> { { "error", $"Member '{memberName}' not found in class '{className}'." } };
             }
 
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -55,38 +55,38 @@ public class RefinementEngine
 
             if (baseType == null || baseType.SpecialType == SpecialType.System_Object)
             {
-                return new Dictionary<string, string> { { "error", "No base class found to pull up to." } };
+                return new Dictionary<FilePath, string> { { "error", "No base class found to pull up to." } };
             }
 
             var baseFile = baseType.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree.FilePath;
             if (baseFile == null)
             {
-                return new Dictionary<string, string> { { "error", "Base class source file not found." } };
+                return new Dictionary<FilePath, string> { { "error", "Base class source file not found." } };
             }
 
             if (baseType.DeclaringSyntaxReferences.Length == 0)
             {
-                return new Dictionary<string, string> { { "error", "Base class is in an external assembly and cannot be modified." } };
+                return new Dictionary<FilePath, string> { { "error", "Base class is in an external assembly and cannot be modified." } };
             }
 
             var baseDoc = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == baseFile);
             if (baseDoc == null)
             {
-                return new Dictionary<string, string> { { "error", $"Base class source document not found at '{baseFile}'." } };
+                return new Dictionary<FilePath, string> { { "error", $"Base class source document not found at '{baseFile}'." } };
             }
 
             var baseRoot = await baseDoc.GetSyntaxRootAsync(cancellationToken);
             if (baseRoot == null)
             {
-                return new Dictionary<string, string> { { "error", $"Failed to get syntax root for base class file '{baseFile}'." } };
+                return new Dictionary<FilePath, string> { { "error", $"Failed to get syntax root for base class file '{baseFile}'." } };
             }
 
             var baseClassNode = baseRoot.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == baseType.Name);
             if (baseClassNode == null)
             {
-                return new Dictionary<string, string> { { "error", $"Base class '{baseType.Name}' not found in '{baseFile}'." } };
+                return new Dictionary<FilePath, string> { { "error", $"Base class '{baseType.Name}' not found in '{baseFile}'." } };
             }
 
             // Remove 'override', add 'virtual' (if not already abstract/virtual)
@@ -116,13 +116,13 @@ public class RefinementEngine
             var newDerivedRoot = root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives);
             if (newDerivedRoot == null)
             {
-                return new Dictionary<string, string> { { "error", "Failed to remove member from derived class." } };
+                return new Dictionary<FilePath, string> { { "error", "Failed to remove member from derived class." } };
             }
 
             var newBaseClassNode = baseClassNode.AddMembers(memberForBase);
             var newBaseRoot = baseRoot.ReplaceNode(baseClassNode, newBaseClassNode);
 
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
         {
             { filePath, newDerivedRoot.NormalizeWhitespace().ToFullString() },
             { baseFile, newBaseRoot.NormalizeWhitespace().ToFullString() }
@@ -130,7 +130,7 @@ public class RefinementEngine
         }
         catch (Exception ex)
         {
-            return new Dictionary<string, string> { { "error", ex.Message } };
+            return new Dictionary<FilePath, string> { { "error", ex.Message } };
         }
     }
 
@@ -139,20 +139,20 @@ public class RefinementEngine
     /// solution-wide with the method's expression, then removing the method declaration.
     /// Returns a dictionary of filePath→updatedContent for every affected file.
     /// </summary>
-    public async Task<Dictionary<string, string>> InlineMethodAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> InlineMethodAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
             { { "__error__", $"File '{Path.GetFileName(filePath)}' not found in solution." } };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
             { { "__error__", $"Failed to get syntax root for '{filePath}'." } };
         }
 
@@ -161,7 +161,7 @@ public class RefinementEngine
 
         if (method == null || semanticModel == null)
         {
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
                 { { "__error__", $"Method '{methodName}' not found in '{filePath}'." } };
         }
 
@@ -177,7 +177,7 @@ public class RefinementEngine
 
         if (expressionToInline == null)
         {
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
             {
                 { "__error__", $"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements." }
             };
@@ -186,7 +186,7 @@ public class RefinementEngine
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
         if (methodSymbol == null)
         {
-            return new Dictionary<string, string>
+            return new Dictionary<FilePath, string>
                 { { "__error__", $"Cannot inline '{methodName}': failed to resolve semantic symbol." } };
         }
 
@@ -198,7 +198,7 @@ public class RefinementEngine
             .GroupBy(l => l.Document.Id)
             .ToDictionary(g => g.Key, g => g.ToList());
 
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var result = new Dictionary<FilePath, string>();
         var expressionTemplate = expressionToInline; // capture once
 
         // Process each document that has call sites (including the defining document)

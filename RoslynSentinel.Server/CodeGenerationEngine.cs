@@ -7,7 +7,7 @@ using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Server;
 
-public record GenerationResult(string FilePath, string Content);
+public record GenerationResult(FilePath filePath, string Content);
 
 public record RepositoryInterfaceResult(
     string InterfaceName,
@@ -174,14 +174,19 @@ public class CodeGenerationEngine
         return false;
     }
 
-    public async Task<string> GenerateConstructorAsync(string filePath, string className, CancellationToken ct = default)
+    public async Task<DocumentEditResult> GenerateConstructorAsync(FilePath filePath, string className, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"// Error: File '{filePath}' not found."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
@@ -189,12 +194,22 @@ public class CodeGenerationEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Class '{className}' not found."
+            };
         }
 
         if (classNode.Members.OfType<ConstructorDeclarationSyntax>().Any())
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// Info: Constructor already exists."
+            };
         }
 
         var fields = classNode.Members
@@ -208,7 +223,12 @@ public class CodeGenerationEngine
 
         if (fields.Count == 0)
         {
-            return root!.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// Info: No fields to initialize in constructor."
+            };
         }
 
         var parameters = fields.Select(f =>
@@ -244,7 +264,13 @@ public class CodeGenerationEngine
         var updatedClass = classNode.AddMembers(ctor);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
         var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        var updatedText = (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = updatedText,
+            FilePath = filePath
+        };
     }
 
     // Property name substrings that are likely to contain sensitive data and should be
@@ -268,7 +294,7 @@ public class CodeGenerationEngine
         string? Warning = null);
 
     public async Task<GenerateToStringResult> GenerateToStringAsync(
-        string filePath,
+        FilePath filePath,
         string className,
         string[]? excludeProperties = null,
         CancellationToken ct = default)
@@ -346,7 +372,7 @@ public class CodeGenerationEngine
     /// <summary>
     /// Scans a project for configuration usage (e.g. config["Key"]) and generates a JSON config file.
     /// </summary>
-    public async Task<string> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
@@ -469,14 +495,18 @@ public class CodeGenerationEngine
             }
         }
 
-        return JsonSerializer.Serialize(root2, defaultJsonSerializerOptions);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = JsonSerializer.Serialize(root2, defaultJsonSerializerOptions)
+        };
     }
 
     /// <summary>
     /// Given a concrete repository class, generates: interface code, DI registration snippet, and Moq mock setup snippet.
     /// </summary>
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
-        string filePath, string className, CancellationToken ct = default)
+        FilePath filePath, string className, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -585,7 +615,7 @@ public class CodeGenerationEngine
     }
 
     public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
-        string filePath, string className, CancellationToken ct = default)
+        FilePath filePath, string className, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
@@ -842,34 +872,54 @@ public class CodeGenerationEngine
         );
     }
 
-    public async Task<string> ImplementInterfaceAsync(string filePath, string className, string interfaceName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return $"File '{filePath}' not found in solution.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"// Error: File '{filePath}' not found in solution."
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null || semanticModel == null)
         {
-            return "Could not load semantic model.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Error: Could not load semantic model."
+            };
         }
 
         var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classDecl == null)
         {
-            return $"Class '{className}' not found in file.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Class '{className}' not found in file."
+            };
         }
 
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: ct) as INamedTypeSymbol;
         if (classSymbol == null)
         {
-            return "Could not get class symbol.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Error: Could not get class symbol."
+            };
         }
 
         var ifaceSymbol = classSymbol.AllInterfaces
@@ -877,7 +927,12 @@ public class CodeGenerationEngine
                 i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);
         if (ifaceSymbol == null)
         {
-            return $"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'."
+            };
         }
 
         var unimplemented = ifaceSymbol.GetMembers()
@@ -891,7 +946,12 @@ public class CodeGenerationEngine
 
         if (unimplemented.Count == 0)
         {
-            return $"All members of '{interfaceName}' are already implemented.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = $"// Info: All members of '{interfaceName}' are already implemented."
+            };
         }
 
         var newMembers = new List<MemberDeclarationSyntax>();
@@ -950,7 +1010,12 @@ public class CodeGenerationEngine
         var newRoot = root.ReplaceNode(classDecl, newClass);
         var updatedDoc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = (await formatted.GetTextAsync(ct)).ToString(),
+            FilePath = filePath
+        };
     }
 
     /// <summary>
@@ -959,8 +1024,8 @@ public class CodeGenerationEngine
     /// correctly handles all modifiers (virtual, override, new). direction: "ToFullProperty" or "ToAutoProperty".
     /// contextSnippet: optional verbatim substring to disambiguate when multiple properties share a name.
     /// </summary>
-    public async Task<string> ConvertPropertySafeAsync(
-        string filePath,
+    public async Task<DocumentEditResult> ConvertPropertySafeAsync(
+        FilePath filePath,
         string propertyName,
         string direction,
         string? contextSnippet = null,
@@ -973,13 +1038,23 @@ public class CodeGenerationEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"// Error: File '{filePath}' not found in solution."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Error: Failed to get syntax root for '{filePath}'."
+            };
         }
 
         PropertyDeclarationSyntax? propNode = null;
@@ -989,7 +1064,12 @@ public class CodeGenerationEngine
             var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
             if (pos < 0)
             {
-                return $"Error: {snippetError}";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// Error: {snippetError}"
+                };
             }
 
             propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
@@ -1004,7 +1084,12 @@ public class CodeGenerationEngine
 
         if (propNode == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: Property '{propertyName}' not found."
+            };
         }
 
         SyntaxNode newRoot = direction switch
@@ -1016,7 +1101,12 @@ public class CodeGenerationEngine
 
         var updatedDoc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = (await formatted.GetTextAsync(ct)).ToString(),
+            FilePath = filePath
+        };
     }
 
     private static SyntaxNode BuildFullProperty(SyntaxNode root, PropertyDeclarationSyntax propNode)
@@ -1159,8 +1249,8 @@ public class CodeGenerationEngine
     /// via the semantic model so it works even when the format string is not a literal.
     /// contextSnippet: verbatim substring identifying the string.Format call to convert.
     /// </summary>
-    public async Task<string> InterpolateStringAsync(
-        string filePath,
+    public async Task<DocumentEditResult> InterpolateStringAsync(
+        FilePath filePath,
         string contextSnippet,
         string? lineBefore = null,
         string? lineAfter = null,
@@ -1171,20 +1261,35 @@ public class CodeGenerationEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = $"// Error: File '{filePath}' not found in solution."
+            };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Error: Failed to get syntax root for '{filePath}'."
+            };
         }
 
         var srcText = await document.GetTextAsync(ct);
         var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
         {
-            return $"Error: {snippetError}";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Error: {snippetError}"
+            };
         }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
@@ -1194,13 +1299,23 @@ public class CodeGenerationEngine
 
         if (invocation == null)
         {
-            return "No string.Format call found at the given context snippet.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Error: No string.Format call found at the given context snippet."
+            };
         }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
         {
-            return "string.Format call has no arguments.";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Error: string.Format call has no arguments."
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(ct);
@@ -1226,13 +1341,23 @@ public class CodeGenerationEngine
             {
                 // If constant value resolution fails (e.g., invalid const reference),
                 // return a graceful error instead of crashing
-                return $"Error: Could not resolve format string constant. Details: {ex.Message}";
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = $"// Error: Could not resolve format string constant. Details: {ex.Message}"
+                };
             }
         }
 
         if (formatString == null)
         {
-            return "Could not resolve the format string (not a string literal or const string).";
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Error: Could not resolve the format string (not a string literal or const string)."
+            };
         }
 
         var fmtArgs = args.Skip(1).Select(a => a.Expression.ToString()).ToList();
@@ -1243,7 +1368,12 @@ public class CodeGenerationEngine
 
         var updatedDoc = document.WithSyntaxRoot(newRoot);
         var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
-        return (await formatted.GetTextAsync(ct)).ToString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = (await formatted.GetTextAsync(ct)).ToString()
+        };
     }
 
     private static bool IsStringFormatCall(InvocationExpressionSyntax invocation)

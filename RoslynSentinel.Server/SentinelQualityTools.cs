@@ -20,7 +20,7 @@ public record SourceTransformResult(
     string UpdatedSource,
     bool WroteToFile,
     bool WorkspaceUpdated,
-    string FilePath
+    FilePath filePath
 );
 
 /// <summary>
@@ -101,7 +101,7 @@ public record AsyncMigrationProgressReport(
 /// <param name="FlaggedDate">ISO date string (yyyy-MM-dd) when the method was flagged, or <c>null</c>.</param>
 /// <param name="Line">1-based source line of the method declaration.</param>
 public record MigrationCandidateFinding(
-    string FilePath,
+    FilePath FilePath,
     string MethodName,
     string ClassName,
     string Pattern,
@@ -144,7 +144,7 @@ public record MigrationCandidateFinding(
 /// </param>
 /// <param name="Summary">Human-readable summary of the flag action for log display.</param>
 public record FlagMigrationCandidateResult(
-    string FilePath,
+    FilePath filePath,
     string MethodName,
     string Pattern,
     int Line,
@@ -220,7 +220,7 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<ToolResult<object>> GetTestCoverageMap(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName)
     {
         try
@@ -254,8 +254,8 @@ public class SentinelQualityTools
         bool summarize = false,
         int? topN = null,
         int? minScore = null,
-        [Consumes(DataTag.Limit)] int limit = 50,
-        [Consumes(DataTag.Offset)] int offset = 0)
+        [ToolControlAttribute(DataTag.Limit)] int limit = 50,
+        [ToolControlAttribute(DataTag.Offset)] int offset = 0)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -510,7 +510,7 @@ public class SentinelQualityTools
     [McpServerTool]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<ToolResult<object>> GetMethodComplexity(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName)
     {
         try
@@ -740,22 +740,24 @@ public class SentinelQualityTools
 
                 try
                 {
-                    var updatedSource = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                    string? updatedSource;
+                    var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                         target.FilePath, methodName);
+                    updatedSource = convertResult.UpdatedText;
 
                     if (propagateCancellationTokens)
                     {
                         var asyncMethod = methodName + "Async";
-                        var (propagated, _) = await _asyncOptimizationEngine
+                        var propagationResult = await _asyncOptimizationEngine
                             .PropagateCancellationTokenInMethodAsync(target.FilePath, asyncMethod, cancellationToken);
-                        if (!string.IsNullOrEmpty(propagated))
+                        if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
                         {
-                            updatedSource = propagated;
+                            updatedSource = propagationResult.UpdatedText;
                         }
                     }
 
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<string, string> { { target.FilePath, updatedSource } });
+                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } });
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
@@ -844,7 +846,7 @@ public class SentinelQualityTools
             return halt;
         }
 
-        var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var allChanges = new Dictionary<FilePath, string>();
         int succeeded = 0;
         int failed = 0;
         int skipped = 0;
@@ -1187,7 +1189,7 @@ public class SentinelQualityTools
 
                 var (results, errors) = await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
-                var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var allChanges = new Dictionary<FilePath, string>();
                 for (int i = 0; i < results.Count; i++)
                 {
                     var r = results[i];
@@ -1436,7 +1438,7 @@ public class SentinelQualityTools
                     var (flagResults, flagErrors) =
                         await _asyncOptimizationEngine.FlagMultipleMigrationCandidatesAsync(tuples);
 
-                    var allChanges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    var allChanges = new Dictionary<FilePath, string>();
                     for (int i = 0; i < flagResults.Count; i++)
                     {
                         var r = flagResults[i];

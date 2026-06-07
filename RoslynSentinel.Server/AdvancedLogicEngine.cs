@@ -14,25 +14,25 @@ public class AdvancedLogicEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<Dictionary<string, string>> InvertBooleanLogicAsync(string filePath, string boolName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> InvertBooleanLogicAsync(FilePath filePath, string boolName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        
+
         var variable = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.Text == boolName);
         ISymbol? symbol = null;
         if (variable != null)
         {
             symbol = semanticModel?.GetDeclaredSymbol(variable, cancellationToken);
         }
-        else 
+        else
         {
             var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == boolName);
             if (method != null)
@@ -43,7 +43,7 @@ public class AdvancedLogicEngine
 
         if (symbol == null)
         {
-            return new Dictionary<string, string>();
+            return new Dictionary<FilePath, string>();
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -56,7 +56,7 @@ public class AdvancedLogicEngine
                 var refDocument = updatedSolution.GetDocument(location.Document.Id)!;
                 var refRoot = await refDocument.GetSyntaxRootAsync(cancellationToken);
                 var node = refRoot?.FindNode(location.Location.SourceSpan) as ExpressionSyntax;
-                
+
                 if (node != null)
                 {
                     var parent = node.Parent;
@@ -73,8 +73,8 @@ public class AdvancedLogicEngine
                 }
             }
         }
-        
-        var changes = new Dictionary<string, string>();
+
+        var changes = new Dictionary<FilePath, string>();
         foreach (var projectChange in updatedSolution.GetChanges(solution).GetProjectChanges())
         {
             foreach (var changedDocId in projectChange.GetChangedDocuments())
@@ -86,37 +86,37 @@ public class AdvancedLogicEngine
         return changes;
     }
 
-    public async Task<string> ConvertIfToSwitchExpressionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertIfToSwitchExpressionAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var arms = branches.Select(b =>
@@ -130,40 +130,40 @@ public class AdvancedLogicEngine
             SyntaxFactory.ParseExpression(condVar),
             SyntaxFactory.SeparatedList(arms));
         var newRoot = root.ReplaceNode(ifStmt, SyntaxFactory.ReturnStatement(switchExpr));
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<string> ConvertIfToSwitchStatementAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertIfToSwitchStatementAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var sections = new List<SwitchSectionSyntax>();
@@ -183,16 +183,16 @@ public class AdvancedLogicEngine
         var switchStmt = SyntaxFactory.SwitchStatement(SyntaxFactory.ParseExpression(condVar))
             .WithSections(SyntaxFactory.List(sections));
         var newRoot = root.ReplaceNode(ifStmt, switchStmt);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<string> ExtensionToStaticAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ExtensionToStaticAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -204,19 +204,19 @@ public class AdvancedLogicEngine
             {
                 var newParam = firstParam.WithModifiers(firstParam.Modifiers.Remove(firstParam.Modifiers.First(m => m.IsKind(SyntaxKind.ThisKeyword))));
                 var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
-                return root!.ReplaceNode(methodNode, newMethod).NormalizeWhitespace().ToFullString();
+                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = root!.ReplaceNode(methodNode, newMethod).NormalizeWhitespace().ToFullString(), FilePath = filePath };
             }
         }
-        return root?.ToFullString() ?? "";
+        return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
     }
 
-    public async Task<string> ConvertStaticToExtensionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertStaticToExtensionAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -240,25 +240,25 @@ public class AdvancedLogicEngine
                     updatedRoot = updatedRoot.ReplaceNode(classNode, newClass);
                 }
 
-                return updatedRoot.NormalizeWhitespace().ToFullString();
+                return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = updatedRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
             }
         }
-        return root?.ToFullString() ?? "";
+        return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
     }
 
-    public async Task<string> ConvertForEachToForAsync(string filePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertForEachToForAsync(FilePath filePath, int line, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var forEach = root.DescendantNodes()
@@ -267,7 +267,7 @@ public class AdvancedLogicEngine
 
         if (forEach == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var collection = forEach.Expression;
@@ -368,34 +368,34 @@ public class AdvancedLogicEngine
             newBody);
 
         var newRoot = root.ReplaceNode(forEach, forStatement);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<string> ConvertForToForEachAsync(string filePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertForToForEachAsync(FilePath filePath, int line, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>()
             .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (forStmt == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var indexVar = forStmt.Declaration.Variables[0].Identifier.Text;
@@ -405,7 +405,7 @@ public class AdvancedLogicEngine
             condBin.Right is not MemberAccessExpressionSyntax memberAccess ||
             (memberAccess.Name.Identifier.Text != "Length" && memberAccess.Name.Identifier.Text != "Count"))
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var collectionStr = memberAccess.Expression.ToString();
@@ -421,48 +421,48 @@ public class AdvancedLogicEngine
             newBody);
 
         var newRoot = root.ReplaceNode(forStmt, forEach);
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<string> ConvertWhileToForAsync(string filePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertWhileToForAsync(FilePath filePath, int line, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(ct);
         if (root == null)
         {
-            return "";
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
         }
 
         var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>()
             .FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (whileStmt == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         if (whileStmt.Condition is not BinaryExpressionSyntax condBin ||
             condBin.Left is not IdentifierNameSyntax counterIdent)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var counterName = counterIdent.Identifier.Text;
 
         if (whileStmt.Parent is not BlockSyntax parentBlock)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var whileIndex = parentBlock.Statements.IndexOf(whileStmt);
         if (whileIndex <= 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var prevStmt = parentBlock.Statements[whileIndex - 1];
@@ -470,12 +470,12 @@ public class AdvancedLogicEngine
             localDecl.Declaration.Variables.Count == 0 ||
             localDecl.Declaration.Variables[0].Identifier.Text != counterName)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         if (whileStmt.Statement is not BlockSyntax whileBody)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         ExpressionStatementSyntax? incrementStmt = null;
@@ -493,7 +493,7 @@ public class AdvancedLogicEngine
         }
         if (incrementStmt == null)
         {
-            return root.ToFullString();
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root.ToFullString(), FilePath = filePath };
         }
 
         var newBody = whileBody.WithStatements(whileBody.Statements.Remove(incrementStmt));
@@ -519,7 +519,7 @@ public class AdvancedLogicEngine
         }
         var newStatements = SyntaxFactory.List<StatementSyntax>(newStmtList);
         var newRoot = root.ReplaceNode(parentBlock, parentBlock.WithStatements(newStatements));
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
     private record IfBranch(ExpressionSyntax Pattern, ExpressionSyntax Result);

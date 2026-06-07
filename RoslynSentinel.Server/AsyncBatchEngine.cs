@@ -17,7 +17,7 @@ namespace RoslynSentinel.Server;
 /// <param name="MethodName">Name of the original (now bridge-wrapper) method.</param>
 /// <param name="AsyncMethodName">Name of the newly created async overload.</param>
 public record BridgeAppliedInfo(
-    string FilePath,
+    FilePath FilePath,
     string MethodName,
     string AsyncMethodName
 )
@@ -27,7 +27,10 @@ public record BridgeAppliedInfo(
     /// Populated by RunBridgeBatchAsync to enable undo_last_apply via BeforeSource on
     /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
     /// </summary>
-    public string? BeforeSource { get; init; }
+    public string? BeforeSource
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -39,7 +42,7 @@ public record BridgeAppliedInfo(
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
 public record BridgeSkippedInfo(
-    string FilePath,
+    FilePath FilePath,
     string MethodName,
     string Reason,
     List<string> Diagnostics
@@ -83,7 +86,7 @@ public record BridgeBatchResult(
 /// <param name="CallerMethod">Name of the original (now bridge-wrapper) caller method.</param>
 /// <param name="CallerAsyncMethod">Name of the new async caller overload.</param>
 public record UpliftCallerInfo(
-    string FilePath,
+    FilePath FilePath,
     string CallerMethod,
     string CallerAsyncMethod
 )
@@ -93,7 +96,10 @@ public record UpliftCallerInfo(
     /// Populated by RunUpliftBatchAsync to enable undo_last_apply via BeforeSource on
     /// OperationItemRecord. Null when pre-image capture fails or the file did not previously exist.
     /// </summary>
-    public string? BeforeSource { get; init; }
+    public string? BeforeSource
+    {
+        get; init;
+    }
 }
 
 /// <summary>
@@ -104,7 +110,7 @@ public record UpliftCallerInfo(
 /// <param name="Reason">Human-readable reason for skipping.</param>
 /// <param name="Diagnostics">Roslyn compiler diagnostics that caused the skip (may be empty).</param>
 public record UpliftSkippedInfo(
-    string FilePath,
+    FilePath FilePath,
     string CallerMethod,
     string Reason,
     List<string> Diagnostics
@@ -145,42 +151,60 @@ public record UpliftBatchResult(
 public class UpliftBatchMultiTarget
 {
     /// <summary>Name of the Asyncify-bridge sync method whose callers should be uplifted.</summary>
-    public string  BridgedMethodName { get; set; } = "";
+    public string BridgedMethodName { get; set; } = "";
     /// <summary>Optional project name to restrict the caller scan. <c>null</c> = entire solution.</summary>
-    public string? ProjectName       { get; set; }
+    public string? ProjectName
+    {
+        get; set;
+    }
 }
 
 /// <summary>Input for <c>run_uplift_batch_multi</c>.</summary>
 public class UpliftBatchMultiInput
 {
     /// <summary>List of bridged methods to uplift, each processed as a separate <c>run_uplift_batch</c> call.</summary>
-    public List<UpliftBatchMultiTarget> Targets              { get; set; } = new();
+    public List<UpliftBatchMultiTarget> Targets { get; set; } = new();
     /// <summary>Maximum callers to process per bridged method (forwarded to each inner batch). Default 10.</summary>
-    public int   MaxCallersPerMethod                          { get; set; } = 10;
+    public int MaxCallersPerMethod { get; set; } = 10;
     /// <summary>When <c>true</c>, reports what would happen without writing files. Default <c>false</c>.</summary>
-    public bool  DryRun                                       { get; set; } = false;
+    public bool DryRun { get; set; } = false;
     /// <summary>When <c>true</c> (default), propagates CT to other async callees in each uplifted method.</summary>
-    public bool  PropagateCancellationTokens                  { get; set; } = true;
+    public bool PropagateCancellationTokens { get; set; } = true;
 }
 
 /// <summary>Per-method result within <c>UpliftBatchMultiResult</c>.</summary>
 public class UpliftBatchMultiMethodResult
 {
-    public string            BridgedMethodName { get; set; } = "";
-    public string?           ProjectName       { get; set; }
-    public UpliftBatchResult Result            { get; set; } = new(new(), new(), 0, "");
-    public string?           Error             { get; set; }
+    public string BridgedMethodName { get; set; } = "";
+    public string? ProjectName
+    {
+        get; set;
+    }
+    public UpliftBatchResult Result { get; set; } = new(new(), new(), 0, "");
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 /// <summary>Aggregate result of <c>run_uplift_batch_multi</c>.</summary>
 public class UpliftBatchMultiResult
 {
-    public List<UpliftBatchMultiMethodResult> PerMethod      { get; set; } = new();
-    public int    TotalUplifted                               { get; set; }
-    public int    TotalSkipped                                { get; set; }
-    public int    TotalRemainingCallers                       { get; set; }
+    public List<UpliftBatchMultiMethodResult> PerMethod { get; set; } = new();
+    public int TotalUplifted
+    {
+        get; set;
+    }
+    public int TotalSkipped
+    {
+        get; set;
+    }
+    public int TotalRemainingCallers
+    {
+        get; set;
+    }
     /// <summary>"batch_complete" | "dry_run"</summary>
-    public string StopReason                                  { get; set; } = "";
+    public string StopReason { get; set; } = "";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -190,92 +214,143 @@ public class UpliftBatchMultiResult
 /// <summary>Describes a single call site that was rewritten to forward a CancellationToken.</summary>
 public class CallSiteForward
 {
-    public string CalleeMethod  { get; set; } = "";
-    public string CalleeType    { get; set; } = "";
-    public int    Line          { get; set; }
+    public string CalleeMethod { get; set; } = "";
+    public string CalleeType { get; set; } = "";
+    public int Line
+    {
+        get; set;
+    }
     public string BeforeSnippet { get; set; } = "";
-    public string AfterSnippet  { get; set; } = "";
+    public string AfterSnippet { get; set; } = "";
 }
 
 /// <summary>Describes a call site that was skipped during CancellationToken propagation.</summary>
 public class CallSiteSkip
 {
     public string CalleeMethod { get; set; } = "";
-    public int    Line         { get; set; }
+    public int Line
+    {
+        get; set;
+    }
     /// <summary>
     /// One of: "AlreadyForwarded", "NoCancellationTokenOverload", "AmbiguousOverload",
     /// "NamedArgumentCollision", "CalleeNotAsync".
     /// </summary>
-    public string Reason       { get; set; } = "";
+    public string Reason { get; set; } = "";
 }
 
 /// <summary>Result of a single-method CancellationToken propagation operation.</summary>
 public class PropagateCtResult
 {
-    public string?              ChangeId           { get; set; }
-    public string               MethodName         { get; set; } = "";
-    public string               TokenParameterName { get; set; } = "";
-    public List<CallSiteForward> Forwarded         { get; set; } = new();
-    public List<CallSiteSkip>    Skipped           { get; set; } = new();
-    public int                  ForwardedCount     { get; set; }
-    public int                  SkippedCount       { get; set; }
-    public bool                 MethodFound        { get; set; }
-    public string?              Error              { get; set; }
+    public string? ChangeId
+    {
+        get; set;
+    }
+    public string MethodName { get; set; } = "";
+    public string TokenParameterName { get; set; } = "";
+    public List<CallSiteForward> Forwarded { get; set; } = new();
+    public List<CallSiteSkip> Skipped { get; set; } = new();
+    public int ForwardedCount
+    {
+        get; set;
+    }
+    public int SkippedCount
+    {
+        get; set;
+    }
+    public bool MethodFound
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 /// <summary>Result of a file-level CancellationToken propagation operation.</summary>
 public class PropagateCtFileResult
 {
-    public string?                  ChangeId          { get; set; }
-    public string                   FilePath          { get; set; } = "";
-    public List<PropagateCtResult>  PerMethod         { get; set; } = new();
-    public int                      TotalForwarded    { get; set; }
-    public int                      TotalSkipped      { get; set; }
-    public int                      MethodsProcessed  { get; set; }
-    public int                      MethodsSkipped    { get; set; }
+    public string? ChangeId
+    {
+        get; set;
+    }
+    public string FilePath { get; set; } = "";
+    public List<PropagateCtResult> PerMethod { get; set; } = new();
+    public int TotalForwarded
+    {
+        get; set;
+    }
+    public int TotalSkipped
+    {
+        get; set;
+    }
+    public int MethodsProcessed
+    {
+        get; set;
+    }
+    public int MethodsSkipped
+    {
+        get; set;
+    }
     /// <summary>
     /// Full source text of the file immediately before this operation was written to disk.
     /// Populated by PropagateCancellationTokenBatchAsync to enable undo_last_apply via
     /// BeforeSource on OperationItemRecord. Null when pre-image capture fails or the file
     /// did not previously exist.
     /// </summary>
-    public string?                  BeforeSource      { get; set; }
+    public string? BeforeSource
+    {
+        get; set;
+    }
 }
 
 /// <summary>Specifies a file (with optional method filter) for batch CT propagation.</summary>
 public class PropagateCtFileTarget
 {
-    public string    FilePath    { get; set; } = "";
-    public string[]? MethodNames { get; set; }
+    public string FilePath { get; set; } = "";
+    public string[]? MethodNames
+    {
+        get; set;
+    }
 }
 
 /// <summary>Input for <c>propagate_cancellation_token_batch</c>.</summary>
 public class PropagateCtBatchInput
 {
-    public List<PropagateCtFileTarget> Targets      { get; set; } = new();
-    public bool                        DryRun       { get; set; } = false;
-    public int                         MaxFiles     { get; set; } = 100;
-    public bool                        FlagFailures { get; set; } = true;
+    public List<PropagateCtFileTarget> Targets { get; set; } = new();
+    public bool DryRun { get; set; } = false;
+    public int MaxFiles { get; set; } = 100;
+    public bool FlagFailures { get; set; } = true;
 }
 
 /// <summary>Describes a file that failed during batch CT propagation.</summary>
 public class PropagateCtFileFailure
 {
-    public string             FilePath       { get; set; } = "";
-    public string             Reason         { get; set; } = "";
-    public List<DiagnosticInfo> Diagnostics  { get; set; } = new();
-    public List<string>       FlaggedMethods { get; set; } = new();
+    public string FilePath { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public List<DiagnosticInfo> Diagnostics { get; set; } = new();
+    public List<string> FlaggedMethods { get; set; } = new();
 }
 
 /// <summary>Aggregate result of <c>propagate_cancellation_token_batch</c>.</summary>
 public class PropagateCtBatchResult
 {
-    public List<PropagateCtFileResult>  Applied        { get; set; } = new();
-    public List<PropagateCtFileFailure> Failed         { get; set; } = new();
-    public int                          TotalForwarded { get; set; }
-    public int                          TotalSkipped   { get; set; }
-    public int                          RemainingFiles { get; set; }
-    public string                       StopReason     { get; set; } = "";
+    public List<PropagateCtFileResult> Applied { get; set; } = new();
+    public List<PropagateCtFileFailure> Failed { get; set; } = new();
+    public int TotalForwarded
+    {
+        get; set;
+    }
+    public int TotalSkipped
+    {
+        get; set;
+    }
+    public int RemainingFiles
+    {
+        get; set;
+    }
+    public string StopReason { get; set; } = "";
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -377,8 +452,8 @@ public class AsyncBatchEngine
             .OrderBy(c => c.Score)  // lowest score (easiest) first
             .ToList();
 
-        var applied  = new List<BridgeAppliedInfo>();
-        var skipped  = new List<BridgeSkippedInfo>();
+        var applied = new List<BridgeAppliedInfo>();
+        var skipped = new List<BridgeSkippedInfo>();
 
         if (eligible.Count == 0)
         {
@@ -410,8 +485,9 @@ public class AsyncBatchEngine
             string newSource;
             try
             {
-                newSource = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                     candidate.FilePath, candidate.MethodName, cancellationToken);
+                newSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
             catch (InvalidOperationException ex)
             {
@@ -460,7 +536,7 @@ public class AsyncBatchEngine
 
             // Step C: validate in-memory — no MSBuild required.
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<string, string> { { candidate.FilePath, sourceToValidate } },
+                new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } },
                 cancellationToken);
 
             if (!validation.Success)
@@ -504,7 +580,7 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<string, string> { { candidate.FilePath, sourceToValidate } });
+                new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } });
 
             applied.Add(new BridgeAppliedInfo(
                 candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async")
@@ -581,18 +657,18 @@ public class AsyncBatchEngine
         //    Filter by the standard Obsolete message pattern so we only match the
         //    specific bridge and not unrelated [Obsolete] methods.
         var asyncMethodName = bridgedMethodName + "Async";
-        var messageFilter   = $"Asyncify-bridge: call {asyncMethodName} instead.";
+        var messageFilter = $"Asyncify-bridge: call {asyncMethodName} instead.";
 
         var callerFindings = await _antiPatternEngine.FindObsoleteCallersAsync(
             messagePattern: messageFilter,
-            filePath:       null,
-            projectName:    projectName,
+            filePath: null,
+            projectName: projectName,
             cancellationToken: cancellationToken);
 
         int totalFound = callerFindings.Count;
 
         var uplifted = new List<UpliftCallerInfo>();
-        var skipped  = new List<UpliftSkippedInfo>();
+        var skipped = new List<UpliftSkippedInfo>();
 
         if (totalFound == 0)
         {
@@ -631,8 +707,9 @@ public class AsyncBatchEngine
             string bridgedCallerSource;
             try
             {
-                bridgedCallerSource = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                     callerFilePath, callerMethodName, cancellationToken);
+                bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
             catch (InvalidOperationException ex)
             {
@@ -697,7 +774,7 @@ public class AsyncBatchEngine
 
             // Step D: validate in-memory.
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<string, string> { { callerFilePath, sourceToValidate } },
+                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } },
                 cancellationToken);
 
             if (!validation.Success)
@@ -741,7 +818,7 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<string, string> { { callerFilePath, sourceToValidate } });
+                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } });
 
             uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, callerMethodName + "Async")
             {
@@ -751,7 +828,7 @@ public class AsyncBatchEngine
 
         // Determine stop reason.
         int totalProcessed = uplifted.Count + skipped.Count;
-        string stopReason  = totalProcessed >= callerPairs.Count ? "batch_complete" : "budget_exhausted";
+        string stopReason = totalProcessed >= callerPairs.Count ? "batch_complete" : "budget_exhausted";
 
         // Remaining = original finder count minus number actually uplifted.
         int remaining = Math.Max(0, totalFound - uplifted.Count);
@@ -790,9 +867,9 @@ public class AsyncBatchEngine
         }
 
         // Apply the rewriter scoped to only this method's subtree.
-        var rewriter   = new BridgeCallRewriter(bridgedMethodName);
-        var newMethod  = (MethodDeclarationSyntax)rewriter.Visit(callerAsyncMethod)!;
-        var newRoot    = root.ReplaceNode(callerAsyncMethod, newMethod);
+        var rewriter = new BridgeCallRewriter(bridgedMethodName);
+        var newMethod = (MethodDeclarationSyntax)rewriter.Visit(callerAsyncMethod)!;
+        var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
         return newRoot.NormalizeWhitespace().ToFullString();
     }
@@ -824,7 +901,7 @@ public class AsyncBatchEngine
         public BridgeCallRewriter(string bridgedMethodName)
         {
             _bridgedMethodName = bridgedMethodName;
-            _asyncMethodName   = bridgedMethodName + "Async";
+            _asyncMethodName = bridgedMethodName + "Async";
         }
 
         /// <inheritdoc/>
@@ -834,21 +911,21 @@ public class AsyncBatchEngine
             var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
 
             // Determine whether this invocation targets the bridged method.
-            string?         calledName;
+            string? calledName;
             ExpressionSyntax newExpression;
 
             switch (visited.Expression)
             {
                 // Unqualified call: search(args)
                 case IdentifierNameSyntax id when id.Identifier.Text == _bridgedMethodName:
-                    calledName    = id.Identifier.Text;
+                    calledName = id.Identifier.Text;
                     newExpression = SyntaxFactory.IdentifierName(_asyncMethodName)
                                                  .WithTriviaFrom(id);
                     break;
 
                 // Member-access call: this.search(args) or obj.search(args)
                 case MemberAccessExpressionSyntax ma when ma.Name.Identifier.Text == _bridgedMethodName:
-                    calledName    = ma.Name.Identifier.Text;
+                    calledName = ma.Name.Identifier.Text;
                     newExpression = ma.WithName(
                         SyntaxFactory.IdentifierName(_asyncMethodName)
                                      .WithTriviaFrom(ma.Name));
@@ -869,7 +946,7 @@ public class AsyncBatchEngine
             }
 
             // Append cancellationToken as the final positional argument.
-            var ctArg      = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
+            var ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
             var newArgList = visited.ArgumentList.AddArguments(ctArg);
 
             var rewrittenCall = visited
@@ -984,7 +1061,7 @@ public class AsyncBatchEngine
 
             // Validate
             var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<string, string> { { target.FilePath, updatedSource } },
+                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
                 cancellationToken);
 
             if (!validation.Success)
@@ -1039,7 +1116,7 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<string, string> { { target.FilePath, updatedSource } });
+                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } });
 
             fileResult.BeforeSource = ctBeforeSource;
             batchResult.Applied.Add(fileResult);
@@ -1078,7 +1155,7 @@ public class AsyncBatchEngine
             var methodResult = new UpliftBatchMultiMethodResult
             {
                 BridgedMethodName = target.BridgedMethodName,
-                ProjectName       = target.ProjectName,
+                ProjectName = target.ProjectName,
             };
 
             try
@@ -1095,8 +1172,8 @@ public class AsyncBatchEngine
                     input.PropagateCancellationTokens,
                     cancellationToken);
 
-                result.TotalUplifted         += methodResult.Result.Uplifted.Count;
-                result.TotalSkipped          += methodResult.Result.Skipped.Count;
+                result.TotalUplifted += methodResult.Result.Uplifted.Count;
+                result.TotalSkipped += methodResult.Result.Skipped.Count;
                 result.TotalRemainingCallers += methodResult.Result.RemainingCallers;
             }
             catch (Exception ex)

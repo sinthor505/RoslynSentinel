@@ -11,7 +11,7 @@ public record DiagnosticInfo(
     string Id,
     string Severity,
     string Message,
-    string FilePath,
+    FilePath FilePath,
     int StartLine,
     int StartColumn,
     int EndLine,
@@ -48,7 +48,7 @@ public static class DiagnosticExtensions
 
         if (info.FilePath.StartsWith(solutionDir, StringComparison.OrdinalIgnoreCase))
         {
-            return info with { FilePath = info.FilePath[solutionDir.Length..].TrimStart('\\', '/') };
+            return info with { FilePath = info.FilePath.ToString()[solutionDir.Length..].TrimStart('\\', '/') };
         }
 
         return info with { FilePath = Path.GetFileName(info.FilePath) };

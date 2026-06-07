@@ -13,7 +13,7 @@ public class AdvancedRefactoringEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<string> ReplaceStringConcatWithInterpolationAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -25,7 +25,12 @@ public class AdvancedRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         // Find top-level string concat chains — not a child of another string-concat-with-literal
@@ -38,7 +43,12 @@ public class AdvancedRefactoringEngine
 
         if (topLevelConcats.Count == 0)
         {
-            return root.ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var newRoot = root.ReplaceNodes(topLevelConcats, (original, _) =>
@@ -82,10 +92,15 @@ public class AdvancedRefactoringEngine
                 .WithTriviaFrom(original);
         });
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 
-    public async Task<string> OptimizeTaskWaitAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -97,7 +112,12 @@ public class AdvancedRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return string.Empty;
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -227,7 +247,12 @@ public class AdvancedRefactoringEngine
 
         if (replacements.Count == 0)
         {
-            return root.NormalizeWhitespace().ToFullString();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                UpdatedText = null,
+                FilePath = filePath
+            };
         }
 
         // Track all nodes that will be mutated before any tree modification
@@ -273,7 +298,12 @@ public class AdvancedRefactoringEngine
             newRoot = newRoot.ReplaceNodes(methodUpdates.Keys, (original, _) => methodUpdates[original]);
         }
 
-        return newRoot.NormalizeWhitespace().ToFullString();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath
+        };
     }
 
     private static bool ContainsStringLiteral(ExpressionSyntax expr) =>
@@ -295,7 +325,7 @@ public class AdvancedRefactoringEngine
         (type is IdentifierNameSyntax id && id.Identifier.Text is "Task" or "ValueTask")
         || (type is GenericNameSyntax gn && gn.Identifier.Text is "Task" or "ValueTask");
 
-    public async Task<Dictionary<string, string>> ExtractServiceFromControllerAsync(string filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> ExtractServiceFromControllerAsync(FilePath filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -340,7 +370,7 @@ public class AdvancedRefactoringEngine
             serviceRoot = serviceRoot.AddMembers(serviceClass);
         }
 
-        return new Dictionary<string, string>
+        return new Dictionary<FilePath, string>
         {
             { filePath, updatedRoot.ToFullString() },
             { Path.Combine(Path.GetDirectoryName(filePath)!, $"{serviceName}.cs"), serviceRoot.NormalizeWhitespace().ToFullString() }
