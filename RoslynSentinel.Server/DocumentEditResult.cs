@@ -26,7 +26,7 @@
         {
             get; init;
         }   // non-null if Modified
-        public FilePath FilePath { get; init; } = "";
+        public FilePath FilePath { get; init; }
         public string Message { get; init; } = ""; // for error details in case of failure
 
         public DocumentEditResult()

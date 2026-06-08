@@ -1056,19 +1056,19 @@ public class SentinelRefactoringTools
             if (string.IsNullOrEmpty(position) || position == "end")
             {
                 updated = await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
-                description = $"Adds new member to '{containerName}' in {Path.GetFileName(filePath)}.";
+                description = $"Added new member to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
             {
                 var afterMemberName = position.Substring("after:".Length);
                 updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
-                description = $"Inserts new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
+                description = $"Inserted new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
             {
                 var beforeMemberName = position.Substring("before:".Length);
                 updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
-                description = $"Inserts new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
+                description = $"Inserted new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else
             {
@@ -1115,12 +1115,12 @@ public class SentinelRefactoringTools
             if (kind == "property")
             {
                 updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit);
-                description = $"Adds '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
+                description = $"Added '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (kind == "field")
             {
                 updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer);
-                description = $"Adds '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
+                description = $"Added '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else
             {
@@ -1167,8 +1167,8 @@ public class SentinelRefactoringTools
                     return new ToolResult<object>() { Success = true, Data = updated.Outcome };
                 }
                 var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-                var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in try/catch.");
-                var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wraps lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
+                var id = _workspaceManager.StageChanges(changes, $"Wrapped lines {startLine}-{endLine} in try/catch.");
+                var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.");
                 return new ToolResult<object>() { Success = true, Data = summary };
             }
             if (wrapper == "using")
