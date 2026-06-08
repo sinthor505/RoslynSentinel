@@ -48,7 +48,11 @@ public static partial class SentinelConsoleMode
 
     private static string FriendlyType(Type type)
     {
-        if (!type.IsGenericType) return type.Name;
+        if (!type.IsGenericType)
+        {
+            return type.Name;
+        }
+
         var outer = type.Name[..type.Name.IndexOf('`')];
         var args = string.Join(", ", type.GetGenericArguments().Select(FriendlyType));
         return $"{outer}<{args}>";
@@ -64,7 +68,11 @@ public static partial class SentinelConsoleMode
             .GetTypes()
             .Where(t =>
             {
-                if (t.GetCustomAttribute<McpServerToolTypeAttribute>() == null) return false;
+                if (t.GetCustomAttribute<McpServerToolTypeAttribute>() == null)
+                {
+                    return false;
+                }
+
                 return !ToolTypeToMode.TryGetValue(t.Name, out var mode) || activeModes.Contains(mode);
             })
             .OrderBy(t => t.Name)
@@ -131,7 +139,11 @@ public static partial class SentinelConsoleMode
             ["id"] = id,
             ["method"] = method,
         };
-        if (@params != null) msg["params"] = @params;
+        if (@params != null)
+        {
+            msg["params"] = @params;
+        }
+
         return JsonSerializer.Serialize(msg, CompactJson) + "\n";
     }
 
@@ -142,7 +154,11 @@ public static partial class SentinelConsoleMode
             ["jsonrpc"] = "2.0",
             ["method"] = method,
         };
-        if (@params != null) msg["params"] = @params;
+        if (@params != null)
+        {
+            msg["params"] = @params;
+        }
+
         return JsonSerializer.Serialize(msg, CompactJson) + "\n";
     }
 
@@ -155,14 +171,28 @@ public static partial class SentinelConsoleMode
         while (!ct.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
-            if (line is null) return null;          // stream closed
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (line is null)
+            {
+                return null;          // stream closed
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
 
             try
             {
                 var node = JsonNode.Parse(line);
-                if (node?["id"] is null) continue;  // notification — ignore
-                if (node["id"]!.GetValue<int>() == expectedId) return node;
+                if (node?["id"] is null)
+                {
+                    continue;  // notification — ignore
+                }
+
+                if (node["id"]!.GetValue<int>() == expectedId)
+                {
+                    return node;
+                }
             }
             catch (JsonException) { /* malformed line — skip */ }
         }
@@ -264,9 +294,16 @@ public static partial class SentinelConsoleMode
                 break;
             }
 
-            if (input is null) break;
+            if (input is null)
+            {
+                break;
+            }
+
             input = input.Trim();
-            if (string.IsNullOrEmpty(input)) continue;
+            if (string.IsNullOrEmpty(input))
+            {
+                continue;
+            }
 
             if (input.Equals("exit", StringComparison.OrdinalIgnoreCase) ||
                 input.Equals("quit", StringComparison.OrdinalIgnoreCase))
@@ -404,14 +441,19 @@ public static partial class SentinelConsoleMode
             if (resp["result"] is JsonNode result)
             {
                 if (result["isError"]?.GetValue<bool>() == true)
+                {
                     Console.WriteLine("  [isError=true]");
+                }
 
                 if (result["content"] is JsonArray content)
                 {
                     foreach (var item in content)
                     {
                         var text = item?["text"]?.GetValue<string>();
-                        if (text is null) continue;
+                        if (text is null)
+                        {
+                            continue;
+                        }
 
                         // Pretty-print if the text itself is JSON
                         try
@@ -582,7 +624,10 @@ public static partial class SentinelConsoleMode
                     .OrderBy(m => m.MetadataToken)
                     .ToList();
 
-                if (methods.Count == 0) continue;
+                if (methods.Count == 0)
+                {
+                    continue;
+                }
 
                 var jsonMethods = new List<object>();
                 foreach (var method in methods)
@@ -622,7 +667,10 @@ public static partial class SentinelConsoleMode
         while (dir is not null)
         {
             if (dir.GetFiles("Directory.Build.props").Length > 0)
+            {
                 return dir.FullName;
+            }
+
             dir = dir.Parent;
         }
         return null;
@@ -641,7 +689,11 @@ public static partial class SentinelConsoleMode
     {
         var typeName = FriendlyType(p.ParameterType);
         var name = p.Name ?? "_";
-        if (!p.HasDefaultValue) return $"{typeName} {name}";
+        if (!p.HasDefaultValue)
+        {
+            return $"{typeName} {name}";
+        }
+
         var defStr = p.DefaultValue switch
         {
             null => "null",
@@ -656,9 +708,15 @@ public static partial class SentinelConsoleMode
     {
         if (returnType.IsGenericType
             && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+        {
             return FriendlyType(returnType.GetGenericArguments()[0]);
+        }
+
         if (returnType == typeof(Task) || returnType == typeof(void))
+        {
             return "void";
+        }
+
         return FriendlyType(returnType);
     }
 

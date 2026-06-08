@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -147,6 +149,16 @@ public static class RoslynSentinelServiceExtensions
                     }
                     catch (InvalidOperationException ex) when (ex.Message.StartsWith("No solution is loaded", StringComparison.Ordinal))
                     {
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
+                            IsError = false,
+                        };
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
+
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
                             Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],

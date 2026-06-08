@@ -491,10 +491,12 @@ public class SentinelScanTools
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ToolControl(ToolControlTag.Aspect)] string aspect)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             switch (aspect)

@@ -620,10 +620,12 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.StartLine, required: true)] int line,
         [Consumes(DataTag.Offset, required: true)] int column)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
@@ -681,9 +683,11 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
         [Consumes(DataTag.MethodName, required: true)] string methodName)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -777,8 +781,10 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath)
+        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath)
     {
+        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+
         try
         {
             var solution = await _workspaceManager.GetBranchedSolutionAsync();

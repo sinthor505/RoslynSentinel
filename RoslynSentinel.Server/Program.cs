@@ -63,7 +63,7 @@ builder.Logging.ClearProviders();
 
 var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "server.log");
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Verbose()
+    .MinimumLevel.Information()
     .Enrich.FromLogContext()
     .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .CreateLogger();
@@ -102,9 +102,13 @@ try
     // --- Configure MCP Server Transport ---
     var mcpBuilder = builder.Services.AddMcpServer();
     if (isInteractive)
+    {
         mcpBuilder.WithStreamServerTransport(_interactiveServerInput!, _interactiveServerOutput!);
+    }
     else
+    {
         mcpBuilder.WithStdioServerTransport();
+    }
 
     // --- Tool Registration and Error Filter ---
     mcpBuilder.AddRoslynSentinelTools(builder.Services, activeModes);
@@ -124,11 +128,11 @@ try
         logger.LogInformation("Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg})",
             string.Join(", ", activeModes), modeArg);
     }
-    Console.Error.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
+    Debug.WriteLine($"[RoslynSentinel] PID={Environment.ProcessId} | Log={logPath}");
 
     // Temp testing output
-    Console.Error.WriteLine($"IsInputRedirected: {Console.IsInputRedirected}");
-    Console.Error.WriteLine($"IsOutputRedirected: {Console.IsOutputRedirected}");
+    Debug.WriteLine($"IsInputRedirected: {Console.IsInputRedirected}");
+    Debug.WriteLine($"IsOutputRedirected: {Console.IsOutputRedirected}");
 
     try
     {
@@ -157,15 +161,16 @@ try
         {
             logger.LogCritical(runEx, "Host.RunAsync terminated with exception: {Message}", runEx.Message);
         }
-        Console.Error.WriteLine($"[RoslynSentinel] FATAL: {runEx.Message}");
+        Debug.WriteLine($"[RoslynSentinel] FATAL: {runEx.Message}");
+        Debug.WriteLine(runEx.StackTrace);
         throw;
     }
 }
 catch (Exception ex)
 {
     Log.Fatal(ex, "Roslyn Sentinel failed to start.");
-    Console.Error.WriteLine($"FATAL STARTUP ERROR: {ex.Message}");
-    Console.Error.WriteLine(ex.StackTrace);
+    Debug.WriteLine($"FATAL STARTUP ERROR: {ex.Message}");
+    Debug.WriteLine(ex.StackTrace);
     throw;
 }
 finally

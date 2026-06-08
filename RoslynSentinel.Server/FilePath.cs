@@ -1,5 +1,9 @@
-﻿namespace RoslynSentinel.Server;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
+namespace RoslynSentinel.Server;
+
+[JsonConverter(typeof(FilePathJsonConverter))]
 public readonly struct FilePath : IEquatable<FilePath>
 {
     private readonly string absolute;   // canonical internal form
@@ -85,4 +89,24 @@ public readonly struct FilePath : IEquatable<FilePath>
     {
         return StringComparer.OrdinalIgnoreCase.Equals(absolute, other.absolute);
     }
+}
+
+/// <summary>
+/// Enables System.Text.Json to serialize <see cref="FilePath"/> both as a plain JSON string
+/// and as a dictionary property name (required for Dictionary&lt;FilePath, ...&gt; serialization).
+/// </summary>
+public sealed class FilePathJsonConverter : JsonConverter<FilePath>
+{
+    public override FilePath Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => new FilePath(reader.GetString()!);
+
+    public override void Write(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
+
+    // Required for Dictionary<FilePath, TValue> key serialization
+    public override FilePath ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => new FilePath(reader.GetString()!);
+
+    public override void WriteAsPropertyName(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
+        => writer.WritePropertyName(value.ToString());
 }

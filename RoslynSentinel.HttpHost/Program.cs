@@ -33,7 +33,7 @@ if (args.Contains("--list-tools"))
 
 var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "http-host.log");
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information()
+    .MinimumLevel.Verbose()
     .Enrich.FromLogContext()
     .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
     .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
