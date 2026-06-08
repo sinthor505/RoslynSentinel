@@ -7,6 +7,22 @@ public record DiagnosticReport(
     List<DiagnosticInfo> Diagnostics
 );
 
+public static class DiagnosticReportExtensions
+{
+    public static string ToInfo(this IEnumerable<DiagnosticInfo> diagnostics)
+    {
+        return string.Join(", ", diagnostics.Select(d => d.Message.ToString()));
+    }
+
+    public static string ToJson(this IEnumerable<DiagnosticInfo> diagnostics)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(diagnostics, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+    }
+}
+
 public record DiagnosticInfo(
     string Id,
     string Severity,

@@ -1078,7 +1078,7 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.Outcome };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var id = _workspaceManager.StageChanges(changes, description);
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };

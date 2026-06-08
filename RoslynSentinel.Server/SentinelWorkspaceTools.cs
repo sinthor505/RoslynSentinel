@@ -315,7 +315,7 @@ public class SentinelWorkspaceTools
 
                         if (!validation.Success)
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {validation.Diagnostics}") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
                         }
                     }
 
@@ -449,7 +449,7 @@ public class SentinelWorkspaceTools
 
                     if (!validation.Success)
                     {
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {validation.Diagnostics}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
                     }
                 }
 
