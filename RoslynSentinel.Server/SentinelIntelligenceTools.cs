@@ -421,7 +421,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<string>
             {
                 Success = true,
-                Data = result.Outcome.ToString()
+                Data = result.ToJsonSummary()
             };
         }
         catch (Exception ex)

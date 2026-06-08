@@ -133,7 +133,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"add_braces failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "cleanup_implicit_spans":
                     {
@@ -143,7 +143,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"cleanup_implicit_spans failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "convert_to_null_coalescing":
                     {
@@ -153,7 +153,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"convert_to_null_coalescing failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "convert_to_pattern":
                     {
@@ -163,7 +163,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"convert_to_pattern failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "convert_to_switch":
                     {
@@ -173,7 +173,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"convert_to_switch failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "fix_mismatched_namespaces":
                     {
@@ -183,7 +183,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"fix_mismatched_namespaces failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "fix_thread_sleep":
                     {
@@ -195,7 +195,7 @@ public class SentinelCodemodTools
                                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"fix_thread_sleep failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
                             }
 
-                            return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                            return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                         }
                         catch (InvalidOperationException) { return new ToolResult<object>() { Success = false, Error = new ResultError("", $"fix_thread_sleep failed for '{filePath}': invalid operation. Ensure the solution is loaded.") }; }
                         catch (Exception ex)
@@ -218,7 +218,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"generate_xml_documentation_stubs failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r.Outcome };
+                        return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                     }
                 case "optimize_task_wait":
                     {
@@ -1112,13 +1112,13 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Error = new ResultError("", "className is required for generate_constructor.") };
                         }
 
-                        var r = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        var result = await _codeGenerationEngine.GenerateConstructorAsync(filePath, className);
+                        if (string.IsNullOrEmpty(result.UpdatedText))
                         {
                             return new ToolResult<object>() { Error = new ResultError("", $"generate_constructor failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r };
+                        return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
                     }
                 case "generate_decorator_class":
                     {
@@ -1147,13 +1147,13 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Error = new ResultError("", "className is required for generate_equality_overrides.") };
                         }
 
-                        var r = await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        var result = await _analysisEngine.GenerateEqualityOverridesAsync(filePath, className);
+                        if (string.IsNullOrEmpty(result.UpdatedText))
                         {
                             return new ToolResult<object>() { Error = new ResultError("", $"generate_equality_overrides failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.") };
                         }
 
-                        return new ToolResult<object>() { Success = true, Data = r };
+                        return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
                     }
                 case "generate_fluent_builder":
                     {

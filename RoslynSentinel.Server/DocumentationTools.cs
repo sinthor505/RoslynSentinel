@@ -97,10 +97,14 @@ public class DocumentationTools
     {
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (!ok)
+        {
             return new DocReadResult { Found = false, Filename = filename, Error = guardError };
+        }
 
         if (!File.Exists(fullPath))
+        {
             return new DocReadResult { Found = false, Filename = filename };
+        }
 
         return new DocReadResult
         {
@@ -114,23 +118,31 @@ public class DocumentationTools
     {
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (!ok)
+        {
             return new DocWriteResult { Success = false, Filename = filename, Error = guardError };
+        }
 
         int bytes = Encoding.UTF8.GetByteCount(content);
         if (bytes > MaxDocBytes)
+        {
             return new DocWriteResult
             {
                 Success = false,
                 Filename = filename,
                 Error = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
             };
+        }
 
         Directory.CreateDirectory(subdir);
 
         if (append)
+        {
             File.AppendAllText(fullPath, content);
+        }
         else
+        {
             File.WriteAllText(fullPath, content);
+        }
 
         return new DocWriteResult
         {
@@ -195,7 +207,9 @@ public class DocumentationTools
             if (action == "list")
             {
                 if (!Directory.Exists(docsRoot))
+                {
                     return new DocListResult { Files = [], Count = 0 };
+                }
 
                 var files = Directory.GetFiles(docsRoot, "*", SearchOption.AllDirectories)
                     .Select(f => Path.GetRelativePath(docsRoot, f).Replace('\\', '/'))
@@ -211,16 +225,25 @@ public class DocumentationTools
                 {
                     var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
                     if (!File.Exists(fullPath))
+                    {
                         return new DocReadResult { Found = false, Filename = "migration-state.yaml" };
+                    }
+
                     return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
                 }
                 if (action == "write")
                 {
                     if (content is null)
+                    {
                         return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "content is required for action=write." };
+                    }
+
                     int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
                     if (bytes > MaxDocBytes)
+                    {
                         return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
+                    }
+
                     var stateDir = Path.Combine(docsRoot);
                     var statePath = Path.Combine(stateDir, "migration-state.yaml");
                     Directory.CreateDirectory(stateDir);
@@ -232,9 +255,11 @@ public class DocumentationTools
 
             // ── file-based doc types ──────────────────────────────────────────────
             if (name is null)
+            {
                 return action is "read"
                     ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
                     : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
+            }
 
             var subdir = docType switch
             {
@@ -246,14 +271,21 @@ public class DocumentationTools
             };
 
             if (subdir is null)
+            {
                 return action is "read"
                     ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
                     : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
+            }
 
             if (action == "write" && content is null)
+            {
                 return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
+            }
+
             if (action == "append" && content is null)
+            {
                 return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
+            }
 
             return action switch
             {

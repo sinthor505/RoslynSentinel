@@ -64,7 +64,16 @@ public class FailureDetail
     }
     public string Reason { get; set; } = "";
     /// <summary>"failed" | "rolledback" | "skipped"</summary>
-    public string Outcome { get; set; } = "";
+    public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
+}
+
+public enum OperationOutcome
+{
+    Unset,
+    Succeeded,
+    Skipped,
+    Failed,
+    RolledBack
 }
 
 /// <summary>Per-item forensic record written to the operation blob on disk.</summary>
@@ -76,7 +85,7 @@ public class OperationItemRecord
         get; set;
     }
     /// <summary>"succeeded" | "skipped" | "failed" | "rolledback"</summary>
-    public string Outcome { get; set; } = "";
+    public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
     public string? Reason
     {
         get; set;

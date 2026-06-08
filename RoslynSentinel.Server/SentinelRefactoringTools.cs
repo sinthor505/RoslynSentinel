@@ -104,7 +104,7 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-            return result.Outcome.ToString();
+            return result.ToJsonSummary();
         }
         catch (Exception ex)
         {
@@ -355,7 +355,7 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
-            return result.Outcome.ToString();
+            return result.ToJsonSummary();
         }
         catch (Exception ex)
         {
@@ -375,7 +375,7 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
-            return result.Outcome.ToString();
+            return result.ToJsonSummary();
         }
         catch (Exception ex)
         {
@@ -405,7 +405,7 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.AddUsingDirectiveAsync(filePath, namespaceName);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
@@ -437,7 +437,7 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
@@ -529,7 +529,7 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
@@ -564,7 +564,7 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
@@ -595,7 +595,7 @@ public class SentinelRefactoringTools
             var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
@@ -627,7 +627,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"IntroduceParameterObject failed for '{methodName}' in '{filePath}': file not found in workspace or method not found. Ensure the solution is loaded.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = result.Outcome };
+            return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
         }
         catch (Exception ex)
         {
@@ -665,7 +665,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = result.Outcome };
+            return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
         }
         catch (Exception ex)
         {
@@ -702,7 +702,7 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{attribute}' on '{targetName}'.");
@@ -744,7 +744,7 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
@@ -786,7 +786,7 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
@@ -956,7 +956,7 @@ public class SentinelRefactoringTools
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SyncInterface implement failed for '{className}' implementing '{interfaceName}' in '{filePath}': file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.") };
                 }
-                return new ToolResult<object>() { Success = true, Data = result.Outcome };
+                return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
             }
             if (action == "sync")
             {
@@ -969,7 +969,7 @@ public class SentinelRefactoringTools
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SyncInterface sync failed for '{className}' implementing '{interfaceName}' in '{filePath}': file not found in workspace, class not found, or interface not found. Ensure the solution is loaded.") };
                 }
-                return new ToolResult<object>() { Success = true, Data = result };
+                return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
             }
             if (action == "verify")
             {
@@ -1076,7 +1076,7 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var id = _workspaceManager.StageChanges(changes, description);
@@ -1128,7 +1128,7 @@ public class SentinelRefactoringTools
             }
             if (!autoStage)
             {
-                return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
             var id = _workspaceManager.StageChanges(changes, description);
@@ -1164,7 +1164,7 @@ public class SentinelRefactoringTools
                 var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                 }
                 var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
                 var id = _workspaceManager.StageChanges(changes, $"Wrapped lines {startLine}-{endLine} in try/catch.");
@@ -1180,7 +1180,7 @@ public class SentinelRefactoringTools
                 var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                 }
             }
             if (wrapper == "region")
@@ -1192,7 +1192,7 @@ public class SentinelRefactoringTools
                 var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
                 if (!autoStage)
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated.Outcome };
+                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
                 }
                 var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
                 var id = _workspaceManager.StageChanges(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.");

@@ -507,7 +507,7 @@ public class SentinelWorkspaceTools
             return new OperationItemRecord
             {
                 FilePath = f,
-                Outcome = "succeeded",
+                Outcome = OperationOutcome.Succeeded,
                 BeforeSource = before,
             };
         }).ToList();
@@ -1022,9 +1022,9 @@ public class SentinelWorkspaceTools
                 {
                     filtered = filter.ToLowerInvariant() switch
                     {
-                        "failures" => allItems.Where(r => r.Outcome == "failed"),
-                        "skipped" => allItems.Where(r => r.Outcome == "skipped"),
-                        "rolledback" => allItems.Where(r => r.Outcome == "rolledback"),
+                        "failures" => allItems.Where(r => r.Outcome == OperationOutcome.Failed),
+                        "skipped" => allItems.Where(r => r.Outcome == OperationOutcome.Skipped),
+                        "rolledback" => allItems.Where(r => r.Outcome == OperationOutcome.RolledBack),
                         _ => allItems,
                     };
                 }
@@ -1074,7 +1074,7 @@ public class SentinelWorkspaceTools
             var revertable = doc.GetProperty("items")
                                .EnumerateArray()
                                .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
-                               .Where(r => r.Outcome == "succeeded" && r.BeforeSource != null)
+                               .Where(r => r.Outcome == OperationOutcome.Succeeded && r.BeforeSource != null)
                                .ToList();
 
             if (revertable.Count == 0)

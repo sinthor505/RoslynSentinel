@@ -643,13 +643,13 @@ public class SentinelQualityTools
             items.Add(new OperationItemRecord
             {
                 FilePath = a.FilePath,
-                Outcome = a.TotalForwarded > 0 ? "succeeded" : "skipped",
+                Outcome = a.TotalForwarded > 0 ? OperationOutcome.Succeeded : OperationOutcome.Skipped,
                 Reason = a.TotalForwarded == 0 ? "no eligible call sites" : null,
             });
         }
         foreach (var f in result.Failed)
         {
-            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = "failed", Reason = f.Reason });
+            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = OperationOutcome.Failed, Reason = f.Reason });
         }
 
         var blobName = await OperationBlobWriter.WriteAsync(
@@ -657,7 +657,7 @@ public class SentinelQualityTools
         var status = _workspaceManager.GetBreakerStatus();
         var failures = result.Failed
             .Take(15)
-            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = "failed" })
+            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = OperationOutcome.Failed })
             .ToList();
 
         return new BatchResultSummary
@@ -715,9 +715,9 @@ public class SentinelQualityTools
                 {
                     FilePath = target.FilePath,
                     Reason = "MethodNames must be specified for convert_to_async_bridge",
-                    Outcome = "failed",
+                    Outcome = OperationOutcome.Failed,
                 };
-                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = fd.Reason });
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = fd.Reason });
                 if (failures.Count < 15) { failures.Add(fd); }
                 failed++;
                 continue;
@@ -738,7 +738,7 @@ public class SentinelQualityTools
                     {
                         FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = "dry_run",
                     });
                     succeeded++;
@@ -773,7 +773,7 @@ public class SentinelQualityTools
                     {
                         FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome = "succeeded",
+                        Outcome = OperationOutcome.Succeeded,
                         BeforeSource = beforeSource782,
                     });
                     succeeded++;
@@ -785,7 +785,7 @@ public class SentinelQualityTools
                     {
                         FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome = "failed",
+                        Outcome = OperationOutcome.Failed,
                         Reason = reason,
                     });
                     if (failures.Count < 15)
@@ -795,7 +795,7 @@ public class SentinelQualityTools
                             FilePath = target.FilePath,
                             MethodName = methodName,
                             Reason = reason,
-                            Outcome = "failed",
+                            Outcome = OperationOutcome.Failed,
                         });
                     }
                     failed++;
@@ -880,10 +880,10 @@ public class SentinelQualityTools
                 if (updatedSource.StartsWith("// Error:"))
                 {
                     var reason = updatedSource;
-                    items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = reason });
+                    items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
                     if (failures.Count < 15)
                     {
-                        failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = "failed" });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
                     }
                     failed++;
                 }
@@ -892,7 +892,7 @@ public class SentinelQualityTools
                     items.Add(new OperationItemRecord
                     {
                         FilePath = target.FilePath,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = "no eligible async methods",
                     });
                     skipped++;
@@ -910,7 +910,7 @@ public class SentinelQualityTools
                         {
                             FilePath = target.FilePath,
                             MethodName = m,
-                            Outcome = input.DryRun ? "skipped" : "succeeded",
+                            Outcome = input.DryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
                             Reason = input.DryRun ? "dry_run" : null,
                         });
                     }
@@ -921,10 +921,10 @@ public class SentinelQualityTools
             catch (Exception ex)
             {
                 var reason = ex.Message;
-                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = "failed", Reason = reason });
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
                 if (failures.Count < 15)
                 {
-                    failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = "failed" });
+                    failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
                 }
                 failed++;
                 _logger.LogWarning("AddCancellationToken batch: {File} failed: {Reason}", target.FilePath, reason);
@@ -939,7 +939,7 @@ public class SentinelQualityTools
             {
                 foreach (var item in items)
                 {
-                    if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                    if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
                     {
                         applyResult941.PreImages.TryGetValue(item.FilePath, out var pre);
                         item.BeforeSource = pre;
@@ -1033,7 +1033,7 @@ public class SentinelQualityTools
                 {
                     FilePath = u.FilePath,
                     MethodName = u.CallerMethod,
-                    Outcome = "succeeded",
+                    Outcome = OperationOutcome.Succeeded,
                 });
             }
             foreach (var s in pm.Result.Skipped)
@@ -1042,7 +1042,7 @@ public class SentinelQualityTools
                 {
                     FilePath = s.FilePath,
                     MethodName = s.CallerMethod,
-                    Outcome = "failed",
+                    Outcome = OperationOutcome.Failed,
                     Reason = s.Reason,
                 });
             }
@@ -1051,7 +1051,7 @@ public class SentinelQualityTools
                 items.Add(new OperationItemRecord
                 {
                     FilePath = pm.BridgedMethodName,
-                    Outcome = "failed",
+                    Outcome = OperationOutcome.Failed,
                     Reason = pm.Error,
                 });
             }
@@ -1066,7 +1066,7 @@ public class SentinelQualityTools
                 FilePath = s.FilePath,
                 MethodName = s.CallerMethod,
                 Reason = s.Reason,
-                Outcome = "failed",
+                Outcome = OperationOutcome.Failed,
             }))
             .Take(15)
             .ToList();
@@ -1141,7 +1141,7 @@ public class SentinelQualityTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = "succeeded",
+                            Outcome = OperationOutcome.Succeeded,
                             Reason = null,
                             BeforeSource = beforeSource1135,
                         });
@@ -1156,7 +1156,7 @@ public class SentinelQualityTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = input.DryRun ? "skipped" : "succeeded",
+                            Outcome = input.DryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
                             Reason = input.DryRun ? "dry_run" : null,
                         });
                         succeeded++;
@@ -1168,7 +1168,7 @@ public class SentinelQualityTools
                     {
                         FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = $"score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
@@ -1179,7 +1179,7 @@ public class SentinelQualityTools
                     {
                         FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = "already flagged",
                     });
                     skipped++;
@@ -1215,7 +1215,7 @@ public class SentinelQualityTools
                     {
                         FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome = "succeeded",
+                        Outcome = OperationOutcome.Succeeded,
                     });
                     succeeded++;
                 }
@@ -1227,7 +1227,7 @@ public class SentinelQualityTools
                     {
                         FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome = "failed",
+                        Outcome = OperationOutcome.Failed,
                         Reason = err,
                     });
                     if (failures.Count < 15)
@@ -1237,7 +1237,7 @@ public class SentinelQualityTools
                             FilePath = tgt.FilePath,
                             MethodName = tgt.MethodName,
                             Reason = err,
-                            Outcome = "failed",
+                            Outcome = OperationOutcome.Failed,
                         });
                     }
                     failed++;
@@ -1251,7 +1251,7 @@ public class SentinelQualityTools
                     {
                         foreach (var item in items)
                         {
-                            if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                            if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
                             {
                                 applyResult1223.PreImages.TryGetValue(item.FilePath, out var pre);
                                 item.BeforeSource = pre;
@@ -1361,7 +1361,7 @@ public class SentinelQualityTools
                             {
                                 FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome = "skipped",
+                                Outcome = OperationOutcome.Skipped,
                                 Reason = "excluded",
                             });
                             skipped++;
@@ -1374,7 +1374,7 @@ public class SentinelQualityTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = "succeeded",
+                            Outcome = OperationOutcome.Succeeded,
                             Reason = "phase:flag",
                             BeforeSource = beforeSource1339,
                         });
@@ -1391,7 +1391,7 @@ public class SentinelQualityTools
                             {
                                 FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome = "skipped",
+                                Outcome = OperationOutcome.Skipped,
                                 Reason = "excluded",
                             });
                             skipped++;
@@ -1402,7 +1402,7 @@ public class SentinelQualityTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = "skipped",
+                            Outcome = OperationOutcome.Skipped,
                             Reason = "dry_run:flag",
                         });
                         skipped++;
@@ -1414,7 +1414,7 @@ public class SentinelQualityTools
                     {
                         FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
@@ -1425,7 +1425,7 @@ public class SentinelQualityTools
                     {
                         FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome = "skipped",
+                        Outcome = OperationOutcome.Skipped,
                         Reason = "phase:flag — already flagged",
                     });
                     skipped++;
@@ -1456,7 +1456,7 @@ public class SentinelQualityTools
                         {
                             FilePath = tuples[i].FilePath,
                             MethodName = tuples[i].MethodName,
-                            Outcome = "succeeded",
+                            Outcome = OperationOutcome.Succeeded,
                             Reason = "phase:flag",
                         });
                         succeeded++;
@@ -1467,7 +1467,7 @@ public class SentinelQualityTools
                         {
                             FilePath = tuples[idx].FilePath,
                             MethodName = tuples[idx].MethodName,
-                            Outcome = "failed",
+                            Outcome = OperationOutcome.Failed,
                             Reason = $"phase:flag — {err}",
                         });
                         if (failures.Count < 15)
@@ -1477,7 +1477,7 @@ public class SentinelQualityTools
                                 FilePath = tuples[idx].FilePath,
                                 MethodName = tuples[idx].MethodName,
                                 Reason = err,
-                                Outcome = "failed",
+                                Outcome = OperationOutcome.Failed,
                             });
                         }
                         failed++;
@@ -1490,7 +1490,7 @@ public class SentinelQualityTools
                         {
                             foreach (var item in items)
                             {
-                                if (item.Outcome == "succeeded" && item.BeforeSource == null)
+                                if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
                                 {
                                     applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
                                     item.BeforeSource = pre;
@@ -1517,7 +1517,7 @@ public class SentinelQualityTools
                 {
                     FilePath = a.FilePath,
                     MethodName = a.MethodName,
-                    Outcome = "succeeded",
+                    Outcome = OperationOutcome.Succeeded,
                     Reason = "phase:bridge",
                 });
                 succeeded++;
@@ -1528,7 +1528,7 @@ public class SentinelQualityTools
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome = "failed",
+                    Outcome = OperationOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                 });
                 if (failures.Count < 15)
@@ -1538,7 +1538,7 @@ public class SentinelQualityTools
                         FilePath = s.FilePath,
                         MethodName = s.MethodName,
                         Reason = s.Reason,
-                        Outcome = "failed",
+                        Outcome = OperationOutcome.Failed,
                     });
                 }
                 failed++;
@@ -1580,7 +1580,7 @@ public class SentinelQualityTools
                             {
                                 FilePath = u.FilePath,
                                 MethodName = u.CallerMethod,
-                                Outcome = "succeeded",
+                                Outcome = OperationOutcome.Succeeded,
                                 Reason = "phase:uplift",
                             });
                             succeeded++;
@@ -1591,7 +1591,7 @@ public class SentinelQualityTools
                             {
                                 FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
-                                Outcome = "failed",
+                                Outcome = OperationOutcome.Failed,
                                 Reason = $"phase:uplift — {s.Reason}",
                             });
                             if (failures.Count < 15)
@@ -1601,7 +1601,7 @@ public class SentinelQualityTools
                                     FilePath = s.FilePath,
                                     MethodName = s.CallerMethod,
                                     Reason = s.Reason,
-                                    Outcome = "failed",
+                                    Outcome = OperationOutcome.Failed,
                                 });
                             }
                             failed++;
@@ -1639,7 +1639,7 @@ public class SentinelQualityTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = a.FilePath,
-                            Outcome = "succeeded",
+                            Outcome = OperationOutcome.Succeeded,
                             Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
                         });
                     }
@@ -1648,7 +1648,7 @@ public class SentinelQualityTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = f.FilePath,
-                            Outcome = "failed",
+                            Outcome = OperationOutcome.Failed,
                             Reason = $"phase:propagate_ct — {f.Reason}",
                         });
                     }

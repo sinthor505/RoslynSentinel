@@ -70,7 +70,7 @@ public class SentinelGenerationTools
                     "file not found in workspace or controller class not found. Ensure the solution is loaded.");
             }
 
-            return result.Outcome.ToString();
+            return result.ToJsonSummary();
         }
         catch (Exception ex)
         {
@@ -131,7 +131,7 @@ public class SentinelGenerationTools
                     "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
             }
 
-            return result.Outcome.ToString();
+            return result.ToJsonSummary();
         }
         catch (Exception ex)
         {
