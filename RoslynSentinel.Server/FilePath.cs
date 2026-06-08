@@ -48,7 +48,7 @@ public readonly struct FilePath : IEquatable<FilePath>
         return Path.GetRelativePath(solutionRoot, this.absolute);
     }
 
-    public override string ToString() => absolute;
+    public override string ToString() => absolute ?? string.Empty;
     public override bool Equals(object? obj)
     {
         return obj is FilePath other && string.Equals(absolute, other.absolute, StringComparison.OrdinalIgnoreCase);
@@ -58,7 +58,7 @@ public readonly struct FilePath : IEquatable<FilePath>
     public static implicit operator FilePath(string path) => new FilePath(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath filePath) => filePath.absolute!;
+    public static implicit operator string(FilePath? filePath) => filePath?.absolute ?? string.Empty;
 
     //Equality operators for convenience
     public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);

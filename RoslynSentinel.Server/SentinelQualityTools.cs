@@ -401,13 +401,13 @@ public class SentinelQualityTools
                     {
                         Success = true,
                         LargeResult = new LargeResultInfo(
-                            ResultType: typeof(MigrationScanSummary).Name,
-                            WrittenToFile: true,
-                            FilePath: fp,
-                            ScanId: scanId,
-                            SizeBytes: summaryJson.Length,
-                            TotalRecords: aggregateFindings.Count,
-                            Message: $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
+                            resultType: typeof(MigrationScanSummary).Name,
+                            writtenToFile: true,
+                            filePath: fp,
+                            scanId: scanId,
+                            sizeBytes: summaryJson.Length,
+                            totalRecords: aggregateFindings.Count,
+                            message: $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
                                            $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
                     };
                 }
@@ -488,13 +488,13 @@ public class SentinelQualityTools
                 TotalRecords = totalCount,
                 HasMore = hasMore,
                 LargeResult = new LargeResultInfo(
-                    ResultType: typeof(MigrationScanSummary).Name,
-                    WrittenToFile: written,
-                    FilePath: scanFilePath,
-                    ScanId: scanId,
-                    SizeBytes: jsonBytes.Length,
-                    TotalRecords: totalCount,
-                    Message: $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
+                    resultType: typeof(MigrationScanSummary).Name,
+                    writtenToFile: written,
+                    filePath: scanFilePath,
+                    scanId: scanId,
+                    sizeBytes: jsonBytes.Length,
+                    totalRecords: totalCount,
+                    message: $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
                                    $"Use get_scan_result(scanId: \"{scanId}\") to page through results. " +
                                    "Pass limit and offset to control page size (default limit: 50).")
             };

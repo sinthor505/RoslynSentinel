@@ -126,22 +126,22 @@ public record LargeResultInfo
     }
 
     public LargeResultInfo(
-    string ResultType,
-    bool WrittenToFile,
-    FilePath FilePath,
-    string ScanId,
-    long SizeBytes,
-    int TotalRecords,
-    string? Message = null
+    string resultType,
+    bool writtenToFile,
+    FilePath filePath,
+    string scanId,
+    long sizeBytes,
+    int totalRecords,
+    string? message = null
 )
     {
-        this.ResultType = ResultType ?? throw new ArgumentNullException(nameof(ResultType));
-        this.WrittenToFile = WrittenToFile;
-        this.FilePath = FilePath.Absolute ?? throw new ArgumentNullException(nameof(FilePath));
-        this.ScanId = ScanId ?? throw new ArgumentNullException(nameof(ScanId));
-        this.SizeBytes = SizeBytes == 0 ? throw new ArgumentOutOfRangeException(nameof(SizeBytes)) : SizeBytes;
-        this.TotalRecords = TotalRecords < 0 ? throw new ArgumentOutOfRangeException(nameof(TotalRecords)) : TotalRecords;
-        this.Message = Message;
+        this.ResultType = resultType ?? throw new ArgumentNullException(nameof(resultType));
+        this.WrittenToFile = writtenToFile;
+        this.FilePath = filePath;
+        this.ScanId = scanId ?? throw new ArgumentNullException(nameof(scanId));
+        this.SizeBytes = sizeBytes == 0 ? throw new ArgumentOutOfRangeException(nameof(sizeBytes)) : sizeBytes;
+        this.TotalRecords = totalRecords < 0 ? throw new ArgumentOutOfRangeException(nameof(totalRecords)) : totalRecords;
+        this.Message = message;
     }
 }
 

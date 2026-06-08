@@ -756,13 +756,13 @@ public class SentinelWorkspaceTools
                 {
                     Success = true,
                     LargeResult = new LargeResultInfo(
-                        ResultType: "MethodSource",
-                        WrittenToFile: true,
-                        FilePath: fp,
-                        ScanId: scanId,
-                        SizeBytes: methodBytes,
-                        TotalRecords: 1,
-                        Message: $"Summary exceeded {thresholdBytes} bytes ({methodBytes} bytes). " +
+                        resultType: "MethodSource",
+                        writtenToFile: true,
+                        filePath: fp,
+                        scanId: scanId,
+                        sizeBytes: methodBytes,
+                        totalRecords: 1,
+                        message: $"Summary exceeded {thresholdBytes} bytes ({methodBytes} bytes). " +
                                        $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
                 };
             }

@@ -169,13 +169,13 @@ public class SentinelIntelligenceTools
                     Data = summary,
                     TotalRecords = results.Methods.Count,
                     LargeResult = new LargeResultInfo(
-                        ResultType: typeof(CodeInventoryReport).Name,
-                        WrittenToFile: summary.offloaded,
-                        FilePath: summary.filePath,
-                        ScanId: summary.scanId,
-                        SizeBytes: summary.jsonBytes.Length,
-                        TotalRecords: results.Methods.Count,
-                        Message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +
+                        resultType: typeof(CodeInventoryReport).Name,
+                        writtenToFile: summary.offloaded,
+                        filePath: summary.filePath?.ToString(),
+                        scanId: summary.scanId,
+                        sizeBytes: summary.jsonBytes.Length,
+                        totalRecords: results.Methods.Count,
+                        message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +
                                    $"Use get_scan_result(scanId: \"{summary.scanId}\") to page through results. " +
                                    "Pass limit and offset to control page size (default limit: 50).")
 
@@ -561,13 +561,13 @@ public class SentinelIntelligenceTools
                         TotalRecords = apiResult.Count,
                         HasMore = false,
                         LargeResult = new LargeResultInfo(
-                            ResultType: typeof(ApiSurfaceEntry).Name,
-                            WrittenToFile: true,
-                            FilePath: summaryResults.filePath,
-                            ScanId: summaryResults.scanId,
-                            SizeBytes: summaryResults.jsonBytes.Length,
-                            TotalRecords: apiResult.Count,
-                            Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
+                            resultType: typeof(ApiSurfaceEntry).Name,
+                            writtenToFile: true,
+                            filePath: summaryResults.filePath?.ToString(),
+                            scanId: summaryResults.scanId,
+                            sizeBytes: summaryResults.jsonBytes.Length,
+                            totalRecords: apiResult.Count,
+                            message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
                                            $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
@@ -606,13 +606,13 @@ public class SentinelIntelligenceTools
                         TotalRecords = apiResult.Count,
                         HasMore = false,
                         LargeResult = new LargeResultInfo(
-                            ResultType: typeof(ApiSurfaceEntry).Name,
-                            WrittenToFile: true,
-                            FilePath: summaryResults.filePath,
-                            ScanId: summaryResults.scanId,
-                            SizeBytes: summaryResults.jsonBytes.Length,
-                            TotalRecords: apiResult.Count,
-                            Message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
+                            resultType: typeof(ApiSurfaceEntry).Name,
+                            writtenToFile: true,
+                            filePath: summaryResults.filePath?.ToString(),
+                            scanId: summaryResults.scanId,
+                            sizeBytes: summaryResults.jsonBytes.Length,
+                            totalRecords: apiResult.Count,
+                            message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
                                            $"Use get_scan_result(scanId: \"{summaryResults.scanId}\") to page through results. " +
                                            "Pass limit and offset to control page size (default limit: 50).")
                     };
@@ -629,6 +629,14 @@ public class SentinelIntelligenceTools
             }
 
             return toolResult;
+        }
+        catch (Exception ex) when (ex is ArgumentException && ex.Message.Contains("not found in solution"))
+        {
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
+            };
         }
         catch (Exception ex)
         {

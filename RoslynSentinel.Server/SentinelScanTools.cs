@@ -677,12 +677,12 @@ public class SentinelScanTools
         };
     }
 
-    internal static async Task<(bool offloaded, FilePath filePath, string scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
+    internal static async Task<(bool offloaded, FilePath? filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot))
         {
-            return (false, string.Empty, string.Empty, jsonBytes);
+            return (false, null, null, jsonBytes);
         }
 
         var wrapper = new ScanWapper

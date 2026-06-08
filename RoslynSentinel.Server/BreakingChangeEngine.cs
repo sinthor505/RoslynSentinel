@@ -56,6 +56,10 @@ public class BreakingChangeEngine
         {
             var project = solution.Projects.FirstOrDefault(p =>
                 string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            if (project == null)
+            {
+                throw new ArgumentException($"Project '{projectName}' not found in the solution.");
+            }
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else

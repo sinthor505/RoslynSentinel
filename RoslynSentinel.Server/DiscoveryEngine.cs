@@ -310,7 +310,8 @@ public class DiscoveryEngine
             string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
         if (project == null)
         {
-            return results;
+            //return results;
+            throw new ArgumentException($"Project '{projectName}' not found in solution.");
         }
 
         foreach (var doc in project.Documents)
