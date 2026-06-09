@@ -2,7 +2,7 @@
 
 namespace RoslynSentinel.Server;
 
-public sealed class EngineResult<T>
+public sealed class EngineResultWrapper<T>
 {
     public EngineOutcome Outcome
     {
@@ -32,7 +32,7 @@ public sealed class EngineResult<T>
         }
     }
 
-    public EngineResult(EngineOutcome outcome, T? data = default, EngineError? error = null)
+    public EngineResultWrapper(EngineOutcome outcome, T? data = default, EngineError? error = null)
     {
         Outcome = outcome;
         _data = data;
@@ -44,9 +44,9 @@ public enum EngineOutcome
 {
     Success,
     Failure,
-    NotFound,
+    DocumentNotFound,
+    TargetNotFound,
     InvalidInput,
-    Unauthorized,
     Timeout,
     InternalError
 }

@@ -1,6 +1,4 @@
-﻿using System.Text.Json.Serialization;
-
-namespace RoslynSentinel.Server
+﻿namespace RoslynSentinel.Server
 {
     public enum EditOutcome
     {
@@ -19,32 +17,9 @@ namespace RoslynSentinel.Server
         Error                 // for unexpected exceptions or failures
     }
 
-    public sealed class DocumentEditResult
+    public sealed record DocumentEditResult : EngineResultBase
     {
-        private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new System.Text.Json.JsonSerializerOptions()
-        {
-            WriteIndented = true
-        };
 
-        public EditOutcome Outcome
-        {
-            get; init;
-        } = EditOutcome.Unset;
-        [JsonIgnore]
-        public string? UpdatedText
-        {
-            get; init;
-        }   // non-null if Modified
-        public FilePath FilePath
-        {
-            get; init;
-        }
-        public string Message { get; init; } = ""; // for error details in case of failure
-        public bool IsCommitted { get; init; } = false; // whether changes have been applied to the workspace (vs. just in-memory)
-        public int ChangeId
-        {
-            get; init;
-        }
         public Dictionary<FilePath, string> Changes { get; init; } = new Dictionary<FilePath, string>();
 
         public DocumentEditResult()

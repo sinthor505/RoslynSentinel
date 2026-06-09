@@ -14,14 +14,14 @@ public class AdvancedLogicEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<Dictionary<FilePath, string>> InvertBooleanLogicAsync(string filepath, string boolName, CancellationToken cancellationToken = default)
+    public async Task<EngineResultWrapper<List<DocumentEditResult>>> InvertBooleanLogicAsync(string filepath, string boolName, CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.DocumentNotFound, null, new EngineError("Document not found"));
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -44,7 +44,7 @@ public class AdvancedLogicEngine
 
         if (symbol == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.TargetNotFound, null, new EngineError("Symbol not found"));
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -75,16 +75,17 @@ public class AdvancedLogicEngine
             }
         }
 
-        var changes = new Dictionary<FilePath, string>();
+        var changes = new List<DocumentEditResult>();
         foreach (var projectChange in updatedSolution.GetChanges(solution).GetProjectChanges())
         {
             foreach (var changedDocId in projectChange.GetChangedDocuments())
             {
                 var doc = updatedSolution.GetDocument(changedDocId)!;
-                changes[doc.FilePath ?? doc.Name] = (await doc.GetTextAsync(cancellationToken)).ToString();
+                changes.Add(new DocumentEditResult { FilePath = doc.FilePath ?? doc.Name, UpdatedText = (await doc.GetTextAsync(cancellationToken)).ToString() });
             }
         }
-        return changes;
+
+        return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.Success, changes, null);
     }
 
     public async Task<DocumentEditResult> ConvertIfToSwitchExpressionAsync(string filepath, string methodName, CancellationToken cancellationToken = default)

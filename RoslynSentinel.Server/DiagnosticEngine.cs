@@ -17,7 +17,7 @@ public class DiagnosticEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<EngineResult<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -30,14 +30,14 @@ public class DiagnosticEngine
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo()).ToList();
-        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
+        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
         ));
     }
 
-    public async Task<EngineResult<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
@@ -50,7 +50,7 @@ public class DiagnosticEngine
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo()).ToList();
-        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
+        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
@@ -81,7 +81,7 @@ public class DiagnosticEngine
     /// the cap. File paths are made relative to the solution root for compact output.
     /// Filters Blazor source-generator false positives (CS0234/CS0246/CS0103).
     /// </summary>
-    public async Task<EngineResult<DiagnosticSummary>> GetSolutionDiagnosticsAsync(
+    public async Task<EngineResultWrapper<DiagnosticSummary>> GetSolutionDiagnosticsAsync(
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
@@ -124,6 +124,6 @@ public class DiagnosticEngine
                 "", 0, 0, 0, 0));
         }
 
-        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details));
+        return new EngineResultWrapper<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details));
     }
 }

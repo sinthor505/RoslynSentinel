@@ -19,38 +19,38 @@ public class BatchTarget
 }
 
 /// <summary>Agent-facing return from every batch-first mutation tool.</summary>
-public class BatchResultSummary
+public record BatchResultSummary : EngineResultBase
 {
-    public string ChangeId { get; set; } = "";
-    public string BlobName { get; set; } = "";
+    public string ChangeId { get; init; } = "";
+    public string BlobName { get; init; } = "";
     public int Succeeded
     {
-        get; set;
+        get; init;
     }
     public int Skipped
     {
-        get; set;
+        get; init;
     }
     public int RolledBack
     {
-        get; set;
+        get; init;
     }
     public int Failed
     {
-        get; set;
+        get; init;
     }
     public int Attempted
     {
-        get; set;
+        get; init;
     }
     /// <summary>Inline failures, capped at 15. Enough to course-correct; not enough to flood.</summary>
-    public List<FailureDetail> Failures { get; set; } = new();
+    public List<FailureDetail> Failures { get; init; } = new();
     /// <summary>"ok" | "caution" | "halt" — keyed field, never infer from prose.</summary>
-    public string Severity { get; set; } = "ok";
-    public string Directive { get; set; } = "";
+    public string Severity { get; init; } = "ok";
+    public string Directive { get; init; } = "";
     public bool BreakerOpen
     {
-        get; set;
+        get; init;
     }
 }
 
@@ -65,61 +65,6 @@ public class FailureDetail
     public string Reason { get; set; } = "";
     /// <summary>"failed" | "rolledback" | "skipped"</summary>
     public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
-}
-
-public enum OperationOutcome
-{
-    Unset,
-    Succeeded,
-    Skipped,
-    Failed,
-    RolledBack
-}
-
-/// <summary>Per-item forensic record written to the operation blob on disk.</summary>
-public class OperationItemRecord
-{
-    public string FilePath { get; set; } = "";
-    public string? MethodName
-    {
-        get; set;
-    }
-    /// <summary>"succeeded" | "skipped" | "failed" | "rolledback"</summary>
-    public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
-    public string? Reason
-    {
-        get; set;
-    }
-    /// <summary>Full source text before the operation — enables undo_last_apply.</summary>
-    public string? BeforeSource
-    {
-        get; set;
-    }
-    /// <summary>Full source text after the operation.</summary>
-    public string? AfterSource
-    {
-        get; set;
-    }
-}
-
-/// <summary>Return type for get_operation_detail — a filtered slice of an operation blob.</summary>
-public class OperationDetailResult
-{
-    public string ChangeId { get; set; } = "";
-    public string BlobName { get; set; } = "";
-    public int TotalItems
-    {
-        get; set;
-    }
-    public int ReturnedItems
-    {
-        get; set;
-    }
-    public string? Filter
-    {
-        get; set;
-    }
-    public List<OperationItemRecord> Items { get; set; } = new();
 }
 
 // ── Phase 4 — Batch-first input types ─────────────────────────────────────────

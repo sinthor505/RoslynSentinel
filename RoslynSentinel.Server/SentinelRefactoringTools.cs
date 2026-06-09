@@ -145,8 +145,8 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Produces(DataTag.ResultOnly)]
     [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
-                 "Pass 'symbolName' (the exact identifier to rename) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). " +
-                 "Example: symbolName=\"GetById\", contextSnippet=\"public async Task<Product?> GetById(\". " +
+                 "Pass 'symbolName' (the exact identifier to rename only - do not include the class, namespace, or FQN) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). " +
+                 "Example: symbolName=\"ExampleMethod\", contextSnippet=\"public async Task<Product?> ExampleMethod(\". " +
                  "Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. " +
                  "Returns an error if the snippet matches zero or multiple locations. " +
                  "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges. " +

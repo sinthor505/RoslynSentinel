@@ -555,7 +555,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            EngineResult<DiagnosticSummary> result;
+            EngineResultWrapper<DiagnosticSummary> result;
             DiagnosticSummary summary;
             if (scope == "file")
             {

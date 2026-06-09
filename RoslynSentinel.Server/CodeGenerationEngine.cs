@@ -30,7 +30,7 @@ public record DecoratorResult(
     string SuggestedFileName
 );
 
-public class CodeGenerationEngine
+public partial class CodeGenerationEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
 
@@ -286,12 +286,6 @@ public class CodeGenerationEngine
     private static bool IsSensitivePropertyName(string name)
         => SensitiveNameSubstrings.Any(sub =>
             name.Contains(sub, StringComparison.OrdinalIgnoreCase));
-
-    public record GenerateToStringResult(
-        string UpdatedContent,
-        List<string> IncludedProperties,
-        List<string> ExcludedProperties,
-        string? Warning = null);
 
     public async Task<GenerateToStringResult> GenerateToStringAsync(
         FilePath filePath,

@@ -4,8 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace RoslynSentinel.Server;
 
-public record BestInsertionResult(FilePath FilePath, string ContainerName, string MemberKind, int InsertBeforeLine, string Reason);
-
 public record AttributeUsageSite(
     string AttributeName,
     string TargetKind,
