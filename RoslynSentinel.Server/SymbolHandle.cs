@@ -2,6 +2,10 @@
 
 public readonly struct SymbolHandle
 {
+    public string SymbolName
+    {
+        get; init;
+    }
     public string SessionId
     {
         get; init;
@@ -10,15 +14,16 @@ public readonly struct SymbolHandle
     {
         get; init;
     }
-    public string Id
+    public string SymbolId
     {
         get; init;
     }
 
-    public SymbolHandle(string sessionId, string projectName, string symbolKey)
+    public SymbolHandle(string sessionId, string symbolName, string symbolKey, string projectName)
     {
         SessionId = sessionId;
+        SymbolName = symbolName;
+        SymbolId = symbolKey;
         ProjectName = projectName;
-        Id = symbolKey;
     }
 }

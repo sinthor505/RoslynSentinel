@@ -248,22 +248,22 @@ public class SentinelIntelligenceTools
     }
 
     [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
+    [Produces(DataTag.SymbolId)]
+    [Produces(DataTag.SessionId)]
+    [Produces(DataTag.ProjectName)]
     [Description("""
-        Locates all declaration sites for a symbol by name. Filepath is optional for narrowing the search scope.
-        Returns structured results whose FilePath and ContextSnippet fields can be passed directly
-        to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
-        filePath-gated tools, eliminating the need for search_solution_text as a bootstrap step.
+        Locates all declaration sites for a symbol by name.
+        Returns a SymbolHandle that can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
+        SymbolHandle-gated tools, eliminating the need for search_solution_text as a bootstrap step.
 
-        symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.Data.Repo.GetById").
+        symbolName: simple or fully-qualified name (e.g. "ExampleMethod" or "Acme.Data.Repo.ExampleMethod" or "ExampleSymbol").
         symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
         projectName: optional — restricts search to a single project.
         filepath: optional - restricts search to a single file. Must be an absolute path or relative to the solution root.
         exactMatch: true (default) for exact name match; false for prefix/contains search (discovery mode).
 
         When multiple results are returned (overloads, partial classes), inspect Signature and
-        ContainingType to identify the target, then pass the chosen FilePath + ContextSnippet
-        to the next tool call.
+        ContainingType to identify the target, then pass the chosen SymbolHandle to the next tool call.
         """)]
     public async Task<ToolResult<object>> LocateSymbol(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
@@ -272,11 +272,10 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true)
     {
-
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, filePath, exactMatch);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, exactMatch);
             if (result.Count == 0)
             {
                 return new ToolResult<object>

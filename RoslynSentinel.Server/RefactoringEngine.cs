@@ -23,6 +23,7 @@ public record RenameFileChange(FilePath filePath, List<RenameHunk> Hunks);
 public record RenameSymbolResult(
     string OldName,
     string NewName,
+    //SymbolHandle SymbolHandle,
     Dictionary<FilePath, string> PendingChanges,
     List<RenameFileChange> FileChanges,
     string? Error = null);
@@ -863,86 +864,8 @@ public class RefactoringEngine
         return new Dictionary<FilePath, string> { { filePath, origContent }, { ifacePath, ifaceContent } };
     }
 
-    public async Task<RenameSymbolResult> RenameSymbolAsync(FilePath filePath, string symbolName, string contextSnippet, string newName, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
-    {
-        static RenameSymbolResult Err(string msg, string n) =>
-            new("", n, new Dictionary<FilePath, string>(), new List<RenameFileChange>(), msg);
-
-        if (!_config.IsFeatureEnabled("Rename"))
-        {
-            return Err("Feature 'Rename' is disabled.", newName);
-        }
-
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return Err($"File not found in solution: {filePath}", newName);
-        }
-
-        var text = await document.GetTextAsync(ct);
-        var fullSource = text.ToString();
-
-        // Locate contextSnippet — must match exactly once, or use lineBefore/lineAfter to disambiguate
-        int firstIdx = fullSource.IndexOf(contextSnippet, StringComparison.Ordinal);
-        if (firstIdx < 0)
-        {
-            return Err($"Context snippet not found in file. Verify the snippet is copied verbatim from the source: \"{contextSnippet}\"", newName);
-        }
-
-        int secondIdx = fullSource.IndexOf(contextSnippet, firstIdx + 1, StringComparison.Ordinal);
-        if (secondIdx >= 0)
-        {
-            if (lineBefore == null && lineAfter == null)
-            {
-                return Err($"Context snippet matches multiple locations in the file. Use a longer or more unique snippet, or provide lineBefore/lineAfter to pin the symbol.", newName);
-            }
-
-            try { firstIdx = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
-            catch (InvalidOperationException ex) { return Err(ex.Message, newName); }
-        }
-
-        // Find symbolName as a word-boundary identifier within the matched snippet
-        int symOffset = FindIdentifierInSnippet(contextSnippet, symbolName);
-        if (symOffset < 0)
-        {
-            return Err($"'{symbolName}' not found as a distinct identifier in the context snippet \"{contextSnippet}\". Ensure the symbol appears verbatim and is not part of a larger identifier.", newName);
-        }
-
-        var pos = firstIdx + symOffset;
-        var model = await document.GetSemanticModelAsync(ct);
-        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(model!, pos, solution.Workspace, ct);
-        if (symbol == null)
-        {
-            return Err($"No Roslyn symbol resolved at the identified position. The context may be pointing at a keyword or non-symbol token.", newName);
-        }
-
-        var oldName = symbol.Name;
-        var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(
-            solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, ct);
-
-        var pendingChanges = new Dictionary<FilePath, string>();
-        var fileChanges = new List<RenameFileChange>();
-        foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
-        {
-            foreach (var docId in pc.GetChangedDocuments())
-            {
-                var newDoc = updated.GetDocument(docId)!;
-                var filePth = newDoc.FilePath ?? newDoc.Name;
-                var newContent = (await newDoc.GetTextAsync(ct)).ToString();
-                pendingChanges[filePth] = newContent;
-
-                var origContent = (await solution.GetDocument(docId)!.GetTextAsync(ct)).ToString();
-                fileChanges.Add(new RenameFileChange(filePth, ComputeRenameHunks(origContent, newContent)));
-            }
-        }
-        return new RenameSymbolResult(oldName, newName, pendingChanges, fileChanges);
-    }
-
-    public async Task<RenameSymbolResult> RenameSymbolAsync2(
+    public async Task<RenameSymbolResult> RenameSymbolAsync(
     SymbolHandle symbolHandle,
-    string sessionId,
     string newName,
     CancellationToken ct = default)
     {
@@ -954,7 +877,7 @@ public class RefactoringEngine
             return Err("Feature 'Rename' is disabled.", newName);
         }
 
-        if (sessionId != _workspaceManager.SessionId.ToString())
+        if (symbolHandle.SessionId != _workspaceManager.SessionId.ToString())
         {
             return Err("Symbol key is from a prior workspace session. Re-run symbol discovery.", newName);
         }
@@ -964,7 +887,7 @@ public class RefactoringEngine
             .First()  // or resolve from key metadata — see note below
             .GetCompilationAsync(ct);
 
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.Id, compilation);
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.SymbolId, compilation);
         if (resolved is null)
         {
             return Err($"Symbol key could not be resolved in the current compilation. The symbol may have been removed or renamed.", newName);

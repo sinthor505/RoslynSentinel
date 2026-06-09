@@ -85,10 +85,16 @@ public record ExtensionMethodInfo(
 /// without a separate text-search step.
 /// </summary>
 public record SymbolLocation(
-    /// <summary>Fully-qualified name, e.g. "RoslynSentinel.Server.DiscoveryEngine.FindAttributeUsagesAsync".</summary>
-    string FullyQualifiedName,
     /// <summary>Simple name without namespace or type prefix.</summary>
     string Name,
+    /// <summary>Opaque handle for symbol persistence across calls, e.g. for find_references or rename_symbol. Null for symbols that don't support it (e.g. locals, labels).</summary>
+    string? SymbolId,
+    /// <summary>Name of the project containing the symbol, needed for SymbolHandle construction.</summary>
+    string ProjectName,
+    /// <summary>Session identifier for the current analysis session.</summary>
+    string? SessionId,
+    /// <summary>Fully-qualified name, e.g. "RoslynSentinel.Server.DiscoveryEngine.FindAttributeUsagesAsync".</summary>
+    string FullyQualifiedName,
     /// <summary>Roslyn symbol kind: Method, Property, Field, NamedType, Event, etc.</summary>
     string SymbolKind,
     /// <summary>Full signature string suitable for display and disambiguation.</summary>
@@ -97,20 +103,8 @@ public record SymbolLocation(
     string? ContainingType,
     /// <summary>Declaring namespace, null for global namespace.</summary>
     string? ContainingNamespace,
-    /// <summary>Absolute path to the declaring file. Feed directly to filePath parameters.</summary>
-    string? FilePath,
-    /// <summary>1-based declaration line number.</summary>
-    int? Line,
-    /// <summary>
-    /// Pre-built contextSnippet: the declaration line text, ready to pass to
-    /// inspect_symbol / find_references / rename_symbol contextSnippet parameters.
-    /// </summary>
-    string? ContextSnippet,
     /// <summary>Declared accessibility: Public, Internal, Private, Protected, etc.</summary>
-    string Accessibility,
-        string ProjectName,
-    string? DocCommentId,
-    string? SessionId
+    string Accessibility
 );
 
 public record VariableAccess(
@@ -229,157 +223,11 @@ public class SymbolNavigationEngine
     /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
     /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
     /// then supply the chosen FilePath + ContextSnippet to the next tool call.
-    /// </summary>
+    /// </summary>    
     public async Task<List<SymbolLocation>> LocateSymbolAsync(
         string symbolName,
         string symbolKind = "any",
         string? projectName = null,
-        FilePath filePath = default,  // Changed from 'null' to 'default'
-        bool exactMatch = true,
-        CancellationToken ct = default)
-    {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-
-        var searchProjects = projectName != null
-            ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
-            : solution.Projects;
-
-        // Determine the Roslyn SymbolFilter from the caller's symbolKind string.
-        var filter = symbolKind.ToLowerInvariant() switch
-        {
-            "type" => SymbolFilter.Type,
-            "method" or "property" or "field" or "event" => SymbolFilter.Member,
-            _ => SymbolFilter.TypeAndMember
-        };
-
-        var results = new List<SymbolLocation>();
-        var seen = new HashSet<string>();
-
-        // Strip any namespace prefix from the simple name for GetSymbolsWithName,
-        // which matches only on the unqualified identifier.
-        var simpleName = symbolName.Contains('.')
-            ? symbolName.Split('.').Last()
-            : symbolName;
-
-        foreach (var project in searchProjects)
-        {
-            Compilation? compilation = null;
-            try
-            {
-                compilation = await project.GetCompilationAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "LocateSymbol: could not compile project '{Project}'", project.Name);
-            }
-
-            if (compilation == null)
-            {
-                continue;
-            }
-
-            var candidates = exactMatch
-                ? compilation.GetSymbolsWithName(simpleName, filter, ct)
-                : compilation.GetSymbolsWithName(
-                    n => n.Contains(simpleName, StringComparison.OrdinalIgnoreCase),
-                    filter,
-                    ct);
-
-            foreach (var symbol in candidates)
-            {
-                // Apply the fine-grained kind filter that SymbolFilter alone cannot express.
-                if (!MatchesKindFilter(symbol, symbolKind))
-                {
-                    continue;
-                }
-
-                // When the caller supplied a fully-qualified name, verify the full display string.
-                if (symbolName.Contains('.') &&
-                    !symbol.ToDisplayString().Contains(symbolName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                foreach (var location in symbol.Locations.Where(l => l.IsInSource))
-                {
-                    var filePath2 = location.SourceTree?.FilePath;
-                    if (string.IsNullOrEmpty(filePath2))
-                    {
-                        continue;
-                    }
-
-                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
-                    {
-                        continue;
-                    }
-
-                    var lineSpan = location.GetLineSpan();
-                    var line = lineSpan.StartLinePosition.Line + 1;
-                    var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
-                    if (!seen.Add(dedupeKey))
-                    {
-                        continue;
-                    }
-
-                    // Build ContextSnippet from the source text — the exact declaration line.
-                    string? contextSnippet = null;
-                    try
-                    {
-                        var sourceText = location.SourceTree?.GetText(ct);
-                        if (sourceText != null && line <= sourceText.Lines.Count)
-                        {
-                            contextSnippet = sourceText.Lines[line - 1].ToString().Trim();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "LocateSymbol: could not read source text for context snippet");
-                    }
-
-                    var sig = symbol switch
-                    {
-                        IMethodSymbol m => m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
-                        IPropertySymbol p => p.Type.ToDisplayString() + " " + p.ToDisplayString(),
-                        IFieldSymbol f => f.Type.ToDisplayString() + " " + f.ToDisplayString(),
-                        INamedTypeSymbol t => t.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
-                        _ => symbol.ToDisplayString()
-                    };
-
-                    results.Add(new SymbolLocation(
-                        FullyQualifiedName: symbol.ToDisplayString(),
-                        Name: symbol.Name,
-                        SymbolKind: symbol.Kind.ToString(),
-                        Signature: sig,
-                        ContainingType: symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
-                        ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
-                            ? null
-                            : symbol.ContainingNamespace?.ToDisplayString(),
-                        FilePath: filePath2,
-                        Line: line,
-                        ContextSnippet: contextSnippet,
-                        ProjectName: project.Name,       // needed for SymbolHandle construction
-                        DocCommentId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
-                        Accessibility: symbol.DeclaredAccessibility.ToString(),
-                        SessionId: _workspaceManager.SessionId.ToString()
-                    ));
-                }
-            }
-        }
-
-        return results
-            .OrderBy(r => r.ContainingNamespace)
-            .ThenBy(r => r.ContainingType)
-            .ThenBy(r => r.Name)
-            .ThenBy(r => r.FilePath)
-            .ToList();
-    }
-
-    // v1
-    public async Task<List<SymbolLocation>> LocateSymbolAsync2(
-        string symbolName,
-        string symbolKind = "any",
-        string? projectName = null,
-        FilePath filePath = default,
         bool exactMatch = true,
         CancellationToken ct = default)
     {
@@ -440,31 +288,12 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                // Emit DocCommentId once per symbol — it's the same regardless of location.
+                // Emit SymbolHandle once per symbol — it's the same regardless of location.
                 // Null for symbols that don't support it (e.g. locals, labels).
                 var docCommentId = symbol.GetDocumentationCommentId();
 
                 foreach (var location in symbol.Locations.Where(l => l.IsInSource))
                 {
-                    var filePath2 = location.SourceTree?.FilePath;
-                    if (string.IsNullOrEmpty(filePath2))
-                    {
-                        continue;
-                    }
-
-                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
-                    {
-                        continue;
-                    }
-
-                    var lineSpan = location.GetLineSpan();
-                    var line = lineSpan.StartLinePosition.Line + 1;
-                    var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
-                    if (!seen.Add(dedupeKey))
-                    {
-                        continue;
-                    }
-
                     var sig = symbol switch
                     {
                         IMethodSymbol m => m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
@@ -483,11 +312,8 @@ public class SymbolNavigationEngine
                         ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
                             ? null
                             : symbol.ContainingNamespace?.ToDisplayString(),
-                        FilePath: filePath2,
-                        Line: line,
-                        ContextSnippet: string.Empty,   // empty when using DocCommentId
                         ProjectName: project.Name,       // needed for SymbolHandle construction
-                        DocCommentId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
+                        SymbolId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
                         Accessibility: symbol.DeclaredAccessibility.ToString(),
                         SessionId: _workspaceManager.SessionId.ToString()
                     ));
@@ -499,7 +325,6 @@ public class SymbolNavigationEngine
             .OrderBy(r => r.ContainingNamespace)
             .ThenBy(r => r.ContainingType)
             .ThenBy(r => r.Name)
-            .ThenBy(r => r.FilePath)
             .ToList();
     }
 

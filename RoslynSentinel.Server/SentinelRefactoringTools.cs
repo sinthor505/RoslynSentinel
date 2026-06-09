@@ -1,5 +1,6 @@
 using System.ComponentModel;
 
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
@@ -145,25 +146,21 @@ public class SentinelRefactoringTools
     [McpServerTool]
     [Produces(DataTag.ResultOnly)]
     [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
-                 "Pass 'symbolName' (the exact identifier to rename only - do not include the class, namespace, or FQN) and 'contextSnippet' (a verbatim substring from the source file, long enough to appear exactly once — typically the surrounding line or expression). " +
-                 "Example: symbolName=\"ExampleMethod\", contextSnippet=\"public async Task<Product?> ExampleMethod(\". " +
-                 "Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. " +
-                 "Returns an error if the snippet matches zero or multiple locations. " +
-                 "Returns per-file diff hunks (before/after for each changed line with ±2 lines of context) plus a staged ChangeId. Review FileChanges before calling ApplyStagedChanges. " +
-                "Use locate_symbol first if the filepath and contextSnippet are unknown.")]
+                 "Pass 'symbolHandle' to identify the symbol to rename. Example: symbolHandle=\"ExampleMethodHandle\". Use locate_symbol first if symbolHandle is unknown." +
+                 "Returns a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
     public async Task<ToolResult<object>> RenameSymbol(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.SessionId, required: true)] string sessionId,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Consumes(DataTag.SymbolId, required: true)] string symbolId,
+        [Consumes(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string newName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        var symbolHandle = new SymbolHandle(sessionId, symbolName, symbolId, projectName);
+
         try
         {
-            var result = await _refactoringEngine.RenameSymbolAsync(filePath, symbolName, contextSnippet, newName, lineBefore, lineAfter);
+            var result = await _refactoringEngine.RenameSymbolAsync(symbolHandle, newName);
             if (result.Error != null)
             {
                 return new ToolResult<object>() { Success = false, Error = new ResultError("", result.Error) };
@@ -178,8 +175,8 @@ public class SentinelRefactoringTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "RenameSymbol failed for '{SymbolName}' in '{FilePath}'", symbolName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RenameSymbol failed for '{symbolName}' in '{filePath}': {ex.GetType().Name}: {ex.Message}") };
+            _logger.LogError(ex, "RenameSymbol failed for '{SymbolHandle}'", symbolHandle);
+            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RenameSymbol failed for '{symbolHandle}': {ex.GetType().Name}: {ex.Message}") };
         }
     }
 

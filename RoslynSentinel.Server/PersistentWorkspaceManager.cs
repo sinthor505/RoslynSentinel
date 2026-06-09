@@ -220,7 +220,7 @@ public class PersistentWorkspaceManager : IDisposable
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                _logger.LogInformation("Processing {Count} file system changes...", changes.Count);
+                _logger.LogInformation("Processing {Count} file system changes and reloading solution if necessary...", changes.Count);
             }
 
             bool solutionNeedsReload = false;
@@ -439,7 +439,7 @@ public class PersistentWorkspaceManager : IDisposable
         _stagedChanges[id] = changes;
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Staged change {Id}: {Description} ({Count} files)", id, description, changes.Count);
+            _logger.LogInformation("Staged change {SymbolId}: {Description} ({Count} files)", id, description, changes.Count);
         }
         return id;
     }
@@ -480,7 +480,7 @@ public class PersistentWorkspaceManager : IDisposable
             _stagedChanges[changeId] = remaining;
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                _logger.LogInformation("Updated staged change '{Id}' with remaining {Count} failures.", changeId, remaining.Count);
+                _logger.LogInformation("Updated staged change '{SymbolId}' with remaining {Count} failures.", changeId, remaining.Count);
             }
         }
 
@@ -1002,7 +1002,15 @@ public class PersistentWorkspaceManager : IDisposable
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(ct);
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.Id, compilation);
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.SymbolId, compilation);
         return resolved;
+    }
+    public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken ct = default)
+    {
+        var solution = await GetBranchedSolutionAsync();
+        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
+        if (project is null) { return null; }
+        var compilation = await project.GetCompilationAsync(ct);
+        return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
     }
 }
