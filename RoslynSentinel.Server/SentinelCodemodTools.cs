@@ -115,14 +115,14 @@ public class SentinelCodemodTools
         Applies a file-wide code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.DataType)] string transform,
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
-        [ToolControl(ToolControlTag.Preview)] bool preview = false)
+        [ToolOption(ToolOptionTag.Preview)] bool preview = false)
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_braces":
@@ -392,10 +392,10 @@ public class SentinelCodemodTools
         Applies a method-scoped code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string methodName,
         [ExternalInputRequired(DataTag.Transform)] string transform,
-        [ToolControl(ToolControlTag.Direction)] string? direction = null,
+        [ToolOption(ToolOptionTag.Direction)] string? direction = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
@@ -403,7 +403,7 @@ public class SentinelCodemodTools
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
             switch (transform)
             {
                 case "add_guard_clauses":
@@ -734,18 +734,18 @@ public class SentinelCodemodTools
         Applies a class-scoped code transformation; returns updated file content as a string — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string className,
         [ExternalInputRequired(DataTag.Transform)] string transform,
         [ExternalInputRequired(DataTag.PropertyName)] string? propertyName = null,
-        [ToolControl(ToolControlTag.Direction)] string? direction = null,
+        [ToolOption(ToolOptionTag.Direction)] string? direction = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {
-            FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
             switch (transform)
             {
@@ -1062,7 +1062,7 @@ public class SentinelCodemodTools
         """)]
     public async Task<ToolResult<object>> Generate(
         string kind,
-        [Consumes(DataTag.SourceFilepath)] string? filePath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ClassName)] string? className = null,
         [Consumes(DataTag.MethodName)] string? methodName = null,
         [Consumes(DataTag.MemberName)] string? members = null,
@@ -1073,11 +1073,13 @@ public class SentinelCodemodTools
     {
         try
         {
+            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+
             switch (kind)
             {
                 case "add_benchmark_stub":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for add_benchmark_stub.") };
                         }
@@ -1102,7 +1104,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_constructor":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_constructor.") };
                         }
@@ -1137,7 +1139,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_equality_overrides":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_equality_overrides.") };
                         }
@@ -1157,7 +1159,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_fluent_builder":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_fluent_builder.") };
                         }
@@ -1180,7 +1182,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_path_driven_tests":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_path_driven_tests.") };
                         }
@@ -1195,7 +1197,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_repository_interface":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_repository_interface.") };
                         }
@@ -1210,7 +1212,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_test_scaffold":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_test_scaffold.") };
                         }
@@ -1225,7 +1227,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_test_skeleton":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_test_skeleton.") };
                         }
@@ -1240,7 +1242,7 @@ public class SentinelCodemodTools
                     }
                 case "generate_to_string_safe":
                     {
-                        if (string.IsNullOrEmpty(filePath))
+                        if (!filePath.Validated)
                         {
                             return new ToolResult<object>() { Error = new ResultError("", "filePath is required for generate_to_string_safe.") };
                         }

@@ -112,7 +112,7 @@ public class DependencyInjectionEngine
 
         foreach (var doc in documents)
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
@@ -443,7 +443,7 @@ public class DependencyInjectionEngine
 
         foreach (var doc in documents)
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
@@ -555,7 +555,7 @@ public class DependencyInjectionEngine
 
         foreach (var doc in docs)
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
@@ -620,7 +620,7 @@ public class DependencyInjectionEngine
 
         foreach (var doc in docs)
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }

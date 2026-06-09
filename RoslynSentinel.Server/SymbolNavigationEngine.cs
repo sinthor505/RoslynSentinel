@@ -231,6 +231,7 @@ public class SymbolNavigationEngine
         string symbolName,
         string symbolKind = "any",
         string? projectName = null,
+        FilePath filePath = default,  // Changed from 'null' to 'default'
         bool exactMatch = true,
         CancellationToken ct = default)
     {
@@ -298,15 +299,20 @@ public class SymbolNavigationEngine
 
                 foreach (var location in symbol.Locations.Where(l => l.IsInSource))
                 {
-                    var filePath = location.SourceTree?.FilePath;
-                    if (filePath == null)
+                    var filePath2 = location.SourceTree?.FilePath;
+                    if (string.IsNullOrEmpty(filePath2))
+                    {
+                        continue;
+                    }
+
+                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
                     {
                         continue;
                     }
 
                     var lineSpan = location.GetLineSpan();
                     var line = lineSpan.StartLinePosition.Line + 1;
-                    var dedupeKey = filePath + ":" + line + ":" + symbol.ToDisplayString();
+                    var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
                     if (!seen.Add(dedupeKey))
                     {
                         continue;
@@ -345,7 +351,7 @@ public class SymbolNavigationEngine
                         ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
                             ? null
                             : symbol.ContainingNamespace?.ToDisplayString(),
-                        FilePath: filePath,
+                        FilePath: filePath2,
                         Line: line,
                         ContextSnippet: contextSnippet,
                         Accessibility: symbol.DeclaredAccessibility.ToString()

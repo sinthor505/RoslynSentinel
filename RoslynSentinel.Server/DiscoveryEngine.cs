@@ -68,7 +68,7 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
@@ -213,7 +213,7 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
@@ -610,7 +610,7 @@ public class DiscoveryEngine
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }

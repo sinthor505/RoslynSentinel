@@ -165,7 +165,7 @@ public class RefactoringEngine
             {
                 foreach (var location in reference.Locations)
                 {
-                    if (location.IsImplicit || location.Document.FilePath == null)
+                    if (location.IsImplicit || location.Document?.FilePath == null)
                     {
                         continue;
                     }
@@ -726,7 +726,7 @@ public class RefactoringEngine
             ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
 
         var allChanges = new Dictionary<FilePath, string>();
-        foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
+        foreach (var document in project.Documents.Where(d => d.FilePath.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
             {
@@ -746,7 +746,7 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
         var allChanges = new Dictionary<FilePath, string>();
-        foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
+        foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, ct))
             {

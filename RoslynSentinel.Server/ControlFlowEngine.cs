@@ -432,7 +432,7 @@ public class ControlFlowEngine
 
         foreach (var doc in testDocs)
         {
-            if (doc.FilePath == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }

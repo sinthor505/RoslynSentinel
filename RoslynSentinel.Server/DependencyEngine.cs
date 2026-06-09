@@ -33,7 +33,7 @@ public class DependencyEngine
             .ToList();
 
         var packageRefs = new List<string>();
-        if (File.Exists(project.FilePath))
+        if (project.FilePath != null && File.Exists(project.FilePath))
         {
             var content = await File.ReadAllTextAsync(project.FilePath);
             var matches = System.Text.RegularExpressions.Regex.Matches(content, "<PackageReference\\s+Include=\"([^\"]+)\"");

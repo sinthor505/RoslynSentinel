@@ -55,10 +55,10 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -114,12 +114,12 @@ public class SentinelGenerationTools
         """)]
     // Unlike the built-in convert_to_interpolated_string, this resolves const string format arguments via the semantic model, so it works even when the format string is a named const rather than a literal. Handles {0:format} format specifiers correctly.
     public async Task<string> InterpolateStringSafe(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {

@@ -236,7 +236,7 @@ public class PersistentWorkspaceManager : IDisposable
 
                 if (ext == ".csproj")
                 {
-                    var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
+                    var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
                     if (project != null)
                     {
                         projectsToReload.Add(project.Id);
@@ -629,6 +629,16 @@ public class PersistentWorkspaceManager : IDisposable
                 bool success = false;
                 string lastError = "";
 
+                preImages.TryGetValue(filePath, out var preImage);
+                if (preImage?.ToString() == newContent)
+                {
+                    _logger.LogWarning("Proposed content for {FilePath} is identical to existing content.", filePath);
+                    if (Debugger.IsAttached)
+                    {
+                        Debugger.Break();
+                    }
+                }
+
                 // Mark as internal change before writing to avoid FileSystemWatcher loop
                 _internalChanges[filePath] = DateTime.UtcNow;
 
@@ -962,5 +972,18 @@ public class PersistentWorkspaceManager : IDisposable
                          $"rollbackScore={_weightedRollbackScore}/{BreakerRollbackScoreThreshold}.",
             _ => "Operating within normal failure tolerance.",
         };
+    }
+
+    public FilePath SetFilePath(string? filepath)
+    {
+        FilePath filePath = null;
+        string? solutionRoot = this.GetSolutionRoot();
+
+        if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            filePath = FilePath.FromWire(filepath, solutionRoot);
+        }
+
+        return filePath;
     }
 }

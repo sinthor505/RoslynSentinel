@@ -63,10 +63,10 @@ public class SentinelModernizationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with ! and removes double negations. Returns a file → content map of changed files.")]
     public async Task<ToolResult<object>> InvertBooleanLogic(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string boolName)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {

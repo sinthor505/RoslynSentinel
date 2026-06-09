@@ -14,9 +14,9 @@ public class AdvancedLogicEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<Dictionary<FilePath, string>> InvertBooleanLogicAsync(string rawFilePath, string boolName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePath, string>> InvertBooleanLogicAsync(string filepath, string boolName, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -87,9 +87,9 @@ public class AdvancedLogicEngine
         return changes;
     }
 
-    public async Task<DocumentEditResult> ConvertIfToSwitchExpressionAsync(string rawFilePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertIfToSwitchExpressionAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -135,9 +135,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ConvertIfToSwitchStatementAsync(string rawFilePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertIfToSwitchStatementAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -189,9 +189,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ExtensionToStaticAsync(string rawFilePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ExtensionToStaticAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -214,9 +214,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ConvertStaticToExtensionAsync(string rawFilePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertStaticToExtensionAsync(string filepath, string methodName, CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -251,9 +251,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = root?.ToFullString() ?? "", FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ConvertForEachToForAsync(string rawFilePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertForEachToForAsync(string filepath, int line, CancellationToken ct = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -377,9 +377,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ConvertForToForEachAsync(string rawFilePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertForToForEachAsync(string filepath, int line, CancellationToken ct = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -431,9 +431,9 @@ public class AdvancedLogicEngine
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
 
-    public async Task<DocumentEditResult> ConvertWhileToForAsync(string rawFilePath, int line, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertWhileToForAsync(string filepath, int line, CancellationToken ct = default)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)

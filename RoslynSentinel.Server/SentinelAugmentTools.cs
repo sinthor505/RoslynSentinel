@@ -36,11 +36,11 @@ public class SentinelAugmentTools
         """)]
     // FIXES standard encapsulate_field BUG: the standard tool creates a backing field and property with the same name, causing infinite recursion/compile error. This tool always renames the backing field to _camelCase.
     public async Task<ToolResult<object>> EncapsulateFieldSafe(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string fieldName,
-        [ToolControl(ToolControlTag.OverrideSymbolName)] string? overridePropertyName = null)
+        [ToolOption(ToolOptionTag.OverrideSymbolName)] string? overridePropertyName = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -76,12 +76,12 @@ public class SentinelAugmentTools
         """)]
     // FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect all variables assigned within the switch, and rejects conversion if any are assigned in more than one case arm, or if their assigned value is read later in the method (indicating a likely dependency on the variable retaining its value across cases). IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output.
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -116,12 +116,12 @@ public class SentinelAugmentTools
         """)]
     // FIXES MS BUG: the standard tool drops variable assignments when a case sets more than one variable. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect all variables assigned within the switch, and rejects conversion if any are assigned in more than one case arm, or if their assigned value is read later in the method (indicating a likely dependency on the variable retaining its value across cases).
     public async Task<ToolResult<object>> ConvertSwitchToPatternSafe(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -158,12 +158,12 @@ public class SentinelAugmentTools
         """)]
     // FIXES MS BUG: the standard tool produces incorrect code when the foreach loop body mutates the collection being iterated (e.g. adding/removing items from a List<T>), which is a common pattern. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect mutations to the collection variable within the loop body, and rejects conversion if any are found.
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
@@ -232,13 +232,13 @@ public class SentinelAugmentTools
         """)]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
     public async Task<ToolResult<object>> ExtractMethodSafe(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);

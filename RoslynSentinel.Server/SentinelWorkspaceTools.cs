@@ -281,14 +281,17 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> ProposedChange(
         [ExternalInputRequired(DataTag.ChangeseFormat)] string changesetFormat,
         [ExternalInputRequired(DataTag.Action)] string action,
-        [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>? changes = null,
-        [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [ToolControl(ToolControlTag.UnifiedDiff)] string? unifiedDiff = null,
-        [ToolControl(ToolControlTag.RetryCount)] int retryCount = 3,
-        [ToolControl(ToolControlTag.ValidateOnApply)] bool validateOnApply = true)
+        [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>?
+        changes = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
+        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
+        [ToolOption(ToolOptionTag.ValidateOnApply)] bool validateOnApply = true)
     {
         try
         {
+            FilePath filePath = _workspaceManager.SetFilePath(filepath);
+
             if (changesetFormat == "files")
             {
                 if (changes == null)
@@ -339,7 +342,7 @@ public class SentinelWorkspaceTools
             }
             else if (changesetFormat == "diff")
             {
-                if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(unifiedDiff))
+                if (!filePath.Validated || string.IsNullOrEmpty(unifiedDiff))
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", "filePath and unifiedDiff are required when changesetFormat=diff.") };
                 }
@@ -349,7 +352,7 @@ public class SentinelWorkspaceTools
                     {
                         var solution = await _workspaceManager.GetBranchedSolutionAsync();
                         var document = solution.Projects.SelectMany(p => p.Documents)
-                            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+                            .FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
                         if (document == null)
                         {
                             return new ToolResult<object>() { Success = false, Error = new ResultError("", "File not found.") };
@@ -381,7 +384,7 @@ public class SentinelWorkspaceTools
                 }
                 if (action == "validate")
                 {
-                    var validationResult = await _validationEngine.ValidateDiffAsync(filePath, unifiedDiff);
+                    var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
                     return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange diff validate failed: {validationResult}") };
                 }
             }
@@ -397,7 +400,9 @@ public class SentinelWorkspaceTools
     [McpServerTool]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries committing previously failed file changes using server-side cached content — no need to re-send file contents. specificFiles limits the retry to a subset of files. retryCount defaults to 3.")]
-    public async Task<ToolResult<object>> RetryFailedChanges([Consumes(DataTag.SourceFilepath)] List<string>? specificFiles = null, int retryCount = 3)
+    public async Task<ToolResult<object>> RetryFailedChanges(
+        [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
+        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3)
     {
         try
         {
@@ -425,8 +430,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> StagedChange(
         [Consumes(DataTag.Action, required: true)] string action,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
-        [ToolControl(ToolControlTag.RetryCount)] int retryCount = 3,
-        [ToolControl(ToolControlTag.ValidateOnApply)] bool validateOnApply = true)
+        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
+        [ToolOption(ToolOptionTag.ValidateOnApply)] bool validateOnApply = true)
     {
         try
         {
@@ -456,7 +461,11 @@ public class SentinelWorkspaceTools
                 var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
                 // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
                 await WriteBlobForApplyAsync("staged_change", result, changeId);
-                return new ToolResult<object>() { Success = true, Data = result };
+                string resultMessage = result.SucceededFiles.Count > 0
+                    ? $"Staged change '{changeId}' applied successfully with {result.SucceededFiles.Count} files changed."
+                    : $"Staged change '{changeId}' apply failed: no files were changed.";
+                _logger.LogInformation(resultMessage);
+                return new ToolResult<object>() { Success = true, Data = resultMessage };
             }
             if (action == "get")
             {
@@ -537,14 +546,16 @@ public class SentinelWorkspaceTools
         maxDetails: caps the raw detail list (default 50); error/warning counts are always full totals. Only used when summarize=false.
         topN: max groups to return sorted by count descending (default 20). Only used when summarize=true.
         """)]
-    public async Task<ToolResult<object>> GetDiagnostics([Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath)] string scope,
+    public async Task<ToolResult<object>> GetDiagnostics(
+        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] string scope,
         string? scopeName = null,
         bool summarize = false,
-        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxDetails = 50,
-        [ToolControlAttribute(ToolControlTag.TopN)] int topN = 20)
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20)
     {
         try
         {
+            EngineResult<DiagnosticSummary> result;
             DiagnosticSummary summary;
             if (scope == "file")
             {
@@ -552,7 +563,8 @@ public class SentinelWorkspaceTools
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (filePath) is required when scope=file.") };
                 }
-                summary = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
+                result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
+                summary = result.Data;
             }
             else if (scope == "project")
             {
@@ -560,11 +572,13 @@ public class SentinelWorkspaceTools
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (projectName) is required when scope=project.") };
                 }
-                summary = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
+                result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
+                summary = result.Data;
             }
             else if (scope == "solution")
             {
-                summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
+                result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
+                summary = result.Data;
             }
             else
             {
@@ -573,10 +587,10 @@ public class SentinelWorkspaceTools
 
             if (!summarize)
             {
-                return new ToolResult<object>() { Success = true, Data = summary };
+                return new ToolResult<object>() { Success = true, Data = result.Data };
             }
 
-            var relevant = summary.Details
+            var relevant = result.Data.Details
                 .Where(d => d.Severity is "Error" or "Warning")
                 .ToList();
 
@@ -620,11 +634,11 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine, required: true)] int line,
         [Consumes(DataTag.Offset, required: true)] int column)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -683,10 +697,10 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.MethodName, required: true)] string methodName)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -781,9 +795,9 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -880,10 +894,10 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
-        [ToolControl(ToolControlTag.Pattern, required: true)] string pattern,
-        [ToolControl(ToolControlTag.IsRegex)] bool isRegex = false,
+        [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
+        [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
-        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxResults = 200)
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200)
     {
         try
         {
@@ -977,8 +991,8 @@ public class SentinelWorkspaceTools
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, rolledback, file:<path>, or null for all items. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<ToolResult<object>> GetOperationDetail(
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
-        [ToolControlAttribute(ToolControlTag.Filter)] string? filter = null,
-        [ToolControlAttribute(ToolControlTag.ResultLimit)] int maxItems = 50)
+        [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50)
     {
         try
         {

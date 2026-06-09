@@ -1,14 +1,14 @@
 ﻿namespace RoslynSentinel.Server;
 
 [AttributeUsage(AttributeTargets.Method | AttributeTargets.Parameter, AllowMultiple = true)]
-public sealed class ToolControlAttribute : Attribute
+public sealed class ToolOptionAttribute : Attribute
 {
-    public ToolControlTag Tag
+    public ToolOptionTag Tag
     {
         get;
     }
 
-    public ToolControlAttribute(ToolControlTag tag, bool required = false)
+    public ToolOptionAttribute(ToolOptionTag tag, bool required = false)
     {
         this.Tag = tag;
         this.Required = required;
@@ -20,7 +20,7 @@ public sealed class ToolControlAttribute : Attribute
     }
 }
 
-public enum ToolControlTag
+public enum ToolOptionTag
 {
     Offset,
     ResultLimit,

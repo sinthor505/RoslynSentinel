@@ -107,14 +107,17 @@ public class SentinelScanTools
     public async Task<ToolResult<object>> RunScanDetector(
         [Consumes(DataTag.DetectorName)] DetectorId detector,
         [ExternalInputRequired(DataTag.Scope)] string scope,
-        [Consumes(DataTag.SourceFilepath)][Consumes(DataTag.ProjectName)] string? scopeName = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.ProjectName, required: false)] string? scopeName = null,
         CancellationToken cancellationToken = default)
     {
-        string? filePath = scope == "file" ? scopeName : null;
+        //string? filePath = scope == "file" ? scopeName : null;
         string? projectName = scope == "project" ? scopeName : null;
 
         try
         {
+            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == "file" ? null : FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+
             switch (detector)
             {
                 // ── async ──────────────────────────────────────────────────────────
@@ -454,8 +457,8 @@ public class SentinelScanTools
         Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
         """)]
     public Task<ToolResult<object>> DescribeScanDetectors(
-        [ToolControl(ToolControlTag.Domain)] string? domain = null,
-        [ToolControl(ToolControlTag.Detector)] string? detector = null)
+        [ToolOption(ToolOptionTag.Domain)] string? domain = null,
+        [ToolOption(ToolOptionTag.Detector)] string? detector = null)
     {
         try
         {
@@ -491,11 +494,11 @@ public class SentinelScanTools
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
         """)]
     public async Task<ToolResult<object>> AnalyzeMethod(
-        [Consumes(DataTag.SourceFilepath, required: true)] string rawFilePath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        [ToolControl(ToolControlTag.Aspect)] string aspect)
+        [ToolOption(ToolOptionTag.Aspect)] string aspect)
     {
-        FilePath filePath = FilePath.FromWire(rawFilePath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
@@ -551,10 +554,11 @@ public class SentinelScanTools
         """)]
     public async Task<ToolResult<object>> GetScanResult(
         [Consumes(DataTag.ScanId)] string? scanId = null,
-        [Consumes(DataTag.SourceFilepath)] string? filePath = null,
-        [ToolControl(ToolControlTag.ResultLimit)] int limit = 50,
-        [ToolControl(ToolControlTag.Offset)] int offset = 0)
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
+        [ToolOption(ToolOptionTag.Offset)] int offset = 0)
     {
+        FilePath filePath = _workspaceManager.SetFilePath(filepath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
 
@@ -677,7 +681,7 @@ public class SentinelScanTools
         };
     }
 
-    internal static async Task<(bool offloaded, FilePath? filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
+    internal static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot))

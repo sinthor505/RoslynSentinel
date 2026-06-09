@@ -17,7 +17,7 @@ public class DiagnosticEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<DiagnosticSummary> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<EngineResult<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -30,14 +30,14 @@ public class DiagnosticEngine
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo()).ToList();
-        return new DiagnosticSummary(
+        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
-        );
+        ));
     }
 
-    public async Task<DiagnosticSummary> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
+    public async Task<EngineResult<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
@@ -50,11 +50,11 @@ public class DiagnosticEngine
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
 
         var list = diagnostics.Select(d => d.ToInfo()).ToList();
-        return new DiagnosticSummary(
+        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(
             list.Count(d => d.Severity == "Error"),
             list.Count(d => d.Severity == "Warning"),
             list
-        );
+        ));
     }
 
     // Diagnostic IDs that are false positives in Blazor/Razor projects because Roslyn's
@@ -66,7 +66,7 @@ public class DiagnosticEngine
         project.Name.Contains("Blazor", StringComparison.OrdinalIgnoreCase) ||
         project.Name.Contains("Razor", StringComparison.OrdinalIgnoreCase) ||
         project.Documents.Any(d =>
-            d.FilePath?.EndsWith(".razor.cs", StringComparison.OrdinalIgnoreCase) == true);
+            d.FilePath.EndsWith(".razor.cs", StringComparison.OrdinalIgnoreCase) == true);
 
     private static int SeverityRank(DiagnosticInfo d) => d.Severity switch
     {
@@ -81,7 +81,7 @@ public class DiagnosticEngine
     /// the cap. File paths are made relative to the solution root for compact output.
     /// Filters Blazor source-generator false positives (CS0234/CS0246/CS0103).
     /// </summary>
-    public async Task<DiagnosticSummary> GetSolutionDiagnosticsAsync(
+    public async Task<EngineResult<DiagnosticSummary>> GetSolutionDiagnosticsAsync(
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
@@ -124,6 +124,6 @@ public class DiagnosticEngine
                 "", 0, 0, 0, 0));
         }
 
-        return new DiagnosticSummary(totalErrors, totalWarnings, details);
+        return new EngineResult<DiagnosticSummary>(EngineOutcome.Success, new DiagnosticSummary(totalErrors, totalWarnings, details));
     }
 }

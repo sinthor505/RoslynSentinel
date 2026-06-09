@@ -4,39 +4,21 @@ using System.Text.Json.Serialization;
 namespace RoslynSentinel.Server;
 
 [JsonConverter(typeof(FilePathJsonConverter))]
-public readonly struct FilePath : IEquatable<FilePath>
+public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
 {
-    private readonly string absolute;   // canonical internal form
-    private readonly bool validated;  // whether the path has been validated as absolute and normalized
+    public readonly bool Validated;  // whether the path has been validated as absolute and normalized
 
-    public string? Absolute
-    {
-        get
-        {
-            if (field == null)
-            {
-                throw new InvalidOperationException("FilePath was default-constructed and has no value.");
-            }
-            return field;
-        }
-    }
+    public string Absolute { get; } = string.Empty;
 
     public FilePath(string path, bool validated = false)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            throw new ArgumentException("File path cannot be null or empty.", nameof(path));
-        }
-        absolute = path;
+        Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : path;
+        Validated = validated || File.Exists(Absolute);
     }
 
     // construct from whatever the wire sent, against the known root
     public static FilePath FromWire(string pathArg, string solutionRoot)
     {
-        if (string.IsNullOrWhiteSpace(pathArg))
-        {
-            throw new ArgumentException("File path cannot be null or empty.", nameof(pathArg));
-        }
         string abs = Path.IsPathRooted(pathArg)
             ? Path.GetFullPath(pathArg)
             : Path.GetFullPath(Path.Combine(solutionRoot, pathArg));
@@ -45,49 +27,60 @@ public readonly struct FilePath : IEquatable<FilePath>
 
     public string RelativeTo(string solutionRoot)
     {
-        return Path.GetRelativePath(solutionRoot, this.absolute);
+        return Path.GetRelativePath(solutionRoot, this.Absolute);
     }
 
-    public override string ToString() => absolute ?? string.Empty;
+    public override string ToString() => Absolute ?? string.Empty;
     public override bool Equals(object? obj)
     {
-        return obj is FilePath other && string.Equals(absolute, other.absolute, StringComparison.OrdinalIgnoreCase);
+        return obj is FilePath other && string.Equals(Absolute, other.Absolute, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // compare to string for convenience
+    public bool Equals(string? other)
+    {
+        return string.Equals(Absolute, other, StringComparison.OrdinalIgnoreCase);
     }
 
     // implicit conversion from string to FilePath for convenience
     public static implicit operator FilePath(string path) => new FilePath(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath? filePath) => filePath?.absolute ?? string.Empty;
+    public static implicit operator string(FilePath filePath) => filePath.Absolute;
 
     //Equality operators for convenience
     public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);
     public static bool operator !=(FilePath left, FilePath right) => !left.Equals(right);
 
     // string equality operators for Windows
-    public static bool operator ==(FilePath left, string right) => left.Equals(new FilePath(right));
-    public static bool operator !=(FilePath left, string right) => !left.Equals(new FilePath(right));
-    public static bool operator ==(string left, FilePath right) => new FilePath(left).Equals(right);
-    public static bool operator !=(string left, FilePath right) => !new FilePath(left).Equals(right);
+    public static bool operator ==(FilePath left, string right) => left.Equals(right);
+    public static bool operator !=(FilePath left, string right) => !left.Equals(right);
+    public static bool operator ==(string left, FilePath right) => right.Equals(left);
+    public static bool operator !=(string left, FilePath right) => !right.Equals(left);
 
-    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(absolute ?? string.Empty);
+    public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Absolute);
 
     // startswith for convenience
-    public bool StartsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.StartsWith(value, comparisonType) ?? false;
+    public bool StartsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Absolute.StartsWith(value, comparisonType);
 
     //endswith for convenience
-    public bool EndsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.EndsWith(value, comparisonType) ?? false;
+    public bool EndsWith(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Absolute.EndsWith(value, comparisonType);
 
-    public static bool operator <(FilePath left, string right) => !(left.absolute?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false);
+    public static bool operator <(FilePath left, string right) => !left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
 
-    public static bool operator >(FilePath left, string right) => left.absolute?.StartsWith(right, StringComparison.OrdinalIgnoreCase) ?? false;
+    public static bool operator >(FilePath left, string right) => left.Absolute.StartsWith(right, StringComparison.OrdinalIgnoreCase);
 
     // contains operator for convenience
-    public bool Contains(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.absolute?.Contains(value, comparisonType) ?? false;
+    public bool Contains(string value, StringComparison comparisonType = StringComparison.OrdinalIgnoreCase) => this.Absolute.Contains(value, comparisonType);
 
     public bool Equals(FilePath other)
     {
-        return StringComparer.OrdinalIgnoreCase.Equals(absolute, other.absolute);
+        return StringComparer.OrdinalIgnoreCase.Equals(Absolute, other.Absolute);
+    }
+
+    public int CompareTo(FilePath other)
+    {
+        return StringComparer.OrdinalIgnoreCase.Compare(Absolute, other.Absolute);
     }
 }
 
