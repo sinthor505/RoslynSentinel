@@ -940,6 +940,66 @@ public class RefactoringEngine
         return new RenameSymbolResult(oldName, newName, pendingChanges, fileChanges);
     }
 
+    public async Task<RenameSymbolResult> RenameSymbolAsync2(
+    SymbolHandle symbolHandle,
+    string sessionId,
+    string newName,
+    CancellationToken ct = default)
+    {
+        static RenameSymbolResult Err(string msg, string n) =>
+            new("", n, new Dictionary<FilePath, string>(), new List<RenameFileChange>(), msg);
+
+        if (!_config.IsFeatureEnabled("Rename"))
+        {
+            return Err("Feature 'Rename' is disabled.", newName);
+        }
+
+        if (sessionId != _workspaceManager.SessionId.ToString())
+        {
+            return Err("Symbol key is from a prior workspace session. Re-run symbol discovery.", newName);
+        }
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var compilation = await solution.Projects
+            .First()  // or resolve from key metadata — see note below
+            .GetCompilationAsync(ct);
+
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.Id, compilation);
+        if (resolved is null)
+        {
+            return Err($"Symbol key could not be resolved in the current compilation. The symbol may have been removed or renamed.", newName);
+        }
+
+        var symbol = resolved;
+
+        // Guard: generated/metadata-only symbols
+        if (!symbol.Locations.Any(l => l.IsInSource))
+        {
+            return Err("Symbol is not defined in editable source. Rename is not available.", newName);
+        }
+
+        var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(
+            solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, ct);
+
+        var pendingChanges = new Dictionary<FilePath, string>();
+        var fileChanges = new List<RenameFileChange>();
+
+        foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
+        {
+            foreach (var docId in pc.GetChangedDocuments())
+            {
+                var newDoc = updated.GetDocument(docId)!;
+                var filePth = new FilePath(newDoc.FilePath ?? newDoc.Name);
+                var newContent = (await newDoc.GetTextAsync(ct)).ToString();
+                pendingChanges[filePth] = newContent;
+                var origContent = (await solution.GetDocument(docId)!.GetTextAsync(ct)).ToString();
+                fileChanges.Add(new RenameFileChange(filePth, ComputeRenameHunks(origContent, newContent)));
+            }
+        }
+
+        return new RenameSymbolResult(symbol.Name, newName, pendingChanges, fileChanges);
+    }
+
     private static List<RenameHunk> ComputeRenameHunks(string oldContent, string newContent, int contextLines = 2)
     {
         var oldLines = oldContent.Split(separator, StringSplitOptions.None);

@@ -107,7 +107,10 @@ public record SymbolLocation(
     /// </summary>
     string? ContextSnippet,
     /// <summary>Declared accessibility: Public, Internal, Private, Protected, etc.</summary>
-    string Accessibility
+    string Accessibility,
+        string ProjectName,
+    string? DocCommentId,
+    string? SessionId
 );
 
 public record VariableAccess(
@@ -354,7 +357,139 @@ public class SymbolNavigationEngine
                         FilePath: filePath2,
                         Line: line,
                         ContextSnippet: contextSnippet,
-                        Accessibility: symbol.DeclaredAccessibility.ToString()
+                        ProjectName: project.Name,       // needed for SymbolHandle construction
+                        DocCommentId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
+                        Accessibility: symbol.DeclaredAccessibility.ToString(),
+                        SessionId: _workspaceManager.SessionId.ToString()
+                    ));
+                }
+            }
+        }
+
+        return results
+            .OrderBy(r => r.ContainingNamespace)
+            .ThenBy(r => r.ContainingType)
+            .ThenBy(r => r.Name)
+            .ThenBy(r => r.FilePath)
+            .ToList();
+    }
+
+    // v1
+    public async Task<List<SymbolLocation>> LocateSymbolAsync2(
+        string symbolName,
+        string symbolKind = "any",
+        string? projectName = null,
+        FilePath filePath = default,
+        bool exactMatch = true,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        var searchProjects = projectName != null
+            ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
+            : solution.Projects;
+
+        var filter = symbolKind.ToLowerInvariant() switch
+        {
+            "type" => SymbolFilter.Type,
+            "method" or "property" or "field" or "event" => SymbolFilter.Member,
+            _ => SymbolFilter.TypeAndMember
+        };
+
+        var results = new List<SymbolLocation>();
+        var seen = new HashSet<string>();
+
+        var simpleName = symbolName.Contains('.')
+            ? symbolName.Split('.').Last()
+            : symbolName;
+
+        foreach (var project in searchProjects)
+        {
+            Compilation? compilation = null;
+            try
+            {
+                compilation = await project.GetCompilationAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "LocateSymbol: could not compile project '{Project}'", project.Name);
+            }
+
+            if (compilation == null)
+            {
+                continue;
+            }
+
+            var candidates = exactMatch
+                ? compilation.GetSymbolsWithName(simpleName, filter, ct)
+                : compilation.GetSymbolsWithName(
+                    n => n.Contains(simpleName, StringComparison.OrdinalIgnoreCase),
+                    filter,
+                    ct);
+
+            foreach (var symbol in candidates)
+            {
+                if (!MatchesKindFilter(symbol, symbolKind))
+                {
+                    continue;
+                }
+
+                if (symbolName.Contains('.') &&
+                    !symbol.ToDisplayString().Contains(symbolName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                // Emit DocCommentId once per symbol — it's the same regardless of location.
+                // Null for symbols that don't support it (e.g. locals, labels).
+                var docCommentId = symbol.GetDocumentationCommentId();
+
+                foreach (var location in symbol.Locations.Where(l => l.IsInSource))
+                {
+                    var filePath2 = location.SourceTree?.FilePath;
+                    if (string.IsNullOrEmpty(filePath2))
+                    {
+                        continue;
+                    }
+
+                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
+                    {
+                        continue;
+                    }
+
+                    var lineSpan = location.GetLineSpan();
+                    var line = lineSpan.StartLinePosition.Line + 1;
+                    var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
+                    if (!seen.Add(dedupeKey))
+                    {
+                        continue;
+                    }
+
+                    var sig = symbol switch
+                    {
+                        IMethodSymbol m => m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+                        IPropertySymbol p => p.Type.ToDisplayString() + " " + p.ToDisplayString(),
+                        IFieldSymbol f => f.Type.ToDisplayString() + " " + f.ToDisplayString(),
+                        INamedTypeSymbol t => t.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
+                        _ => symbol.ToDisplayString()
+                    };
+
+                    results.Add(new SymbolLocation(
+                        FullyQualifiedName: symbol.ToDisplayString(),
+                        Name: symbol.Name,
+                        SymbolKind: symbol.Kind.ToString(),
+                        Signature: sig,
+                        ContainingType: symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                        ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
+                            ? null
+                            : symbol.ContainingNamespace?.ToDisplayString(),
+                        FilePath: filePath2,
+                        Line: line,
+                        ContextSnippet: string.Empty,   // empty when using DocCommentId
+                        ProjectName: project.Name,       // needed for SymbolHandle construction
+                        DocCommentId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
+                        Accessibility: symbol.DeclaredAccessibility.ToString(),
+                        SessionId: _workspaceManager.SessionId.ToString()
                     ));
                 }
             }

@@ -25,6 +25,7 @@ public class PersistentWorkspaceManager : IDisposable
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
+    public readonly Guid SessionId = Guid.NewGuid();
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
@@ -985,5 +986,23 @@ public class PersistentWorkspaceManager : IDisposable
         }
 
         return filePath;
+    }
+
+    // In PersistentWorkspaceManager
+    private readonly Dictionary<string, SymbolHandle> _trackedSymbols = new();
+
+    public void TrackSymbol(string agentHandle, SymbolHandle handle)
+    {
+        _trackedSymbols[agentHandle] = handle;
+    }
+
+    public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken ct)
+    {
+        var solution = await GetBranchedSolutionAsync();
+        var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
+        if (project is null) { return null; }
+        var compilation = await project.GetCompilationAsync(ct);
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.Id, compilation);
+        return resolved;
     }
 }
