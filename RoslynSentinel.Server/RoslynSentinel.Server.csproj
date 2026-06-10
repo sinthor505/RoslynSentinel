@@ -36,4 +36,16 @@
     <None Include="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Server\.editorconfig" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\RoslynSentinel.Advanced\RoslynSentinel.Advanced.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="RoslynSentinel.Advanced" />
+    <Using Include="RoslynSentinel.Basic" />
+    <Using Include="RoslynSentinel.Common" />
+  </ItemGroup>
+
 </Project>

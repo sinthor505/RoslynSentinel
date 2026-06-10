@@ -3,6 +3,8 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server;
 
 /// <summary>

@@ -6,22 +6,9 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-namespace RoslynSentinel.Server;
+using RoslynSentinel.Common;
 
-/// <summary>
-/// Return type for source-transform tools that compute an updated file but do NOT write to disk.
-/// Always pass <see cref="UpdatedSource"/> to <c>apply_proposed_changes</c> to persist the change.
-/// </summary>
-/// <param name="UpdatedSource">Full updated source content for the file.</param>
-/// <param name="WroteToFile">Always <c>false</c> — these tools never write to disk.</param>
-/// <param name="WorkspaceUpdated">Always <c>false</c> — these tools never update the in-memory workspace.</param>
-/// <param name="FilePath">Echo of the input file path for routing to <c>apply_proposed_changes</c>.</param>
-public record SourceTransformResult(
-    string UpdatedSource,
-    bool WroteToFile,
-    bool WorkspaceUpdated,
-    FilePath filePath
-);
+namespace RoslynSentinel.Server;
 
 /// <summary>
 /// Return type for <c>apply_cancellation_token_to_file</c>.
@@ -48,63 +35,6 @@ public record ApplyCancellationTokenToFileResult(
     bool WorkspaceInSync = false,
     int WorkspaceVersion = 0
 );
-
-/// <summary>
-/// Return type for <c>get_async_migration_progress</c>.
-/// Aggregated async-migration statistics for the solution or a single project.
-/// </summary>
-/// <param name="TotalAsyncMethods">All async or Task/ValueTask-returning methods found.</param>
-/// <param name="WithCancellationToken">Subset that already have a CancellationToken parameter.</param>
-/// <param name="WithoutCancellationToken">Subset that are still missing a CancellationToken parameter.</param>
-/// <param name="CancellationTokenPct">Percentage of async methods that carry a CancellationToken (0–100).</param>
-/// <param name="BridgeWrappers">Methods decorated with [Obsolete] where the message contains "Asyncify-bridge".</param>
-/// <param name="PendingObsoleteCallers">Call sites of those bridge wrappers that still need to be migrated.</param>
-/// <param name="AsyncVoidEventHandlers">Count of <c>async void</c> methods (informational — signatures are fixed).</param>
-public record AsyncMigrationProgressReport(
-    int TotalAsyncMethods,
-    int WithCancellationToken,
-    int WithoutCancellationToken,
-    double CancellationTokenPct,
-    int BridgeWrappers,
-    int PendingObsoleteCallers,
-    int AsyncVoidEventHandlers
-);
-
-/// <summary>
-/// A single method flagged by a scout tool via <c>flag_migration_candidate</c>.
-/// </summary>
-/// <param name="FilePath">Absolute path of the source file containing the method.</param>
-/// <param name="MethodName">The method's identifier (case-sensitive).</param>
-/// <param name="ClassName">The class that declares the method.</param>
-/// <param name="Pattern">
-/// The refactoring pattern the method is earmarked for:
-/// <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtract"</c>, <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, etc.
-/// </param>
-/// <param name="Score">Eligibility score from the scout tool (0 = unscored).</param>
-/// <param name="Reason">Human-readable rationale for the flag, or <c>null</c> if none was supplied.</param>
-/// <param name="FlaggedDate">ISO date string (yyyy-MM-dd) when the method was flagged, or <c>null</c>.</param>
-/// <param name="Line">1-based source line of the method declaration.</param>
-public record MigrationCandidateFinding(
-    FilePath FilePath,
-    string MethodName,
-    string ClassName,
-    string Pattern,
-    int Score,
-    string? Reason,
-    string? FlaggedDate,
-    int Line,
-    string ProjectName = ""
-)
-{
-    /// <summary>
-    /// Human-readable one-liner combining the most useful fields.
-    /// Example: <c>"AsyncBridgeCandidate (score=70): Calls search/isExistedInDB — updateSettlement"</c>.
-    /// </summary>
-    public string Summary =>
-        $"{Pattern} (score={Score})" +
-        (string.IsNullOrWhiteSpace(Reason) ? "" : $": {Reason}") +
-        $" — {MethodName}";
-}
 
 /// <summary>
 /// Slim return type for <c>flag_migration_candidate</c>.

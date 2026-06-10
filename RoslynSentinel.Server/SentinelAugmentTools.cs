@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server;
 
 /// <summary>

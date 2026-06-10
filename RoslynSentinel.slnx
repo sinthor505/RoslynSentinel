@@ -3,6 +3,10 @@
     <File Path=".editorconfig" />
   </Folder>
   <Project Path="DummyConsole/DummyApp/DummyApp.csproj" />
+  <Project Path="RoslynSentinel.Advanced/RoslynSentinel.Advanced.csproj" Id="e1b2a0ed-07f8-4a58-b2a3-2c2026c89b94" />
+  <Project Path="RoslynSentinel.Basic/RoslynSentinel.Basic.csproj" Id="64d64c3a-2d54-46b4-884b-dc53b60d474f" />
+  <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
+  <Project Path="RoslynSentinel.Core/RoslynSentinel.Core.csproj" Id="c1003737-a8b1-41e0-a04e-4aa30847b65b" />
   <Project Path="RoslynSentinel.HttpHost/RoslynSentinel.HttpHost.csproj" />
   <Project Path="RoslynSentinel.Server/RoslynSentinel.Server.csproj" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />

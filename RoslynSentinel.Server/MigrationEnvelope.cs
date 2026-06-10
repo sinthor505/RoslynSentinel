@@ -1,3 +1,5 @@
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server;
 
 // ── Error codes ───────────────────────────────────────────────────────────────

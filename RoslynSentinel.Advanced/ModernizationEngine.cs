@@ -1,0 +1,499 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Advanced;
+
+public class ModernizationEngine
+{
+    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
+
+    public ModernizationEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
+    {
+        _workspaceManager = workspaceManager;
+        _config = config;
+    }
+
+    public async Task<DocumentEditResult> ClassToRecordAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
+    {
+        if (!_config.IsFeatureEnabled("ClassToRecord"))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature 'ClassToRecord' is disabled."
+            };
+        }
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (classNode == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Class '{className}' not found."
+            };
+        }
+
+        // Extract properties
+        var properties = classNode.Members.OfType<PropertyDeclarationSyntax>().ToList();
+
+        // Only use positional syntax when properties have no attributes and no initializers.
+        // If any property has attributes or an initializer, positional syntax would silently drop them.
+        bool canUsePositional = properties.All(p => !p.AttributeLists.Any() && p.Initializer == null);
+
+        SyntaxNode recordNode;
+        if (canUsePositional)
+        {
+            // Positional record: `record Foo(T Prop1, T Prop2);`
+            var parameters = properties.Select(prop =>
+                SyntaxFactory.Parameter(prop.Identifier).WithType(prop.Type)
+            ).ToList();
+
+            var positional = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
+                .WithModifiers(classNode.Modifiers)
+                .WithParameterList(parameters.Count != 0
+                    ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters))
+                    : SyntaxFactory.ParameterList());
+
+            // Only include non-property members (positional params auto-generate the properties)
+            var nonPropMembers = classNode.Members.Where(m => m is not PropertyDeclarationSyntax).ToList();
+            if (nonPropMembers.Count > 0)
+            {
+                positional = positional
+                    .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                    .WithMembers(SyntaxFactory.List(nonPropMembers))
+                    .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+            }
+            else
+            {
+                positional = positional.WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            }
+            recordNode = positional;
+        }
+        else
+        {
+            // Class-body record: preserves attributes and initializers on each property.
+            // Convert `set` accessors to `init` so the record remains immutable by convention.
+            var convertedProperties = properties.Select(prop =>
+            {
+                if (prop.AccessorList == null)
+                {
+                    return (MemberDeclarationSyntax)prop;
+                }
+
+                var newAccessors = prop.AccessorList.Accessors.Select(acc =>
+                {
+                    if (acc.IsKind(SyntaxKind.SetAccessorDeclaration) && acc.Body == null && acc.ExpressionBody == null)
+                    {
+                        return SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                    }
+                    return acc;
+                });
+                return (MemberDeclarationSyntax)prop.WithAccessorList(
+                    prop.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
+            });
+
+            var allMembers = convertedProperties
+                .Concat(classNode.Members.Where(m => m is not PropertyDeclarationSyntax))
+                .ToList();
+
+            recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier)
+                .WithModifiers(classNode.Modifiers)
+                .WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken))
+                .WithMembers(SyntaxFactory.List(allMembers))
+                .WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+        }
+
+        var newRoot = root!.ReplaceNode(classNode, recordNode);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
+    }
+
+    public async Task<DocumentEditResult> RecordToClassAsync(FilePath filePath, string recordName, CancellationToken cancellationToken = default)
+    {
+        if (!_config.IsFeatureEnabled("RecordToClass"))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.FeatureDisabled,
+                FilePath = filePath,
+                Message = "// Feature 'RecordToClass' is disabled."
+            };
+        }
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
+        if (recordNode == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Record '{recordName}' not found."
+            };
+        }
+
+        var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier).WithModifiers(recordNode.Modifiers);
+
+        // Preserve base types (interfaces, base classes)
+        if (recordNode.BaseList != null)
+        {
+            classNode = classNode.WithBaseList(recordNode.BaseList);
+        }
+
+        var properties = new List<MemberDeclarationSyntax>();
+
+        if (recordNode.ParameterList != null)
+        {
+            foreach (var parameter in recordNode.ParameterList.Parameters)
+            {
+                var property = SyntaxFactory.PropertyDeclaration(parameter.Type!, parameter.Identifier)
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(new[] {
+                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
+                        SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                    })));
+                properties.Add(property);
+            }
+        }
+
+        properties.AddRange(recordNode.Members);
+        classNode = classNode.WithMembers(SyntaxFactory.List(properties));
+
+        var newRoot = root!.ReplaceNode(recordNode, classNode);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
+    }
+
+    public async Task<DocumentEditResult> ConvertMethodToExpressionBodyAsync(FilePath filePath, string methodName, CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+
+        if (method?.Body != null && method.Body.Statements.Count == 1)
+        {
+            var stmt = method.Body.Statements[0];
+            ExpressionSyntax? expr = null;
+            if (stmt is ReturnStatementSyntax ret)
+            {
+                expr = ret.Expression;
+            }
+            else if (stmt is ExpressionStatementSyntax es)
+            {
+                expr = es.Expression;
+            }
+
+            if (expr != null)
+            {
+                var newMethod = method.WithBody(null)
+                    .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expr))
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+
+                var newRoot = root!.ReplaceNode(method, newMethod);
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.Modified,
+                    FilePath = filePath,
+                    Message = newRoot.NormalizeWhitespace().ToFullString()
+                };
+            }
+        }
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.TargetNotFound,
+            FilePath = filePath,
+            Message = $"// Method '{methodName}' not found."
+        };
+    }
+
+    public async Task<DocumentEditResult> ConvertToPatternAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Syntax root not found."
+            };
+        }
+
+        var rewriter = new PatternModernizationRewriter();
+        var newRoot = rewriter.Visit(root);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = newRoot.NormalizeWhitespace().ToFullString()
+        };
+    }
+
+    private class PatternModernizationRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitIfStatement(IfStatementSyntax node)
+        {
+            // Recursively visit children first
+            var visitedNode = (IfStatementSyntax?)base.VisitIfStatement(node) ?? node;
+
+            // Try to convert conditions to patterns
+            if (TryConvertToPattern(visitedNode.Condition, out var newCondition) && newCondition != null)
+            {
+                visitedNode = visitedNode.WithCondition(newCondition);
+            }
+
+            return visitedNode;
+        }
+
+        public override SyntaxNode? VisitBinaryExpression(BinaryExpressionSyntax node)
+        {
+            var visited = (BinaryExpressionSyntax?)base.VisitBinaryExpression(node) ?? node;
+
+            // Handle binary OR patterns - convert 'x == 1 || x == 2' to 'x is 1 or 2'
+            if (visited.IsKind(SyntaxKind.LogicalOrExpression))
+            {
+                if (TryConvertOrChainToPattern(visited, out var patternExpr) && patternExpr != null)
+                {
+                    return patternExpr;
+                }
+            }
+
+            return visited;
+        }
+
+        private bool TryConvertToPattern(ExpressionSyntax condition, out ExpressionSyntax? newCondition)
+        {
+            newCondition = null;
+
+            // Pattern 1: x == null → x is null
+            if (condition is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.EqualsExpression))
+            {
+                if (binary.Right.IsKind(SyntaxKind.NullLiteralExpression))
+                {
+                    // Create: x is null using ConstantPattern
+                    var nullPattern = SyntaxFactory.ConstantPattern(
+                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression));
+                    newCondition = SyntaxFactory.IsPatternExpression(binary.Left, nullPattern);
+                    return true;
+                }
+                if (binary.Left.IsKind(SyntaxKind.NullLiteralExpression))
+                {
+                    var nullPattern = SyntaxFactory.ConstantPattern(
+                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression));
+                    newCondition = SyntaxFactory.IsPatternExpression(binary.Right, nullPattern);
+                    return true;
+                }
+            }
+
+            // Pattern 2: x != null → x is not null
+            if (condition is BinaryExpressionSyntax notEqual && notEqual.IsKind(SyntaxKind.NotEqualsExpression))
+            {
+                if (notEqual.Right.IsKind(SyntaxKind.NullLiteralExpression))
+                {
+                    // Create: x is not null pattern
+                    var nullPattern = SyntaxFactory.ConstantPattern(
+                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression));
+                    // Note: We can't create "not null" pattern directly in older Roslyn versions
+                    // so we'll keep this as-is for now
+                    return false;
+                }
+                if (notEqual.Left.IsKind(SyntaxKind.NullLiteralExpression))
+                {
+                    return false;
+                }
+            }
+
+            // Pattern 3: Combined patterns with logical AND
+            // obj != null && obj.Property > 0 → simplified to keep readable
+            if (condition is BinaryExpressionSyntax andExpr && andExpr.IsKind(SyntaxKind.LogicalAndExpression))
+            {
+                // For now, skip complex property patterns as they require more advanced Roslyn API
+                return false;
+            }
+
+            return false;
+        }
+
+        private bool TryConvertOrChainToPattern(BinaryExpressionSyntax orExpr, out ExpressionSyntax? result)
+        {
+            result = null;
+            var expressions = CollectOrChain(orExpr);
+
+            if (expressions.Count < 2)
+            {
+                return false;
+            }
+
+            // Check if all expressions are comparisons with the same subject
+            ExpressionSyntax? subject = null;
+            var caseValues = new List<ExpressionSyntax>();
+
+            foreach (var expr in expressions)
+            {
+                if (expr is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.EqualsExpression))
+                {
+                    if (IsLiteralOrIdentifier(binary.Right))
+                    {
+                        if (subject == null)
+                        {
+                            subject = binary.Left;
+                        }
+                        else if (!AreExpressionsEquivalent(subject, binary.Left))
+                        {
+                            return false;
+                        }
+
+                        caseValues.Add(binary.Right);
+                    }
+                    else if (IsLiteralOrIdentifier(binary.Left))
+                    {
+                        if (subject == null)
+                        {
+                            subject = binary.Right;
+                        }
+                        else if (!AreExpressionsEquivalent(subject, binary.Right))
+                        {
+                            return false;
+                        }
+
+                        caseValues.Add(binary.Left);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    return false;
+                }
+            }
+
+            if (subject == null || caseValues.Count != expressions.Count)
+            {
+                return false;
+            }
+
+            // Build or pattern: x is 1 or 2 or 3
+            // Due to Roslyn API limitations, we'll try to build this using ConstantPatterns
+            PatternSyntax pattern = SyntaxFactory.ConstantPattern(caseValues[0]);
+
+            // Try to create an or pattern: x is 1 or 2 or 3
+            for (int i = 1; i < caseValues.Count; i++)
+            {
+                var nextPattern = SyntaxFactory.ConstantPattern(caseValues[i]);
+                pattern = SyntaxFactory.BinaryPattern(SyntaxKind.OrPattern, pattern, nextPattern);
+            }
+
+            result = SyntaxFactory.IsPatternExpression(subject, pattern);
+            return true;
+        }
+
+        private List<ExpressionSyntax> CollectOrChain(BinaryExpressionSyntax orExpr)
+        {
+            var result = new List<ExpressionSyntax>();
+            CollectOrChainRecursive(orExpr, result);
+            return result;
+        }
+
+        private void CollectOrChainRecursive(BinaryExpressionSyntax expr, List<ExpressionSyntax> result)
+        {
+            if (expr.Left is BinaryExpressionSyntax leftOr && leftOr.IsKind(SyntaxKind.LogicalOrExpression))
+            {
+                CollectOrChainRecursive(leftOr, result);
+            }
+            else
+            {
+                result.Add(expr.Left);
+            }
+
+            result.Add(expr.Right);
+        }
+
+        private bool IsLiteralOrIdentifier(ExpressionSyntax expr)
+        {
+            return expr.IsKind(SyntaxKind.NumericLiteralExpression) ||
+                   expr.IsKind(SyntaxKind.StringLiteralExpression) ||
+                   expr.IsKind(SyntaxKind.CharacterLiteralExpression) ||
+                   expr.IsKind(SyntaxKind.TrueLiteralExpression) ||
+                   expr.IsKind(SyntaxKind.FalseLiteralExpression) ||
+                   expr.IsKind(SyntaxKind.NullLiteralExpression) ||
+                   expr is IdentifierNameSyntax ||
+                   expr is MemberAccessExpressionSyntax;
+        }
+
+        private static bool AreExpressionsEquivalent(ExpressionSyntax? a, ExpressionSyntax? b)
+        {
+            if (a == null || b == null)
+            {
+                return false;
+            }
+
+            return a.IsEquivalentTo(b);
+        }
+    }
+}

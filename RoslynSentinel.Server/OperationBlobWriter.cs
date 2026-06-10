@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Server;
 
 /// <summary>
