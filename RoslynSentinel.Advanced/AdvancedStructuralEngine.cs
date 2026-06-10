@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Advanced;
 
 public class AdvancedStructuralEngine
 {

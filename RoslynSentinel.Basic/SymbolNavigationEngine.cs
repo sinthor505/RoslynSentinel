@@ -4,8 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record CallerInfo(

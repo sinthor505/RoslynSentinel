@@ -3,7 +3,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Server.Basic;
 
 /// <summary>
 /// Shared service registration helpers used by both the stdio server (Program.cs)
@@ -25,11 +25,11 @@ public static class RoslynSentinelServiceExtensions
         services.AddSingleton<MetricsEngine>();
         services.AddSingleton<CodeHealingEngine>();
         services.AddSingleton<AnalysisEngine>();
-        services.AddSingleton<PerformanceEngine>();
+        // services.AddSingleton<PerformanceEngine>();
         services.AddSingleton<SecurityEngine>();
-        services.AddSingleton<TestingEngine>();
+        // services.AddSingleton<TestingEngine>();
         services.AddSingleton<CodeGenerationEngine>();
-        services.AddSingleton<ModernizationEngine>();
+        // services.AddSingleton<ModernizationEngine>();
         services.AddSingleton<DependencyInjectionEngine>();
         services.AddSingleton<ThreadSafetyEngine>();
         services.AddSingleton<ArchitecturalEngine>();
@@ -99,8 +99,8 @@ public static class RoslynSentinelServiceExtensions
         }
         if (activeModes.Contains("Intelligence"))
         {
-            services.AddSingleton<SentinelIntelligenceTools>();
-            mcpBuilder.WithTools<SentinelIntelligenceTools>();
+            services.AddSingleton<SentinelSymbolTools>();
+            mcpBuilder.WithTools<SentinelSymbolTools>();
             services.AddSingleton<SentinelScanTools>();
             mcpBuilder.WithTools<SentinelScanTools>();
         }

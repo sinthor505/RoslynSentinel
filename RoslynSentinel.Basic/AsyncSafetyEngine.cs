@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class AsyncSafetyEngine
@@ -1625,7 +1623,7 @@ public class AsyncSafetyEngine
         return reports;
     }
 
-    // ── UnawakedDisposeAsync ──────────────────────────────────────────────────
+    // ── UnawaitedDisposeAsync ──────────────────────────────────────────────────
     // Calling IAsyncDisposable.DisposeAsync() without await in a synchronous Dispose()
     // or other non-async cleanup path means cleanup finishes after the method returns,
     // leaving file handles, network connections, and database connections dangling.
@@ -1634,7 +1632,7 @@ public class AsyncSafetyEngine
     /// Detects calls to DisposeAsync() in non-async methods (or in async methods without await),
     /// where the ValueTask returned by DisposeAsync is discarded rather than awaited.
     /// </summary>
-    public async Task<List<AsyncSafetyReport>> FindUnawakedDisposeAsyncAsync(
+    public async Task<List<AsyncSafetyReport>> FindUnawaitedDisposeAsyncAsync(
         string? filePath = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

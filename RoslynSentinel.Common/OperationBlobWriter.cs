@@ -1,9 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-using RoslynSentinel.Common;
-
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Writes forensic operation blobs to .roslynsentinel/operations/ under the solution root.

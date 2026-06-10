@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Basic;
 
 public class SemanticRefactoringLibrary
 {

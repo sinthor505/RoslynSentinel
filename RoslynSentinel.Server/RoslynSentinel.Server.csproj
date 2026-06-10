@@ -40,12 +40,16 @@
     <ProjectReference Include="..\RoslynSentinel.Advanced\RoslynSentinel.Advanced.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
+    <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="RoslynSentinel.Advanced" />
     <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />
+    <Using Include="RoslynSentinel.Server.Advanced" />
+    <Using Include="RoslynSentinel.Server.Basic" />
   </ItemGroup>
 
 </Project>

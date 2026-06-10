@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Common;
 
 public record CallGraphNode(
     string MethodName,

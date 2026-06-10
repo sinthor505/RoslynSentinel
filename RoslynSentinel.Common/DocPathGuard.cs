@@ -1,4 +1,4 @@
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Defense-in-depth filename validation for scoped documentation tools.

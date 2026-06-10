@@ -3,7 +3,9 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Shared service registration helpers used by both the stdio server (Program.cs)
@@ -106,8 +108,8 @@ public static class RoslynSentinelServiceExtensions
         }
         if (activeModes.Contains("Refactor"))
         {
-            services.AddSingleton<SentinelRefactoringTools>();
-            mcpBuilder.WithTools<SentinelRefactoringTools>();
+            services.AddSingleton<SentinelAdvancedRefactoringTools>();
+            mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
             services.AddSingleton<SentinelAugmentTools>();
             mcpBuilder.WithTools<SentinelAugmentTools>();
         }
@@ -118,8 +120,8 @@ public static class RoslynSentinelServiceExtensions
         }
         if (activeModes.Contains("Quality"))
         {
-            services.AddSingleton<SentinelQualityTools>();
-            mcpBuilder.WithTools<SentinelQualityTools>();
+            services.AddSingleton<SentinelAsyncifyTools>();
+            mcpBuilder.WithTools<SentinelAsyncifyTools>();
         }
         if (activeModes.Contains("Generation"))
         {

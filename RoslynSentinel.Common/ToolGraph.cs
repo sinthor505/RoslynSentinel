@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Server;
+﻿namespace RoslynSentinel.Common;
 
 public sealed class ToolGraph
 {

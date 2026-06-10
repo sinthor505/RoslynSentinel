@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Basic;
 
 public class UniversalRefactoringLibrary
 {

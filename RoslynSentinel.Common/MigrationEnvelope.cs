@@ -1,6 +1,4 @@
-using RoslynSentinel.Common;
-
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Common;
 
 // ── Error codes ───────────────────────────────────────────────────────────────
 public static class MigrationErrorCode
