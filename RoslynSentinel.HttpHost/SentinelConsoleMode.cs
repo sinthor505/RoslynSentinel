@@ -6,11 +6,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-using Microsoft.Extensions.DependencyInjection;
-
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Server;
 
 namespace RoslynSentinel.HttpHost;
 

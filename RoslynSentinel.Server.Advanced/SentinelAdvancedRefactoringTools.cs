@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
-public class SentinelStructuralRefactoringTools
+public class SentinelAdvancedRefactoringTools
 {
     private readonly RefactoringEngine _refactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
@@ -30,9 +30,9 @@ public class SentinelStructuralRefactoringTools
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
-    private readonly ILogger<SentinelStructuralRefactoringTools> _logger;
+    private readonly ILogger<SentinelAdvancedRefactoringTools> _logger;
 
-    public SentinelStructuralRefactoringTools(
+    public SentinelAdvancedRefactoringTools(
         RefactoringEngine refactoringEngine,
         StandardRefactoringEngine standardRefactoringEngine,
         AdvancedStructuralEngine advancedStructuralEngine,
@@ -54,7 +54,7 @@ public class SentinelStructuralRefactoringTools
         SymbolNavigationEngine symbolNavigationEngine,
         PersistentWorkspaceManager workspaceManager,
         SentinelConfiguration config,
-        ILogger<SentinelStructuralRefactoringTools> logger)
+        ILogger<SentinelAdvancedRefactoringTools> logger)
     {
         _refactoringEngine = refactoringEngine;
         _standardRefactoringEngine = standardRefactoringEngine;

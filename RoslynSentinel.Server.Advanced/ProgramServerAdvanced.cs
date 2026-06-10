@@ -4,12 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Server;
+using RoslynSentinel.Server.Advanced;
 
 using Serilog;
 using Serilog.Extensions.Logging;
-
-using SentinelConsoleMode = RoslynSentinel.Server.SentinelConsoleMode;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -99,7 +97,7 @@ builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 try
 {
     // --- Register Infrastructure ---
-    builder.Services.AddRoslynSentinelEngines();
+    builder.Services.AddRoslynSentinelEnginesAdvanced();
 
     // --- Configure MCP Server Transport ---
     var mcpBuilder = builder.Services.AddMcpServer();
@@ -113,13 +111,13 @@ try
     }
 
     // --- Tool Registration and Error Filter ---
-    mcpBuilder.AddRoslynSentinelTools(builder.Services, activeModes);
+    RoslynSentinelServiceExtensionsAdvanced.AddRoslynSentinelToolsAdvanced(mcpBuilder, builder.Services, activeModes);
 
     using var host = builder.Build();
     var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
     // --- Pre-Warm MSBuildLocator + Auto-Load Solution ---
-    host.Services.WarmupAndAutoLoad(solutionPath, logger);
+    RoslynSentinelServiceExtensionsAdvanced.WarmupAndAutoLoadAdvanced(host.Services, solutionPath, logger);
 
     // --- Startup tool dump (internal diagnostic — not an MCP tool) ---
     SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

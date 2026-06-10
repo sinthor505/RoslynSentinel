@@ -22,7 +22,7 @@ public class SentinelSymbolTools
     private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
     // private readonly ArchitecturalEngine _architecturalEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
-    private readonly DependencyInjectionEngine _dependencyInjectionEngine;
+    // private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -33,16 +33,16 @@ public class SentinelSymbolTools
         SemanticSearchEngine semanticSearchEngine,
         //MetricsEngine metricsEngine,
         InventoryEngine inventoryEngine,
-        DeadCodeEngine deadCodeEngine,
+        // DeadCodeEngine deadCodeEngine,
         AnalysisEngine analysisEngine,
-        DocumentationEngine documentationEngine,
+        //DocumentationEngine documentationEngine,
         DependencyEngine dependencyEngine,
         ProjectStructureEngine projectStructureEngine,
         //AsyncSafetyEngine asyncSafetyEngine,
         HealthOrchestrationEngine healthOrchestrationEngine,
-        ArchitecturalEngine architecturalEngine,
+        // ArchitecturalEngine architecturalEngine,
         SymbolNavigationEngine symbolNavigationEngine,
-        DependencyInjectionEngine dependencyInjectionEngine,
+        // DependencyInjectionEngine dependencyInjectionEngine,
         DiscoveryEngine discoveryEngine,
         ProjectConsistencyEngine projectConsistencyEngine,
         PersistentWorkspaceManager workspaceManager,
@@ -62,7 +62,7 @@ public class SentinelSymbolTools
         _healthOrchestrationEngine = healthOrchestrationEngine;
         // _architecturalEngine = architecturalEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
-        _dependencyInjectionEngine = dependencyInjectionEngine;
+        // _dependencyInjectionEngine = dependencyInjectionEngine;
         _discoveryEngine = discoveryEngine;
         _projectConsistencyEngine = projectConsistencyEngine;
         _workspaceManager = workspaceManager;

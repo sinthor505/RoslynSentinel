@@ -1,5 +1,9 @@
-using RoslynSentinel.HttpHost;
-using RoslynSentinel.Server;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+
+using RoslynSentinel.Server.Basic;
 
 using Serilog;
 using Serilog.Extensions.Logging;
@@ -65,14 +69,14 @@ builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
 
 // Register all Roslyn engine singletons
-builder.Services.AddRoslynSentinelEngines();
+builder.Services.AddRoslynSentinelEnginesBasic();
 
 // Register MCP with HTTP transport (Streamable HTTP)
 var mcpBuilder = builder.Services.AddMcpServer()
     .WithHttpTransport();
 
 // Register tool classes (mode-conditional) and the error filter
-mcpBuilder.AddRoslynSentinelTools(builder.Services, activeModes);
+mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
 
 // ── Run ───────────────────────────────────────────────────────────────────────
 
@@ -83,7 +87,7 @@ app.MapMcp("/mcp");
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel.HttpHost");
 
 // Pre-warm MSBuildLocator (~5-8 s) and optionally auto-load solution
-app.Services.WarmupAndAutoLoad(solutionPath, logger);
+app.Services.WarmupAndAutoLoadBasic(solutionPath, logger);
 
 // Startup tool dump (internal diagnostic — not an MCP tool)
 // SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

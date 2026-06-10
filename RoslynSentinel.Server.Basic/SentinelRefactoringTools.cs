@@ -12,17 +12,17 @@ public class SentinelRefactoringTools
 {
     private readonly RefactoringEngine _refactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
-    private readonly AdvancedStructuralEngine _advancedStructuralEngine;
+    // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
     // private readonly AdvancedLogicEngine _advancedLogicEngine;
-    private readonly RefinementEngine _refinementEngine;
-    private readonly AdvancedTypeEngine _advancedTypeEngine;
-    private readonly StructuralRefinementEngine _structuralRefinementEngine;
+    // private readonly RefinementEngine _refinementEngine;
+    // private readonly AdvancedTypeEngine _advancedTypeEngine;
+    //private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
-    //private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
+    // private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     // private readonly LogicOptimizationEngine _logicOptimizationEngine;
     // private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly MsToolAugmentEngine _augmentEngine;
@@ -38,16 +38,16 @@ public class SentinelRefactoringTools
         MappingEngine mappingEngine,
         SemanticRefactoringLibrary semanticRefactoringLibrary,
         GranularRefactoringEngine granularRefactoringEngine,
-        AdvancedLogicEngine advancedLogicEngine,
-        RefinementEngine refinementEngine,
-        AdvancedTypeEngine advancedTypeEngine,
-        StructuralRefinementEngine structuralRefinementEngine,
+        // AdvancedLogicEngine advancedLogicEngine,
+        // RefinementEngine refinementEngine,
+        // AdvancedTypeEngine advancedTypeEngine,
+        // StructuralRefinementEngine structuralRefinementEngine,
         CodeStyleEngine codeStyleEngine,
         CodeFlowEngine codeFlowEngine,
-        AdvancedRefactoringEngine advancedRefactoringEngine,
-        LogicOptimizationEngine logicOptimizationEngine,
-        ModernizationEngine modernizationEngine,
-        OutParamRefactoringEngine outParamRefactoringEngine,
+        // AdvancedRefactoringEngine advancedRefactoringEngine,
+        // LogicOptimizationEngine logicOptimizationEngine,
+        // ModernizationEngine modernizationEngine,
+        // OutParamRefactoringEngine outParamRefactoringEngine,
         MsToolAugmentEngine augmentEngine,
         CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
@@ -61,9 +61,9 @@ public class SentinelRefactoringTools
         _semanticRefactoringLibrary = semanticRefactoringLibrary;
         _granularRefactoringEngine = granularRefactoringEngine;
         // _advancedLogicEngine = advancedLogicEngine;
-        _refinementEngine = refinementEngine;
-        _advancedTypeEngine = advancedTypeEngine;
-        _structuralRefinementEngine = structuralRefinementEngine;
+        // _refinementEngine = refinementEngine;
+        // _advancedTypeEngine = advancedTypeEngine;
+        // _structuralRefinementEngine = structuralRefinementEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeFlowEngine = codeFlowEngine;
         //_advancedRefactoringEngine = advancedRefactoringEngine;
@@ -88,26 +88,6 @@ public class SentinelRefactoringTools
         var head = lines.Take(10);
         var tail = lines.TakeLast(10);
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        try
-        {
-            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-            return result.ToJsonSummary();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
-            return $"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
-        }
     }
 
     [McpServerTool]
@@ -421,41 +401,6 @@ public class SentinelRefactoringTools
         {
             _logger.LogError(ex, "InvertAssignments failed in '{FilePath}'", filePath);
             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"InvertAssignments failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
-        """)]
-    public async Task<ToolResult<object>> PullUpMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string className,
-        [Consumes(DataTag.SymbolName, required: true)] string memberName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        try
-        {
-            FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-            var changes = await _refinementEngine.PullUpMemberAsync(filePath, className, memberName);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = changes };
-            }
-
-            if (changes.Count == 0)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Member '{memberName}' not found or no accessible base class available.") };
-            }
-
-            var id = _workspaceManager.StageChanges(changes, $"Pull up '{memberName}' from '{className}' to base class.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, changes.Keys.ToList(), $"Pulls '{memberName}' from '{className}' up to its base class.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PullUpMember failed for '{MemberName}' in '{ClassName}'", memberName, className);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"PullUpMember failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 

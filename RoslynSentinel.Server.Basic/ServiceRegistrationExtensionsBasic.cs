@@ -9,12 +9,12 @@ namespace RoslynSentinel.Server.Basic;
 /// Shared service registration helpers used by both the stdio server (Program.cs)
 /// and the separate HTTP host (RoslynSentinel.HttpHost).
 /// </summary>
-public static class RoslynSentinelServiceExtensions
+public static class RoslynSentinelServiceExtensionsBasic
 {
     /// <summary>
     /// Registers all Roslyn analysis engine singletons into the DI container.
     /// </summary>
-    public static IServiceCollection AddRoslynSentinelEngines(this IServiceCollection services)
+    public static IServiceCollection AddRoslynSentinelEnginesBasic(this IServiceCollection services)
     {
         services.AddSingleton<SentinelConfiguration>();
         services.AddSingleton<PersistentWorkspaceManager>();
@@ -22,36 +22,36 @@ public static class RoslynSentinelServiceExtensions
         services.AddSingleton<ValidationEngine>();
         services.AddSingleton<ImpactAnalyzer>();
         services.AddSingleton<RefactoringEngine>();
-        services.AddSingleton<MetricsEngine>();
-        services.AddSingleton<CodeHealingEngine>();
+        // services.AddSingleton<MetricsEngine>();
+        // services.AddSingleton<CodeHealingEngine>();
         services.AddSingleton<AnalysisEngine>();
         // services.AddSingleton<PerformanceEngine>();
-        services.AddSingleton<SecurityEngine>();
+        // services.AddSingleton<SecurityEngine>();
         // services.AddSingleton<TestingEngine>();
         services.AddSingleton<CodeGenerationEngine>();
         // services.AddSingleton<ModernizationEngine>();
-        services.AddSingleton<DependencyInjectionEngine>();
+        // services.AddSingleton<DependencyInjectionEngine>();
         services.AddSingleton<ThreadSafetyEngine>();
-        services.AddSingleton<ArchitecturalEngine>();
-        services.AddSingleton<AdvancedRefactoringEngine>();
-        services.AddSingleton<DocumentationEngine>();
-        services.AddSingleton<SecurityAndSafetyEngine>();
-        services.AddSingleton<ApiIntegrationEngine>();
+        // services.AddSingleton<ArchitecturalEngine>();
+        // services.AddSingleton<AdvancedRefactoringEngine>();
+        // services.AddSingleton<DocumentationEngine>();
+        // services.AddSingleton<SecurityAndSafetyEngine>();
+        // services.AddSingleton<ApiIntegrationEngine>();
         services.AddSingleton<InventoryEngine>();
-        services.AddSingleton<AsyncOptimizationEngine>();
+        // services.AddSingleton<AsyncOptimizationEngine>();
         services.AddSingleton<InstrumentationEngine>();
-        services.AddSingleton<AdvancedTypeEngine>();
-        services.AddSingleton<ModernLoggingEngine>();
+        // services.AddSingleton<AdvancedTypeEngine>();
+        // services.AddSingleton<ModernLoggingEngine>();
         services.AddSingleton<CodeFlowEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
-        services.AddSingleton<LogicOptimizationEngine>();
+        // services.AddSingleton<LogicOptimizationEngine>();
         services.AddSingleton<SemanticSearchEngine>();
-        services.AddSingleton<ModernizationUpgradeEngine>();
+        // services.AddSingleton<ModernizationUpgradeEngine>();
         services.AddSingleton<AsyncSafetyEngine>();
         services.AddSingleton<ProjectStructureEngine>();
-        services.AddSingleton<DeadCodeEngine>();
+        // services.AddSingleton<DeadCodeEngine>();
         services.AddSingleton<SyntaxUpgradeEngine>();
-        services.AddSingleton<RefinementEngine>();
+        // services.AddSingleton<RefinementEngine>();
         services.AddSingleton<DiagnosticEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MappingEngine>();
@@ -60,32 +60,32 @@ public static class RoslynSentinelServiceExtensions
         services.AddSingleton<ImmutabilityEngine>();
         services.AddSingleton<CodeStyleEngine>();
         services.AddSingleton<DependencyEngine>();
-        services.AddSingleton<AdvancedLogicEngine>();
-        services.AddSingleton<AdvancedStructuralEngine>();
+        // services.AddSingleton<AdvancedLogicEngine>();
+        // services.AddSingleton<AdvancedStructuralEngine>();
         services.AddSingleton<SemanticRefactoringLibrary>();
         services.AddSingleton<GranularRefactoringEngine>();
-        services.AddSingleton<ApiAutomationEngine>();
+        // services.AddSingleton<ApiAutomationEngine>();
         services.AddSingleton<ControlFlowEngine>();
         services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<SymbolNavigationEngine>();
-        services.AddSingleton<AntiPatternEngine>();
-        services.AddSingleton<CloneDetectionEngine>();
-        services.AddSingleton<OutParamRefactoringEngine>();
+        // services.AddSingleton<AntiPatternEngine>();
+        // services.AddSingleton<CloneDetectionEngine>();
+        // services.AddSingleton<OutParamRefactoringEngine>();
         services.AddSingleton<DiscoveryEngine>();
         services.AddSingleton<MsToolAugmentEngine>();
         services.AddSingleton<CodeStyleAnalysisEngine>();
         services.AddSingleton<ProjectConsistencyEngine>();
         services.AddSingleton<BreakingChangeEngine>();
-        services.AddSingleton<PathDrivenTestEngine>();
+        // services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<StackOverflowEngine>();
-        services.AddSingleton<AsyncBatchEngine>();
+        // services.AddSingleton<AsyncBatchEngine>();
         return services;
     }
 
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional) and the centralized error filter.
     /// </summary>
-    public static IMcpServerBuilder AddRoslynSentinelTools(
+    public static IMcpServerBuilder AddRoslynSentinelToolsBasic(
         this IMcpServerBuilder mcpBuilder,
         IServiceCollection services,
         HashSet<string> activeModes)
@@ -96,41 +96,50 @@ public static class RoslynSentinelServiceExtensions
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
             services.AddSingleton<DocumentationTools>();
             mcpBuilder.WithTools<DocumentationTools>();
+            services.AddSingleton<SentinelSymbolTools>();
+            mcpBuilder.WithTools<SentinelSymbolTools>();
         }
         if (activeModes.Contains("Intelligence"))
         {
-            services.AddSingleton<SentinelSymbolTools>();
-            mcpBuilder.WithTools<SentinelSymbolTools>();
-            services.AddSingleton<SentinelScanTools>();
-            mcpBuilder.WithTools<SentinelScanTools>();
+            // services.AddSingleton<SentinelIntelligenceTools>();
+            // mcpBuilder.WithTools<SentinelIntelligenceTools>();
+            // services.AddSingleton<SentinelScanTools>();
+            // mcpBuilder.WithTools<SentinelScanTools>();
         }
         if (activeModes.Contains("Refactor"))
         {
             services.AddSingleton<SentinelRefactoringTools>();
             mcpBuilder.WithTools<SentinelRefactoringTools>();
+            // services.AddSingleton<SentinelAdvancedRefactoringTools>();
+            // mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
             services.AddSingleton<SentinelAugmentTools>();
             mcpBuilder.WithTools<SentinelAugmentTools>();
         }
         if (activeModes.Contains("Modernize"))
         {
-            services.AddSingleton<SentinelModernizationTools>();
-            mcpBuilder.WithTools<SentinelModernizationTools>();
+            // services.AddSingleton<SentinelModernizationTools>();
+            // mcpBuilder.WithTools<SentinelModernizationTools>();
         }
         if (activeModes.Contains("Quality"))
         {
-            services.AddSingleton<SentinelQualityTools>();
-            mcpBuilder.WithTools<SentinelQualityTools>();
+            // services.AddSingleton<SentinelAsyncifyTools>();
+            // mcpBuilder.WithTools<SentinelAsyncifyTools>();
         }
         if (activeModes.Contains("Generation"))
         {
-            services.AddSingleton<SentinelGenerationTools>();
-            mcpBuilder.WithTools<SentinelGenerationTools>();
+            // services.AddSingleton<SentinelGenerationTools>();
+            // mcpBuilder.WithTools<SentinelGenerationTools>();
         }
         if (activeModes.Contains("Refactor") || activeModes.Contains("Modernize") ||
             activeModes.Contains("Quality") || activeModes.Contains("Generation"))
         {
-            services.AddSingleton<SentinelCodemodTools>();
-            mcpBuilder.WithTools<SentinelCodemodTools>();
+            // services.AddSingleton<SentinelCodemodTools>();
+            // mcpBuilder.WithTools<SentinelCodemodTools>();
+        }
+        if (activeModes.Contains("Asyncify"))
+        {
+            // services.AddSingleton<SentinelAsyncifyTools>();
+            // mcpBuilder.WithTools<SentinelAsyncifyTools>();
         }
 
         // Centralized error-to-success filter:
@@ -175,7 +184,7 @@ public static class RoslynSentinelServiceExtensions
     /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
     /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
     /// </summary>
-    public static void WarmupAndAutoLoad(this IServiceProvider services, string? solutionPath, ILogger? logger = null)
+    public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null)
     {
         logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
         var warmupStart = System.Diagnostics.Stopwatch.StartNew();

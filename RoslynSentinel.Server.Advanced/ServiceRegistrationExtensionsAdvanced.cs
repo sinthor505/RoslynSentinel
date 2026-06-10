@@ -3,20 +3,18 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Advanced;
 
 /// <summary>
 /// Shared service registration helpers used by both the stdio server (Program.cs)
 /// and the separate HTTP host (RoslynSentinel.HttpHost).
 /// </summary>
-public static class RoslynSentinelServiceExtensions
+public static class RoslynSentinelServiceExtensionsAdvanced
 {
     /// <summary>
     /// Registers all Roslyn analysis engine singletons into the DI container.
     /// </summary>
-    public static IServiceCollection AddRoslynSentinelEngines(this IServiceCollection services)
+    public static IServiceCollection AddRoslynSentinelEnginesAdvanced(this IServiceCollection services)
     {
         services.AddSingleton<SentinelConfiguration>();
         services.AddSingleton<PersistentWorkspaceManager>();
@@ -87,7 +85,7 @@ public static class RoslynSentinelServiceExtensions
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional) and the centralized error filter.
     /// </summary>
-    public static IMcpServerBuilder AddRoslynSentinelTools(
+    public static IMcpServerBuilder AddRoslynSentinelToolsAdvanced(
         this IMcpServerBuilder mcpBuilder,
         IServiceCollection services,
         HashSet<string> activeModes)
@@ -98,6 +96,8 @@ public static class RoslynSentinelServiceExtensions
             mcpBuilder.WithTools<SentinelWorkspaceTools>();
             services.AddSingleton<DocumentationTools>();
             mcpBuilder.WithTools<DocumentationTools>();
+            services.AddSingleton<SentinelSymbolTools>();
+            mcpBuilder.WithTools<SentinelSymbolTools>();
         }
         if (activeModes.Contains("Intelligence"))
         {
@@ -108,6 +108,8 @@ public static class RoslynSentinelServiceExtensions
         }
         if (activeModes.Contains("Refactor"))
         {
+            services.AddSingleton<SentinelRefactoringTools>();
+            mcpBuilder.WithTools<SentinelRefactoringTools>();
             services.AddSingleton<SentinelAdvancedRefactoringTools>();
             mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
             services.AddSingleton<SentinelAugmentTools>();
@@ -133,6 +135,11 @@ public static class RoslynSentinelServiceExtensions
         {
             services.AddSingleton<SentinelCodemodTools>();
             mcpBuilder.WithTools<SentinelCodemodTools>();
+        }
+        if (activeModes.Contains("Asyncify"))
+        {
+            services.AddSingleton<SentinelAsyncifyTools>();
+            mcpBuilder.WithTools<SentinelAsyncifyTools>();
         }
 
         // Centralized error-to-success filter:
@@ -177,7 +184,7 @@ public static class RoslynSentinelServiceExtensions
     /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
     /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
     /// </summary>
-    public static void WarmupAndAutoLoad(this IServiceProvider services, string? solutionPath, ILogger? logger = null)
+    public static void WarmupAndAutoLoadAdvanced(this IServiceProvider services, string? solutionPath, ILogger? logger = null)
     {
         logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
         var warmupStart = System.Diagnostics.Stopwatch.StartNew();

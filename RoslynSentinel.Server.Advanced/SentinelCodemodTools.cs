@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Advanced;
+namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
 public class SentinelCodemodTools

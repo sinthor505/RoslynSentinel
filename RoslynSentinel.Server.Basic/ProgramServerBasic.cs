@@ -97,7 +97,7 @@ builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 try
 {
     // --- Register Infrastructure ---
-    builder.Services.AddRoslynSentinelEngines();
+    builder.Services.AddRoslynSentinelEnginesBasic();
 
     // --- Configure MCP Server Transport ---
     var mcpBuilder = builder.Services.AddMcpServer();
@@ -111,13 +111,13 @@ try
     }
 
     // --- Tool Registration and Error Filter ---
-    mcpBuilder.AddRoslynSentinelTools(builder.Services, activeModes);
+    mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
 
     using var host = builder.Build();
     var logger = host.Services.GetRequiredService<ILogger<Program>>();
 
     // --- Pre-Warm MSBuildLocator + Auto-Load Solution ---
-    host.Services.WarmupAndAutoLoad(solutionPath, logger);
+    host.Services.WarmupAndAutoLoadBasic(solutionPath, logger);
 
     // --- Startup tool dump (internal diagnostic — not an MCP tool) ---
     SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);

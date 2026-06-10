@@ -7,8 +7,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server;
 
 [McpServerToolType]
@@ -174,8 +172,8 @@ public class SentinelScanTools
                 case DetectorId.unawaited_fire_and_forget:
                     var result17 = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath, projectName);
                     return new ToolResult<object>() { Success = true, Data = result17 };
-                case DetectorId.unawaked_dispose:
-                    var result18 = await _asyncSafetyEngine.FindUnawakedDisposeAsyncAsync(filePath);
+                case DetectorId.unawaited_dispose:
+                    var result18 = await _asyncSafetyEngine.FindUnawaitedDisposeAsyncAsync(filePath);
                     return new ToolResult<object>() { Success = true, Data = result18 };
                 case DetectorId.unobserved_task_in_field:
                     var result19 = await _asyncSafetyEngine.FindUnobservedTaskInFieldAsync(filePath);
@@ -728,7 +726,7 @@ public class SentinelScanTools
         new(DetectorId.task_when_all_usage, "async", "file", "Detects sequential awaits that could be parallelized with Task.WhenAll."),
         new(DetectorId.task_yield_usage, "async", "file", "Detects Task.Yield() calls."),
         new(DetectorId.unawaited_fire_and_forget, "async", "any", "Finds Task-returning method calls not awaited (fire-and-forget). Exceptions are silently swallowed."),
-        new(DetectorId.unawaked_dispose, "async", "file|solution", "Detects DisposeAsync() calls that are not awaited — async cleanup finishes after the method returns."),
+        new(DetectorId.unawaited_dispose, "async", "file|solution", "Detects DisposeAsync() calls that are not awaited — async cleanup finishes after the method returns."),
         new(DetectorId.unobserved_task_in_field, "async", "file|solution", "Finds Task/ValueTask assigned to fields without being awaited — silent failure risk."),
         new(DetectorId.value_task_misuse, "async", "file", "Detects invalid ValueTask usage: double-await, deferred-await, .Result access."),
         // concurrency (8)
@@ -825,7 +823,7 @@ public class SentinelScanTools
         inconsistent_async_suffix, mismatched_await, missing_cancellation_tokens,
         sequential_independent_awaits, task_delay_usage, task_delay_zero_usage,
         task_run_in, task_void_usage, task_when_all_usage, task_yield_usage,
-        unawaited_fire_and_forget, unawaked_dispose, unobserved_task_in_field,
+        unawaited_fire_and_forget, unawaited_dispose, unobserved_task_in_field,
         value_task_misuse,
         // concurrency
         cas_loop_without_backoff, check_then_act_on_dictionary,
@@ -866,5 +864,5 @@ public class SentinelScanTools
         primitive_obsession, structural_smells, type_cohesion
     }
 }
-// v2 — async domain extracted from concurrency; blocking_calls_in and unawaked_dispose relocated
+// v2 — async domain extracted from concurrency; blocking_calls_in and unawaited_dispose relocated
 // v2 — async domain extracted; scan_descriptors made internal; ScanOptions derived from scan_descriptors
