@@ -26,7 +26,7 @@ var resolvedModeArg = modeArg.Equals("Toolset1", StringComparison.OrdinalIgnoreC
     : modeArg;
 
 var activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
-    ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
+    ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify" }
     : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 // --- Fast-exit commands (no host build needed) ---
