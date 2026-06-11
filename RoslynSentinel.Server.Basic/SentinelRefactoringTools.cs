@@ -12,13 +12,13 @@ public class SentinelRefactoringTools
     private readonly RefactoringEngine _refactoringEngine;
     private readonly StandardRefactoringEngine _standardRefactoringEngine;
     // private readonly AdvancedStructuralEngine _advancedStructuralEngine;
+    private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly MappingEngine _mappingEngine;
     private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
     // private readonly AdvancedLogicEngine _advancedLogicEngine;
     // private readonly RefinementEngine _refinementEngine;
     // private readonly AdvancedTypeEngine _advancedTypeEngine;
-    //private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
     // private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
@@ -37,11 +37,11 @@ public class SentinelRefactoringTools
         MappingEngine mappingEngine,
         SemanticRefactoringLibrary semanticRefactoringLibrary,
         GranularRefactoringEngine granularRefactoringEngine,
-        // AdvancedLogicEngine advancedLogicEngine,
-        // RefinementEngine refinementEngine,
-        // AdvancedTypeEngine advancedTypeEngine,
-        // StructuralRefinementEngine structuralRefinementEngine,
-        CodeStyleEngine codeStyleEngine,
+    // AdvancedLogicEngine advancedLogicEngine,
+    // RefinementEngine refinementEngine,
+    // AdvancedTypeEngine advancedTypeEngine,
+    StructuralRefinementEngine structuralRefinementEngine,
+    CodeStyleEngine codeStyleEngine,
         CodeFlowEngine codeFlowEngine,
         // AdvancedRefactoringEngine advancedRefactoringEngine,
         // LogicOptimizationEngine logicOptimizationEngine,
@@ -62,7 +62,7 @@ public class SentinelRefactoringTools
         // _advancedLogicEngine = advancedLogicEngine;
         // _refinementEngine = refinementEngine;
         // _advancedTypeEngine = advancedTypeEngine;
-        // _structuralRefinementEngine = structuralRefinementEngine;
+        _structuralRefinementEngine = structuralRefinementEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeFlowEngine = codeFlowEngine;
         //_advancedRefactoringEngine = advancedRefactoringEngine;
@@ -622,6 +622,27 @@ public class SentinelRefactoringTools
         {
             _logger.LogError(ex, "AddMemberTyped ({Kind}) failed for '{ContainerName}' in '{FilePath}'", kind, containerName, filePath);
             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMemberTyped failed: {ex.GetType().Name}: {ex.Message}") };
+        }
+    }
+
+
+    [McpServerTool(Name = "SyncTypeAndFilename")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("Synchronizes the filename to match the primary type declared in the file.")]
+    public async Task<string> SyncTypeAndFilename(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+
+        try
+        {
+            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
+            return result.ToJsonSummary();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
+            return $"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
         }
     }
 }

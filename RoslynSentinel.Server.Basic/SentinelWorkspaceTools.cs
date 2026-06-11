@@ -27,6 +27,7 @@ public class SentinelWorkspaceTools
     private readonly SolutionManagementEngine _solutionManagementEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly DependencyEngine _dependencyEngine;
+    private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
 
@@ -38,6 +39,7 @@ public class SentinelWorkspaceTools
         SolutionManagementEngine solutionManagementEngine,
         StructuralRefinementEngine structuralRefinementEngine,
         DependencyEngine dependencyEngine,
+        ProjectConsistencyEngine projectConsistencyEngine,
         SentinelConfiguration config,
         ILogger<SentinelWorkspaceTools> logger)
     {
@@ -48,6 +50,7 @@ public class SentinelWorkspaceTools
         _solutionManagementEngine = solutionManagementEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _dependencyEngine = dependencyEngine;
+        _projectConsistencyEngine = projectConsistencyEngine;
         _config = config;
         _logger = logger;
     }
@@ -1245,6 +1248,31 @@ public class SentinelWorkspaceTools
             {
                 Success = false,
                 Error = new ResultError("", $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
+            };
+        }
+    }
+
+    [McpServerTool(Name = "ListProjectFrameworkTargets")]
+    [Produces(DataTag.Report)]
+    [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
+    public async Task<ToolResult<object>> ListProjectFrameworkTargets()
+    {
+        try
+        {
+            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "GetProjectFrameworkSummary failed");
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

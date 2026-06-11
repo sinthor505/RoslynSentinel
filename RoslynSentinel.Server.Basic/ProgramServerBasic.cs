@@ -14,6 +14,11 @@ public partial class ProgramServerBasic
     private static async Task Main(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true,
+        }));
 
         // --- Command Line Argument Parsing ---
         var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
@@ -118,7 +123,27 @@ public partial class ProgramServerBasic
             mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
 
             using var host = builder.Build();
+
             var logger = host.Services.GetRequiredService<ILogger<ProgramServerBasic>>();
+
+#if DEBUG
+            // Startup self-check: force-construct every registered tool class so a
+            // ctor-body throw or missed registration surfaces here, not on first tool call.
+            foreach (var toolType in new[]
+            {
+                typeof(SentinelWorkspaceTools),
+                typeof(DocumentationTools),
+                typeof(SentinelSymbolTools),
+                typeof(SentinelRefactoringTools),
+                typeof(SentinelAugmentTools),
+            })
+            {
+                if (host.Services.GetService(toolType) is null)
+                {
+                    throw new InvalidOperationException($"Tool type not resolvable: {toolType.Name}");
+                }
+            }
+#endif
 
             // --- Pre-Warm MSBuildLocator + Auto-Load Solution ---
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger);

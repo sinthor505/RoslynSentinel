@@ -62,6 +62,11 @@ namespace RoslynSentinel.HttpHost
             // ── Build WebApplication ──────────────────────────────────────────────────────
 
             var builder = WebApplication.CreateBuilder(args);
+            builder.Host.UseDefaultServiceProvider((context, options) =>
+            {
+                options.ValidateOnBuild = true;
+                options.ValidateScopes = true;
+            });
 
             builder.Logging.ClearProviders();
             builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));

@@ -60,9 +60,9 @@ public static partial class SentinelConsoleMode
 
     // ─── Tool discovery via reflection ──────────────────────────────────────
 
-    private sealed record ToolEntry(string Name, string? Description, string Module, MethodInfo Method, Type ToolType);
+    internal sealed record ToolEntry(string Name, string? Description, string Module, MethodInfo Method, Type ToolType);
 
-    private static IReadOnlyList<ToolEntry> DiscoverTools(HashSet<string> activeModes)
+    internal static IReadOnlyList<ToolEntry> DiscoverTools(HashSet<string> activeModes)
     {
         return typeof(SentinelWorkspaceTools).Assembly
             .GetTypes()

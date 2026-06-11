@@ -353,28 +353,4 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool(Name = "ListProjectFrameworkTargets")]
-    [Produces(DataTag.Report)]
-    [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
-    public async Task<ToolResult<object>> ListProjectFrameworkTargets()
-    {
-        try
-        {
-            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetProjectFrameworkSummary failed");
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
 }

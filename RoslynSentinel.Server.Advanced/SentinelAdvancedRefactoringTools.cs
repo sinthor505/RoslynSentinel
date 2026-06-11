@@ -16,15 +16,15 @@ public class SentinelAdvancedRefactoringTools
     private readonly MappingEngine _mappingEngine;
     private readonly SemanticRefactoringLibrary _semanticRefactoringLibrary;
     private readonly GranularRefactoringEngine _granularRefactoringEngine;
-    // private readonly AdvancedLogicEngine _advancedLogicEngine;
+    private readonly AdvancedLogicEngine _advancedLogicEngine;
     private readonly RefinementEngine _refinementEngine;
     private readonly AdvancedTypeEngine _advancedTypeEngine;
     private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
-    //private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
-    // private readonly LogicOptimizationEngine _logicOptimizationEngine;
-    // private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
+    private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private readonly LogicOptimizationEngine _logicOptimizationEngine;
+    private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
     private readonly MsToolAugmentEngine _augmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
@@ -62,15 +62,15 @@ public class SentinelAdvancedRefactoringTools
         _mappingEngine = mappingEngine;
         _semanticRefactoringLibrary = semanticRefactoringLibrary;
         _granularRefactoringEngine = granularRefactoringEngine;
-        // _advancedLogicEngine = advancedLogicEngine;
+        _advancedLogicEngine = advancedLogicEngine;
         _refinementEngine = refinementEngine;
         _advancedTypeEngine = advancedTypeEngine;
         _structuralRefinementEngine = structuralRefinementEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeFlowEngine = codeFlowEngine;
-        //_advancedRefactoringEngine = advancedRefactoringEngine;
-        // _logicOptimizationEngine = logicOptimizationEngine;
-        // _outParamRefactoringEngine = outParamRefactoringEngine;
+        _advancedRefactoringEngine = advancedRefactoringEngine;
+        _logicOptimizationEngine = logicOptimizationEngine;
+        _outParamRefactoringEngine = outParamRefactoringEngine;
         _augmentEngine = augmentEngine;
         _codeGenerationEngine = codeGenerationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
@@ -90,26 +90,6 @@ public class SentinelAdvancedRefactoringTools
         var head = lines.Take(10);
         var tail = lines.TakeLast(10);
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
-    }
-
-    [McpServerTool(Name = "SyncTypeAndFilename")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        try
-        {
-            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-            return result.ToJsonSummary();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
-            return $"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
-        }
     }
 
     [McpServerTool(Name = "ChangeSignature")]
