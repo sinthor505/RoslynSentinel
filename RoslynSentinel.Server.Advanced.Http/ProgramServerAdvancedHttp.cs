@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,12 +16,12 @@ public partial class ProgramServerAdvancedHttp
 {
     private static async Task Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
-        builder.ConfigureContainer(new DefaultServiceProviderFactory(new ServiceProviderOptions
+        var builder = WebApplication.CreateBuilder(args);
+        builder.Host.UseDefaultServiceProvider((context, options) =>
         {
-            ValidateOnBuild = true,
-            ValidateScopes = true,
-        }));
+            options.ValidateOnBuild = true;
+            options.ValidateScopes = true;
+        });
 
         // --- Command Line Argument Parsing ---
         var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode="))?.Replace("--mode=", "") ?? "all";
