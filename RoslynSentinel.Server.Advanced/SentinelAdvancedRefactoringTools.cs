@@ -92,7 +92,7 @@ public class SentinelAdvancedRefactoringTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
     public async Task<string> SyncTypeAndFilename(
@@ -112,7 +112,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ChangeSignature")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reorders method parameters and updates all call sites across the solution. newParameterOrder: zero-based index array specifying the new parameter order. autoStage=true → ChangeId.")]
     public async Task<ToolResult<object>> ChangeSignature(
@@ -141,44 +141,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Renames a symbol (class, method, property, field, local, etc.) across the entire solution. " +
-                 "Pass 'symbolHandle' to identify the symbol to rename. Example: symbolHandle=\"ExampleMethodHandle\". Use locate_symbol first if symbolHandle is unknown." +
-                 "Returns a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.")]
-    public async Task<ToolResult<object>> RenameSymbol(
-        [Consumes(DataTag.SessionId, required: true)] string sessionId,
-        [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        [Consumes(DataTag.SymbolId, required: true)] string symbolId,
-        [Consumes(DataTag.ProjectName, required: true)] string projectName,
-        [ExternalInputRequired(DataTag.SymbolName, required: true)] string newName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        var symbolHandle = new SymbolHandle(sessionId, symbolName, symbolId, projectName);
-
-        try
-        {
-            var result = await _refactoringEngine.RenameSymbolAsync(symbolHandle, newName);
-            if (result.Error != null)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", result.Error) };
-            }
-
-            if (autoStage)
-            {
-                var id = _workspaceManager.StageChanges(result.PendingChanges, $"Rename '{result.OldName}' to '{result.NewName}'");
-                return new ToolResult<object>() { Success = true, Data = new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, StagingId = id, result.FileChanges } };
-            }
-            return new ToolResult<object>() { Success = true, Data = new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, result.FileChanges } };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "RenameSymbol failed for '{SymbolHandle}'", symbolHandle);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RenameSymbol failed for '{symbolHandle}': {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "ConvertAnonymousToNamed")]
     [Produces(DataTag.ResultOnly)]
     [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration.")]
     public async Task<ToolResult<object>> ConvertAnonymousToNamed(
@@ -198,7 +161,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "InlineClass")]
     [Produces(DataTag.Report)]
     [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references (variable declarations, constructor calls, casts, typeof, etc.) to the inlined class name throughout the solution. Returns a filePath → updatedContent dictionary for every affected file.")]
     public async Task<ToolResult<object>> InlineClass(
@@ -220,7 +183,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "MoveAllTypesToFiles")]
     [Produces(DataTag.Report)]
     [Description("""
         Moves all secondary types to their own files. scope=file → requires scopeName (file path), returns ChangeId + first-15-line content previews. scope=project → requires scopeName (project name), returns ChangeId + affected file list. scope=solution → scopeName ignored. autoStage=false → returns raw changes dictionary without staging.
@@ -276,10 +239,10 @@ public class SentinelAdvancedRefactoringTools
     }
 
     private Task<ToolResult<object>> MoveAllTypesToFilesCore(
-        Dictionary<FilePath, string> changes,
-        bool autoStage,
-        string description,
-        bool previewFiles)
+    Dictionary<FilePath, string> changes,
+    bool autoStage,
+    string description,
+    bool previewFiles)
     {
         if (!autoStage)
         {
@@ -318,115 +281,7 @@ public class SentinelAdvancedRefactoringTools
         });
     }
 
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
-    public async Task<string> ReplaceMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string memberName,
-        [Consumes(DataTag.SourceCode, required: true)] string newSource)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
-            return result.ToJsonSummary();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ReplaceMember unexpected exception for '{MemberName}' in '{FilePath}'", memberName, filePath);
-            return $"ReplaceMember for '{memberName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Removes a specific member from a class or interface by name.")]
-    public async Task<string> RemoveMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string memberName)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
-            return result.ToJsonSummary();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "RemoveMember failed for '{MemberName}' in '{FilePath}'", memberName, filePath);
-            return $"RemoveMember failed: {ex.GetType().Name}: {ex.Message}";
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Adds a using directive to a file if not already present.
-
-        Pass just the namespace name (e.g. "System.Linq", "Microsoft.Extensions.DependencyInjection").
-        For static usings, prefix with "static " (e.g. "static System.Math").
-        If the directive already exists, the file is returned unchanged.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<ToolResult<object>> AddUsingDirective(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string namespaceName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.AddUsingDirectiveAsync(filePath, namespaceName);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddUsingDirective failed for '{Namespace}' in '{FilePath}'", namespaceName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddUsingDirective failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Adds a new value to an existing enum. `explicitValue=99` → `Archived = 99`. If the enum is not found, the file is returned unchanged. `autoStage=true` → ChangeId for `staged_change`.
-        """)]
-    public async Task<ToolResult<object>> AddEnumValue(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string enumName,
-        [Consumes(DataTag.SymbolName, required: true)] string valueName,
-        [Consumes(DataTag.DataType, required: false)] int? explicitValue = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddEnumValue failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddEnumValue failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "InvertAssignments")]
     [Produces(DataTag.ResultOnly)]
     [Description("Swaps left and right sides of all assignment statements within a 1-based line range.")]
     public async Task<ToolResult<object>> InvertAssignments(
@@ -447,7 +302,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "PullUpMember")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Pulls a method or property from a derived class into its base class. Removes override, adds virtual (if not already abstract/virtual), and moves the declaration. Returns a two-file change dict (derived + base class). Requires the base class to have accessible source in the solution. autoStage=true → ChangeId.
@@ -482,109 +337,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Changes the accessibility modifier of a type or member.
-
-        targetName is the class/method/property/field name to modify.
-        accessibility must be one of: "public", "private", "internal", "protected",
-        "protected internal", or "private protected".
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<ToolResult<object>> ChangeAccessibility(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [ExternalInputRequired(DataTag.Accessibility, required: true)] string accessibility,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ChangeAccessibility failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Description("""
-        Adds or replaces a /// <summary>...</summary> XML doc comment on a type or member.
-
-        targetName is the class/method/property name to document.
-        summaryText is the text content of the summary (single line).
-        If a summary already exists it will be replaced.
-        Use autoStage=true (default) to get a ChangeId for ApplyStagedChanges.
-        """)]
-    public async Task<ToolResult<object>> AddSummaryComment(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        string summaryText,
-        bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddSummaryComment failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddSummaryComment failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Description("""
-        Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. `fieldName` overrides the derived field name (defaults to `_camelCase` of `paramName`). Creates a constructor if none exists; converts expression-bodied constructors to block bodies. `autoStage=true` → ChangeId for `staged_change`
-        """)]
-    public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.ClassName, required: true)] string className,
-        [Consumes(DataTag.SymbolName, required: true)] string paramName,
-        [Consumes(DataTag.DataType, required: true)] string paramType,
-        [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddConstructorParameter failed for '{ClassName}' in '{FilePath}'", className, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddConstructorParameter failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "IntroduceParameterObject")]
     [Produces(DataTag.ResultOnly)]
     [Description("Encapsulates method parameters into a new C# 12 record type. Groups all non-CancellationToken parameters (or only parameterNames if specified) into public record {NewTypeName}(...). Rewrites parameter references in the method body to request.PropertyName. Appends the record to end of file. Adds a TODO comment to update call sites — call sites must be updated manually.")]
     public async Task<ToolResult<object>> IntroduceParameterObject(
@@ -611,133 +364,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Adds or removes an attribute on a type or member. action: add or remove. attribute/attributeSource/attributeName accept the attribute with or without brackets or Attribute suffix (e.g. \"[ApiController]\", \"Required\", \"Obsolete\"). autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyAttribute(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [ExternalInputRequired(DataTag.AttributeName, required: true)] string attribute,
-        [ExternalInputRequired(DataTag.Action, required: true)] string action,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            if (action == "add")
-            {
-                updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, attribute);
-            }
-            else if (action == "remove")
-            {
-                updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, attribute);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, remove.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{attribute}' on '{targetName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{attribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyAttribute failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. action: add or remove. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyModifier(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string targetName,
-        [ExternalInputRequired(DataTag.Modifier, required: true)] string modifier,
-        [Consumes(DataTag.Action, required: true)] string action,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            if (action == "add")
-            {
-                updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
-            }
-            else if (action == "remove")
-            {
-                updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, remove.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyModifier failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration. action: add or remove. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> ModifyBaseType(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string typeName,
-        string baseTypeName,
-        string action,
-        bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            if (action == "add")
-            {
-                updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
-            }
-            else if (action == "remove")
-            {
-                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, remove.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePath}'", typeName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyBaseType failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "Introduce")]
     [Produces(DataTag.ResultOnly)]
     [Description("Introduces a named symbol from an expression. as values: localVariable, field (private readonly), parameter (single-file), constant (→ MsAugmentResult). contextSnippet: verbatim substring identifying the expression. lineBefore/lineAfter disambiguate.")]
     public async Task<ToolResult<object>> Introduce(
@@ -776,7 +403,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
     public async Task<ToolResult<object>> ExtractMembers(
@@ -869,7 +496,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "SyncInterface")]
     [Produces(DataTag.ResultOnly)]
     [Description("Manages interface/class synchronization. action values: implement (generate stub implementations for all unimplemented interface members on className → returns updated file content), sync (add to interface any public members in className missing from interfaceName → returns updated interface file), verify (report coverage of all implementing classes → requires only interfaceName; use projectName to scope). filePath is the class file for implement/sync.")]
     public async Task<ToolResult<object>> SyncInterface(
@@ -922,7 +549,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "Inline")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inlines a symbol by replacing all usages with its definition. kind: method (inline body at all call sites solution-wide — expression-body or single-return methods only), variable (inline local variable into usages), field (inline field value into usages), parameter (inline a constant parameter into method body — also supply methodName). targetName is the symbol name (parameterName when kind=parameter).")]
     public async Task<ToolResult<object>> Inline(
@@ -975,111 +602,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Adds a new member to a type. position: null/end (append), after:MemberName, or before:MemberName. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> AddMember(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string containerName,
-        [ExternalInputRequired(DataTag.ClassName)] string newMemberSource,
-        [ExternalInputRequired(DataTag.Position)] string? position = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            string description;
-            if (string.IsNullOrEmpty(position) || position == "end")
-            {
-                updated = await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
-                description = $"Added new member to '{containerName}' in {Path.GetFileName(filePath)}.";
-            }
-            else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
-            {
-                var afterMemberName = position.Substring("after:".Length);
-                updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
-                description = $"Inserted new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
-            }
-            else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
-            {
-                var beforeMemberName = position.Substring("before:".Length);
-                updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
-                description = $"Inserted new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
-            var id = _workspaceManager.StageChanges(changes, description);
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddMember failed for '{ContainerName}' in '{FilePath}'", containerName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMember failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.ChangeId)]
-    [Description("Generates a typed member and adds it to a type. kind: property (auto-property) or field. Property defaults: hasSetter=true, accessibility=public. Field defaults: isReadonly=false, isStatic=false, accessibility=private; initializer sets optional field initializer expression. autoStage=true → ChangeId.")]
-    public async Task<ToolResult<object>> AddMemberTyped(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.ClassName, required: true)] string containerName,
-        [ExternalInputRequired(DataTag.SymbolName)] string name,
-        [ExternalInputRequired(DataTag.DataType)] string type,
-        [ExternalInputRequired(DataTag.SymbolKind)] string kind,
-        [ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        [ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
-        [ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
-        [ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
-        [ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
-        [ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
-        [ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-        try
-        {
-            DocumentEditResult updated;
-            string description;
-            if (kind == "property")
-            {
-                updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit);
-                description = $"Added '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
-            }
-            else if (kind == "field")
-            {
-                updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer);
-                description = $"Added '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
-            }
-            else
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: property, field.") };
-            }
-            if (!autoStage)
-            {
-                return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-            }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
-            var id = _workspaceManager.StageChanges(changes, description);
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
-            return new ToolResult<object>() { Success = true, Data = summary };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AddMemberTyped ({Kind}) failed for '{ContainerName}' in '{FilePath}'", kind, containerName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMemberTyped failed: {ex.GetType().Name}: {ex.Message}") };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "WrapRange")]
     [Produces(DataTag.ChangeId)]
     [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly.")]
     public async Task<ToolResult<object>> WrapRange(
@@ -1145,7 +668,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "MoveType")]
     [Produces(DataTag.ChangeId)]
     [Description("Moves a type to a new location. destination: ownFile (move to its own .cs file → ChangeId + content previews; autoStage=false → raw file dict) or outerScope (move nested type to containing namespace scope → updated file content).")]
     public async Task<ToolResult<object>> MoveType(

@@ -6,7 +6,6 @@
   <Project Path="RoslynSentinel.Advanced/RoslynSentinel.Advanced.csproj" Id="e1b2a0ed-07f8-4a58-b2a3-2c2026c89b94" />
   <Project Path="RoslynSentinel.Basic/RoslynSentinel.Basic.csproj" Id="64d64c3a-2d54-46b4-884b-dc53b60d474f" />
   <Project Path="RoslynSentinel.Common/RoslynSentinel.Common.csproj" Id="fbd51816-ef10-4c4c-a0fa-7792a6fe7db7" />
-  <Project Path="RoslynSentinel.Core/RoslynSentinel.Core.csproj" Id="c1003737-a8b1-41e0-a04e-4aa30847b65b" />
   <Project Path="RoslynSentinel.HttpHost/RoslynSentinel.HttpHost.csproj" />
   <Project Path="RoslynSentinel.Server.Advanced.Http/RoslynSentinel.Server.Advanced.Http.csproj" Id="96f1f842-2c4b-4bfd-986c-2229c757124c" />
   <Project Path="RoslynSentinel.Server.Advanced/RoslynSentinel.Server.Advanced.csproj" Id="c76d7d9f-da14-4474-a0ef-fa7e59bb0986" />

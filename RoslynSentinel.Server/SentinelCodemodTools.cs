@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-namespace RoslynSentinel.Server.Advanced;
+namespace RoslynSentinel.Server;
 
 [McpServerToolType]
 public class SentinelCodemodTools

@@ -69,7 +69,7 @@ public class SentinelSymbolTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "LocateSymbol")]
     [Produces(DataTag.SymbolId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
@@ -127,35 +127,61 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.Report)]
-    [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
-    public async Task<ToolResult<string>> MoveFileToNamespaceFolder(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
+    [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate. Use locate_symbol first if the filepath and contextSnippet are unknown.")]
+    public async Task<ToolResult<object>> InspectSymbol(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [ToolOption(ToolOptionTag.Aspect)] string aspect,
+        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var result = await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
-            return new ToolResult<string>
+            if (aspect == "info")
             {
-                Success = true,
-                Data = result.ToJsonSummary()
+                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                if (symbolInfo == null) return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError("", "Symbol info not found.")
+                };
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = symbolInfo
+                };
+            }
+            if (aspect == "blastRadius")
+            {
+                var result = await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = result
+                };
+            }
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError("", $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MoveFileToNamespaceFolder failed for '{FilePath}'", filePath);
-            return new ToolResult<string>
+            _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePath}'", aspect, filePath);
+            return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError("", $"InspectSymbol failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "FindUsages")]
     [Produces(DataTag.Report)]
     [Description("""
         Queries symbol relationships by name. Use locate_symbol instead when you want to find
@@ -254,7 +280,7 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]
     [Description("Returns the best 1-based line number for inserting a new member of memberKind in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
     public async Task<ToolResult<object>> GetBestInsertionPoint(
@@ -284,7 +310,7 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
     [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
@@ -316,7 +342,7 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
     [Description("""
         Finds all call sites or implementations for a symbol.
@@ -376,39 +402,7 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.Report)]
-    [Description("""
-        Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
-        """)]
-    public async Task<ToolResult<object>> TraceVariableLifetime(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName)] string variableName,
-        [Consumes(DataTag.StartLine)] int lineNumber)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        try
-        {
-            var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"TraceVariableLifetime failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
     [Description("Returns type information. include: hierarchy (base class chain, interfaces, derived types → TypeHierarchyReport), members (all public/protected members with full metadata → List<TypeMemberDetail>), both (default → object with Hierarchy and Members). includeInherited=false excludes inherited members (applies to members and both).")]
     public async Task<ToolResult<object>> GetTypeInfo(
@@ -466,31 +460,6 @@ public class SentinelSymbolTools
             {
                 Success = false,
                 Error = new ResultError("", $"GetTypeInfo failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.Report)]
-    [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
-    public async Task<ToolResult<object>> ListProjectFrameworkTargets()
-    {
-        try
-        {
-            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetProjectFrameworkSummary failed");
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

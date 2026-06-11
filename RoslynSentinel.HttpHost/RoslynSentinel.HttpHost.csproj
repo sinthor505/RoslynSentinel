@@ -30,7 +30,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Core\RoslynSentinel.Core.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server\RoslynSentinel.Server.csproj" />
   </ItemGroup>
 

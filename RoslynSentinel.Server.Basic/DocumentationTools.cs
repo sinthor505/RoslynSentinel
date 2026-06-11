@@ -155,7 +155,7 @@ public class DocumentationTools
 
     // ── project_doc ──────────────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
     [Description("""
         Unified documentation accessor for all project doc files stored under docs/.

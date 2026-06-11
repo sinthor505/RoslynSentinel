@@ -4,8 +4,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Advanced;
 
 [McpServerToolType]
@@ -61,7 +59,7 @@ public class SentinelModernizationTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "InvertBooleanLogic")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier across the solution: wraps each usage with ! and removes double negations. Returns a file → content map of changed files.")]
     public async Task<ToolResult<object>> InvertBooleanLogic(

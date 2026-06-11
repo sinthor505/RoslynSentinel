@@ -3,110 +3,117 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Server.Basic;
-
 using Serilog;
 using Serilog.Extensions.Logging;
 
-// ── Argument Parsing ─────────────────────────────────────────────────────────
+namespace RoslynSentinel.Server.Basic;
 
-var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode=", StringComparison.Ordinal))?.Replace("--mode=", "", StringComparison.Ordinal) ?? "all";
-var solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution=", StringComparison.Ordinal))?.Replace("--solution=", "", StringComparison.Ordinal);
-var portArg = args.FirstOrDefault(a => a.StartsWith("--port=", StringComparison.Ordinal))?.Replace("--port=", "", StringComparison.Ordinal);
-var port = int.TryParse(portArg, out var parsedPort) ? parsedPort : 5100;
-
-// Toolset aliases (mirrors RoslynSentinel.Server)
-var resolvedModeArg = modeArg.Equals("Toolset1", StringComparison.OrdinalIgnoreCase)
-    ? "Workspace,Quality,Intelligence,Refactor"
-    : modeArg;
-
-var activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
-    ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
-    : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-// ── Fast-exit: --list-tools ───────────────────────────────────────────────────
-
-if (args.Contains("--list-tools"))
+public partial class ProgramServerBasicHttp
 {
-    var outputPath = args.FirstOrDefault(a => a.StartsWith("--output=", StringComparison.Ordinal))
-                        ?.Replace("--output=", "");
-    SentinelConsoleMode.ListTools(activeModes, outputPath);
-    return;
-}
+    private static async Task Main(string[] args)
+    {
 
-// ── Logging ───────────────────────────────────────────────────────────────────
+        // ── Argument Parsing ─────────────────────────────────────────────────────────
 
-var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "http-host.log");
-Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Verbose()
-    .Enrich.FromLogContext()
-    .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
-    .CreateLogger();
+        var modeArg = args.FirstOrDefault(a => a.StartsWith("--mode=", StringComparison.Ordinal))?.Replace("--mode=", "", StringComparison.Ordinal) ?? "all";
+        var solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution=", StringComparison.Ordinal))?.Replace("--solution=", "", StringComparison.Ordinal);
+        var portArg = args.FirstOrDefault(a => a.StartsWith("--port=", StringComparison.Ordinal))?.Replace("--port=", "", StringComparison.Ordinal);
+        var port = int.TryParse(portArg, out var parsedPort) ? parsedPort : 5100;
 
-AppDomain.CurrentDomain.UnhandledException += (_, e) =>
-{
-    var ex = e.ExceptionObject as Exception;
-    Log.Fatal(ex, "UNHANDLED EXCEPTION (IsTerminating={IsTerminating}): {Message}",
-        e.IsTerminating, ex?.Message ?? e.ExceptionObject?.ToString());
-    Log.CloseAndFlush();
-};
+        // Toolset aliases (mirrors RoslynSentinel.Server)
+        var resolvedModeArg = modeArg.Equals("Toolset1", StringComparison.OrdinalIgnoreCase)
+            ? "Workspace,Quality,Intelligence,Refactor"
+            : modeArg;
 
-TaskScheduler.UnobservedTaskException += (_, e) =>
-{
-    Log.Warning(e.Exception, "Unobserved task exception (suppressed): {Message}", e.Exception.Message);
-    e.SetObserved();
-};
+        var activeModes = resolvedModeArg.Equals("all", StringComparison.OrdinalIgnoreCase)
+            ? new HashSet<string> { "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation" }
+            : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-// ── Build WebApplication ──────────────────────────────────────────────────────
+        // ── Fast-exit: --list-tools ───────────────────────────────────────────────────
 
-var builder = WebApplication.CreateBuilder(args);
+        if (args.Contains("--list-tools"))
+        {
+            var outputPath = args.FirstOrDefault(a => a.StartsWith("--output=", StringComparison.Ordinal))
+                                ?.Replace("--output=", "");
+            SentinelConsoleMode.ListTools(activeModes, outputPath);
+            return;
+        }
 
-builder.Logging.ClearProviders();
-builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
-builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
+        // ── Logging ───────────────────────────────────────────────────────────────────
 
-builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
+        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "http-host.log");
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Verbose()
+            .Enrich.FromLogContext()
+            .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
+            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
 
-// Register all Roslyn engine singletons
-builder.Services.AddRoslynSentinelEnginesBasic();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            var ex = e.ExceptionObject as Exception;
+            Log.Fatal(ex, "UNHANDLED EXCEPTION (IsTerminating={IsTerminating}): {Message}",
+                e.IsTerminating, ex?.Message ?? e.ExceptionObject?.ToString());
+            Log.CloseAndFlush();
+        };
 
-// Register MCP with HTTP transport (Streamable HTTP)
-var mcpBuilder = builder.Services.AddMcpServer()
-    .WithHttpTransport();
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            Log.Warning(e.Exception, "Unobserved task exception (suppressed): {Message}", e.Exception.Message);
+            e.SetObserved();
+        };
 
-// Register tool classes (mode-conditional) and the error filter
-mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
+        // ── Build WebApplication ──────────────────────────────────────────────────────
 
-// ── Run ───────────────────────────────────────────────────────────────────────
+        var builder = WebApplication.CreateBuilder(args);
 
-var app = builder.Build();
+        builder.Logging.ClearProviders();
+        builder.Services.AddSingleton<ILoggerFactory>(new SerilogLoggerFactory(Log.Logger));
+        builder.Services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-app.MapMcp("/mcp");
+        builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
 
-var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel.HttpHost");
+        // Register all Roslyn engine singletons
+        builder.Services.AddRoslynSentinelEnginesBasic();
 
-// Pre-warm MSBuildLocator (~5-8 s) and optionally auto-load solution
-app.Services.WarmupAndAutoLoadBasic(solutionPath, logger);
+        // Register MCP with HTTP transport (Streamable HTTP)
+        var mcpBuilder = builder.Services.AddMcpServer()
+            .WithHttpTransport();
 
-// Startup tool dump (internal diagnostic — not an MCP tool)
-// SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-// SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        // Register tool classes (mode-conditional) and the error filter
+        mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
 
-if (logger.IsEnabled(LogLevel.Information))
-    logger.LogInformation(
-        "RoslynSentinel HTTP Host starting. Port={Port} | Modes={Modes} | Log={Log}",
-        port, string.Join(", ", activeModes), logPath);
+        // ── Run ───────────────────────────────────────────────────────────────────────
 
-Console.WriteLine($"[RoslynSentinel.HttpHost] Listening on http://0.0.0.0:{port}/mcp | PID={Environment.ProcessId}");
-Console.WriteLine($"[RoslynSentinel.HttpHost] Legacy SSE endpoint: http://0.0.0.0:{port}/sse");
-Console.WriteLine($"[RoslynSentinel.HttpHost] Log: {logPath}");
+        var app = builder.Build();
 
-try
-{
-    await app.RunAsync().ConfigureAwait(false);
-}
-finally
-{
-    Log.CloseAndFlush();
+        app.MapMcp("/mcp");
+
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel.HttpHost");
+
+        // Pre-warm MSBuildLocator (~5-8 s) and optionally auto-load solution
+        app.Services.WarmupAndAutoLoadBasic(solutionPath, logger);
+
+        // Startup tool dump (internal diagnostic — not an MCP tool)
+        // SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        // SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+
+        if (logger.IsEnabled(LogLevel.Information))
+            logger.LogInformation(
+                "RoslynSentinel HTTP Host starting. Port={Port} | Modes={Modes} | Log={Log}",
+                port, string.Join(", ", activeModes), logPath);
+
+        Console.WriteLine($"[RoslynSentinel.HttpHost] Listening on http://0.0.0.0:{port}/mcp | PID={Environment.ProcessId}");
+        Console.WriteLine($"[RoslynSentinel.HttpHost] Legacy SSE endpoint: http://0.0.0.0:{port}/sse");
+        Console.WriteLine($"[RoslynSentinel.HttpHost] Log: {logPath}");
+
+        try
+        {
+            await app.RunAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+        }
+    }
 }

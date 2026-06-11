@@ -122,8 +122,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         }
         if (activeModes.Contains("Quality"))
         {
-            services.AddSingleton<SentinelAsyncifyTools>();
-            mcpBuilder.WithTools<SentinelAsyncifyTools>();
+            services.AddSingleton<SentinelQualityTools>();
+            mcpBuilder.WithTools<SentinelQualityTools>();
         }
         if (activeModes.Contains("Generation"))
         {

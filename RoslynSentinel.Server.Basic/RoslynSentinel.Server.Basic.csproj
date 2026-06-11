@@ -10,7 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Core\RoslynSentinel.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

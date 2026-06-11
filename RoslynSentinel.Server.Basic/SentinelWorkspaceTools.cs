@@ -8,8 +8,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Basic;
 
 /// <summary>Structural outline entry returned by get_file_outline.</summary>
@@ -53,7 +51,7 @@ public class SentinelWorkspaceTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
     [Description("""
         Queries or updates analysis/refactoring feature flags. action values: list (all features and current status; names/enabled ignored), get (enabled status of specific features by names), update (batch-update via enabled as [{ Key: featureName, Value: bool }] pairs).
@@ -86,7 +84,7 @@ public class SentinelWorkspaceTools
         return $"Updated {updates.Count} features.";
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
@@ -142,7 +140,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ListWorkspaceSolutions")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
     [Description("""
@@ -181,7 +179,7 @@ public class SentinelWorkspaceTools
 
     public sealed record SolutionFileInfo(string Path, string Format);
 
-    [McpServerTool]
+    [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\".")]
     public async Task<ToolResult<object>> LoadSolution([Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath)
@@ -206,7 +204,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "Diagnose")]
     [Produces(DataTag.ResultOnly)]
     [Description("Checks Roslyn MCP server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Prefer get_workspace_health — this tool has a known false-negative bug where healthy workspaces are reported as unhealthy.")]
     public async Task<HealthReport> Diagnose([Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false)
@@ -265,17 +263,17 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ListExternalDiskChanges")]
     [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
     public List<string> ListExternalDiskChanges() => _workspaceManager.GetExternalDrift();
 
-    [McpServerTool]
+    [McpServerTool(Name = "ClearExternalDrift")]
     [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift() => _workspaceManager.ClearDrift();
 
-    [McpServerTool]
+    [McpServerTool(Name = "ProposedChange")]
     [Produces(DataTag.ChangeId)]
     [Description("""
         Applies or validates a proposed change set. changesetFormat=files → supply changes dict (filePath → newContent). changesetFormat=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
@@ -399,7 +397,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries committing previously failed file changes using server-side cached content — no need to re-send file contents. specificFiles limits the retry to a subset of files. retryCount defaults to 3.")]
     public async Task<ToolResult<object>> RetryFailedChanges(
@@ -417,7 +415,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "StagedChange")]
     [Produces(DataTag.ChangeId)]
     [Description("""
         Manages a staged change set produced by a refactoring tool.
@@ -538,7 +536,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
     [Description("""
         Gets compiler diagnostics for a file, project, or the entire solution.
@@ -632,7 +630,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
@@ -654,7 +652,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
     [Description("Creates a new project and adds it to the current solution. projectType defaults to console.")]
     public async Task<ToolResult<object>> CreateProject(
@@ -673,7 +671,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "SplitProjectByFolder")]
     [Produces(DataTag.ResultOnly)]
     [Description("Moves all files under a specific folder from a source project to a new target project, preserving folder structure.")]
     public async Task<ToolResult<object>> SplitProjectByFolder(
@@ -695,7 +693,7 @@ public class SentinelWorkspaceTools
 
     // ── Phase 1 — Low-level fallback tools ──────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(
@@ -793,7 +791,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(
@@ -891,7 +889,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
     [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
@@ -988,7 +986,7 @@ public class SentinelWorkspaceTools
 
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, rolledback, file:<path>, or null for all items. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<ToolResult<object>> GetOperationDetail(
@@ -1069,7 +1067,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply([Consumes(DataTag.OperationId, required: true)] string changeId)
@@ -1134,7 +1132,7 @@ public class SentinelWorkspaceTools
 
     // ── Phase 3 — Circuit breaker tools ────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "ResetBreaker")]
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
     public ToolResult<object> ResetBreaker()
@@ -1143,7 +1141,7 @@ public class SentinelWorkspaceTools
         return new ToolResult<object>() { Success = true, Data = "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled." };
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetBreakerStatus")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
     public ToolResult<object> GetBreakerStatus()

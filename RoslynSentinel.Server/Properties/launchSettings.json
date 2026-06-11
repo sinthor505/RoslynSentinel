@@ -2,6 +2,10 @@
   "profiles": {
     "RoslynSentinel.Server": {
       "commandName": "Project"
+    },
+    "ListTools": {
+      "commandName": "Project",
+      "commandLineArgs": "--list-tools"
     }
   }
 }

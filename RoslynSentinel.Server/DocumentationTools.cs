@@ -5,8 +5,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server;
 
 // ─── Result types ────────────────────────────────────────────────────────────
@@ -157,7 +155,7 @@ public class DocumentationTools
 
     // ── project_doc ──────────────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
     [Description("""
         Unified documentation accessor for all project doc files stored under docs/.

@@ -69,7 +69,7 @@ public class SentinelIntelligenceTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetComprehensiveHealthReport")]
     [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines: Structure, Modernization, Performance, Safety, Architecture. Null engines → all engines. projectName/filePath narrow scope. offset/limit page project results. timeoutSeconds defaults to 25.")]
     public async Task<ToolResult<object>> GetComprehensiveHealthReport(
@@ -102,7 +102,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetSolutionMetrics")]
     [Produces(DataTag.Report)]
     [Description("Returns deep metrics for the entire solution or a single project. projectName=null → solution-wide.")]
     public async Task<ToolResult<object>> GetSolutionMetrics(
@@ -128,7 +128,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetCodeInventory")]
     [Produces(DataTag.Report)]
     [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
     public async Task<ToolResult<object>> GetCodeInventory(
@@ -187,65 +187,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.SymbolId)]
-    [Produces(DataTag.SessionId)]
-    [Produces(DataTag.ProjectName)]
-    [Description("""
-        Locates all declaration sites for a symbol by name.
-        Returns a SymbolHandle that can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
-        SymbolHandle-gated tools, eliminating the need for search_solution_text as a bootstrap step.
-
-        symbolName: simple or fully-qualified name (e.g. "ExampleMethod" or "Acme.Data.Repo.ExampleMethod" or "ExampleSymbol").
-        symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
-        projectName: optional — restricts search to a single project.
-        filepath: optional - restricts search to a single file. Must be an absolute path or relative to the solution root.
-        exactMatch: true (default) for exact name match; false for prefix/contains search (discovery mode).
-
-        When multiple results are returned (overloads, partial classes), inspect Signature and
-        ContainingType to identify the target, then pass the chosen SymbolHandle to the next tool call.
-        """)]
-    public async Task<ToolResult<object>> LocateSymbol(
-        [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
-        [ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
-        [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true)
-    {
-        FilePath filePath = _workspaceManager.SetFilePath(filepath);
-        try
-        {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, exactMatch);
-            if (result.Count == 0)
-            {
-                return new ToolResult<object>
-                {
-                    Success = false,
-                    Error = new ResultError("", $"Symbol '{symbolName}' not found in the solution" +
-                        (projectName != null ? $" (project: {projectName})" : "") +
-                        ". Try exactMatch=false for a broader search, or verify the symbol name and kind.")
-                };
-            }
-
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result,
-                TotalRecords = result.Count
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "GetDiRegistrations")]
     [Produces(DataTag.Report)]
     [Description("Scans for all DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or in a scoped project/file. Returns service type, implementation type, lifetime, and source location. lifetimeFilter: Singleton, Scoped, or Transient.")]
     public async Task<ToolResult<object>> GetDiRegistrations(
@@ -274,7 +216,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
     [Description("Builds a call graph for a method. direction: forward (what the method calls → CallGraphNode tree), reverse (who calls this method → ReverseCallGraphNode tree), tree (markdown call-tree string). maxDepth defaults to 3.")]
     public async Task<ToolResult<object>> GetCallGraph(
@@ -351,7 +293,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "MoveFileToNamespaceFolder")]
     [Produces(DataTag.Report)]
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
     public async Task<ToolResult<string>> MoveFileToNamespaceFolder(
@@ -379,69 +321,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
-    [Produces(DataTag.StartLine)]
-    [Description("Returns the best 1-based line number for inserting a new member of memberKind in a type, following standard C# ordering (fields → constructors → destructors → properties → events → methods → nested types).")]
-    public async Task<ToolResult<object>> GetBestInsertionPoint(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.ContainerName)] string containerName,
-        [ExternalInputRequired(DataTag.MemberKind)] string memberKind)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        try
-        {
-            var result = await _discoveryEngine.FindBestInsertionPointAsync(filePath, containerName, memberKind);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePath}'", containerName, filePath);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"GetBestInsertionPoint failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
-
-    [McpServerTool]
-    [Produces(DataTag.Report)]
-    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
-    public async Task<ToolResult<object>> PreviewRenameImpact(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName)] string symbolName,
-        [Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
-    {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
-
-        try
-        {
-            var result = await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePath}'", symbolName, filePath);
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"PreviewRenameImpact failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
-
-    [McpServerTool]
+    [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
     [Description("""
         Traces a variable's complete lifetime from declaration through every read, write, ref/out pass, return, and closure capture, across all code paths (loops, conditionals, try/catch) in the enclosing scope. lineNumber: 1-based line of the declaration (disambiguates same-name variables). Returns: TypeName, DeclarationLine, ScopeDescription, IsDefinitelyAssigned, IsAlwaysAssigned, IsCapturedInClosure, and Accesses list with Line, Column, AccessKind (Declaration/Read/Write/Ref/Out/Return/Capture), ContextStack (method > if > for ancestry), IsInLoop, IsInConditional.
@@ -473,7 +353,7 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets()

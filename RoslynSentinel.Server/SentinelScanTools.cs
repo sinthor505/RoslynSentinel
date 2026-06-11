@@ -95,7 +95,7 @@ public class SentinelScanTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "RunScanDetector")]
     [Produces(DataTag.ScanId)]
     [Description("""
     Dispatches a named detector across a file, project, or solution.
@@ -451,7 +451,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "DescribeScanDetectors")]
     [Produces(DataTag.Report)]
     [Description("""
         Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
@@ -488,7 +488,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "AnalyzeMethod")]
     [Produces(DataTag.Report)]
     [Description("""
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
@@ -547,7 +547,7 @@ public class SentinelScanTools
 
     // ── get_scan_result ────────────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetScanResult")]
     [Produces(DataTag.Report)]
     [Description("""
         Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.

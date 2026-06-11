@@ -6,8 +6,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server;
 
 /// <summary>
@@ -131,7 +129,7 @@ public class SentinelQualityTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetTestCoverageMap")]
     [Produces(DataTag.Report)]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<ToolResult<object>> GetTestCoverageMap(
@@ -159,7 +157,7 @@ public class SentinelQualityTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ScanMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
     [Description("""
         Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate. Syntax-level — no compilation needed. pattern: call describe_advanced_tool_options("scan_migration_candidates") for valid values. summarize=true → guaranteed ≤2KB dashboard (byClass capped at 10, TopCandidates capped at 5 regardless of topN; ByClassTruncated=true when truncated). summarize=false + limit/offset → full paged candidate records. minScore filters in both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice. When results exceed the inline threshold, LargeResultInfo is populated instead of Data — call get_scan_result(scanId) to read in pages.
@@ -424,7 +422,7 @@ public class SentinelQualityTools
         };
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetMethodComplexity")]
     [Produces(DataTag.Report)]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<ToolResult<object>> GetMethodComplexity(
@@ -455,7 +453,7 @@ public class SentinelQualityTools
 
     // ── Phase 8: get_async_migration_progress ─────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetAsyncMigrationProgress")]
     [Produces(DataTag.AsyncMigrationProgressReport)]
     [Description("""
         Returns async migration progress statistics for the solution or a single project. Reports: total async Task/ValueTask methods, how many have a CancellationToken parameter (and how many still need one), percentage coverage, Asyncify-bridge wrapper count ([Obsolete("Asyncify-bridge:...")]), bridge call sites pending migration (CS0618), and async void event handlers (informational — their signatures cannot be extended). projectName=null → entire solution.
@@ -1600,7 +1598,7 @@ public class SentinelQualityTools
 
     // ── Phase 7 — async_migrate dispatcher ────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "AsyncMigrate")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
         Unified dispatcher for six async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
@@ -1725,7 +1723,7 @@ public class SentinelQualityTools
 
     // ── describe_advanced_tool_options ─────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "DescribeAdvancedToolOptions")]
     [Produces(DataTag.Report)]
     [Description("""
         Returns reference documentation for a named tool's valid input values — operation names, transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set — this does not mean the tool is invalid, only that its schema is self-describing.

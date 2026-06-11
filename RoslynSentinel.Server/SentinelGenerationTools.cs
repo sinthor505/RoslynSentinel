@@ -4,8 +4,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server;
 
 [McpServerToolType]
@@ -34,7 +32,7 @@ public class SentinelGenerationTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GenerateClassesFromJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
     public object GenerateClassesFromJson(
@@ -53,7 +51,7 @@ public class SentinelGenerationTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GenerateHttpClient")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
@@ -81,7 +79,7 @@ public class SentinelGenerationTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GenerateDefaultConfigJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
@@ -106,7 +104,7 @@ public class SentinelGenerationTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "InterpolateStringSafe")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Converts a string.Format(...) call to an interpolated string ($"...").        

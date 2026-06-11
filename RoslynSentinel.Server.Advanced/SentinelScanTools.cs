@@ -99,7 +99,7 @@ public class SentinelScanTools
         _logger = logger;
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "RunScanDetector")]
     [Produces(DataTag.ScanId)]
     [Description("""
     Dispatches a named detector across a file, project, or solution.
@@ -455,7 +455,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "DescribeScanDetectors")]
     [Produces(DataTag.Report)]
     [Description("""
         Returns the catalogue of available scan detectors. domain filters by domain: async | concurrency | config | convention | correctness | dead-code | misc | performance | security | structure. detector returns info for a single detector by exact id. Both omitted → all 94 detectors. Each entry includes: Id, Domain, ScopeHint (file | project | solution | any combinations), Description.
@@ -492,7 +492,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "AnalyzeMethod")]
     [Produces(DataTag.Report)]
     [Description("""
         Analyses a method from multiple angles. aspect values: controlFlow (return paths, throw sites, infinite loop detection → ControlFlowSummary), dataFlow (unassigned reads, written/read variables, closure captures → DataFlowSummary), pathCoverage (execution paths for test coverage → PathCoverageReport), unreachableCode (statements after unconditional return/throw → List<string>).
@@ -551,7 +551,7 @@ public class SentinelScanTools
 
     // ── get_scan_result ────────────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetScanResult")]
     [Produces(DataTag.Report)]
     [Description("""
         Pages through a large scan result written to disk when output result payload exceeded the inline size threshold. Supply either scanId (resolves to .roslynsentinel/scans/scan_*_{scanId}.json) or filePath (must match the scan_*.json pattern). Returns ToolResult<object> with TotalRecords and HasMore.
@@ -868,7 +868,7 @@ public class SentinelScanTools
         primitive_obsession, structural_smells, type_cohesion
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ScanBreakingChanges")]
     [Produces(DataTag.ApiBaseline)]
     [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. Workflow: (1) call get_public_api_surface with persistBaseline=true to capture baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName/filePath matching step 1.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
@@ -898,7 +898,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "ScanDuplicateBlocksInClass")]
     [Produces(DataTag.Report)]
     [Description("""
         Finds duplicate statement sequences within the methods of a single class using structural hashing (SyntaxKind-based — matches regardless of variable names or literal values). Returns clone groups with: StatementCount, HasControlFlowExit (flag only, does not block finding), SnippetPreview, CapturedVariables (would become parameters if extracted), ProducedVariables (would need to be returned if extracted), and Occurrences (method, start line, end line, file). minStatements=3 for aggressive detection, 6+ for substantial clones only.
@@ -930,7 +930,7 @@ public class SentinelScanTools
         }
     }
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetPublicApiSurface")]
     [Produces(DataTag.Report)]
     [Description("Returns the public API surface of a project. persistBaseline=false (default) → full List<ApiSurfaceEntry> with signatures, virtuality, and XML docs (for SDK documentation/API review). persistBaseline=true → compact List<PublicApiMember> baseline for passing to scan_breaking_changes. filePath scopes to a single file (persistBaseline=true only). includeMethods/includeProperties/includeTypes filter output (persistBaseline=false only). Returns a scanId and writes scan results to disk when output result payload exceeds the inline size threshold. Use get_scan_result(scanId) to retrieve the results.")]
     public async Task<ToolResult<object>> GetPublicApiSurface(

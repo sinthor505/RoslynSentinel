@@ -4,8 +4,6 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Server.Basic;
 
 /// <summary>
@@ -31,7 +29,7 @@ public class SentinelAugmentTools
 
     // ── 1. EncapsulateFieldSafe ───────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "EncapsulateFieldSafe")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Encapsulates a public field into a private backing field + public property. overridePropertyName provides a custom property name when the default PascalCase would conflict. Returns UpdatedContent.
@@ -71,7 +69,7 @@ public class SentinelAugmentTools
 
     // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
     [Produces(DataTag.Analysis)]
     [Description("""
         Pre-flight safety check before converting a switch statement to a switch expression. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion") for full output field reference.
@@ -111,7 +109,7 @@ public class SentinelAugmentTools
 
     // ── 3. ConvertSwitchToPatternSafe ─────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "ConvertSwitchToPatternSafe")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Converts a switch statement to a switch expression, rejecting unsafe cases instead of silently producing broken code. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate multiple matches. Run analyze_switch_for_pattern_conversion first if unsure. Returns MsAugmentResult with UpdatedContent on success or Error on rejection. Call describe_advanced_tool_options("convert_switch_to_pattern_safe") for supported switch forms and rejection rules.
@@ -153,7 +151,7 @@ public class SentinelAugmentTools
 
     // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Pre-flight safety check before convert_foreach_linq. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for full output field reference and safety rules.
@@ -192,7 +190,7 @@ public class SentinelAugmentTools
 
     // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
 
-    [McpServerTool]
+    [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         Targeted workspace health check. Returns: IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false is normal — no solution loaded yet, not an error.
@@ -227,7 +225,7 @@ public class SentinelAugmentTools
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
 
 
-    [McpServerTool]
+    [McpServerTool(Name = "ExtractMethodSafe")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
         extract_method_safe—extracts selected statements into a new method with the CORRECT return type. newMethodName must be a valid C# identifier. contextSnippet: short unique code snippet identifying the selection. lineBefore/lineAfter disambiguate. Returns MsAugmentResult with extracted method code or error on rejection.
