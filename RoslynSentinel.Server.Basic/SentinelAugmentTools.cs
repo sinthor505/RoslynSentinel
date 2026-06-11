@@ -188,39 +188,7 @@ public class SentinelAugmentTools
         }
     }
 
-    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
 
-    [McpServerTool(Name = "GetWorkspaceHealth")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Targeted workspace health check. Returns: IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false is normal — no solution loaded yet, not an error.
-        """)]
-    // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
-    public async Task<ToolResult<object>> GetWorkspaceHealth()
-    {
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("GetWorkspaceHealth called");
-        }
-        try
-        {
-            var result = await _engine.GetWorkspaceHealthAsync();
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "GetWorkspaceHealth failed");
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError("", $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
-            };
-        }
-    }
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
 

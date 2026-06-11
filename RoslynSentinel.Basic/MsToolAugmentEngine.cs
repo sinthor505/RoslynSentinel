@@ -6,8 +6,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
@@ -823,70 +821,7 @@ public class MsToolAugmentEngine
             Recommendation: "Use standard convert_foreach_linq tool — collection has no modifications before the foreach.");
     }
 
-    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
-    // MS Bug: roslyn-diagnose reports healthy: false even when 86/86 projects load
-    // successfully, because the health check tests MSBuild path existence rather
-    // than actual workspace state. A fully operational workspace with a loaded
-    // solution is falsely reported as unhealthy.
-    // Fix: targeted health check that reads actual workspace state.
 
-    /// <summary>
-    /// Returns a targeted workspace health report based on actual solution state.
-    /// Fixes the false-negative in the standard <c>diagnose</c> tool, which reports
-    /// <c>healthy: false</c> even when all projects load successfully.
-    /// </summary>
-    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken ct = default)
-    {
-        // Use CurrentSolution (sync, no throw) rather than GetBranchedSolutionAsync
-        // to distinguish "no solution loaded" from "workspace error"
-        Solution? currentSolution;
-        try { currentSolution = _workspaceManager.CurrentSolution; }
-        catch (Exception ex)
-        {
-            // Workspace itself threw — genuinely non-operational
-            return Task.FromResult(new WorkspaceHealthReport(
-                IsOperational: false,
-                HasLoadedSolution: false,
-                LoadedSolutionPath: null,
-                ProjectCount: 0,
-                DocumentCount: 0,
-                LoadErrors: [$"Workspace exception: {ex.Message}"],
-                Summary: $"Workspace is NOT operational: {ex.Message}"));
-        }
-
-        var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
-
-        if (currentSolution == null)
-        {
-            // No solution is loaded — but the workspace itself is operational
-            return Task.FromResult(new WorkspaceHealthReport(
-                IsOperational: true,
-                HasLoadedSolution: false,
-                LoadedSolutionPath: null,
-                ProjectCount: 0,
-                DocumentCount: 0,
-                LoadErrors: loadErrors,
-                Summary: "Workspace is operational. No solution is currently loaded. " +
-                         "Call load_solution to load a .sln or .csproj file."));
-        }
-
-        var projectCount = currentSolution.ProjectIds.Count;
-        var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
-        var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
-
-        return Task.FromResult(new WorkspaceHealthReport(
-            IsOperational: true,
-            HasLoadedSolution: true,
-            LoadedSolutionPath: solutionPath,
-            ProjectCount: projectCount,
-            DocumentCount: documentCount,
-            LoadErrors: loadErrors,
-            Summary: $"Workspace operational. {projectCount} project(s) loaded, " +
-                     $"{documentCount} document(s). " +
-                     (loadErrors.Count > 0
-                         ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)."
-                         : "No load errors.")));
-    }
 
     // ── 9. PreviewAddMissingUsings ────────────────────────────────────────────
     // MS Bug: roslyn-add_missing_usings with preview:true silently APPLIES changes
