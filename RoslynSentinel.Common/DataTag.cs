@@ -6,6 +6,8 @@ public enum DataTag
     SolutionFilepath,
     ProjectName,
     SymbolHandle,
+    ContainingType,
+    ContainingNamespace,
     SymbolName,
     SymbolKind,
     Signature,

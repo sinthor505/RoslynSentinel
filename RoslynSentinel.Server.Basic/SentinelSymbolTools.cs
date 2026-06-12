@@ -78,11 +78,15 @@ public class SentinelSymbolTools
         Returns a SymbolHandle that can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
         SymbolHandle-gated tools, eliminating the need for search_solution_text as a bootstrap step.
 
-        symbolName: simple or fully-qualified name (e.g. "ExampleMethod" or "Acme.Data.Repo.ExampleMethod" or "ExampleSymbol").
+        symbolName: simple, partial, FQN, or fully-qualified name (e.g. "MySymbol" or "MyType.MySymbol" or "MyNamespace.MyType.MySymbol").
         symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
+        containingType: optional filter for member symbols within a type (e.g. "MyType").
+        containingNamespace: optional filter for symbols within a specific namespace (e.g. "MyNamespace").
         projectName: optional — restricts search to a single project.
         filepath: optional - restricts search to a single file. Must be an absolute path or relative to the solution root.
         exactMatch: true (default) for exact name match; false for prefix/contains search (discovery mode).
+
+        Filtering by Type or Namespace is recommended to disambiguate common symbol names.
 
         When multiple results are returned (overloads, partial classes), inspect Signature and
         ContainingType to identify the target, then pass the chosen SymbolHandle to the next tool call.
@@ -90,6 +94,8 @@ public class SentinelSymbolTools
     public async Task<ToolResult<object>> LocateSymbol(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
+        [Consumes(DataTag.ContainingType)] string? containingType = null,
+        [Consumes(DataTag.ContainingNamespace)] string? containingNamespace = null,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true)
@@ -97,7 +103,7 @@ public class SentinelSymbolTools
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, exactMatch);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, containingType, containingNamespace, projectName, exactMatch);
             if (result.Count == 0)
             {
                 return new ToolResult<object>
@@ -105,7 +111,7 @@ public class SentinelSymbolTools
                     Success = false,
                     Error = new ResultError("", $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
-                        ". Try exactMatch=false for a broader search, or verify the symbol name and kind.")
+                        ". Try exactMatch=false for a broader search, or verify the symbol name and searchKind.")
                 };
             }
 
@@ -128,8 +134,8 @@ public class SentinelSymbolTools
     }
 
     [McpServerTool(Name = "InspectSymbol")]
-    [Produces(DataTag.Report)]
-    [Description("Inspects a symbol in depth. aspect: info (type, kind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate. Use locate_symbol first if the filepath and contextSnippet are unknown.")]
+    [Produces(DataTag.SymbolId)]
+    [Description("Inspects a symbol in depth. aspect: info (type, searchKind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate. Use locate_symbol first if the filepath and contextSnippet are unknown.")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
@@ -187,7 +193,7 @@ public class SentinelSymbolTools
         Queries symbol relationships by name. Use locate_symbol instead when you want to find
         where a symbol is declared and get its file path.
 
-        kind values and what they return:
+        searchKind values and what they return:
           implementorsOf     — all classes/structs implementing a named interface or deriving from a class
           attributeUsages    — all sites where a named attribute is applied
           objectCreations    — all instantiation sites for a named type (new T(...))
@@ -200,7 +206,7 @@ public class SentinelSymbolTools
         """)]
     public async Task<ToolResult<object>> FindUsages(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
-        [ExternalInputRequired(DataTag.SymbolKind)] string kind,
+        [ExternalInputRequired(DataTag.SymbolKind)] string searchKind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false)
@@ -209,7 +215,7 @@ public class SentinelSymbolTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            if (kind == "implementorsOf")
+            if (searchKind == "implementorsOf")
             {
                 var result = await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName);
                 return new ToolResult<object>
@@ -218,7 +224,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "attributeUsages")
+            if (searchKind == "attributeUsages")
             {
                 var result = await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath);
                 return new ToolResult<object>
@@ -227,7 +233,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "objectCreations")
+            if (searchKind == "objectCreations")
             {
                 var result = await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency);
                 return new ToolResult<object>
@@ -236,7 +242,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "extensionsFor")
+            if (searchKind == "extensionsFor")
             {
                 var result = await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName);
                 return new ToolResult<object>
@@ -245,7 +251,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "typesWithAttribute")
+            if (searchKind == "typesWithAttribute")
             {
                 var result = await _semanticSearchEngine.FindTypesByAttributeAsync(name);
                 return new ToolResult<object>
@@ -254,7 +260,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "methodsByReturnType")
+            if (searchKind == "methodsByReturnType")
             {
                 var result = await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name);
                 return new ToolResult<object>
@@ -266,12 +272,12 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
+                Error = new ResultError("", $"Unknown searchKind '{searchKind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "FindUsages ({Kind}) failed for '{Name}'", kind, name);
+            _logger.LogError(ex, "FindUsages ({Kind}) failed for '{Name}'", searchKind, name);
             return new ToolResult<object>
             {
                 Success = false,
@@ -388,7 +394,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: callers, implementations.")
+                Error = new ResultError("", $"Unknown searchKind '{kind}'. Valid values: callers, implementations.")
             };
         }
         catch (Exception ex)

@@ -6,8 +6,6 @@ using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record ExtractMethodResult(
@@ -2460,6 +2458,114 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             UpdatedText = newRoot.ToFullString()
+        };
+    }
+
+    public async Task<DocumentEditResult> ReplaceAttributeAsync(
+    FilePath filePath,
+    string targetName,
+    string oldAttributeName,
+    string newAttributeSource,
+    CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid syntax root."
+            };
+        }
+
+        // Parse new attribute
+        var normalizedNew = newAttributeSource.Trim();
+        if (!normalizedNew.StartsWith("["))
+        {
+            normalizedNew = $"[{normalizedNew}]";
+        }
+
+        var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedNew}\npublic class __Dummy__ {{}}");
+        var newAttrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+        if (newAttrList == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: invalid new attribute source."
+            };
+        }
+
+        var newAttr = newAttrList.Attributes.First();
+
+        // Locate target node (member first, then type)
+        SyntaxNode? targetNode =
+            root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax)
+            ?? (SyntaxNode?)root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+                .FirstOrDefault(t => t.Identifier.Text == targetName);
+
+        if (targetNode == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
+        }
+
+        // Find the attribute by name within the target's attribute lists
+        var attrLists = targetNode is MemberDeclarationSyntax m2
+            ? m2.AttributeLists
+            : ((BaseTypeDeclarationSyntax)targetNode).AttributeLists;
+
+        AttributeSyntax? oldAttr = attrLists
+            .SelectMany(al => al.Attributes)
+            .FirstOrDefault(a => GetAttributeName(a) == oldAttributeName);
+
+        if (oldAttr == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: attribute '{oldAttributeName}' not found on target."
+            };
+        }
+
+        var newRoot = root.ReplaceNode(oldAttr, newAttr).NormalizeWhitespace();
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
+    }
+
+    private static string GetAttributeName(AttributeSyntax attr)
+    {
+        return attr.Name switch
+        {
+            IdentifierNameSyntax id => id.Identifier.Text,
+            QualifiedNameSyntax q => q.Right.Identifier.Text,
+            _ => attr.Name.ToString()
         };
     }
 

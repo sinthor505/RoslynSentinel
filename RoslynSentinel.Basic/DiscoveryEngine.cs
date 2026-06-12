@@ -2,17 +2,18 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record AttributeUsageSite(
     string AttributeName,
+    string[] Attributes,
+    string SymbolId,
     string TargetKind,
     string TargetName,
     string ContainingType,
-    FilePath FilePath,
-    int Line);
+    string ContainingNamespace,
+    string ProjectName,
+    FilePath FilePath, int Line);
 public record TodoCommentFinding(FilePath FilePath, int Line, string Kind, string Text);
 public record RenameImpactPreview(string SymbolName, int TotalReferences, int FilesAffected, bool HasTestReferences, List<string> AffectedFiles);
 
@@ -45,11 +46,13 @@ public record ApiSurfaceEntry(
 
 public class DiscoveryEngine
 {
+    private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
 
-    public DiscoveryEngine(PersistentWorkspaceManager workspaceManager)
+    public DiscoveryEngine(PersistentWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine)
     {
         _workspaceManager = workspaceManager;
+        _symbolNavigationEngine = symbolNavigationEngine;
     }
 
     /// <summary>
@@ -808,8 +811,10 @@ public class DiscoveryEngine
                         _ => ("Unknown", parent?.GetType().Name ?? "", "")
                     };
 
+                    var symbolLocation = await _symbolNavigationEngine.LocateSymbolAsync(targetName, kind, containingType, null, null, true).ConfigureAwait(false);
+
                     var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    results.Add(new AttributeUsageSite(bare, kind, targetName, containingType, docPath, line));
+                    results.Add(new AttributeUsageSite(bare, attr.ArgumentList?.Arguments.Select(a => a.ToString()).ToArray() ?? Array.Empty<string>(), symbolLocation.First().SymbolId ?? string.Empty, kind, targetName, containingType, symbolLocation.First()?.ContainingNamespace ?? string.Empty, symbolLocation.First().ProjectName, docPath, line));
                 }
             }
         }

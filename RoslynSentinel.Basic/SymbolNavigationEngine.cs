@@ -86,10 +86,10 @@ public record ExtensionMethodInfo(
 /// </summary>
 public record SymbolLocation(
     /// <summary>Simple name without namespace or type prefix.</summary>
-    string Name,
+    string SymbolName,
     /// <summary>Opaque handle for symbol persistence across calls, e.g. for find_references or rename_symbol. Null for symbols that don't support it (e.g. locals, labels).</summary>
     string? SymbolId,
-    /// <summary>Name of the project containing the symbol, needed for SymbolHandle construction.</summary>
+    /// <summary>SymbolName of the project containing the symbol, needed for SymbolHandle construction.</summary>
     string ProjectName,
     /// <summary>Session identifier for the current analysis session.</summary>
     string? SessionId,
@@ -136,6 +136,8 @@ public class SymbolNavigationEngine
     public async Task<List<SymbolLocation>> LocateSymbolAsync(
         string symbolName,
         string symbolKind = "any",
+        string? containingType = null,
+        string? containingNamespace = null,
         string? projectName = null,
         bool exactMatch = true,
         CancellationToken ct = default)
@@ -197,6 +199,16 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
+                if (containingType != null && symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) != containingType)
+                {
+                    continue;
+                }
+
+                if (containingNamespace != null && symbol.ContainingNamespace?.ToDisplayString() != containingNamespace)
+                {
+                    continue;
+                }
+
                 // Emit SymbolHandle once per symbol — it's the same regardless of location.
                 // Null for symbols that don't support it (e.g. locals, labels).
                 var docCommentId = symbol.GetDocumentationCommentId();
@@ -214,7 +226,7 @@ public class SymbolNavigationEngine
 
                     results.Add(new SymbolLocation(
                         FullyQualifiedName: symbol.ToDisplayString(),
-                        Name: symbol.Name,
+                        SymbolName: symbol.Name,
                         SymbolKind: symbol.Kind.ToString(),
                         Signature: sig,
                         ContainingType: symbol.ContainingType?.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
@@ -233,7 +245,7 @@ public class SymbolNavigationEngine
         return results
             .OrderBy(r => r.ContainingNamespace)
             .ThenBy(r => r.ContainingType)
-            .ThenBy(r => r.Name)
+            .ThenBy(r => r.SymbolName)
             .ToList();
     }
 
