@@ -877,17 +877,12 @@ public class RefactoringEngine
             return Err("Feature 'Rename' is disabled.", newName);
         }
 
-        if (symbolHandle.SessionId != _workspaceManager.SessionId.ToString())
-        {
-            return Err("Symbol key is from a prior workspace session. Re-run symbol discovery.", newName);
-        }
-
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var compilation = await solution.Projects
             .First()  // or resolve from key metadata — see note below
             .GetCompilationAsync(ct);
 
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.SymbolId, compilation);
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.DocCommentId, compilation);
         if (resolved is null)
         {
             return Err($"Symbol key could not be resolved in the current compilation. The symbol may have been removed or renamed.", newName);

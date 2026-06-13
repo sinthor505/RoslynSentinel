@@ -101,14 +101,13 @@ public class SentinelRefactoringTools
         
         """)]
     public async Task<ToolResult<object>> RenameSymbol(
-        [Consumes(DataTag.SessionId, required: true)] string sessionId,
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Consumes(DataTag.SymbolId, required: true)] string symbolId,
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string newName,
         [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
     {
-        var symbolHandle = new SymbolHandle(sessionId, symbolName, symbolId, projectName);
+        var symbolHandle = new SymbolHandle(symbolName, symbolId, projectName);
 
         try
         {
@@ -382,8 +381,8 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.SymbolName)] string variableName,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -643,7 +642,6 @@ public class SentinelRefactoringTools
             return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMemberTyped failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
-
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ChangeId)]

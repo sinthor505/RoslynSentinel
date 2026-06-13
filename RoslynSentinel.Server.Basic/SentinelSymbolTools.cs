@@ -94,13 +94,14 @@ public class SentinelSymbolTools
     public async Task<ToolResult<object>> LocateSymbol(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
         [ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
-        [Consumes(DataTag.ContainingType)] string? containingType = null,
-        [Consumes(DataTag.ContainingNamespace)] string? containingNamespace = null,
-        [Consumes(DataTag.ProjectName)] string? projectName = null,
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
+        [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
+        [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
+        [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
+
         try
         {
             var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, containingType, containingNamespace, projectName, exactMatch);
@@ -140,8 +141,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -323,8 +324,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName)] string symbolName,
         [Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -366,8 +367,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SymbolKind)] string kind,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         try
         {

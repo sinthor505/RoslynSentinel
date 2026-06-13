@@ -78,8 +78,8 @@ public class SentinelAugmentTools
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -118,8 +118,8 @@ public class SentinelAugmentTools
     public async Task<ToolResult<object>> ConvertSwitchToPatternSafe(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -160,8 +160,8 @@ public class SentinelAugmentTools
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
@@ -203,8 +203,8 @@ public class SentinelAugmentTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))

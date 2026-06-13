@@ -423,7 +423,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         _stagedChanges[id] = changes;
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("Staged change {SymbolId}: {Description} ({Count} files)", id, description, changes.Count);
+            _logger.LogInformation("Staged change {DocCommentId}: {Description} ({Count} files)", id, description, changes.Count);
         }
         return id;
     }
@@ -464,7 +464,7 @@ public partial class PersistentWorkspaceManager : IDisposable
             _stagedChanges[changeId] = remaining;
             if (_logger.IsEnabled(LogLevel.Information))
             {
-                _logger.LogInformation("Updated staged change '{SymbolId}' with remaining {Count} failures.", changeId, remaining.Count);
+                _logger.LogInformation("Updated staged change '{DocCommentId}' with remaining {Count} failures.", changeId, remaining.Count);
             }
         }
 
@@ -986,7 +986,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(ct);
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.SymbolId, compilation);
+        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.DocCommentId, compilation);
         return resolved;
     }
     public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken ct = default)
@@ -996,5 +996,53 @@ public partial class PersistentWorkspaceManager : IDisposable
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(ct);
         return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
+    }
+
+    // v1
+    public readonly struct SymbolResolution
+    {
+        public ISymbol? Symbol
+        {
+            get; init;
+        }
+        public SymbolHandle Handle
+        {
+            get; init;
+        }
+        public EngineError? Error
+        {
+            get; init;
+        }
+
+        public bool Resolved
+        {
+            get
+            {
+                return this.Error is null;
+            }
+        }
+    }
+
+    // v1 — single integration point for all symbol-accepting tools
+    public async Task<SymbolResolution> ResolveFromWireAsync(
+        string sessionId,
+        string projectName,
+        string docCommentId,
+        CancellationToken ct)
+    {
+        SymbolHandle handle = new SymbolHandle(sessionId, projectName, docCommentId);
+        ISymbol? symbol = await this.ResolveSymbolAsync(handle, ct);
+
+        if (symbol is null)
+        {
+            return new SymbolResolution
+            {
+                Handle = handle,
+                Error = new(
+                    $"Symbol '{docCommentId}' no longer resolves — renamed, moved, or removed. Re-run locate_symbol.")
+            };
+        }
+
+        return new SymbolResolution { Symbol = symbol, Handle = handle };
     }
 }
