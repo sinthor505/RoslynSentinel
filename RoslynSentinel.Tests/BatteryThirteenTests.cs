@@ -101,7 +101,7 @@ public class CodeGenerationEngineTests
 
         var result = _engine.GenerateClassesFromJson(json, "Person", "MyApp");
 
-        Assert.That(result.FilePath, Is.EqualTo("Person.cs"));
+        Assert.That(result.filePath.Absolute, Is.EqualTo("Person.cs"));
         Assert.That(result.Content, Does.Contain("class Person"));
         Assert.That(result.Content, Does.Contain("string"));
         Assert.That(result.Content, Does.Contain("Name"));

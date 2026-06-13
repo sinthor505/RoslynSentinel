@@ -1,5 +1,6 @@
 using System.ComponentModel;
 
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
@@ -90,45 +91,25 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "RenameSymbol")]
-    [Produces(DataTag.ChangeId)]
-    [Description("""
-        
-        Renames a symbol (class, method, property, field, local, etc.) across the entire solution.
-        
-        Pass 'symbolId' to indicate the symbol to rename. Use locate_symbol first if symbolId is unknown.
-        The newName parameter must be a valid symbol name without namespace or class e.g., "NewSymbolName" NOT "Namespace.NewSymbolName" or "Class.NewSymbolName" or FQN. 
-        Returns a staged ChangeId. Review FileChanges before calling ApplyStagedChanges.
-        
-        """)]
-    public async Task<ToolResult<object>> RenameSymbol(
-        [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        [Consumes(DataTag.SymbolId, required: true)] string symbolId,
-        [Consumes(DataTag.ProjectName, required: true)] string projectName,
-        [ExternalInputRequired(DataTag.SymbolName, required: true)] string newName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
+    [Description("Renames a symbol and all its references across the solution. " +
+                 "Requires a symbol handle from locate_symbol (sessionId, projectName, docCommentId).")]
+    public async Task<string> RenameSymbol(
+        [Description(ToolParams.SessionId)] string sessionId,
+        [Description(ToolParams.ProjectName)] string projectName,
+        [Description(ToolParams.DocCommentId)] string docCommentId,
+        [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
+        CancellationToken ct = default)
     {
-        var symbolHandle = new SymbolHandle(symbolName, symbolId, projectName);
-
-        try
+        SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
+            sessionId, projectName, docCommentId, ct);
+        if (!resolution.Resolved)
         {
-            var result = await _refactoringEngine.RenameSymbolAsync(symbolHandle, newName);
-            if (result.Error != null)
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", result.Error) };
-            }
+            return resolution.Error!.ToToolResponse();
+        }
 
-            if (autoStage)
-            {
-                var id = _workspaceManager.StageChanges(result.PendingChanges, $"Rename '{result.OldName}' to '{result.NewName}'");
-                return new ToolResult<object>() { Success = true, Data = new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, StagingId = id, result.FileChanges } };
-            }
-            return new ToolResult<object>() { Success = true, Data = new { result.OldName, result.NewName, FilesChanged = result.FileChanges.Count, result.FileChanges } };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "RenameSymbol failed for '{SymbolHandle}'", symbolHandle);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RenameSymbol failed for '{symbolHandle}': {ex.GetType().Name}: {ex.Message}") };
-        }
+        RenameSymbolResult result = await _refactoringEngine.RenameSymbolAsync(
+            resolution.Handle, resolution.Symbol!, newName, ct);
+        return result.ToToolResponse();
     }
 
     [McpServerTool(Name = "GenerateMapping")]

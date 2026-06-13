@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Server;
 
+using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
 
@@ -115,7 +117,7 @@ public class ComprehensiveToolTests
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _immutabilityEngine = new ImmutabilityEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
@@ -130,7 +132,7 @@ public class ComprehensiveToolTests
 
         _modernizationTools = new SentinelModernizationTools(_modernizationEngine, _modernizationUpgradeEngine, _modernLoggingEngine, _syntaxUpgradeEngine, _analysisEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _immutabilityEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<SentinelModernizationTools>.Instance);
         _qualityTools = new SentinelQualityTools(_performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine, _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine, new AntiPatternEngine(_workspaceManager), _asyncOptimizationEngine, new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new PathDrivenTestEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), _asyncBatchEngine, _workspaceManager, NullLogger<SentinelQualityTools>.Instance);
-        _generationTools = new SentinelGenerationTools(_codeGenerationEngine, _apiAutomationEngine, _asyncOptimizationEngine, _apiIntegrationEngine, NullLogger<SentinelGenerationTools>.Instance);
+        _generationTools = new SentinelGenerationTools(_codeGenerationEngine, _apiAutomationEngine, _asyncOptimizationEngine, _apiIntegrationEngine, _workspaceManager, NullLogger<SentinelGenerationTools>.Instance);
     }
 
     [TearDown]

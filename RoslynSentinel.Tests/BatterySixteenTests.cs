@@ -167,7 +167,7 @@ public class GranularRefactoringEngineTests
     {
         // InlineFieldAsync returns "" for an unknown file (not an error comment)
         var result = await _engine.InlineFieldAsync("NoSuchFile.cs", "_field");
-        Assert.That(result, Is.EqualTo(""), "unknown file should return empty string");
+        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string");
     }
 
     [Test]
@@ -184,7 +184,7 @@ public class MyClass
 
         var result = await _engine.InlineFieldAsync("MyClass.cs", "_nonexistent");
 
-        Assert.That(result, Does.StartWith("// ERROR:"), "absent field should return error comment");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "absent field should return error comment");
     }
 
     [Test]
@@ -201,8 +201,8 @@ public class Calc
 
         var result = await _engine.InlineFieldAsync("Calc.cs", "_factor");
 
-        Assert.That(result, Does.Not.StartWith("// ERROR:"), "valid field should not return error comment");
-        Assert.That(result, Does.Contain("2"), "inlined value should appear in output");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "valid field should not return error comment");
+        Assert.That(result.UpdatedText!, Does.Contain("2"), "inlined value should appear in output");
     }
 }
 

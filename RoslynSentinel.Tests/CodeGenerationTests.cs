@@ -73,7 +73,7 @@ public class MyService
         Assert.That(result, Does.Contain("public MyService(string name)"),
             "Existing constructor should be preserved unchanged.");
         // No duplicate constructor
-        Assert.That(result.IndexOf("public MyService("), Is.EqualTo(result.LastIndexOf("public MyService(")),
+        Assert.That(result.UpdatedText!.IndexOf("public MyService("), Is.EqualTo(result.UpdatedText!.LastIndexOf("public MyService(")),
             "Should not add a duplicate constructor.");
     }
 

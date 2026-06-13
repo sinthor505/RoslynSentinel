@@ -631,7 +631,7 @@ public class DependencyInjectionEngineGapTests
         _workspaceManager.SetTestSolution(solution);
 
         // The method either returns empty/error string OR throws for an unknown file — both are acceptable
-        string? result = null;
+        DocumentEditResult? result = null;
         Exception? caughtEx = null;
         try
         {

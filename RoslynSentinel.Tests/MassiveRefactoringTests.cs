@@ -71,7 +71,7 @@ public class MassiveRefactoringTests
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
         SetSource(source, $"C{id}.cs");
 
-        var result = await _refactoringTools.RenameSymbol($"C{id}.cs", $"OldM{id}", $"void OldM{id}()", $"NewM{id}", autoStage: false);
+        var result = await _refactoringTools.RenameSymbol($"C{id}.cs", $"OldM{id}", $"void OldM{id}()", $"NewM{id}");
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }

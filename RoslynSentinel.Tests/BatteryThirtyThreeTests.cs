@@ -77,7 +77,7 @@ public class BatteryThirtyThreeTests
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
 
         _intelligenceTools = new SentinelIntelligenceTools(
             _impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine,

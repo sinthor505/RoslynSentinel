@@ -75,12 +75,12 @@ namespace Avaal.Service
         Assert.That(changes.Count, Is.EqualTo(2),
             "Should return exactly two changes: target file + MigrationCandidateAttribute.cs.");
 
-        var attrEntry = changes.Keys.FirstOrDefaultByFileNameSuffix("MigrationCandidateAttribute.cs");
-        Assert.That(attrEntry, Is.Not.Null,
+        var attrEntry = changes.Keys.FirstOrDefault(fp => fp.Absolute.EndsWith("MigrationCandidateAttribute.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.That(attrEntry.Absolute, Is.Not.Null.And.Not.Empty,
             "One change should be the injected MigrationCandidateAttribute.cs.");
-        Assert.That(changes[attrEntry!], Does.Contain("class MigrationCandidateAttribute"),
+        Assert.That(changes[attrEntry], Does.Contain("class MigrationCandidateAttribute"),
             "Injected file should define the attribute class.");
-        Assert.That(changes[attrEntry!], Does.Contain("internal sealed"),
+        Assert.That(changes[attrEntry], Does.Contain("internal sealed"),
             "Injected attribute class should be internal sealed.");
     }
 
@@ -100,9 +100,9 @@ namespace Avaal.Service
             "TripService.cs", "GetCount", "AsyncBridge");
         var changes = result.Changes;
 
-        var attrKey = changes.Keys.FirstOrDefaultByFileNameSuffix("MigrationCandidateAttribute.cs");
-        Assert.That(attrKey, Is.Not.Null);
-        Assert.That(changes[attrKey!], Does.Contain("namespace Avaal.Service"),
+        var attrKey = changes.Keys.FirstOrDefault(fp => fp.Absolute.EndsWith("MigrationCandidateAttribute.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.That(attrKey.Absolute, Is.Not.Null.And.Not.Empty);
+        Assert.That(changes[attrKey], Does.Contain("namespace Avaal.Service"),
             "Injected attribute class should use the namespace of the target file.");
     }
 

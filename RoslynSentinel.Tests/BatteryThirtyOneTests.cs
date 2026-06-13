@@ -302,8 +302,8 @@ public class Service
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod");
 
         // Regression: was silently returning original content with no indication of failure
-        Assert.That(result, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
-        Assert.That(result, Does.Contain("NoSuchMethod"), "Error should mention the method name");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
+        Assert.That(result.UpdatedText!, Does.Contain("NoSuchMethod"), "Error should mention the method name");
     }
 
     [Test]
@@ -313,8 +313,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
 
-        Assert.That(result, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
-        Assert.That(result, Does.Contain("GetValue"), "Error should name the method");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
+        Assert.That(result.UpdatedText!, Does.Contain("GetValue"), "Error should name the method");
     }
 
     [Test]
@@ -324,8 +324,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
-        Assert.That(result, Does.Contain("Get"), "Error should name the method");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
+        Assert.That(result.UpdatedText!, Does.Contain("Get"), "Error should name the method");
     }
 
     [Test]
@@ -335,8 +335,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
-        Assert.That(result, Does.Contain("static"), "Error should mention static");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
+        Assert.That(result.UpdatedText!, Does.Contain("static"), "Error should mention static");
     }
 
     [Test]
@@ -346,7 +346,7 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
+        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
     }
 
     [Test]
@@ -360,9 +360,9 @@ public class MyList {
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
-        Assert.That(result, Does.Contain("this[int i]"), "Should produce indexer syntax");
-        Assert.That(result, Does.Not.Contain("Get(int i)"), "Original method should be replaced");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
+        Assert.That(result.UpdatedText!, Does.Contain("this[int i]"), "Should produce indexer syntax");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("Get(int i)"), "Original method should be replaced");
     }
 
     [Test]
@@ -376,8 +376,8 @@ public class MyList {
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
-        Assert.That(result, Does.Contain("this[int index]"), "Should produce indexer");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
+        Assert.That(result.UpdatedText!, Does.Contain("this[int index]"), "Should produce indexer");
     }
 
     [Test]

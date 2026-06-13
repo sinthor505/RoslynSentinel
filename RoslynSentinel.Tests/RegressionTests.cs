@@ -239,7 +239,7 @@ public class RegressionTests
         Assert.That(result, Does.Contain("\"Acme\""),
             "Company's initializer Acme must appear in the backing field");
         // Person.Name should still be an auto-property (no _name backing for Alice)
-        var personSection = result.Substring(0, result.IndexOf("Company", StringComparison.Ordinal));
+        var personSection = result.UpdatedText!.Substring(0, result.UpdatedText!.IndexOf("Company", StringComparison.Ordinal));
         Assert.That(personSection, Does.Contain("{ get; set; }"),
             "Person.Name must remain an auto-property — context snippet should have limited the change");
     }
@@ -270,9 +270,9 @@ public class RegressionTests
             "Test.cs",
             "string.Format(MessageFmt, user, ip)");
 
-        Assert.That(result, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result, Contains.Substring("{user}"), "user arg should be inlined");
-        Assert.That(result, Contains.Substring("{ip}"), "ip arg should be inlined");
+        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
+        Assert.That(result.UpdatedText!, Contains.Substring("{user}"), "user arg should be inlined");
+        Assert.That(result.UpdatedText!, Contains.Substring("{ip}"), "ip arg should be inlined");
         // The const itself should no longer appear as a format reference
         Assert.That(result, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
     }
@@ -295,8 +295,8 @@ public class RegressionTests
             "Test.cs",
             "string.Format(\"Price: {0:N2}\", amount)");
 
-        Assert.That(result, Contains.Substring("$\""), "Must produce interpolated string");
-        Assert.That(result, Contains.Substring("{amount:N2}"), "Format specifier N2 must be preserved");
+        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Must produce interpolated string");
+        Assert.That(result.UpdatedText!, Contains.Substring("{amount:N2}"), "Format specifier N2 must be preserved");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -470,7 +470,7 @@ public class RegressionTests
         Assert.That(result, Does.Contain("public void Stop"),
             "Missing Stop() method must be generated");
         // Start() must NOT be duplicated — check 'public void Start' (not 'void Start' which also matches interface)
-        var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result, @"public void Start").Count;
+        var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"public void Start").Count;
         Assert.That(publicStartCount, Is.EqualTo(1),
             "Start() must NOT be duplicated — it was already implemented");
     }
@@ -551,8 +551,8 @@ public class RegressionTests
         Assert.That(result, Does.Contain("public string Id"),
             "Id property must be generated");
         // A read-only stub should NOT have a setter accessor
-        var idPropStart = result.IndexOf("public string Id", StringComparison.Ordinal);
-        var afterId = result.Substring(idPropStart);
+        var idPropStart = result.UpdatedText!.IndexOf("public string Id", StringComparison.Ordinal);
+        var afterId = result.UpdatedText!.Substring(idPropStart);
         var nextMemberOrEnd = afterId.IndexOf("\n    public ", StringComparison.Ordinal);
         var idBlock = nextMemberOrEnd > 0 ? afterId.Substring(0, nextMemberOrEnd) : afterId;
         Assert.That(idBlock, Does.Not.Contain("set"),
@@ -638,12 +638,12 @@ public class RegressionTests
         var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
 
         Assert.That(summary, Is.Not.Null);
-        Assert.That(summary.Details, Is.Not.Null);
+        Assert.That(summary.Data.Details, Is.Not.Null);
 
         // CS0103 ("name does not exist in current context") should appear in Details
         // and its count should be >= 3 (one per undefined symbol), OR it should be
         // aggregated into a single entry with count 3.
-        var errorCount = summary.Errors + summary.Warnings;
+        var errorCount = summary.Data.Errors + summary.Data.Warnings;
         Assert.That(errorCount, Is.GreaterThanOrEqualTo(3),
             "Three undefined symbols should produce at least 3 diagnostics total");
     }
@@ -663,7 +663,7 @@ public class RegressionTests
 
         var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
-        Assert.That(summary.Errors, Is.EqualTo(0),
+        Assert.That(summary.Data.Errors, Is.EqualTo(0),
             "REGRESSION: Valid code must report zero errors");
     }
 

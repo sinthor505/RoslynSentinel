@@ -1,0 +1,12 @@
+﻿  RoslynSentinel.Common -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Common\bin\Debug\net10.0\RoslynSentinel.Common.dll
+  RoslynSentinel.Basic -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Basic\bin\Debug\net10.0\RoslynSentinel.Basic.dll
+  RoslynSentinel.Server.Basic -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Server.Basic\bin\Debug\net10.0\RoslynSentinel.Server.Basic.dll
+  RoslynSentinel.Advanced -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Advanced\bin\Debug\net10.0\RoslynSentinel.Advanced.dll
+  RoslynSentinel.Server.Advanced -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Server.Advanced\bin\Debug\net10.0\RoslynSentinel.Server.Advanced.dll
+  RoslynSentinel.Server -> C:\Users\Andrew\Documents\GitHub\RoslynSentinel\RoslynSentinel.Server\bin\Debug\net10.0\RoslynSentinel.Server.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:01.51

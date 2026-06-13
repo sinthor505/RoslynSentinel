@@ -1468,4 +1468,51 @@ public class MsToolAugmentEngine
 
         return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
     }
+
+    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken ct = default)
+    {
+        Solution? currentSolution;
+        try { currentSolution = _workspaceManager.CurrentSolution; }
+        catch (Exception ex)
+        {
+            return Task.FromResult(new WorkspaceHealthReport(
+                IsOperational: false,
+                HasLoadedSolution: false,
+                LoadedSolutionPath: null,
+                ProjectCount: 0,
+                DocumentCount: 0,
+                LoadErrors: [$"Workspace exception: {ex.Message}"],
+                Summary: $"Workspace is NOT operational: {ex.Message}"));
+        }
+
+        var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
+
+        if (currentSolution is null)
+        {
+            return Task.FromResult(new WorkspaceHealthReport(
+                IsOperational: true,
+                HasLoadedSolution: false,
+                LoadedSolutionPath: null,
+                ProjectCount: 0,
+                DocumentCount: 0,
+                LoadErrors: loadErrors,
+                Summary: "Workspace is operational. No solution is currently loaded. Call load_solution to load a .sln or .csproj file."));
+        }
+
+        var projectCount = currentSolution.ProjectIds.Count;
+        var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
+        var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
+
+        return Task.FromResult(new WorkspaceHealthReport(
+            IsOperational: true,
+            HasLoadedSolution: true,
+            LoadedSolutionPath: solutionPath,
+            ProjectCount: projectCount,
+            DocumentCount: documentCount,
+            LoadErrors: loadErrors,
+            Summary: $"Workspace operational. {projectCount} project(s) loaded, {documentCount} document(s). " +
+                     (loadErrors.Count > 0
+                         ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)."
+                         : "No load errors.")));
+    }
 }

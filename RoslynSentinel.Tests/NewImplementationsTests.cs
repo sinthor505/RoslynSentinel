@@ -998,7 +998,7 @@ public class Reporter
 
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
 
-        Assert.That(result.Contains("{x}") || result.Contains("{y}"), Is.True,
+        Assert.That(result.UpdatedText!.Contains("{x}") || result.UpdatedText!.Contains("{y}"), Is.True,
             "At least one concat chain must be converted.");
     }
 
@@ -1188,7 +1188,7 @@ public class Standalone
     public void Feature() { }
 }", "Standalone.cs");
 
-        Dictionary<string, string> result = null!;
+        Dictionary<FilePath, string> result = null!;
         Assert.DoesNotThrowAsync(async () =>
             result = await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
             "A class with no explicit base class should return an error dict, not throw.");

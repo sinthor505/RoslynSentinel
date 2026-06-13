@@ -44,7 +44,7 @@ public class QualityTests
         var source = "public class S { public void M(string input) { var x = input.Length; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "S.cs"));
         var result = await _logicEngine.AddGuardClausesAsync("S.cs", "M");
-        Assert.That(result, Contains.Substring("ArgumentNullException.ThrowIfNull(input);"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentNullException.ThrowIfNull(input);"));
     }
 
     [Test]

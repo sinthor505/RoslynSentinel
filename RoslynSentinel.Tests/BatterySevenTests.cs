@@ -222,7 +222,7 @@ public class DataService
         Assert.That(result["Test.cs"], Does.Not.Contain("(int Id, string Name)"), "Tuple return type should be replaced");
 
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("DataResult.cs"));
-        Assert.That(newClassKey, Is.Not.Null, "Should generate DataResult.cs");
+        Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate DataResult.cs");
         Assert.That(result[newClassKey!], Does.Contain("public int Id"), "Generated class should have Id property");
         Assert.That(result[newClassKey!], Does.Contain("public string Name"), "Generated class should have Name property");
     }
@@ -278,7 +278,7 @@ public class Factory
         var result = await _engine.ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
 
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("ItemDto.cs"));
-        Assert.That(newClassKey, Is.Not.Null, "Should generate ItemDto.cs");
+        Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate ItemDto.cs");
         Assert.That(result[newClassKey!], Does.Contain("ItemDto"), "Generated class should be named ItemDto");
         Assert.That(result[newClassKey!], Does.Contain("Name"), "Should extract Name property from anonymous type");
         Assert.That(result[newClassKey!], Does.Contain("Quantity"), "Should extract Quantity property from anonymous type");

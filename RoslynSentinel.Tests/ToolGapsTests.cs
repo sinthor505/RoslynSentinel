@@ -15,6 +15,7 @@ public class ToolGapsTests
     private AsyncSafetyEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private ThreadSafetyEngine _threadSafetyEngine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
     private DiscoveryEngine _discoveryEngine;
     private AntiPatternEngine _antiPatternEngine;
     private CodeStyleEngine _codeStyleEngine;
@@ -28,7 +29,8 @@ public class ToolGapsTests
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         var config = new SentinelConfiguration();
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
@@ -76,10 +78,10 @@ public class ToolGapsTests
         SetSource(
             "public class C { private readonly System.Threading.SemaphoreSlim _lock = new(1,1); public void DoWork() { int x = 1; } }",
             "C.cs");
-        string result = null!;
+        DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
-        Assert.That(result, Does.StartWith("// Error:"));
+        Assert.That(result!.UpdatedText, Does.StartWith("// Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

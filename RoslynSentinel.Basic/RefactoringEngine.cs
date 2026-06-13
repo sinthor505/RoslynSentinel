@@ -23,10 +23,29 @@ public record RenameFileChange(FilePath filePath, List<RenameHunk> Hunks);
 public record RenameSymbolResult(
     string OldName,
     string NewName,
-    //SymbolHandle SymbolHandle,
     Dictionary<FilePath, string> PendingChanges,
     List<RenameFileChange> FileChanges,
-    string? Error = null);
+    string? Error = null,
+    SymbolHandle? UpdatedHandle = null)
+{
+    public string ToToolResponse()
+    {
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            success = Error is null,
+            oldName = OldName,
+            newName = NewName,
+            filesChanged = FileChanges.Count,
+            fileChanges = FileChanges,
+            updatedHandle = UpdatedHandle is SymbolHandle h
+                ? new { h.SessionId, h.ProjectName, h.DocCommentId }
+                : null,
+            note = UpdatedHandle is null
+                ? "updatedHandle is null — re-run locate_symbol before further operations on this symbol."
+                : null
+        });
+    }
+}
 
 public record ControlFlowSummary(
     string MethodName,
@@ -865,9 +884,10 @@ public class RefactoringEngine
     }
 
     public async Task<RenameSymbolResult> RenameSymbolAsync(
-    SymbolHandle symbolHandle,
-    string newName,
-    CancellationToken ct = default)
+        SymbolHandle handle,
+        ISymbol symbol,
+        string newName,
+        CancellationToken ct = default)
     {
         static RenameSymbolResult Err(string msg, string n) =>
             new("", n, new Dictionary<FilePath, string>(), new List<RenameFileChange>(), msg);
@@ -877,24 +897,12 @@ public class RefactoringEngine
             return Err("Feature 'Rename' is disabled.", newName);
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var compilation = await solution.Projects
-            .First()  // or resolve from key metadata — see note below
-            .GetCompilationAsync(ct);
-
-        ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolHandle.DocCommentId, compilation);
-        if (resolved is null)
-        {
-            return Err($"Symbol key could not be resolved in the current compilation. The symbol may have been removed or renamed.", newName);
-        }
-
-        var symbol = resolved;
-
-        // Guard: generated/metadata-only symbols
         if (!symbol.Locations.Any(l => l.IsInSource))
         {
             return Err("Symbol is not defined in editable source. Rename is not available.", newName);
         }
+
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
 
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(
             solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, ct);
@@ -915,7 +923,57 @@ public class RefactoringEngine
             }
         }
 
-        return new RenameSymbolResult(symbol.Name, newName, pendingChanges, fileChanges);
+        var updatedHandle = await TryResolveUpdatedHandleAsync(handle, symbol, updated, newName, ct);
+        return new RenameSymbolResult(symbol.Name, newName, pendingChanges, fileChanges, null, updatedHandle);
+    }
+
+    private static async Task<SymbolHandle?> TryResolveUpdatedHandleAsync(
+        SymbolHandle handle,
+        ISymbol originalSymbol,
+        Solution updatedSolution,
+        string newName,
+        CancellationToken ct)
+    {
+        try
+        {
+            var originalLocation = originalSymbol.Locations.FirstOrDefault(l => l.IsInSource);
+            if (originalLocation is null) return null;
+
+            var docId = updatedSolution.GetDocumentId(originalLocation.SourceTree!);
+            if (docId is null) return null;
+
+            var updatedDoc = updatedSolution.GetDocument(docId);
+            if (updatedDoc is null) return null;
+
+            var updatedRoot = await updatedDoc.GetSyntaxRootAsync(ct);
+            var updatedModel = await updatedDoc.GetSemanticModelAsync(ct);
+            if (updatedRoot is null || updatedModel is null) return null;
+
+            var originalSpanStart = originalLocation.SourceSpan.Start;
+            var candidates = updatedRoot.DescendantTokens()
+                .Where(t => t.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.IdentifierToken)
+                         && t.Text == newName
+                         && Math.Abs(t.SpanStart - originalSpanStart) < 500);
+
+            foreach (var token in candidates)
+            {
+                var parentNode = token.Parent;
+                if (parentNode is null) continue;
+                var declaredSymbol = updatedModel.GetDeclaredSymbol(parentNode, ct);
+                if (declaredSymbol is null) continue;
+                var newDocCommentId = declaredSymbol.GetDocumentationCommentId();
+                if (newDocCommentId is not null)
+                {
+                    return new SymbolHandle(handle.SessionId, handle.ProjectName, newDocCommentId);
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static List<RenameHunk> ComputeRenameHunks(string oldContent, string newContent, int contextLines = 2)

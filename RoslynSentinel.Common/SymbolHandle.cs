@@ -1,43 +1,17 @@
-﻿namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Common;
 
-public struct SymbolHandle
+public readonly struct SymbolHandle
 {
-    public string SymbolName
+    public string SessionId { get; init; }
+    public string ProjectName { get; init; }
+    public string DocCommentId { get; init; }
+
+    public SymbolHandle(string sessionId, string projectName, string docCommentId)
     {
-        get; init;
-    }
-    public string ProjectName
-    {
-        get; init;
-    }
-    private string _docCommentId;
-    public string DocCommentId
-    {
-        get
-        {
-            return _docCommentId;
-        }
-        init
-        {
-            _docCommentId = value;
-        }
-    }
-    public string SymbolId
-    {
-        get
-        {
-            return _docCommentId;
-        }
-        init
-        {
-            _docCommentId = value;
-        }
+        SessionId = sessionId;
+        ProjectName = projectName;
+        DocCommentId = docCommentId;
     }
 
-    public SymbolHandle(string symbolName, string symbolId, string projectName)
-    {
-        SymbolName = symbolName;
-        _docCommentId = symbolId;
-        ProjectName = projectName;
-    }
+    public override string ToString() => $"{ProjectName}::{DocCommentId}";
 }

@@ -87,9 +87,9 @@ public record ExtensionMethodInfo(
 public record SymbolLocation(
     /// <summary>Simple name without namespace or type prefix.</summary>
     string SymbolName,
-    /// <summary>Opaque handle for symbol persistence across calls, e.g. for find_references or rename_symbol. Null for symbols that don't support it (e.g. locals, labels).</summary>
-    string? SymbolId,
-    /// <summary>SymbolName of the project containing the symbol, needed for SymbolHandle construction.</summary>
+    /// <summary>Documentation comment ID for symbol persistence. Null for symbols that don't support it (e.g. locals, lambdas). Pass as docCommentId to symbol-accepting tools.</summary>
+    string? DocCommentId,
+    /// <summary>Project containing the symbol, needed for SymbolHandle construction.</summary>
     string ProjectName,
     /// <summary>Session identifier for the current analysis session.</summary>
     string? SessionId,
@@ -233,8 +233,8 @@ public class SymbolNavigationEngine
                         ContainingNamespace: symbol.ContainingNamespace?.IsGlobalNamespace == true
                             ? null
                             : symbol.ContainingNamespace?.ToDisplayString(),
-                        ProjectName: project.Name,       // needed for SymbolHandle construction
-                        SymbolId: symbol.GetDocumentationCommentId(),       // new field — add to SymbolLocation record
+                        ProjectName: project.Name,
+                        DocCommentId: docCommentId,
                         Accessibility: symbol.DeclaredAccessibility.ToString(),
                         SessionId: _workspaceManager.SessionId.ToString()
                     ));

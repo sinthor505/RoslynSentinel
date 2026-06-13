@@ -3997,7 +3997,7 @@ public class C : IDisposable {
         _resource.DisposeAsync(); // not awaited
     }
 }");
-        var results = await _engine.FindUnawakedDisposeAsyncAsync();
+        var results = await _engine.FindUnawaitedDisposeAsyncAsync();
         Assert.That(results, Is.Not.Empty,
             "DisposeAsync() without await in sync Dispose should be flagged");
     }
@@ -4014,7 +4014,7 @@ public class C : IAsyncDisposable {
         await _resource.DisposeAsync();
     }
 }");
-        var results = await _engine.FindUnawakedDisposeAsyncAsync();
+        var results = await _engine.FindUnawaitedDisposeAsyncAsync();
         Assert.That(results, Is.Empty,
             "await DisposeAsync() is the correct pattern — must not be flagged");
     }

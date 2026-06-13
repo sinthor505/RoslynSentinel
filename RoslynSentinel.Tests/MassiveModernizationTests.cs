@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Server;
+using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -63,7 +64,7 @@ public class MassiveModernizationTests
             }}
         }}", $"C{id}.cs");
         var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync($"C{id}.cs");
-        Assert.That(result, Contains.Substring("is string s"));
+        Assert.That(result.UpdatedText!, Contains.Substring("is string s"));
     }
 
     [Test]
@@ -80,7 +81,7 @@ public class MassiveModernizationTests
             public int X => _x;
         }}", $"C{id}.cs");
         var result = await _refactoringEngine.ConvertToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
-        Assert.That(result, Contains.Substring($"class C{id}(int x)"));
+        Assert.That(result.UpdatedText!, Contains.Substring($"class C{id}(int x)"));
     }
 
     [Test]
@@ -93,6 +94,6 @@ public class MassiveModernizationTests
     {
         SetSource($@"public class C{id} {{ public int Id {{ get; set; }} }}", $"C{id}.cs");
         var result = await _modernizationEngine.ClassToRecordAsync($"C{id}.cs", $"C{id}");
-        Assert.That(result, Contains.Substring("record C"));
+        Assert.That(result.UpdatedText!, Contains.Substring("record C"));
     }
 }

@@ -111,7 +111,7 @@ public class Foo { }
         var result = await _engine.AddUsingDirectiveAsync("Foo.cs", "System.Linq");
 
         // Should not duplicate
-        var count = System.Text.RegularExpressions.Regex.Matches(result, "using System\\.Linq").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, "using System\\.Linq").Count;
         Assert.That(count, Is.EqualTo(1), "Duplicate using directive should not be added.");
     }
 
@@ -198,9 +198,9 @@ public class Service
             "public void Pause() { }");
 
         // Pause should appear between Start and Stop
-        var startIdx = result.IndexOf("Start");
-        var pauseIdx = result.IndexOf("Pause");
-        var stopIdx = result.IndexOf("Stop");
+        var startIdx = result.UpdatedText!.IndexOf("Start");
+        var pauseIdx = result.UpdatedText!.IndexOf("Pause");
+        var stopIdx = result.UpdatedText!.IndexOf("Stop");
         Assert.That(pauseIdx, Is.GreaterThan(startIdx), "Pause should come after Start.");
         Assert.That(pauseIdx, Is.LessThan(stopIdx), "Pause should come before Stop.");
     }
@@ -235,8 +235,8 @@ public class Widget
         var result = await _engine.InsertMemberAfterAsync("Widget.cs", "Widget", "Draw",
             "public void Resize() { }");
 
-        var drawIdx = result.IndexOf("Draw");
-        var resizeIdx = result.IndexOf("Resize");
+        var drawIdx = result.UpdatedText!.IndexOf("Draw");
+        var resizeIdx = result.UpdatedText!.IndexOf("Resize");
         Assert.That(resizeIdx, Is.GreaterThan(drawIdx), "Resize should be after Draw.");
     }
 
@@ -258,9 +258,9 @@ public class Controller
         var result = await _engine.InsertMemberBeforeAsync("Controller.cs", "Controller", "Post",
             "public void Put() { }");
 
-        var getIdx = result.IndexOf("Get()");
-        var putIdx = result.IndexOf("Put()");
-        var postIdx = result.IndexOf("Post()");
+        var getIdx = result.UpdatedText!.IndexOf("Get()");
+        var putIdx = result.UpdatedText!.IndexOf("Put()");
+        var postIdx = result.UpdatedText!.IndexOf("Post()");
         Assert.That(putIdx, Is.GreaterThan(getIdx), "Put should come after Get.");
         Assert.That(putIdx, Is.LessThan(postIdx), "Put should come before Post.");
     }
@@ -295,8 +295,8 @@ public class Logger
         var result = await _engine.InsertMemberBeforeAsync("Logger.cs", "Logger", "Log",
             "public void Init() { }");
 
-        var initIdx = result.IndexOf("Init");
-        var logIdx = result.IndexOf("Log()");
+        var initIdx = result.UpdatedText!.IndexOf("Init");
+        var logIdx = result.UpdatedText!.IndexOf("Log()");
         Assert.That(initIdx, Is.LessThan(logIdx), "Init should appear before Log.");
     }
 
@@ -398,7 +398,7 @@ public class Worker : IWorker
         var result = await _engine.AddBaseTypeAsync("Worker.cs", "Worker", "IWorker");
 
         // Only one occurrence in the base list
-        var count = System.Text.RegularExpressions.Regex.Matches(result, "IWorker").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, "IWorker").Count;
         Assert.That(count, Is.EqualTo(1), "IWorker should not be duplicated.");
     }
 
@@ -584,7 +584,7 @@ public class Base
 ", "Base.cs");
 
         var result = await _engine.AddModifierAsync("Base.cs", "Execute", "virtual");
-        var count = System.Text.RegularExpressions.Regex.Matches(result, @"\bvirtual\b").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bvirtual\b").Count;
 
         Assert.That(count, Is.EqualTo(1), "virtual should appear only once.");
     }
@@ -770,8 +770,8 @@ public class Repo
 
         var result = await _engine.SortMembersAsync("Repo.cs", "Repo");
 
-        var fieldIdx = result.IndexOf("_name", StringComparison.Ordinal);
-        var methodIdx = result.IndexOf("Save()", StringComparison.Ordinal);
+        var fieldIdx = result.UpdatedText!.IndexOf("_name", StringComparison.Ordinal);
+        var methodIdx = result.UpdatedText!.IndexOf("Save()", StringComparison.Ordinal);
         Assert.That(fieldIdx, Is.LessThan(methodIdx), "Fields should appear before methods.");
     }
 
@@ -789,8 +789,8 @@ public class Dto
 
         var result = await _engine.SortMembersAsync("Dto.cs", "Dto");
 
-        var ctorIdx = result.IndexOf("Dto(string name)", StringComparison.Ordinal);
-        var propIdx = result.IndexOf("Name", StringComparison.Ordinal);
+        var ctorIdx = result.UpdatedText!.IndexOf("Dto(string name)", StringComparison.Ordinal);
+        var propIdx = result.UpdatedText!.IndexOf("Name", StringComparison.Ordinal);
         Assert.That(ctorIdx, Is.LessThan(propIdx), "Constructor should appear before properties.");
     }
 
@@ -807,8 +807,8 @@ public class Utils
 
         var result = await _engine.SortMembersAsync("Utils.cs", "Utils");
 
-        var staticIdx = result.IndexOf("StaticMethod()", StringComparison.Ordinal);
-        var instanceIdx = result.IndexOf("InstanceMethod()", StringComparison.Ordinal);
+        var staticIdx = result.UpdatedText!.IndexOf("StaticMethod()", StringComparison.Ordinal);
+        var instanceIdx = result.UpdatedText!.IndexOf("InstanceMethod()", StringComparison.Ordinal);
         Assert.That(staticIdx, Is.LessThan(instanceIdx), "Static methods should come before instance methods.");
     }
 
@@ -975,9 +975,9 @@ public class MyClass
 
         var result = await _engine.WrapInRegionAsync("MyClass.cs", 5, 5, "Methods");
 
-        var regionIdx = result.IndexOf("#region Methods", StringComparison.Ordinal);
-        var runIdx = result.IndexOf("public void Run()", StringComparison.Ordinal);
-        var endRegionIdx = result.IndexOf("#endregion", StringComparison.Ordinal);
+        var regionIdx = result.UpdatedText!.IndexOf("#region Methods", StringComparison.Ordinal);
+        var runIdx = result.UpdatedText!.IndexOf("public void Run()", StringComparison.Ordinal);
+        var endRegionIdx = result.UpdatedText!.IndexOf("#endregion", StringComparison.Ordinal);
 
         Assert.That(regionIdx, Is.LessThan(runIdx), "#region should precede the method.");
         Assert.That(runIdx, Is.LessThan(endRegionIdx), "#endregion should follow the method.");

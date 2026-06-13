@@ -43,10 +43,10 @@ public class C {
     }
 }");
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
-        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegative(i)"));
-        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegativeOrZero(i)"));
-        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfZero(i)"));
-        Assert.That(result, Contains.Substring("ArgumentOutOfRangeException.ThrowIfGreaterThan(i, limit)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegative(i)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegativeOrZero(i)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentOutOfRangeException.ThrowIfZero(i)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentOutOfRangeException.ThrowIfGreaterThan(i, limit)"));
     }
 
     [Test]
@@ -59,8 +59,8 @@ public class C {
     public DateTime M() => DateTime.UtcNow;
 }");
         var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
-        Assert.That(result, Contains.Substring("_myCustomProvider.GetUtcNow()"));
-        Assert.That(result, Does.Not.Contain("private readonly TimeProvider _timeProvider;"), "Should not add new field if one exists.");
+        Assert.That(result.UpdatedText!, Contains.Substring("_myCustomProvider.GetUtcNow()"));
+        Assert.That(result.UpdatedText!, Does.Not.Contain("private readonly TimeProvider _timeProvider;"), "Should not add new field if one exists.");
     }
 
     [Test]
@@ -75,9 +75,9 @@ public class C {
     }
 }");
         var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
-        Assert.That(result, Contains.Substring("_timeProvider.GetUtcNow()"));
-        Assert.That(result, Contains.Substring("_timeProvider.GetLocalNow()"));
-        Assert.That(result, Contains.Substring("private readonly TimeProvider _timeProvider;"));
+        Assert.That(result.UpdatedText!, Contains.Substring("_timeProvider.GetUtcNow()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("_timeProvider.GetLocalNow()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("private readonly TimeProvider _timeProvider;"));
     }
 
     [Test]
@@ -94,9 +94,9 @@ public class MyPoco {
         var result = await modernizationEngine.ClassToRecordAsync("Test.cs", "MyPoco");
         // Bug 2 fix: properties with [Required] cannot use positional syntax (would drop attributes),
         // so class-body record with init accessors is generated instead.
-        Assert.That(result, Contains.Substring("record MyPoco"));
-        Assert.That(result, Contains.Substring("[Required]"), "Attribute must be preserved");
-        Assert.That(result, Contains.Substring("init"), "set accessor must be converted to init");
-        Assert.That(result, Contains.Substring("DoWork"), "Methods must be preserved");
+        Assert.That(result.UpdatedText!, Contains.Substring("record MyPoco"));
+        Assert.That(result.UpdatedText!, Contains.Substring("[Required]"), "Attribute must be preserved");
+        Assert.That(result.UpdatedText!, Contains.Substring("init"), "set accessor must be converted to init");
+        Assert.That(result.UpdatedText!, Contains.Substring("DoWork"), "Methods must be preserved");
     }
 }

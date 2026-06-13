@@ -74,6 +74,7 @@ public interface IOrderRepository
             _apiAutomationEngine,
             _asyncOptimizationEngine,
             _apiIntegrationEngine,
+            _workspaceManager,
             NullLogger<SentinelGenerationTools>.Instance);
     }
 

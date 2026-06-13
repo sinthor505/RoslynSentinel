@@ -69,7 +69,7 @@ public sealed record FeatureGateErrorResponse { public string ErrorMessage { get
             Assert.That(changes, Is.Not.Null);
             Assert.That(changes.Count, Is.EqualTo(2));
             var newFilePath = changes.Keys.FirstOrDefault(k => k.Contains("FeatureGateErrorResponse.cs"));
-            Assert.That(newFilePath, Is.Not.Null);
+            Assert.That(newFilePath.Absolute, Is.Not.Null);
         });
     }
 

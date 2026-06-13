@@ -205,7 +205,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var file = _realFilePath;
         // Use first discovered method name to avoid "method not found" error
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.OptimizeIndependentAwaitsAsync(file, _realMethodName),
+            result = (await engine.OptimizeIndependentAwaitsAsync(file, _realMethodName)).UpdatedText!,
             "AsyncOptimizationEngine.OptimizeIndependentAwaitsAsync must not throw.");
         Assert.That(result, Is.Not.Null);
     }
@@ -216,7 +216,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new AsyncOptimizationEngine(_workspaceManager);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateAsyncOverloadAsync(_realFilePath, _realMethodName),
+            result = (await engine.GenerateAsyncOverloadAsync(_realFilePath, _realMethodName)).UpdatedText!,
             "AsyncOptimizationEngine.GenerateAsyncOverloadAsync must not throw.");
         Assert.That(result, Is.Not.Null);
     }
@@ -233,7 +233,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         // Use the real file path for thread-safety analysis
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.MakeMethodThreadSafeAsync(file, _realMethodName),
+            result = (await engine.MakeMethodThreadSafeAsync(file, _realMethodName)).UpdatedText!,
             "ThreadSafetyEngine.MakeMethodThreadSafeAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
@@ -261,7 +261,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task DiagnosticEngine_GetFileDiagnostics_DoesNotThrow()
     {
         var engine = new DiagnosticEngine(_workspaceManager);
-        DiagnosticSummary? result = null;
+        EngineResultWrapper<DiagnosticSummary>? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GetFileDiagnosticsAsync(_realFilePath),
             "DiagnosticEngine.GetFileDiagnosticsAsync must not throw on real file.");
@@ -272,7 +272,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task DiagnosticEngine_GetSolutionDiagnostics_DoesNotThrow()
     {
         var engine = new DiagnosticEngine(_workspaceManager);
-        DiagnosticSummary? result = null;
+        EngineResultWrapper<DiagnosticSummary>? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GetSolutionDiagnosticsAsync(),
             "DiagnosticEngine.GetSolutionDiagnosticsAsync must not throw on the real solution.");
@@ -291,7 +291,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         string? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.ClassToRecordAsync(file, _realClassName),
+            result = (await engine.ClassToRecordAsync(file, _realClassName)).UpdatedText!,
             "ModernizationEngine.ClassToRecordAsync must not throw on real class.");
         Assert.That(result, Is.Not.Null);
     }
@@ -307,7 +307,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new SyntaxUpgradeEngine(_workspaceManager, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.AddBracesAsync(_realFilePath),
+            result = (await engine.AddBracesAsync(_realFilePath)).UpdatedText!,
             "SyntaxUpgradeEngine.AddBracesAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
@@ -319,7 +319,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new SyntaxUpgradeEngine(_workspaceManager, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.UpgradeToModernGuardsAsync(_realFilePath),
+            result = (await engine.UpgradeToModernGuardsAsync(_realFilePath)).UpdatedText!,
             "SyntaxUpgradeEngine.UpgradeToModernGuardsAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
@@ -335,7 +335,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         string? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateConstructorAsync(file, _realClassName),
+            result = (await engine.GenerateConstructorAsync(file, _realClassName)).UpdatedText!,
             "CodeGenerationEngine.GenerateConstructorAsync must not throw on real class.");
         Assert.That(result, Is.Not.Null);
     }
@@ -376,7 +376,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         string? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GenerateCallTreeAsync(file, _realMethodName),
+            result = (await engine.GenerateCallTreeAsync(file, _realMethodName)).UpdatedText!,
             "AnalysisEngine.GenerateCallTreeAsync must not throw on real method.");
         Assert.That(result, Is.Not.Null);
     }
@@ -391,7 +391,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var config = new SentinelConfiguration();
         var engine = new RefactoringEngine(
             NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
-        Dictionary<string, string>? result = null;
+        Dictionary<FilePath, string>? result = null;
         var file = _realFilePath;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.MoveAllTypesToFilesAsync(file),
@@ -407,7 +407,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
             NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.WrapInTryCatchAsync(_realFilePath, 1, 5),
+            result = (await engine.WrapInTryCatchAsync(_realFilePath, 1, 5)).UpdatedText!,
             "RefactoringEngine.WrapInTryCatchAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
@@ -420,8 +420,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
             NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.SyncInterfaceToImplementationAsync(
-                _realFilePath, _realClassName, "I" + _realClassName),
+            result = (await engine.SyncInterfaceToImplementationAsync(
+                _realFilePath, _realClassName, "I" + _realClassName)).UpdatedText!,
             "RefactoringEngine.SyncInterfaceToImplementationAsync must not throw (interface may not exist — graceful return expected).");
         Assert.That(result, Is.Not.Null);
     }
@@ -434,7 +434,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     public async Task GranularRefactoringEngine_ExtractMembersToPartial_DoesNotThrow()
     {
         var engine = new GranularRefactoringEngine(_workspaceManager);
-        Dictionary<string, string>? result = null;
+        Dictionary<FilePath, string>? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.ExtractMembersToPartialAsync(
                 _realFilePath, _realClassName, new[] { _realMethodName }),
@@ -452,7 +452,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new ModernizationUpgradeEngine(_workspaceManager);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.UpgradePatternMatchingAsync(_realFilePath),
+            result = (await engine.UpgradePatternMatchingAsync(_realFilePath)).UpdatedText!,
             "ModernizationUpgradeEngine.UpgradePatternMatchingAsync must not throw on real file.");
         Assert.That(result, Is.Not.Null);
     }
@@ -464,7 +464,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var engine = new SyntaxUpgradeEngine(_workspaceManager, config);
         string? result = null;
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.UpgradeToPrimaryConstructorAsync(_realFilePath, _realClassName),
+            result = (await engine.UpgradeToPrimaryConstructorAsync(_realFilePath, _realClassName)).UpdatedText!,
             "SyntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync must not throw on real class.");
         Assert.That(result, Is.Not.Null);
     }
@@ -480,7 +480,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var issues = await engine.AnalyzePerformanceAsync(_realFilePath);
         foreach (var issue in issues)
         {
-            Assert.That(issue.FilePath, Is.Not.Null,
+            Assert.That(issue.FilePath.Absolute, Is.Not.Null.And.Not.Empty,
                 "Every PerformanceIssueReport must have a non-null FilePath.");
             Assert.That(issue.Description, Is.Not.Null.And.Not.Empty,
                 "Every PerformanceIssueReport must have a non-empty Description.");
@@ -506,11 +506,11 @@ public class RealSolution_EngineSmoke_Battery34Tests
     {
         var engine = new DiagnosticEngine(_workspaceManager);
         var summary = await engine.GetFileDiagnosticsAsync(_realFilePath);
-        Assert.That(summary.Errors, Is.GreaterThanOrEqualTo(0),
+        Assert.That(summary.Data.Errors, Is.GreaterThanOrEqualTo(0),
             "DiagnosticSummary.Errors must be >= 0.");
-        Assert.That(summary.Warnings, Is.GreaterThanOrEqualTo(0),
+        Assert.That(summary.Data.Warnings, Is.GreaterThanOrEqualTo(0),
             "DiagnosticSummary.Warnings must be >= 0.");
-        Assert.That(summary.Details, Is.Not.Null,
+        Assert.That(summary.Data.Details, Is.Not.Null,
             "DiagnosticSummary.Details must not be null.");
     }
 
@@ -520,7 +520,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         var config = new SentinelConfiguration();
         var engine = new AnalysisEngine(_workspaceManager, config);
         var file = _realFilePath;
-        var result = await engine.GenerateCallTreeAsync(file, _realMethodName);
+        var result = (await engine.GenerateCallTreeAsync(file, _realMethodName)).UpdatedText!;
         Assert.That(result, Is.Not.Null.And.Not.Empty,
             "GenerateCallTreeAsync should return a non-empty call tree string.");
     }

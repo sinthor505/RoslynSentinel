@@ -36,9 +36,9 @@ public class ValidationEngineTests
     [Test]
     public async Task ValidateChanges_ValidNewContent_SucceedsWithNoErrors()
     {
-        var result = await _engine.ValidateChangesAsync(new Dictionary<string, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
         {
-            ["Greeter.cs"] = "public class Greeter { public string Greet() => \"Hi!\"; }"
+            [new FilePath("Greeter.cs")] = "public class Greeter { public string Greet() => \"Hi!\"; }"
         });
 
         Assert.That(result.Success, Is.True, "Syntactically valid replacement should pass");
@@ -48,9 +48,9 @@ public class ValidationEngineTests
     [Test]
     public async Task ValidateChanges_FileNotFound_ReturnsErrorReport()
     {
-        var result = await _engine.ValidateChangesAsync(new Dictionary<string, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
         {
-            ["DoesNotExist.cs"] = "public class X {}"
+            [new FilePath("DoesNotExist.cs")] = "public class X {}"
         });
 
         Assert.That(result.Success, Is.False, "Missing file should not be valid");
@@ -62,9 +62,9 @@ public class ValidationEngineTests
     public async Task ValidateChanges_BreakingContent_ReturnsFalseWithCompileError()
     {
         // CS0029: cannot implicitly convert type 'string' to 'int'
-        var result = await _engine.ValidateChangesAsync(new Dictionary<string, string>
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
         {
-            ["Greeter.cs"] = "public class Greeter { void M() { int x = \"not a number\"; } }"
+            [new FilePath("Greeter.cs")] = "public class Greeter { void M() { int x = \"not a number\"; } }"
         });
 
         Assert.That(result, Is.Not.Null, "Should always return a report, never throw");
@@ -160,7 +160,7 @@ public class DiagnosticEngineTests
     {
         var summary = await _engine.GetFileDiagnosticsAsync("Clean.cs");
 
-        Assert.That(summary.Errors, Is.EqualTo(0), "Clean file should report no errors");
+        Assert.That(summary.Data.Errors, Is.EqualTo(0), "Clean file should report no errors");
     }
 
     [Test]
@@ -175,8 +175,8 @@ public class DiagnosticEngineTests
         var summary = await _engine.GetProjectDiagnosticsAsync("Source");
 
         Assert.That(summary, Is.Not.Null, "Known project should return a summary");
-        Assert.That(summary.Errors, Is.GreaterThanOrEqualTo(0));
-        Assert.That(summary.Warnings, Is.GreaterThanOrEqualTo(0));
+        Assert.That(summary.Data.Errors, Is.GreaterThanOrEqualTo(0));
+        Assert.That(summary.Data.Warnings, Is.GreaterThanOrEqualTo(0));
     }
 }
 

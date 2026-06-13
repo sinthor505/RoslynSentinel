@@ -127,7 +127,7 @@ class C {
 
         var results = await _securityEngine.FindHardcodedPathsAsync();
         Assert.That(results, Is.Not.Empty, "Solution-wide scan should find hardcoded path");
-        Assert.That(results.All(r => r.FilePath != null), Is.True, "FilePath must be set on every finding");
+        Assert.That(results.All(r => r.filePath.Absolute != null), Is.True, "FilePath must be set on every finding");
     }
 
     [Test]

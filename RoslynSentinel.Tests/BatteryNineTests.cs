@@ -246,7 +246,7 @@ public class StructuralRefinementEngineTests
 
         var result = await _engine.SyncTypeAndFilenameAsync("MyService.cs");
 
-        Assert.That(result, Is.EqualTo("Filename matches primary type."));
+        Assert.That(result.UpdatedText!, Is.EqualTo("Filename matches primary type."));
     }
 
     [Test]
@@ -258,7 +258,7 @@ public class StructuralRefinementEngineTests
 
         var result = await _engine.SyncTypeAndFilenameAsync("Wrong.cs");
 
-        Assert.That(result, Does.StartWith("CHANGE_"), "Should propose a rename via staging change ID");
+        Assert.That(result.UpdatedText!, Does.StartWith("CHANGE_"), "Should propose a rename via staging change ID");
         Assert.That(result, Does.Contain("MyService.cs"), "Target filename should be the type name");
     }
 

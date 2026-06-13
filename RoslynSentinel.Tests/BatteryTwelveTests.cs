@@ -119,7 +119,7 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.UpgradeToModernGuardsAsync("Code.cs");
 
-        Assert.That(result, Does.StartWith("// No if-throw guard clause"),
+        Assert.That(result.UpdatedText!, Does.StartWith("// No if-throw guard clause"),
             "No patterns should produce a no-op comment");
     }
 }

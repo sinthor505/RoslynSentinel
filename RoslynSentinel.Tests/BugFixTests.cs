@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Server;
 
+using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
 
@@ -28,6 +30,7 @@ public class BugFixTests
     private CodeStyleEngine _codeStyleEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private StructuralRefinementEngine _structuralRefinementEngine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
 
     [SetUp]
     public void Setup()
@@ -38,7 +41,8 @@ public class BugFixTests
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _mappingEngine = new MappingEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager);
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
@@ -479,7 +483,7 @@ namespace MyApp
 
         Assert.That(result, Is.Not.Null, "Should return result");
         // Should target DataService (primary type) or return a valid result
-        Assert.That(result.Length, Is.GreaterThan(0), "Should return non-empty result");
+        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return non-empty result");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -510,7 +514,7 @@ public class Logger
 
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return interpolated string result");
         // Either should contain interpolated result or return the code as-is
-        Assert.That(result.Length, Is.GreaterThan(0), "Should return a result");
+        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return a result");
     }
 
     [Test]
@@ -1119,7 +1123,7 @@ public class Product
 
             foreach (var loc in finding.Locations)
             {
-                Assert.That(loc.FilePath, Is.Not.Null.And.Not.Empty,
+                Assert.That(loc.FilePath.Absolute, Is.Not.Null.And.Not.Empty,
                     "Location.FilePath must not be empty (value tuple serialization bug)");
                 Assert.That(loc.Line, Is.GreaterThan(0),
                     "Location.Line must be a real line number");
@@ -1892,7 +1896,7 @@ public class TargetDto
                 "MyClass.cs", "Name", "ToFullProperty",
                 contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
 
-            Assert.That(result, Does.StartWith("Error:"),
+            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
                 "Should return an error string when snippet is not found");
         }
 
@@ -1908,7 +1912,7 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "NonExistentMethod", "ToExpressionBody");
 
-            Assert.That(result, Does.StartWith("Error:"),
+            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
                 "Should return an error string when the named member does not exist");
         }
 
@@ -1928,7 +1932,7 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToExpressionBody");
 
-            Assert.That(result, Does.StartWith("Error:"),
+            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
                 "Should return an error string when method has multiple statements");
         }
 
@@ -1947,7 +1951,7 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToBlockBody");
 
-            Assert.That(result, Does.StartWith("Error:"),
+            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
                 "Should return an error string when converting ToBlockBody but already a block body");
         }
 
@@ -2117,7 +2121,7 @@ public class MyClass
             // 2. Return the interpolated string
             Assert.That(result, Is.Not.Null,
                 "Should handle named const without crashing");
-            Assert.That(result.Length, Is.GreaterThan(0),
+            Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0),
                 "Should return non-empty result (error or success)");
         }
 
@@ -2972,7 +2976,7 @@ public class Processor2 : IProcessor
 
             Assert.That(result, Is.Not.Null, "Should return a result");
             // All implementations should be updated
-            var processMethods = result!.Count(c => c == '{') - result!.Count(c => c == '}');
+            var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
             // Verify that the code includes the interface and implementations
             Assert.That(result, Does.Contain("IProcessor"), "Should contain interface");
         }
@@ -2999,7 +3003,7 @@ public class Helper
 
             // Should error or return unchanged because GetName is used
             Assert.That(result, Is.Not.Null, "Should return a result");
-            if (!result!.Contains("error") && !result.Contains("Error"))
+            if (!result!.UpdatedText!.Contains("error") && !result.UpdatedText!.Contains("Error"))
             {
                 // If not an error, GetName should still be in the output
                 Assert.That(result, Does.Contain("GetName"),
@@ -3104,7 +3108,7 @@ public class Cat
 
             SetMultipleFiles(("Dog.cs", code));
 
-            var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new[] { "Dog.cs" }, new[] { "Dog", "Cat" }, "Animal");
+            var result = await _advancedStructuralEngine.ExtractSuperclassAsync(new FilePath[] { new FilePath("Dog.cs") }, new[] { "Dog", "Cat" }, "Animal");
 
             Assert.That(result, Is.Not.Null, "Should return a result");
             // Base class should have the common Name property

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 using RoslynSentinel.Server;
 using System.Reflection;
+using SentinelModernizationTools = RoslynSentinel.Server.Advanced.SentinelModernizationTools;
 
 namespace RoslynSentinel.Tests;
 

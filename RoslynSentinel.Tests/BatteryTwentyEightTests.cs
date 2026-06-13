@@ -98,7 +98,7 @@ public class B02extra_Immutability_ReadonlySpacing
 
         Assert.That(result, Does.Not.Contain("readonlyint"),
             "No field should produce 'readonlyint' — all must have space.");
-        var readonlyCount = result.Split("readonly int").Length - 1;
+        var readonlyCount = result.UpdatedText!.Split("readonly int").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(2),
             "Both fields should get 'readonly int' with correct spacing.");
     }
@@ -118,7 +118,7 @@ public class B02extra_Immutability_ReadonlySpacing
 
         var result = await _engine.MakeClassImmutableAsync("Const.cs", "Const");
 
-        var readonlyCount = result.Split("readonly").Length - 1;
+        var readonlyCount = result.UpdatedText!.Split("readonly").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(1),
             "An already-readonly field must not get a second readonly modifier.");
     }
@@ -397,7 +397,7 @@ public class Processor {
         Assert.That(result, Does.Contain("for"),
             "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
-        var bodyStatements = result
+        var bodyStatements = result.UpdatedText!
             .Split(new[] { "for " }, StringSplitOptions.None)
             .Skip(1).FirstOrDefault() ?? "";
         Assert.That(result, Does.Contain("i * 2"),
@@ -563,7 +563,7 @@ public class RealSolution_SmokeTests_Battery28
     public async Task ImmutabilityEngine_MakeClassImmutable_DoesNotThrow()
     {
         var engine = new ImmutabilityEngine(_workspaceManager);
-        string? result = null;
+        DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.MakeClassImmutableAsync(_realFilePath, _realClassName),
             $"ImmutabilityEngine must not throw on class '{_realClassName}' in {_realFilePath}");
@@ -574,7 +574,7 @@ public class RealSolution_SmokeTests_Battery28
     public async Task DocumentationEngine_GenerateStubs_DoesNotThrow()
     {
         var engine = new DocumentationEngine(_workspaceManager);
-        string? result = null;
+        DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.GenerateXmlDocumentationStubsAsync(_realFilePath),
             $"DocumentationEngine.GenerateXmlDocumentationStubsAsync must not throw on real file.");
@@ -585,7 +585,7 @@ public class RealSolution_SmokeTests_Battery28
     public async Task LogicOptimizationEngine_SimplifyBooleans_DoesNotThrow()
     {
         var engine = new LogicOptimizationEngine(_workspaceManager);
-        string? result = null;
+        DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await engine.SimplifyBooleanExpressionsAsync(_realFilePath),
             $"LogicOptimizationEngine.SimplifyBooleanExpressionsAsync must not throw on real file.");
@@ -613,7 +613,7 @@ public class RealSolution_SmokeTests_Battery28
 
         foreach (var issue in issues)
         {
-            Assert.That(issue.FilePath, Is.Not.Null.And.Not.Empty,
+            Assert.That(issue.filePath.Absolute, Is.Not.Null.And.Not.Empty,
                 "Every SafetyIssue must have a non-empty FilePath.");
             Assert.That(issue.Type, Is.Not.Null.And.Not.Empty,
                 "Every SafetyIssue must have a non-empty Type.");

@@ -32,7 +32,7 @@ public class LogicOptimizationEngineTests
     public async Task ConvertToNullCoalescing_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.ConvertToNullCoalescingAsync("NoSuchFile.cs");
-        Assert.That(result, Is.EqualTo(""), "unknown file should return empty string");
+        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string");
     }
 
     [Test]
@@ -55,21 +55,21 @@ public class Guard
 
         var result = await _engine.ConvertToNullCoalescingAsync("Guard.cs");
 
-        Assert.That(result, Is.Not.EqualTo(""), "result should not be empty for a file with null check");
+        Assert.That(result.UpdatedText!, Is.Not.EqualTo(""), "result should not be empty for a file with null check");
     }
 
     [Test]
     public async Task AddGuardClauses_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.AddGuardClausesAsync("NoSuchFile.cs", "DoWork");
-        Assert.That(result, Is.EqualTo(""), "unknown file should return empty string for AddGuardClauses");
+        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string for AddGuardClauses");
     }
 
     [Test]
     public async Task SimplifyBooleanExpressions_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.SimplifyBooleanExpressionsAsync("NoSuchFile.cs");
-        Assert.That(result, Is.EqualTo(""), "unknown file should return empty string for SimplifyBooleanExpressions");
+        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string for SimplifyBooleanExpressions");
     }
 }
 

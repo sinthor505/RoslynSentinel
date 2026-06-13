@@ -59,7 +59,7 @@ namespace ExpressRecipe.Services
 }");
         var report = await _engine.GetCodeInventoryAsync("Test.cs");
 
-        Assert.That(report.FilePath, Is.EqualTo("Test.cs"));
+        Assert.That(report.filePath.Absolute, Is.EqualTo("Test.cs"));
         Assert.That(report.Namespaces, Contains.Item("ExpressRecipe.Services"));
         Assert.That(report.Classes, Contains.Item("ProductService"));
         Assert.That(report.Interfaces, Contains.Item("IProductService"));
@@ -140,7 +140,7 @@ public class Processor
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Does.Contain("Process"), "Method name should be preserved");
-        Assert.That(result.Length, Is.GreaterThan(10), "Should return non-empty code");
+        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(10), "Should return non-empty code");
     }
 
     [Test]
@@ -355,8 +355,8 @@ public class Product { public string Name { get; set; } public decimal Price { g
         Assert.That(result, Does.Contain("Name"), "Property Name should be in initializer");
         Assert.That(result, Does.Contain("Price"), "Property Price should be in initializer");
         // Both assignments should be collapsed into object initializer — no separate assignment statements
-        Assert.That(result, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
-        Assert.That(result, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
+        Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
+        Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
     }
 
     [Test]

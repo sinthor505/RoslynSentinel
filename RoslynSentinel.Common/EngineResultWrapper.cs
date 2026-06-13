@@ -1,6 +1,14 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 
 namespace RoslynSentinel.Common;
+
+public enum EngineErrorCode
+{
+    General,
+    StaleSession,
+    SymbolNotResolved,
+}
 
 public sealed class EngineResultWrapper<T>
 {
@@ -53,17 +61,29 @@ public enum EngineOutcome
 
 public class EngineError
 {
-    public string Message
-    {
-        get;
-    }
-    public Exception? Exception
-    {
-        get;
-    }
+    public string Message { get; }
+    public Exception? Exception { get; }
+    public EngineErrorCode? Code { get; }
+
     public EngineError(string message, Exception? exception = null)
     {
         Message = message;
         Exception = exception;
+    }
+
+    public EngineError(EngineErrorCode code, string message, DataTag? tag = null)
+    {
+        Code = code;
+        Message = message;
+    }
+
+    public string ToToolResponse()
+    {
+        return JsonSerializer.Serialize(new
+        {
+            success = false,
+            error = Message,
+            errorCode = Code?.ToString() ?? EngineErrorCode.General.ToString()
+        });
     }
 }

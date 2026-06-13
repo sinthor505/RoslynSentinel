@@ -49,7 +49,7 @@ public class Service
 
         Assert.That(result, Does.Contain("ValueTask<int>"),
             "Method returning Task<int> with 1 await should be converted to ValueTask<int>.");
-        Assert.That(result, Does.Not.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// WARNING:"),
             "Single-await method should not trigger a warning.");
     }
 
@@ -70,7 +70,7 @@ public class Service
 
         var result = await _engine.OptimizeToValueTaskAsync("Service.cs", "DoWorkAsync");
 
-        Assert.That(result, Does.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
             "Method with 2+ awaits must produce a WARNING comment.");
         Assert.That(result, Does.Contain("2 await"),
             "Warning should mention the count of await expressions.");
@@ -97,7 +97,7 @@ public class Service
 
         var result = await _engine.OptimizeToValueTaskAsync("Service.cs", "RunAsync");
 
-        Assert.That(result, Does.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
             "Method with try/catch must produce a WARNING comment.");
         Assert.That(result, Does.Contain("try/catch"),
             "Warning should mention try/catch as the reason.");
@@ -143,7 +143,7 @@ public class Service
         // Should return source unchanged (not Task return type → no conversion)
         Assert.That(result, Does.Contain("ValueTask<int>"),
             "Already-ValueTask method should be returned as-is.");
-        Assert.That(result, Does.Not.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// WARNING:"),
             "Already-ValueTask method should not produce a warning.");
     }
 

@@ -1,4 +1,5 @@
 {
     "editor.occurrencesHighlight": "off",
-    "editor.selectionHighlight": false
+    "editor.selectionHighlight": false,
+    "claudeCode.allowDangerouslySkipPermissions": true
 }

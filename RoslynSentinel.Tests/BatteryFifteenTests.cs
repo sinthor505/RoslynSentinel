@@ -161,7 +161,7 @@ public class CodeFlowEngineTests
     public async Task ReduceBlockDepth_UnknownFile_ReturnsErrorComment()
     {
         var result = await _engine.ReduceBlockDepthAsync("NoSuchFile.cs", "Process");
-        Assert.That(result, Does.StartWith("// Error:"), "unknown file should return an error comment string");
+        Assert.That(result.UpdatedText!, Does.StartWith("// Error:"), "unknown file should return an error comment string");
     }
 
     [Test]
@@ -204,7 +204,7 @@ public class Logger
 
         var result = await _engine.ReduceBlockDepthAsync("Logger.cs", "Log");
 
-        Assert.That(result, Does.Not.StartWith("// Error:"), "should return source, not error comment");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// Error:"), "should return source, not error comment");
         Assert.That(result, Does.Contain("Log"), "method name should still appear");
     }
 }
@@ -231,7 +231,7 @@ public class CodeHealingEngineTests
     public async Task FixThreadSleep_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.FixThreadSleepAsync("NoSuchFile.cs");
-        Assert.That(result, Is.EqualTo(string.Empty), "unknown file should return empty string");
+        Assert.That(result.UpdatedText!, Is.EqualTo(string.Empty), "unknown file should return empty string");
     }
 
     [Test]

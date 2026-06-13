@@ -998,29 +998,10 @@ public partial class PersistentWorkspaceManager : IDisposable
         return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
     }
 
-    // v1
-    public readonly struct SymbolResolution
+    public bool IsCurrentSession(string sessionId)
     {
-        public ISymbol? Symbol
-        {
-            get; init;
-        }
-        public SymbolHandle Handle
-        {
-            get; init;
-        }
-        public EngineError? Error
-        {
-            get; init;
-        }
-
-        public bool Resolved
-        {
-            get
-            {
-                return this.Error is null;
-            }
-        }
+        // TODO: revisit after empirical agent testing
+        return sessionId == this.SessionId.ToString();
     }
 
     // v1 — single integration point for all symbol-accepting tools
@@ -1030,6 +1011,17 @@ public partial class PersistentWorkspaceManager : IDisposable
         string docCommentId,
         CancellationToken ct)
     {
+        if (!this.IsCurrentSession(sessionId))
+        {
+            return new SymbolResolution
+            {
+                Error = new EngineError(
+                    EngineErrorCode.StaleSession,
+                    "Symbol handle is from a prior workspace session. Re-run locate_symbol.",
+                    DataTag.SymbolHandle)
+            };
+        }
+
         SymbolHandle handle = new SymbolHandle(sessionId, projectName, docCommentId);
         ISymbol? symbol = await this.ResolveSymbolAsync(handle, ct);
 
@@ -1038,8 +1030,10 @@ public partial class PersistentWorkspaceManager : IDisposable
             return new SymbolResolution
             {
                 Handle = handle,
-                Error = new(
-                    $"Symbol '{docCommentId}' no longer resolves — renamed, moved, or removed. Re-run locate_symbol.")
+                Error = new EngineError(
+                    EngineErrorCode.SymbolNotResolved,
+                    $"Symbol '{docCommentId}' no longer resolves — may have been renamed, moved, or removed. Re-run locate_symbol.",
+                    DataTag.SymbolHandle)
             };
         }
 

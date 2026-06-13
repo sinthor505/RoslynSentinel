@@ -343,7 +343,7 @@ public class Service
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "99", "MaxAttempts");
 
-        var lines = result.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        var lines = result.UpdatedText!.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         var constLine = Array.FindIndex(lines, l => l.Contains("const int MaxAttempts"));
         var methodLine = Array.FindIndex(lines, l => l.Contains("void Execute"));
 

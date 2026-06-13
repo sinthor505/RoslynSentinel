@@ -23,6 +23,9 @@
 
   <ItemGroup>
     <Using Include="NUnit.Framework" />
+    <Using Include="RoslynSentinel.Advanced" />
+    <Using Include="RoslynSentinel.Basic" />
+    <Using Include="RoslynSentinel.Common" />
   </ItemGroup>
 
   <ItemGroup>

@@ -814,7 +814,7 @@ public class DiscoveryEngine
                     var symbolLocation = await _symbolNavigationEngine.LocateSymbolAsync(targetName, kind, containingType, null, null, true).ConfigureAwait(false);
 
                     var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    results.Add(new AttributeUsageSite(bare, attr.ArgumentList?.Arguments.Select(a => a.ToString()).ToArray() ?? Array.Empty<string>(), symbolLocation.First().SymbolId ?? string.Empty, kind, targetName, containingType, symbolLocation.First()?.ContainingNamespace ?? string.Empty, symbolLocation.First().ProjectName, docPath, line));
+                    results.Add(new AttributeUsageSite(bare, attr.ArgumentList?.Arguments.Select(a => a.ToString()).ToArray() ?? Array.Empty<string>(), symbolLocation.First().DocCommentId ?? string.Empty, kind, targetName, containingType, symbolLocation.First()?.ContainingNamespace ?? string.Empty, symbolLocation.First().ProjectName, docPath, line));
                 }
             }
         }

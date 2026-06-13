@@ -203,9 +203,9 @@ public class ConvertToSwitchTests
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
         Assert.That(result, Does.Contain("switch"), "Should contain switch statement");
         // Should not have default if no else clause
-        var switchStart = result.IndexOf("switch");
-        var switchEnd = result.LastIndexOf("}");
-        var switchSection = result.Substring(switchStart, switchEnd - switchStart);
+        var switchStart = result.UpdatedText!.IndexOf("switch");
+        var switchEnd = result.UpdatedText!.LastIndexOf("}");
+        var switchSection = result.UpdatedText!.Substring(switchStart, switchEnd - switchStart);
         // This assertion checks that switch was created, default is optional
         Assert.That(switchSection, Does.Contain("case"), "Should contain case statements");
     }
@@ -377,7 +377,7 @@ public class ConvertToSwitchTests
         
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
         // Two-branch should not be converted to switch
-        var hasIfStatement = result.Contains("if (x == 1)") || result.Contains("if (x==1)");
+        var hasIfStatement = result.UpdatedText!.Contains("if (x == 1)") || result.UpdatedText!.Contains("if (x==1)");
         Assert.That(hasIfStatement, Is.True, "Should preserve if-else for two branches");
     }
 
@@ -411,8 +411,8 @@ public class ConvertToSwitchTests
         
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
         // Complex condition should not be converted
-        var hasIfStatement = (result.Contains("if") && result.Contains("&&")) || result.Contains("||");
-        Assert.That(hasIfStatement || !result.Contains("switch"), 
+        var hasIfStatement = (result.UpdatedText!.Contains("if") && result.UpdatedText!.Contains("&&")) || result.UpdatedText!.Contains("||");
+        Assert.That(hasIfStatement || !result.UpdatedText!.Contains("switch"),
             Is.True, 
             "Should preserve complex if conditions (not convert to switch)");
     }
@@ -447,7 +447,7 @@ public class ConvertToSwitchTests
         
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
         // Different subjects should not be converted
-        var shouldHaveIf = result.Contains("if (x == 1)") || result.Contains("if (x==1)");
+        var shouldHaveIf = result.UpdatedText!.Contains("if (x == 1)") || result.UpdatedText!.Contains("if (x==1)");
         Assert.That(shouldHaveIf, Is.True, "Should preserve if when subjects differ");
     }
 
@@ -481,7 +481,7 @@ public class ConvertToSwitchTests
         
         Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
         // Non-equality comparisons should not be converted
-        var shouldHaveIf = result.Contains("if") && result.Contains("<");
+        var shouldHaveIf = result.UpdatedText!.Contains("if") && result.UpdatedText!.Contains("<");
         Assert.That(shouldHaveIf, Is.True, "Should preserve non-equality comparisons");
     }
 

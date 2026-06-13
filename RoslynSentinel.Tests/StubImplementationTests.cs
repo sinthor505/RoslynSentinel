@@ -208,7 +208,7 @@ class C {
 
         Assert.That(result, Does.Not.Contain(".Substring("),
             "All Substring calls should be converted");
-        Assert.That(result.Split("AsSpan").Length - 1, Is.EqualTo(2),
+        Assert.That(result.UpdatedText!.Split("AsSpan").Length - 1, Is.EqualTo(2),
             "Should have 2 AsSpan calls");
     }
 

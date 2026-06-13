@@ -27,6 +27,7 @@ public class MigrationScanResultTests
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AntiPatternEngine _antiPatternEngine;
     private SentinelQualityTools _qualityTools;
+    private SentinelScanTools _scanTools;
     private string _tempDir;
 
     // ── attribute stub included in every source snippet ──────────────────────
@@ -70,6 +71,33 @@ public class MigrationScanResultTests
                 NullLogger<AsyncBatchEngine>.Instance),
             _workspaceManager,
             NullLogger<SentinelQualityTools>.Instance);
+
+        var config = new SentinelConfiguration();
+        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _scanTools = new SentinelScanTools(
+            new AnalysisEngine(_workspaceManager, config),
+            new SecurityEngine(_workspaceManager),
+            _antiPatternEngine,
+            new AsyncSafetyEngine(_workspaceManager),
+            new ThreadSafetyEngine(_workspaceManager),
+            new ControlFlowEngine(_workspaceManager),
+            new PerformanceEngine(_workspaceManager),
+            new DeadCodeEngine(_workspaceManager),
+            new DependencyEngine(_workspaceManager),
+            new ArchitecturalEngine(_workspaceManager),
+            new ProjectStructureEngine(_workspaceManager, config),
+            new DependencyInjectionEngine(_workspaceManager),
+            new ProjectConsistencyEngine(_workspaceManager),
+            new MetricsEngine(_workspaceManager),
+            new CloneDetectionEngine(_workspaceManager),
+            new DiscoveryEngine(_workspaceManager, symbolNavEngine),
+            new StackOverflowEngine(_workspaceManager),
+            new CodeStyleEngine(_workspaceManager, config),
+            new CodeStyleAnalysisEngine(_workspaceManager),
+            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config),
+            symbolNavEngine,
+            _workspaceManager,
+            NullLogger<SentinelScanTools>.Instance);
 
         // Create a temp dir so GetSolutionRoot() returns a valid path for file-write tests.
         _tempDir = Path.Combine(Path.GetTempPath(), "MigrationScanResultTests_" + Guid.NewGuid().ToString("N"));
@@ -256,7 +284,7 @@ public class Svc
         Assert.That(result!.LargeResult, Is.Not.Null,
             "A page > 256 KB should trigger the file-write path.");
         Assert.That(result.LargeResult!.WrittenToFile, Is.True);
-        Assert.That(result.LargeResult.FilePath, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.LargeResult.FilePath.Absolute, Is.Not.Null.And.Not.Empty);
         Assert.That(result.LargeResult.ScanId, Is.Not.Null.And.Not.Empty);
         Assert.That(result.LargeResult.SizeBytes, Is.GreaterThan(256 * 1024));
         Assert.That(result.LargeResult.TotalRecords, Is.GreaterThan(0));
@@ -284,7 +312,7 @@ public class Svc
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await SentinelScanTools.GetScanResult(solutionRoot: _workspaceManager.GetSolutionRoot(), scanId: operationId, limit: 10, offset: 0)).Data;
+        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 0)).Data;
         Assert.That(page1Result.Success, Is.True);
         Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
@@ -300,7 +328,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
-        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await SentinelScanTools.GetScanResult(solutionRoot: _workspaceManager.GetSolutionRoot(), scanId: operationId, limit: 10, offset: 10)).Data;
+        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 10)).Data;
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.Data!.Select(f => f.MethodName).ToHashSet();

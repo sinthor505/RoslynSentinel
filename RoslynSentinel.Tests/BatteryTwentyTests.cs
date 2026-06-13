@@ -169,7 +169,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _tools.ProposedChange("diff", "validate", filePath: "Test.cs", unifiedDiff: diff);
+        var result = await _tools.ProposedChange("diff", "validate", filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -177,9 +177,9 @@ public class BatteryTwentyTests
     public async Task ProposedChange_Files_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
-        var changes = new Dictionary<string, string>
+        var changes = new Dictionary<FilePath, string>
         {
-            ["Test.cs"] = SimpleSource + " // changed"
+            [new FilePath("Test.cs")] = SimpleSource + " // changed"
         };
         var result = await _tools.ProposedChange("files", "validate", changes: changes);
         Assert.That(result, Is.Not.Null);
@@ -201,14 +201,14 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.ProposedChange("diff", "apply", filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
+            () => _tools.ProposedChange("diff", "apply", filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
     }
 
     [Test]
     public async Task ProposedChange_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ProposedChange("files", "apply", changes: new Dictionary<string, string>());
+        var result = await _tools.ProposedChange("files", "apply", changes: new Dictionary<FilePath, string>());
         Assert.That(result, Is.Not.Null);
     }
 
@@ -261,7 +261,7 @@ public class BatteryTwentyTests
     public async Task SafeDelete_ValidPosition_ReturnsString()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SafeDelete("Test.cs", 1, 1);
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", 1, 1);
         Assert.That(result, Is.Not.Null);
     }
 

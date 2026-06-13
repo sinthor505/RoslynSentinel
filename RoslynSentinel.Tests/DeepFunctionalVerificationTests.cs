@@ -101,9 +101,9 @@ public class Service {
         var result = await _modernizationEngine.RecordToClassAsync("Test.cs", "MyRecord");
 
         // Assert
-        Assert.That(result, Contains.Substring("public class MyRecord"));
-        Assert.That(result, Contains.Substring("public string Name { get; init; }"));
-        Assert.That(result, Contains.Substring("public int Age { get; init; }"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public class MyRecord"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public string Name { get; init; }"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public int Age { get; init; }"));
     }
 
     [Test]
@@ -121,7 +121,7 @@ public class MyType {
         var result = await _syntaxUpgradeEngine.UseNameofExpressionAsync("Test.cs", "\"MyType\"");
 
         // Assert
-        Assert.That(result, Contains.Substring("var s = nameof(MyType);"));
+        Assert.That(result.UpdatedText!, Contains.Substring("var s = nameof(MyType);"));
     }
 
     [Test]
@@ -190,8 +190,8 @@ public class C {
         var result = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Old", newSource);
 
         // Assert
-        Assert.That(result, Contains.Substring("public void New()"));
-        Assert.That(result, Does.Not.Contain("public void Old()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public void New()"));
+        Assert.That(result.UpdatedText!, Does.Not.Contain("public void Old()"));
     }
 
     [Test]
@@ -205,7 +205,7 @@ public class C {
         var result = await _refactoringEngine.AddMemberAsync("C.cs", "C", member);
 
         // Assert
-        Assert.That(result, Contains.Substring("public int NewField;"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public int NewField;"));
     }
 
     [Test]
@@ -218,8 +218,8 @@ public class C {
         var result = await _refactoringEngine.RemoveMemberAsync("C.cs", "Junk");
 
         // Assert
-        Assert.That(result, Does.Not.Contain("void Junk()"));
-        Assert.That(result, Contains.Substring("void Keep()"));
+        Assert.That(result.UpdatedText!, Does.Not.Contain("void Junk()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("void Keep()"));
     }
 
     [Test]
@@ -232,9 +232,9 @@ public class C {
         var result = await _codeStyleEngine.FixDangerousLockAsync("C.cs");
 
         // Assert
-        Assert.That(result, Contains.Substring("private readonly Lock _lockObj = new Lock()"));
-        Assert.That(result, Contains.Substring("lock (_lockObj)"));
-        Assert.That(result, Contains.Substring("using System.Threading;"));
+        Assert.That(result.UpdatedText!, Contains.Substring("private readonly Lock _lockObj = new Lock()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("lock (_lockObj)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("using System.Threading;"));
     }
 
     [Test]
@@ -247,9 +247,9 @@ public class C {
         var result = await _codeStyleEngine.ConvertPropertyToMethodsAsync("C.cs", "Name");
 
         // Assert
-        Assert.That(result, Contains.Substring("public string GetName()"));
-        Assert.That(result, Contains.Substring("public void SetName(string value)"));
-        Assert.That(result, Contains.Substring("private string _name;"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public string GetName()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("public void SetName(string value)"));
+        Assert.That(result.UpdatedText!, Contains.Substring("private string _name;"));
     }
 
     [Test]
@@ -268,7 +268,7 @@ public class C {
         var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("C.cs");
 
         // Assert
-        Assert.That(result, Contains.Substring("ReadOnlySpan<byte> span = data;"));
-        Assert.That(result, Does.Not.Contain(".AsSpan()"));
+        Assert.That(result.UpdatedText!, Contains.Substring("ReadOnlySpan<byte> span = data;"));
+        Assert.That(result.UpdatedText!, Does.Not.Contain(".AsSpan()"));
     }
 }

@@ -152,13 +152,13 @@ public class Foo
         SetSource(src, "Foo.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Foo.cs");
 
-        Assert.That(result, Does.Not.StartWith("// "),
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// "),
             "Should return converted code, not an error/message comment");
-        Assert.That(result, Does.Contain("namespace MyApp;"),
+        Assert.That(result.UpdatedText!, Does.Contain("namespace MyApp;"),
             "Should use file-scoped namespace syntax (semicolon form)");
-        Assert.That(result, Does.Not.Contain("namespace MyApp\n{").And.Not.Contain("namespace MyApp\r\n{"),
+        Assert.That(result.UpdatedText!, Does.Not.Contain("namespace MyApp\n{").And.Not.Contain("namespace MyApp\r\n{"),
             "Block-form namespace braces should be gone");
-        Assert.That(result, Does.Contain("class Foo"), "Class body should be preserved");
+        Assert.That(result.UpdatedText!, Does.Contain("class Foo"), "Class body should be preserved");
     }
 
     [Test]
@@ -168,7 +168,7 @@ public class Foo
         SetSource(src, "Bar.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Bar.cs");
 
-        Assert.That(result, Does.StartWith("// Already"),
+        Assert.That(result.UpdatedText!, Does.StartWith("// Already"),
             "Should return message when namespace is already file-scoped");
     }
 
@@ -179,7 +179,7 @@ public class Foo
         SetSource(src, "Global.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Global.cs");
 
-        Assert.That(result, Does.StartWith("// No block"),
+        Assert.That(result.UpdatedText!, Does.StartWith("// No block"),
             "Should return a message when no namespace is found");
     }
 

@@ -199,7 +199,7 @@ public class B01_Instrumentation_ValidThrowStatement
 
         var result = await _engine.AddTryCatchToClassAsync("Worker.cs", "Worker");
 
-        var throwCount = result.Split("throw;").Length - 1;
+        var throwCount = result.UpdatedText!.Split("throw;").Length - 1;
         Assert.That(throwCount, Is.GreaterThanOrEqualTo(2),
             "Each public method's catch block must contain a valid throw;");
     }
@@ -519,7 +519,7 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Service.cs");
 
-        var summaryCount = result.Split("/// <summary>").Length - 1;
+        var summaryCount = result.UpdatedText!.Split("/// <summary>").Length - 1;
         Assert.That(summaryCount, Is.EqualTo(1),
             "Methods that already have XML docs must not receive a second summary stub.");
     }
@@ -565,10 +565,10 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
             "Output must contain a record declaration.");
         // Count occurrences of "X" as a standalone word in the record output
         // There should be exactly ONE declaration of X (either as positional param or body member)
-        var xCount = System.Text.RegularExpressions.Regex.Matches(result, @"\bint X\b").Count;
+        var xCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint X\b").Count;
         Assert.That(xCount, Is.EqualTo(1),
             "Property X must appear exactly once — no duplicate declarations.");
-        var yCount = System.Text.RegularExpressions.Regex.Matches(result, @"\bint Y\b").Count;
+        var yCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bint Y\b").Count;
         Assert.That(yCount, Is.EqualTo(1),
             "Property Y must appear exactly once — no duplicate declarations.");
     }
@@ -640,7 +640,7 @@ public class B10_ModernizationEngine_OrChainFullPattern
         Assert.That(result, Does.Contain("3"),
             "Converted OR pattern must retain the third value (3).");
         // If actual OR-pattern conversion occurred it should contain "or"
-        if (result.Contains("is"))
+        if (result.UpdatedText!.Contains("is"))
         {
             Assert.That(result, Does.Contain("or").Or.Contain("||"),
                 "If converted to is-pattern, must include all values with 'or'; otherwise chain preserved.");

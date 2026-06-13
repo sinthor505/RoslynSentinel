@@ -63,9 +63,9 @@ public class NewToolTests
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToFullProperty");
 
-        Assert.That(result, Contains.Substring("42"), "Initializer value should survive ToFullProperty conversion");
-        Assert.That(result, Contains.Substring("get =>"), "Should produce expression-body getter");
-        Assert.That(result, Contains.Substring("set =>"), "Should produce expression-body setter");
+        Assert.That(result.UpdatedText!, Contains.Substring("42"), "Initializer value should survive ToFullProperty conversion");
+        Assert.That(result.UpdatedText!, Contains.Substring("get =>"), "Should produce expression-body getter");
+        Assert.That(result.UpdatedText!, Contains.Substring("set =>"), "Should produce expression-body setter");
     }
 
     [Test]
@@ -85,7 +85,7 @@ public class NewToolTests
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToAutoProperty");
 
-        Assert.That(result, Contains.Substring("{ get; set; }"), "Should produce auto-property");
+        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Should produce auto-property");
     }
 
     [Test]
@@ -121,9 +121,9 @@ public class NewToolTests
             "Test.cs",
             "string.Format(\"Hello {0}, you are {1}\", name, age)");
 
-        Assert.That(result, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result, Contains.Substring("{name}"), "First arg should be inlined");
-        Assert.That(result, Contains.Substring("{age}"), "Second arg should be inlined");
+        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
+        Assert.That(result.UpdatedText!, Contains.Substring("{name}"), "First arg should be inlined");
+        Assert.That(result.UpdatedText!, Contains.Substring("{age}"), "Second arg should be inlined");
     }
 
     [Test]
@@ -133,10 +133,10 @@ public class NewToolTests
             public class Foo { }
             """);
 
-        string result = null!;
+        DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
-        Assert.That(result, Does.StartWith("Error:"));
+        Assert.That(result!.UpdatedText, Does.StartWith("Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ public class NewToolTests
 
         var summary = await _diagnosticEngine.GetFileDiagnosticsAsync("Test.cs");
 
-        Assert.That(summary.Errors, Is.EqualTo(0), "Well-formed file should have no errors");
+        Assert.That(summary.Data.Errors, Is.EqualTo(0), "Well-formed file should have no errors");
     }
 
     [Test]
@@ -296,6 +296,6 @@ public class NewToolTests
 
         // We just verify the summary struct is usable and has Details
         Assert.That(summary, Is.Not.Null);
-        Assert.That(summary.Details, Is.Not.Null);
+        Assert.That(summary.Data.Details, Is.Not.Null);
     }
 }

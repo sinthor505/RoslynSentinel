@@ -275,7 +275,7 @@ public class SentinelIntelligenceTools
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName, exactMatch);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, projectName: projectName, exactMatch: exactMatch);
             if (result.Count == 0)
             {
                 return new ToolResult<object>

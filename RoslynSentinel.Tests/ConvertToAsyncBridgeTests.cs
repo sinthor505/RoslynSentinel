@@ -236,8 +236,8 @@ public class TripService
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
 
         // The bridge wrapper (GetTrips) should appear before the async overload (GetTripsAsync).
-        var bridgeIdx = result.IndexOf("GetAwaiter", StringComparison.Ordinal);
-        var asyncBodyIdx = result.IndexOf("DataHelper.Search", StringComparison.Ordinal);
+        var bridgeIdx = result.UpdatedText!.IndexOf("GetAwaiter", StringComparison.Ordinal);
+        var asyncBodyIdx = result.UpdatedText!.IndexOf("DataHelper.Search", StringComparison.Ordinal);
 
         // Bridge body (GetAwaiter) should appear before the async overload's body (DataHelper.Search).
         Assert.That(bridgeIdx, Is.LessThan(asyncBodyIdx),
