@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class GranularRefactoringEngine
@@ -762,7 +760,8 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Local variable introduced.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -857,7 +856,8 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
+            Message = "// Nested type moved to outer scope.",
+            UpdatedText = newRoot?.NormalizeWhitespace().ToFullString() ?? root.ToFullString()
         };
     }
 
@@ -1130,7 +1130,8 @@ public class GranularRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Local variable introduced.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 

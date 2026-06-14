@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class SyntaxUpgradeEngine
@@ -780,7 +778,8 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Class converted to primary constructor.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -844,7 +843,8 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Converted to file-scoped namespace.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -974,7 +974,8 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.ToFullString()
+            Message = "// Replacements applied.",
+            UpdatedText = newRoot.ToFullString()
         };
     }
 

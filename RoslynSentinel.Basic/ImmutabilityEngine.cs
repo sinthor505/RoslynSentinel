@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class ImmutabilityEngine
@@ -81,7 +79,8 @@ public class ImmutabilityEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Class made immutable.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 }

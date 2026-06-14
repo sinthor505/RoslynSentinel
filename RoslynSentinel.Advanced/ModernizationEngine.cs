@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class ModernizationEngine
@@ -129,7 +127,8 @@ public class ModernizationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Record converted to class.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -201,7 +200,8 @@ public class ModernizationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Record converted to class.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -246,7 +246,8 @@ public class ModernizationEngine
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
-                    Message = newRoot.NormalizeWhitespace().ToFullString()
+                    Message = "// Method converted to expression-bodied.",
+                    UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
                 };
             }
         }
@@ -289,7 +290,8 @@ public class ModernizationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Patterns modernized.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 

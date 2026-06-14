@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class InstrumentationEngine
@@ -53,7 +51,8 @@ public class InstrumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Try/catch added to method.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -101,7 +100,8 @@ public class InstrumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Try/catch added to class methods.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -160,7 +160,8 @@ public class InstrumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Stopwatch diagnostics added to method.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 }

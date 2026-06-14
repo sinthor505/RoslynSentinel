@@ -9,6 +9,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public readonly bool Validated;  // whether the path has been validated as absolute and normalized
 
     public string Absolute { get; } = string.Empty;
+    public string Relative { get; } = string.Empty;
 
     public FilePath(string path, bool validated = false)
     {

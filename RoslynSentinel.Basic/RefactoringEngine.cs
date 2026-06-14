@@ -38,7 +38,12 @@ public record RenameSymbolResult(
             filesChanged = FileChanges.Count,
             fileChanges = FileChanges,
             updatedHandle = UpdatedHandle is SymbolHandle h
-                ? new { h.SessionId, h.ProjectName, h.DocCommentId }
+                ? new
+                {
+                    h.SessionId,
+                    h.ProjectName,
+                    h.DocCommentId
+                }
                 : null,
             note = UpdatedHandle is null
                 ? "updatedHandle is null — re-run locate_symbol before further operations on this symbol."
@@ -1102,7 +1107,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Indexer converted to method.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -1155,7 +1161,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Params keyword toggled.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -1201,7 +1208,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString()
+            Message = "// Member replaced.",
+            UpdatedText = root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -1254,7 +1262,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString()
+            Message = "// Member added.",
+            UpdatedText = root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -1311,7 +1320,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString()
+            Message = "// Member removed.",
+            UpdatedText = root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -1375,7 +1385,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = "// Class converted to primary constructor.",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 

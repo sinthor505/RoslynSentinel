@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class ProjectStructureEngine
@@ -59,7 +57,8 @@ public class ProjectStructureEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                Message = newRoot.NormalizeWhitespace().ToFullString()
+                Message = "// Namespace updated.",
+                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
             };
         }
 

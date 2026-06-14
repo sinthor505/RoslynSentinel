@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class MappingEngine
@@ -82,7 +80,8 @@ public class MappingEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = mappingMethod.NormalizeWhitespace().ToFullString()
+            Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
+            UpdatedText = mappingMethod.NormalizeWhitespace().ToFullString()
         };
     }
 
@@ -125,7 +124,8 @@ public class MappingEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = newRoot.NormalizeWhitespace().ToFullString()
+            Message = $"// Assignment expressions inverted in the specified range: {startLine}-{endLine}",
+            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
 }
