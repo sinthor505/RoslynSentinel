@@ -11,9 +11,10 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public string Absolute { get; } = string.Empty;
     public string Relative { get; } = string.Empty;
 
-    public FilePath(string path, bool validated = false)
+    public FilePath(string path, string? solutionRoot = "", bool validated = false)
     {
         Absolute = string.IsNullOrWhiteSpace(path) ? string.Empty : path;
+        Relative = string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(solutionRoot) ? string.Empty : Path.GetRelativePath(solutionRoot, path);
         Validated = validated || File.Exists(Absolute);
     }
 
@@ -23,7 +24,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
         string abs = Path.IsPathRooted(pathArg)
             ? Path.GetFullPath(pathArg)
             : Path.GetFullPath(Path.Combine(solutionRoot, pathArg));
-        return new FilePath(abs, validated: true);
+        return new FilePath(abs, solutionRoot, validated: true);
     }
 
     public string RelativeTo(string solutionRoot)
@@ -47,7 +48,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public static implicit operator FilePath(string path) => new FilePath(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath filePath) => filePath.Absolute;
+    public static implicit operator string(FilePath filePath) => filePath.Relative;
 
     //Equality operators for convenience
     public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);

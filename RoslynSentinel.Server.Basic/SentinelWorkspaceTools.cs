@@ -924,7 +924,7 @@ public class SentinelWorkspaceTools
                         break;
                     }
 
-                    var docPath = document.FilePath ?? "";
+                    var docPath = new FilePath(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
                     if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
                     {
                         continue;
@@ -966,7 +966,7 @@ public class SentinelWorkspaceTools
                                 preview = preview[..120] + "\u2026";
                             }
 
-                            results.Add(new TextSearchMatch(docPath, i + 1, col + 1, preview));
+                            results.Add(new TextSearchMatch(docPath.Relative, i + 1, col + 1, preview));
                         }
                     }
                 }
@@ -983,7 +983,7 @@ public class SentinelWorkspaceTools
 
     private static bool GlobMatchesFileName([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string glob)
     {
-        var fileName = Path.GetFileName(filePath);
+        var fileName = Path.GetFileName(filePath.Relative);
         var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
         return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
     }

@@ -920,7 +920,7 @@ public class RefactoringEngine
             foreach (var docId in pc.GetChangedDocuments())
             {
                 var newDoc = updated.GetDocument(docId)!;
-                var filePth = new FilePath(newDoc.FilePath ?? newDoc.Name);
+                var filePth = new FilePath(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
                 var newContent = (await newDoc.GetTextAsync(ct)).ToString();
                 pendingChanges[filePth] = newContent;
                 var origContent = (await solution.GetDocument(docId)!.GetTextAsync(ct)).ToString();
