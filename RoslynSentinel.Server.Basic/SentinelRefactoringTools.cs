@@ -29,6 +29,7 @@ public class SentinelRefactoringTools
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly ValidationEngine _validationEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
 
@@ -52,6 +53,7 @@ public class SentinelRefactoringTools
         CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         PersistentWorkspaceManager workspaceManager,
+        ValidationEngine validationEngine,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
     {
@@ -73,6 +75,7 @@ public class SentinelRefactoringTools
         _codeGenerationEngine = codeGenerationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
+        _validationEngine = validationEngine;
         _config = config;
         _logger = logger;
     }
@@ -90,11 +93,37 @@ public class SentinelRefactoringTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
+    private async Task<(string? ChangeId, ResultError? Error)> ValidateAndStageAsync(
+        Dictionary<FilePath, string> changes, string description, string operationName)
+    {
+        DiagnosticReport validation;
+        try
+        {
+            validation = await _validationEngine.ValidateChangesAsync(changes);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ValidateAndStage pre-validate failed for {OperationName}", operationName);
+            return (null, new ResultError(ToolErrorCode.Exception,
+                $"{operationName} pre-validate failed: {ex.GetType().Name}: {ex.Message}"));
+        }
+
+        if (!validation.Success)
+        {
+            return (null, new ResultError(ToolErrorCode.Exception,
+                $"{operationName} introduces new compiler errors — change not staged. " +
+                $"Fix diagnostics and retry: {validation.Diagnostics.ToJson()}"));
+        }
+
+        return (_workspaceManager.StageChanges(changes, description), null);
+    }
+
     [McpServerTool(Name = "RenameSymbol")]
-    [Produces(DataTag.SymbolId)]
+    [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution. " +
                  "Requires a symbol handle from locate_symbol (sessionId, projectName, docCommentId). " +
-                 "Returns updatedHandle with the new sessionId/projectName/docCommentId for the renamed symbol.")]
+                 "Validates the rename, stages it, and returns a changeId plus updatedHandle for the renamed symbol. " +
+                 "Pass changeId to staged_change(action=\"apply\") to commit or staged_change(action=\"discard\") to revert.")]
     public async Task<ToolResult<object>> RenameSymbol(
         [Description(ToolParams.SessionId)] string sessionId,
         [Description(ToolParams.ProjectName)] string projectName,
@@ -125,14 +154,33 @@ public class SentinelRefactoringTools
             };
         }
 
+        if (result.PendingChanges.Count == 0)
+        {
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception,
+                    $"RenameSymbol produced no file changes for '{result.OldName}' → '{result.NewName}'.")
+            };
+        }
+
+        var (changeId, stageError) = await ValidateAndStageAsync(
+            result.PendingChanges,
+            $"Rename '{result.OldName}' to '{result.NewName}'.",
+            "RenameSymbol");
+
+        if (stageError is not null)
+            return new ToolResult<object> { Success = false, Error = stageError };
+
         return new ToolResult<object>
         {
             Success = true,
             Data = new
             {
+                changeId,
                 oldName = result.OldName,
                 newName = result.NewName,
-                filesChanged = result.FileChanges.Count,
+                filesChanged = result.PendingChanges.Count,
                 fileChanges = result.FileChanges,
                 updatedHandle = result.UpdatedHandle is SymbolHandle h
                     ? new { h.SessionId, h.ProjectName, h.DocCommentId }
@@ -143,7 +191,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "GenerateMapping")]
     [Produces(DataTag.ChangeId)]
-    [Description("Generates a mapping method between fromType and toType.")]
+    [Description("Generates a mapping method between fromType and toType. Validates and stages the result — pass the returned changeId to staged_change(action=\"apply\") to commit.")]
     public async Task<ToolResult<object>> GenerateMapping(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.DataType, required: true)] string fromType,
@@ -153,7 +201,14 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType);
-            return new ToolResult<object>() { Success = true, Data = result };
+            if (string.IsNullOrEmpty(result.UpdatedText))
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePath}'. Ensure both types exist in the solution.") };
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var (changeId, error) = await ValidateAndStageAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping");
+            if (error is not null)
+                return new ToolResult<object> { Success = false, Error = error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -163,8 +218,8 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "ReplaceMember")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code. Validates and stages the result — pass the returned changeId to staged_change(action=\"apply\") to commit.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
@@ -174,7 +229,14 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
-            return new ToolResult<object> { Success = true, Data = result };
+            if (string.IsNullOrEmpty(result.UpdatedText))
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ReplaceMember: member '{memberName}' not found in '{filePath}'.") };
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var (changeId, error) = await ValidateAndStageAsync(changes, $"Replace member '{memberName}'.", "ReplaceMember");
+            if (error is not null)
+                return new ToolResult<object> { Success = false, Error = error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -184,8 +246,8 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "RemoveMember")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Removes a specific member from a class or interface by name.")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Removes a specific member from a class or interface by name. Validates and stages the result — pass the returned changeId to staged_change(action=\"apply\") to commit.")]
     public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName)
@@ -194,7 +256,14 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
-            return new ToolResult<object> { Success = true, Data = result };
+            if (string.IsNullOrEmpty(result.UpdatedText))
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RemoveMember: member '{memberName}' not found in '{filePath}'.") };
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var (changeId, error) = await ValidateAndStageAsync(changes, $"Remove member '{memberName}'.", "RemoveMember");
+            if (error is not null)
+                return new ToolResult<object> { Success = false, Error = error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Removes '{memberName}' from {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -228,8 +297,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add using {namespaceName}.", "AddUsingDirective");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -260,8 +331,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add enum value '{valueName}' to '{enumName}'.", "AddEnumValue");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -296,8 +369,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -332,8 +407,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add summary comment to '{targetName}'.", "AddSummaryComment");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -364,8 +441,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add constructor parameter '{paramName}' to '{className}'.", "AddConstructorParameter");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -403,7 +482,11 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
             }
 
-            return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var (changeId, stageError) = await ValidateAndStageAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
@@ -454,8 +537,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : action == "replace" ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : action == "replace" ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -496,8 +581,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -538,8 +625,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
+            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -590,8 +679,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
-            var id = _workspaceManager.StageChanges(changes, description);
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
+            var (id, stageError) = await ValidateAndStageAsync(changes, description, "AddMember");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -642,8 +733,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var id = _workspaceManager.StageChanges(changes, description);
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
+            var (id, stageError) = await ValidateAndStageAsync(changes, description, "AddMemberTyped");
+            if (stageError is not null)
+                return new ToolResult<object> { Success = false, Error = stageError };
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)

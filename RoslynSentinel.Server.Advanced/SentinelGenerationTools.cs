@@ -139,4 +139,58 @@ public class SentinelGenerationTools
             return $"InterpolateStringSafe failed: {ex.GetType().Name}: {ex.Message}";
         }
     }
+
+    internal static ToolOptionsResult GenerateOptions() => new()
+    {
+        Description = """
+            generate — valid kind values:
+              add_benchmark_stub           Adds a BenchmarkDotNet stub class for a method.
+                                           Requires filePath, className, methodName.
+                                           Returns SourceTransformResult.
+              generate_constructor         Generates a constructor from private/readonly fields.
+                                           Returns updated file content as a string.
+              generate_decorator_class     Generates a Decorator pattern class for an interface.
+                                           Pass the interface name as className (filePath not required).
+                                           decoratorPrefix: prefix for the decorator class (default "Logging").
+                                           projectName: optional project scope.
+                                           Returns DecoratorResult.
+              generate_equality_overrides  Generates Equals and GetHashCode overrides.
+                                           Returns updated file content as a string.
+              generate_fluent_builder      Generates a fluent builder class with With{Property}() methods.
+                                           Returns FluentBuilderResult.
+              generate_path_driven_tests   Generates test stubs for each execution path in a method.
+                                           Requires filePath, methodName.
+                                           framework: "NUnit" (default), "xunit", or "mstest".
+                                           disambiguateLine: line number to resolve overloaded methods.
+                                           Returns PathDrivenTestReport.
+              generate_repository_interface  Extracts an interface from a class with DI and Moq snippets.
+                                           Returns RepositoryInterfaceResult.
+              generate_test_scaffold       Generates an xUnit+Moq test scaffold with mock fields and test stubs.
+                                           Returns TestScaffoldResult.
+              generate_test_skeleton       Generates a test class skeleton with one test stub per public method.
+                                           Returns TestSkeletonReport.
+              generate_to_string_safe      Generates a ToString() override with correctly escaped interpolated strings.
+                                           members: optional comma-separated list of property/field names.
+                                           Returns MsAugmentResult.
+
+            Additional parameters:
+              filePath: required for all kinds except generate_decorator_class.
+              className: target class name; for generate_decorator_class pass the interface name.
+              methodName: required for add_benchmark_stub and generate_path_driven_tests.
+              members: for generate_to_string_safe — optional comma-separated member list.
+              decoratorPrefix: for generate_decorator_class (default "Logging").
+              projectName: for generate_decorator_class — optional project scope.
+              framework: for generate_path_driven_tests — "NUnit" (default), "xunit", or "mstest".
+              disambiguateLine: for generate_path_driven_tests — disambiguates overloaded methods.
+            """,
+        StructuredOptions = new Dictionary<string, object>
+        {
+            ["kinds"] = new[] {
+                "add_benchmark_stub", "generate_constructor", "generate_decorator_class",
+                "generate_equality_overrides", "generate_fluent_builder", "generate_path_driven_tests",
+                "generate_repository_interface", "generate_test_scaffold", "generate_test_skeleton",
+                "generate_to_string_safe"
+            }
+        }
+    };
 }

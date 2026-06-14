@@ -1048,6 +1048,64 @@ public class SentinelScanTools
             };
         }
     }
+
+    internal static ToolOptionsResult ScanOptions()
+    {
+        // Single source of truth: derived from SentinelScanTools.scan_descriptors.
+        // Adding, removing, or reclassifying a detector in scan_descriptors automatically
+        // propagates here — no manual sync required.
+        var byDomain = SentinelScanTools.scan_descriptors
+            .GroupBy(d => d.Domain)
+            .OrderBy(g => g.Key)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(d => d.Id).ToArray());
+
+        int total = SentinelScanTools.scan_descriptors.Length;
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"scan — valid detector IDs grouped by domain ({total} total):");
+        sb.AppendLine();
+        foreach (var (domain, ids) in byDomain)
+        {
+            sb.AppendLine($"{domain} ({ids.Length}):");
+            // Wrap ids at ~80 chars, indented two spaces
+            const int Indent = 2;
+            const int WrapAt = 80;
+            var line = new StringBuilder(new string(' ', Indent));
+            foreach (var id in ids)
+            {
+                string candidate = line.Length == Indent ? id.ToString() : ", " + id.ToString();
+                if (line.Length + candidate.Length > WrapAt && line.Length > Indent)
+                {
+                    sb.AppendLine(line.ToString());
+                    line.Clear().Append(new string(' ', Indent)).Append(id.ToString());
+                }
+                else
+                {
+                    line.Append(candidate);
+                }
+            }
+            if (line.Length > Indent)
+            {
+                sb.AppendLine(line.ToString());
+            }
+            sb.AppendLine();
+        }
+        sb.AppendLine("scope values: \"file\" | \"project\" | \"solution\"");
+        sb.AppendLine("scopeName: filePath for scope=file; projectName for scope=project; omit for solution.");
+        sb.AppendLine("  For duplicate_blocks_in_hierarchy, scopeName is the root type name.");
+        sb.AppendLine("File-scope-only detectors require scope=\"file\". unused_references requires scope=\"project\".");
+        sb.Append("Call describe_scan_detectors for per-detector scope hints and descriptions.");
+
+        return new ToolOptionsResult
+        {
+            Description = sb.ToString(),
+            StructuredOptions = new Dictionary<string, object>(
+                byDomain.Select(kvp =>
+                    new KeyValuePair<string, object>(kvp.Key, kvp.Value)))
+        };
+    }
 }
 // v2 — async domain extracted from concurrency; blocking_calls_in and unawaited_dispose relocated
 // v2 — async domain extracted; scan_descriptors made internal; ScanOptions derived from scan_descriptors
