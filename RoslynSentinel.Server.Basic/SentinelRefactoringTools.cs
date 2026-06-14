@@ -1,6 +1,5 @@
 using System.ComponentModel;
 
-using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
@@ -183,7 +182,12 @@ public class SentinelRefactoringTools
                 filesChanged = result.PendingChanges.Count,
                 fileChanges = result.FileChanges,
                 updatedHandle = result.UpdatedHandle is SymbolHandle h
-                    ? new { h.SessionId, h.ProjectName, h.DocCommentId }
+                    ? new
+                    {
+                        h.SessionId,
+                        h.ProjectName,
+                        h.DocCommentId
+                    }
                     : null
             }
         };

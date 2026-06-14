@@ -32,7 +32,7 @@
             this.FilePath = filePath;
         }
 
-        public DocumentEditResult(EditOutcome outcome, FilePath filePath, int changeId, bool isCommitted = false, string? updatedText = null)
+        public DocumentEditResult(EditOutcome outcome, FilePath filePath, string changeId, bool isCommitted = false, string? updatedText = null)
         {
             this.Outcome = outcome;
             this.FilePath = filePath;

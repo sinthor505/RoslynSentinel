@@ -21,7 +21,6 @@ public class BatchTarget
 /// <summary>Agent-facing return from every batch-first mutation tool.</summary>
 public record BatchResultSummary : EngineResultBase
 {
-    public string ChangeId { get; init; } = "";
     public string BlobName { get; init; } = "";
     public int Succeeded
     {

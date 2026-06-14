@@ -14,18 +14,18 @@ public record EngineResultBase
         get; init;
     } = EditOutcome.Unset;
     [JsonIgnore]
-    public string? UpdatedText
+    public string UpdatedText
     {
         get; init;
-    }   // non-null if Modified
+    } = string.Empty;
     public FilePath FilePath
     {
         get; init;
     }
     public string Message { get; init; } = ""; // for error details in case of failure
     public bool IsCommitted { get; init; } = false; // whether changes have been applied to the workspace (vs. just in-memory)
-    public int ChangeId
+    public string ChangeId
     {
         get; init;
-    }
+    } = string.Empty;
 }
