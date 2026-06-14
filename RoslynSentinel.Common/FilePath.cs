@@ -48,7 +48,7 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public static implicit operator FilePath(string path) => new FilePath(path);
 
     //implicit conversion from filePath to string for convenience
-    public static implicit operator string(FilePath filePath) => filePath.Relative;
+    public static implicit operator string(FilePath filePath) => filePath.Absolute;
 
     //Equality operators for convenience
     public static bool operator ==(FilePath left, FilePath right) => left.Equals(right);

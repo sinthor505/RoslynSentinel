@@ -33,15 +33,15 @@ public static class OperationBlobWriter
             Directory.CreateDirectory(dir);
 
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-            var fileName  = $"{toolName}_{timestamp}_{changeId}.json";
-            var filePath  = Path.Combine(dir, fileName);
+            var fileName = $"{toolName}_{timestamp}_{changeId}.json";
+            var filePath = Path.Combine(dir, fileName);
 
             var payload = new
             {
                 toolName,
                 changeId,
                 generatedUtc = DateTime.UtcNow.ToString("O"),
-                itemCount    = items.Count,
+                itemCount = items.Count,
                 items,
             };
 
@@ -49,6 +49,11 @@ public static class OperationBlobWriter
                 filePath,
                 JsonSerializer.Serialize(payload, PrettyJson),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            if (!File.Exists(filePath))
+            {
+                throw new FileNotFoundException("Blob write failed: file not found after write operation.", filePath);
+            }
 
             return fileName;
         }

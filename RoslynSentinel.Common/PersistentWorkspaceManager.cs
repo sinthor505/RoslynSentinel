@@ -21,6 +21,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _stagedChanges = new();
+    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _appliedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
@@ -429,6 +430,45 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     /// <summary>
+    /// Retrieves the content of all applied changes.
+    /// </summary>
+    public Dictionary<FilePath, string> GetAllAppliedChanges()
+    {
+        if (_appliedChanges == null || _appliedChanges.Count == 0)
+        {
+            return new Dictionary<FilePath, string>();
+        }
+        return _appliedChanges.SelectMany(kvp => kvp.Value ?? new Dictionary<FilePath, string>())
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    }
+
+    /// <summary>
+    /// Retrieves the content of applied changes by ID.
+    /// </summary>
+    public Dictionary<FilePath, string> GetAppliedChanges(string changeId)
+    {
+        if (_appliedChanges.TryGetValue(changeId, out var changes))
+        {
+            return changes;
+        }
+
+        throw new KeyNotFoundException($"Applied change ID '{changeId}' not found.");
+    }
+
+    /// <summary>
+    /// Retrieves the content of staged changes by ID.
+    /// </summary>
+    public Dictionary<FilePath, string> GetAllStagedChanges()
+    {
+        if (_stagedChanges == null || _stagedChanges.Count == 0)
+        {
+            return new Dictionary<FilePath, string>();
+        }
+        return _stagedChanges.SelectMany(kvp => kvp.Value ?? new Dictionary<FilePath, string>())
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    }
+
+    /// <summary>
     /// Retrieves the content of staged changes by ID.
     /// </summary>
     public Dictionary<FilePath, string> GetStagedChanges(string changeId)
@@ -452,6 +492,7 @@ public partial class PersistentWorkspaceManager : IDisposable
 
         if (result.Success)
         {
+            _appliedChanges.AddOrUpdate(changeId, changes, (key, oldValue) => changes);
             _stagedChanges.TryRemove(changeId, out _);
         }
         else if (result.SucceededFiles.Count > 0)

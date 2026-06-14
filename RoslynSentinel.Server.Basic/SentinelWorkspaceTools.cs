@@ -420,7 +420,7 @@ public class SentinelWorkspaceTools
     }
 
     [McpServerTool(Name = "StagedChange")]
-    [Produces(DataTag.ChangeId)]
+    [Produces(DataTag.ResultOnly)]
     [Description("""
         Manages a staged change set produced by a refactoring tool.
         action: apply (write to disk), get (return file contents dict), validate (dry-run compiler diagnostics), discard (remove without applying).
@@ -1078,6 +1078,13 @@ public class SentinelWorkspaceTools
     {
         try
         {
+            if (!_workspaceManager.GetAllAppliedChanges().Any())
+            {
+                var statedChangeIds = _workspaceManager.GetAllStagedChanges();
+
+                return new ToolResult<object>() { Success = false, Error = new ResultError("NoAppliedChanges", $"No applied changes found to undo. Current staged changes: {string.Join(", ", statedChangeIds.Keys)}") };
+            }
+
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
@@ -1125,7 +1132,7 @@ public class SentinelWorkspaceTools
             }
 
             var failedPart = failed.Count > 0 ? $" Failures: {string.Join("; ", failed)}" : "";
-            return new ToolResult<object>() { Success = true, Data = $"Reverted {reverted.Count} files.{failedPart}" };
+            return new ToolResult<object>() { Success = true, Data = $"Reverted {reverted.Count} files. Files: {string.Join(", ", reverted)}{failedPart}" };
         }
         catch (Exception ex)
         {
