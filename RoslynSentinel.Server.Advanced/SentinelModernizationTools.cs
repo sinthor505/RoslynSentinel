@@ -83,7 +83,7 @@ public class SentinelModernizationTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"InvertBooleanLogic failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"InvertBooleanLogic failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

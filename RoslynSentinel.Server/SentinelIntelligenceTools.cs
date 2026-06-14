@@ -103,7 +103,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetComprehensiveHealthReport failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetComprehensiveHealthReport failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -129,7 +129,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetSolutionMetrics failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetSolutionMetrics failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -188,7 +188,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetCodeInventory failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetCodeInventory failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -213,7 +213,7 @@ public class SentinelIntelligenceTools
                 if (symbolInfo == null) return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError("", "Symbol info not found.")
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, "Symbol info not found.")
                 };
                 return new ToolResult<object>
                 {
@@ -233,7 +233,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
             };
         }
         catch (Exception ex)
@@ -242,7 +242,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"InspectSymbol failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"InspectSymbol failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -281,7 +281,7 @@ public class SentinelIntelligenceTools
                 return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError("", $"Symbol '{symbolName}' not found in the solution" +
+                    Error = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, or verify the symbol name and kind.")
                 };
@@ -300,7 +300,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -329,7 +329,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetDiRegistrations failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetDiRegistrations failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -355,7 +355,7 @@ public class SentinelIntelligenceTools
                     return new ToolResult<object>
                     {
                         Success = false,
-                        Error = new ResultError("", $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                             "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                             "Use get_document_outline to list available methods in the file.")
                     };
@@ -374,7 +374,7 @@ public class SentinelIntelligenceTools
                     return new ToolResult<object>
                     {
                         Success = false,
-                        Error = new ResultError("", $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                         "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                         "Use get_document_outline to list available methods in the file.")
                     };
@@ -397,7 +397,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
             };
         }
         catch (Exception ex)
@@ -406,7 +406,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetCallGraph failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetCallGraph failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -434,7 +434,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<string>
             {
                 Success = false,
-                Error = new ResultError("", $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -524,7 +524,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
             };
         }
         catch (Exception ex)
@@ -533,7 +533,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"FindUsages failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"FindUsages failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -597,7 +597,7 @@ public class SentinelIntelligenceTools
                     toolResult = new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError("", "projectName is required when persistBaseline=false.")
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when persistBaseline=false.")
                     };
                     return toolResult;
                 }
@@ -643,7 +643,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
             };
         }
         catch (Exception ex)
@@ -652,7 +652,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetPublicApiSurface failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -682,7 +682,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetBestInsertionPoint failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetBestInsertionPoint failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -714,7 +714,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"PreviewRenameImpact failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"PreviewRenameImpact failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -765,7 +765,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: callers, implementations.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: callers, implementations.")
             };
         }
         catch (Exception ex)
@@ -774,7 +774,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"FindReferences failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"FindReferences failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -806,7 +806,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"TraceVariableLifetime failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"TraceVariableLifetime failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -859,7 +859,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown include '{include}'. Valid values: hierarchy, members, both.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown include '{include}'. Valid values: hierarchy, members, both.")
             };
         }
         catch (Exception ex)
@@ -868,7 +868,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetTypeInfo failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetTypeInfo failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -893,7 +893,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ListProjectFrameworkTargets failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ListProjectFrameworkTargets failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -923,7 +923,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ScanBreakingChanges failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanBreakingChanges failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -955,7 +955,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ScanDuplicateBlocksInClass failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanDuplicateBlocksInClass failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

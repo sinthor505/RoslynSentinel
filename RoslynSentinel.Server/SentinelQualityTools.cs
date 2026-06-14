@@ -152,7 +152,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetTestCoverageMap failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetTestCoverageMap failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -446,7 +446,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

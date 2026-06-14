@@ -108,7 +108,7 @@ public class SentinelWorkspaceTools
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "projectName is required when kind=files.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.") };
                 }
                 try
                 {
@@ -116,31 +116,31 @@ public class SentinelWorkspaceTools
                     var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
                     if (project == null)
                     {
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Project '{projectName}' not found.") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Project '{projectName}' not found.") };
                     }
                     return new ToolResult<object>() { Success = true, Data = project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>() };
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}") };
                 }
             }
             if (kind == "dependencies")
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "projectName is required when kind=dependencies.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.") };
                 }
                 var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName);
                 return new ToolResult<object>() { Success = true, Data = result };
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "List ({Kind}) failed", kind);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"List failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -198,13 +198,13 @@ public class SentinelWorkspaceTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.") };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -317,12 +317,12 @@ public class SentinelWorkspaceTools
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
-                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
                         }
 
                         if (!validation.Success)
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
                         }
                     }
 
@@ -335,12 +335,12 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(changes);
-                        return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange validate failed: {validationResult.Diagnostics}") };
+                        return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {validationResult.Diagnostics}") };
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ProposedChange validate unexpected exception");
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}") };
                     }
                 }
             }
@@ -348,7 +348,7 @@ public class SentinelWorkspaceTools
             {
                 if (!filePath.Validated || string.IsNullOrEmpty(unifiedDiff))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "filePath and unifiedDiff are required when changesetFormat=diff.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath and unifiedDiff are required when changesetFormat=diff.") };
                 }
                 if (action == "apply")
                 {
@@ -359,7 +359,7 @@ public class SentinelWorkspaceTools
                             .FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
                         if (document == null)
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError("", "File not found.") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "File not found.") };
                         }
                         var oldText = await document.GetTextAsync();
                         var newContent = _diffEngine.ApplyDiff(oldText, unifiedDiff).ToString();
@@ -372,7 +372,7 @@ public class SentinelWorkspaceTools
                             var validation = await _validationEngine.ValidateChangesAsync(diffChanges);
                             if (!validation.Success)
                             {
-                                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange diff validate failed: {validation.Diagnostics}") };
+                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validation.Diagnostics}") };
                             }
                         }
 
@@ -383,21 +383,21 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
                     }
                 }
                 if (action == "validate")
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
-                    return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError("", $"ProposedChange diff validate failed: {validationResult}") };
+                    return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validationResult}") };
                 }
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown changesetFormat '{changesetFormat}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown changesetFormat '{changesetFormat}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ProposedChange ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -415,7 +415,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "RetryFailedChanges failed");
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -453,12 +453,12 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
                     }
 
                     if (!validation.Success)
                     {
-                        return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
                     }
                 }
 
@@ -483,14 +483,14 @@ public class SentinelWorkspaceTools
             if (action == "discard")
             {
                 var success = _workspaceManager.DiscardStagedChanges(changeId);
-                return success ? new ToolResult<object>() { Success = true, Data = $"Staged change '{changeId}' discarded." } : new ToolResult<object>() { Success = false, Error = new ResultError("", $"Staged change '{changeId}' not found.") };
+                return success ? new ToolResult<object>() { Success = true, Data = $"Staged change '{changeId}' discarded." } : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Staged change '{changeId}' not found.") };
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: apply, get, validate, discard.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown action '{action}'. Valid values: apply, get, validate, discard.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "StagedChange ({Action}) failed for '{ChangeId}'", action, changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"StagedChange failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -565,7 +565,7 @@ public class SentinelWorkspaceTools
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (filePath) is required when scope=file.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (filePath) is required when scope=file.") };
                 }
                 result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
                 summary = result.Data;
@@ -574,7 +574,7 @@ public class SentinelWorkspaceTools
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError("", "scopeName (projectName) is required when scope=project.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (projectName) is required when scope=project.") };
                 }
                 result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
                 summary = result.Data;
@@ -586,7 +586,7 @@ public class SentinelWorkspaceTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown scope '{scope}'. Valid values: file, project, solution.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown scope '{scope}'. Valid values: file, project, solution.") };
             }
 
             if (!summarize)
@@ -630,7 +630,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -652,7 +652,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePath}' at {Line}:{Column}", filePath, line, column);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SafeDeleteUnusedSymbol failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -671,7 +671,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"CreateProject failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"CreateProject failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -691,7 +691,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -1247,7 +1247,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -1272,7 +1272,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

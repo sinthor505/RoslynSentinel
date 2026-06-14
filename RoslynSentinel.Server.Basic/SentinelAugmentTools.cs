@@ -62,7 +62,7 @@ public class SentinelAugmentTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"EncapsulateFieldSafe failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"EncapsulateFieldSafe failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -102,7 +102,7 @@ public class SentinelAugmentTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -142,7 +142,7 @@ public class SentinelAugmentTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ConvertSwitchToPatternSafe failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ConvertSwitchToPatternSafe failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -183,7 +183,7 @@ public class SentinelAugmentTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -227,7 +227,7 @@ public class SentinelAugmentTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

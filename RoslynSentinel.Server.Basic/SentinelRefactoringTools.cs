@@ -91,9 +91,11 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "RenameSymbol")]
+    [Produces(DataTag.SymbolId)]
     [Description("Renames a symbol and all its references across the solution. " +
-                 "Requires a symbol handle from locate_symbol (sessionId, projectName, docCommentId).")]
-    public async Task<string> RenameSymbol(
+                 "Requires a symbol handle from locate_symbol (sessionId, projectName, docCommentId). " +
+                 "Returns updatedHandle with the new sessionId/projectName/docCommentId for the renamed symbol.")]
+    public async Task<ToolResult<object>> RenameSymbol(
         [Description(ToolParams.SessionId)] string sessionId,
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)] string docCommentId,
@@ -104,12 +106,39 @@ public class SentinelRefactoringTools
             sessionId, projectName, docCommentId, ct);
         if (!resolution.Resolved)
         {
-            return resolution.Error!.ToToolResponse();
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
+            };
         }
 
         RenameSymbolResult result = await _refactoringEngine.RenameSymbolAsync(
             resolution.Handle, resolution.Symbol!, newName, ct);
-        return result.ToToolResponse();
+
+        if (result.Error is not null)
+        {
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, result.Error)
+            };
+        }
+
+        return new ToolResult<object>
+        {
+            Success = true,
+            Data = new
+            {
+                oldName = result.OldName,
+                newName = result.NewName,
+                filesChanged = result.FileChanges.Count,
+                fileChanges = result.FileChanges,
+                updatedHandle = result.UpdatedHandle is SymbolHandle h
+                    ? new { h.SessionId, h.ProjectName, h.DocCommentId }
+                    : null
+            }
+        };
     }
 
     [McpServerTool(Name = "GenerateMapping")]
@@ -129,14 +158,14 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePath}'", fromType, toType, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"GenerateMapping failed for '{fromType}' to '{toType}' in '{filePath}': {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping failed for '{fromType}' to '{toType}' in '{filePath}': {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool(Name = "ReplaceMember")]
-    [Produces(DataTag.ChangeId)]
+    [Produces(DataTag.ResultOnly)]
     [Description("Surgically replaces a specific member (method, property, class) in a file by name with new source code.")]
-    public async Task<string> ReplaceMember(
+    public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
         [Consumes(DataTag.SourceCode, required: true)] string newSource)
@@ -145,19 +174,19 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource);
-            return result.ToJsonSummary();
+            return new ToolResult<object> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ReplaceMember unexpected exception for '{MemberName}' in '{FilePath}'", memberName, filePath);
-            return $"ReplaceMember for '{memberName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ReplaceMember for '{memberName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool(Name = "RemoveMember")]
-    [Produces(DataTag.ChangeId)]
+    [Produces(DataTag.ResultOnly)]
     [Description("Removes a specific member from a class or interface by name.")]
-    public async Task<string> RemoveMember(
+    public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName)
     {
@@ -165,12 +194,12 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
-            return result.ToJsonSummary();
+            return new ToolResult<object> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "RemoveMember failed for '{MemberName}' in '{FilePath}'", memberName, filePath);
-            return $"RemoveMember failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RemoveMember failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -198,14 +227,14 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"Add using {namespaceName}.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddUsingDirective failed for '{Namespace}' in '{FilePath}'", namespaceName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddUsingDirective failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddUsingDirective failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -230,14 +259,14 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"Add enum value '{valueName}' to '{enumName}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddEnumValue failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddEnumValue failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddEnumValue failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -266,14 +295,14 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ChangeAccessibility failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ChangeAccessibility failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -302,14 +331,14 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"Add summary comment to '{targetName}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddSummaryComment failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddSummaryComment failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddSummaryComment failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -334,14 +363,14 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"Add constructor parameter '{paramName}' to '{className}'.");
             return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddConstructorParameter failed for '{ClassName}' in '{FilePath}'", className, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddConstructorParameter failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddConstructorParameter failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -371,7 +400,7 @@ public class SentinelRefactoringTools
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
             }
 
             return new ToolResult<object>() { Success = true, Data = result.ToJsonSummary() };
@@ -379,7 +408,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ExtractLocalVariable failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -418,13 +447,13 @@ public class SentinelRefactoringTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, replace, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, replace, remove.") };
             }
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : action == "replace" ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -432,7 +461,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyAttribute failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyAttribute failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -460,13 +489,13 @@ public class SentinelRefactoringTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, remove.") };
             }
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"{action} '{modifier}' modifier on '{targetName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -474,7 +503,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyModifier failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyModifier failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -502,13 +531,13 @@ public class SentinelRefactoringTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown action '{action}'. Valid values: add, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, remove.") };
             }
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.");
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -516,7 +545,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePath}'", typeName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"ModifyBaseType failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyBaseType failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -554,7 +583,7 @@ public class SentinelRefactoringTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
             }
             if (!autoStage)
             {
@@ -568,7 +597,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddMember failed for '{ContainerName}' in '{FilePath}'", containerName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMember failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddMember failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
@@ -606,13 +635,13 @@ public class SentinelRefactoringTools
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("", $"Unknown kind '{kind}'. Valid values: property, field.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown kind '{kind}'. Valid values: property, field.") };
             }
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.FilePath };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var id = _workspaceManager.StageChanges(changes, description);
             var summary = new PersistentWorkspaceManager.StagedChangeSummary(id, [filePath], description);
             return new ToolResult<object>() { Success = true, Data = summary };
@@ -620,14 +649,14 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AddMemberTyped ({Kind}) failed for '{ContainerName}' in '{FilePath}'", kind, containerName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("", $"AddMemberTyped failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddMemberTyped failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
-    [Produces(DataTag.ChangeId)]
+    [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
-    public async Task<string> SyncTypeAndFilename(
+    public async Task<ToolResult<object>> SyncTypeAndFilename(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -635,12 +664,12 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-            return result.ToJsonSummary();
+            return new ToolResult<object> { Success = true, Data = result };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
-            return $"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}";
+            return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
 }

@@ -893,7 +893,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ScanBreakingChanges failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanBreakingChanges failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -925,7 +925,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"ScanDuplicateBlocksInClass failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanDuplicateBlocksInClass failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -989,7 +989,7 @@ public class SentinelScanTools
                     toolResult = new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError("", "projectName is required when persistBaseline=false.")
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when persistBaseline=false.")
                     };
                     return toolResult;
                 }
@@ -1035,7 +1035,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
             };
         }
         catch (Exception ex)
@@ -1044,7 +1044,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetPublicApiSurface failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

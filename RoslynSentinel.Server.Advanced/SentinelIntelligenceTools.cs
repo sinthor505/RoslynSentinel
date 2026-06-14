@@ -97,7 +97,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetComprehensiveHealthReport failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetComprehensiveHealthReport failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -123,7 +123,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetSolutionMetrics failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetSolutionMetrics failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -182,7 +182,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetCodeInventory failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetCodeInventory failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -211,7 +211,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetDiRegistrations failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetDiRegistrations failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -237,7 +237,7 @@ public class SentinelIntelligenceTools
                     return new ToolResult<object>
                     {
                         Success = false,
-                        Error = new ResultError("", $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                             "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                             "Use get_document_outline to list available methods in the file.")
                     };
@@ -256,7 +256,7 @@ public class SentinelIntelligenceTools
                     return new ToolResult<object>
                     {
                         Success = false,
-                        Error = new ResultError("", $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
+                        Error = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
                         "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " +
                         "Use get_document_outline to list available methods in the file.")
                     };
@@ -279,7 +279,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
+                Error = new ResultError(ToolErrorCode.Exception, $"Unknown direction '{direction}'. Valid values: forward, reverse, tree.")
             };
         }
         catch (Exception ex)
@@ -288,7 +288,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetCallGraph failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetCallGraph failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -316,7 +316,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<string>
             {
                 Success = false,
-                Error = new ResultError("", $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -348,7 +348,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"TraceVariableLifetime failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"TraceVariableLifetime failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

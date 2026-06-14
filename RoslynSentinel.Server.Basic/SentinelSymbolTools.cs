@@ -110,7 +110,7 @@ public class SentinelSymbolTools
                 return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError("", $"Symbol '{symbolName}' not found in the solution" +
+                    Error = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, or verify the symbol name and searchKind.")
                 };
@@ -129,7 +129,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"LocateSymbol failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -154,7 +154,7 @@ public class SentinelSymbolTools
                 if (symbolInfo == null) return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError("", "Symbol info not found.")
+                    Error = new ResultError(ToolErrorCode.Exception, "Symbol info not found.")
                 };
                 return new ToolResult<object>
                 {
@@ -174,7 +174,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
             };
         }
         catch (Exception ex)
@@ -183,7 +183,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"InspectSymbol failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"InspectSymbol failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -273,7 +273,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown searchKind '{searchKind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown searchKind '{searchKind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
             };
         }
         catch (Exception ex)
@@ -282,7 +282,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"FindUsages failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"FindUsages failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -312,7 +312,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetBestInsertionPoint failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetBestInsertionPoint failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -344,7 +344,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"PreviewRenameImpact failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"PreviewRenameImpact failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -395,7 +395,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown searchKind '{kind}'. Valid values: callers, implementations.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown searchKind '{kind}'. Valid values: callers, implementations.")
             };
         }
         catch (Exception ex)
@@ -404,7 +404,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"FindReferences failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"FindReferences failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
@@ -457,7 +457,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"Unknown include '{include}'. Valid values: hierarchy, members, both.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown include '{include}'. Valid values: hierarchy, members, both.")
             };
         }
         catch (Exception ex)
@@ -466,7 +466,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError("", $"GetTypeInfo failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetTypeInfo failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }
