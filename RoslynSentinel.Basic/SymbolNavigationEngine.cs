@@ -91,8 +91,6 @@ public record SymbolLocation(
     string? DocCommentId,
     /// <summary>Project containing the symbol, needed for SymbolHandle construction.</summary>
     string ProjectName,
-    /// <summary>Session identifier for the current analysis session.</summary>
-    string? SessionId,
     /// <summary>Fully-qualified name, e.g. "RoslynSentinel.Server.DiscoveryEngine.FindAttributeUsagesAsync".</summary>
     string FullyQualifiedName,
     /// <summary>Roslyn symbol kind: Method, Property, Field, NamedType, Event, etc.</summary>
@@ -103,6 +101,15 @@ public record SymbolLocation(
     string? ContainingType,
     /// <summary>Declaring namespace, null for global namespace.</summary>
     string? ContainingNamespace,
+    /// <summary>Absolute path to the declaring file. Feed directly to filePath parameters.</summary>
+    string? FilePath,
+    /// <summary>1-based declaration line number.</summary>
+    int? Line,
+    /// <summary>
+    /// Pre-built contextSnippet: the declaration line text, ready to pass to
+    /// inspect_symbol / find_references / rename_symbol contextSnippet parameters.
+    /// </summary>
+    string? ContextSnippet,
     /// <summary>Declared accessibility: Public, Internal, Private, Protected, etc.</summary>
     string Accessibility
 );
@@ -139,6 +146,7 @@ public class SymbolNavigationEngine
         string? containingType = null,
         string? containingNamespace = null,
         string? projectName = null,
+        FilePath filePath = default,
         bool exactMatch = true,
         CancellationToken ct = default)
     {
@@ -162,7 +170,7 @@ public class SymbolNavigationEngine
             ? symbolName.Split('.').Last()
             : symbolName;
 
-        foreach (var project in searchProjects)
+        await Parallel.ForEachAsync(searchProjects, async (project, ct) =>
         {
             Compilation? compilation = null;
             try
@@ -176,7 +184,7 @@ public class SymbolNavigationEngine
 
             if (compilation == null)
             {
-                continue;
+                return;
             }
 
             var candidates = exactMatch
@@ -215,6 +223,40 @@ public class SymbolNavigationEngine
 
                 foreach (var location in symbol.Locations.Where(l => l.IsInSource))
                 {
+                    var filePath2 = location.SourceTree?.FilePath;
+                    if (string.IsNullOrEmpty(filePath2))
+                    {
+                        continue;
+                    }
+
+                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
+                    {
+                        continue;
+                    }
+
+                    var lineSpan = location.GetLineSpan();
+                    var line = lineSpan.StartLinePosition.Line + 1;
+                    var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
+                    if (!seen.Add(dedupeKey))
+                    {
+                        continue;
+                    }
+
+                    // Build ContextSnippet from the source text — the exact declaration line.
+                    string? contextSnippet = null;
+                    try
+                    {
+                        var sourceText = location.SourceTree?.GetText(ct);
+                        if (sourceText != null && line <= sourceText.Lines.Count)
+                        {
+                            contextSnippet = sourceText.Lines[line - 1].ToString().Trim();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "LocateSymbol: could not read source text for context snippet");
+                    }
+
                     var sig = symbol switch
                     {
                         IMethodSymbol m => m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat),
@@ -236,11 +278,13 @@ public class SymbolNavigationEngine
                         ProjectName: project.Name,
                         DocCommentId: docCommentId,
                         Accessibility: symbol.DeclaredAccessibility.ToString(),
-                        SessionId: _workspaceManager.SessionId.ToString()
+                        FilePath: filePath2,
+                        Line: line,
+                        ContextSnippet: contextSnippet
                     ));
                 }
             }
-        }
+        }).ConfigureAwait(false);
 
         return results
             .OrderBy(r => r.ContainingNamespace)

@@ -104,7 +104,7 @@ public class SentinelSymbolTools
 
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, containingType, containingNamespace, projectName, exactMatch);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch);
             if (result.Count == 0)
             {
                 return new ToolResult<object>

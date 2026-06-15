@@ -1,8 +1,8 @@
+using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
-
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Basic;
 
@@ -62,6 +62,7 @@ public class ValidationEngine
     /// </summary>
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
     {
+        Debug.WriteLine("Starting validation of proposed changes...");
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var candidateSolution = solution;
         var affectedProjectIds = new HashSet<ProjectId>();
@@ -76,6 +77,8 @@ public class ValidationEngine
             var filePath = change.Key;
             var newContent = change.Value;
             var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+
+            Debug.WriteLine($"Processing change for {filePath} (mapped to DocumentId: {documentId})...");
 
             if (documentId == null)
             {
@@ -95,6 +98,7 @@ public class ValidationEngine
         // If no files could be mapped to solution documents, nothing to validate.
         if (affectedProjectIds.Count == 0)
         {
+            Debug.WriteLine("No files could be mapped to solution documents, nothing to validate.");
             return new DiagnosticReport(true, new List<DiagnosticInfo>());
         }
 
@@ -109,6 +113,7 @@ public class ValidationEngine
             {
                 _logger.LogInformation("Compiling project {ProjectName} (baseline + candidate)...", baselineProject.Name);
             }
+            Debug.WriteLine($"Compiling project {baselineProject.Name} (baseline + candidate)...");
 
             // ApiBaseline compile — errors that already exist before our changes.
             var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
@@ -116,6 +121,7 @@ public class ValidationEngine
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
                     $"Failed to create baseline compilation for project {baselineProject.Name}.", "", 0, 0, 0, 0));
+                Debug.WriteLine($"Failed to create baseline compilation for project {baselineProject.Name}.");
                 continue;
             }
 
@@ -131,6 +137,7 @@ public class ValidationEngine
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
                     $"Failed to create candidate compilation for project {candidateProject.Name}.", "", 0, 0, 0, 0));
+                Debug.WriteLine($"Failed to create candidate compilation for project {candidateProject.Name}.");
                 continue;
             }
 
@@ -141,6 +148,7 @@ public class ValidationEngine
                     continue;
                 }
 
+                Debug.WriteLine($"Found new error in project {candidateProject.Name}: {diagnostic.GetMessage()}");
                 // Only report errors that are NEW — not present in the baseline.
                 if (!baselineErrors.Contains(DiagnosticKey(diagnostic)))
                 {
@@ -148,6 +156,8 @@ public class ValidationEngine
                 }
             }
         }
+
+        Debug.WriteLine($"Validation complete. Introduced errors: {introducedDiagnostics.Count}");
 
         return new DiagnosticReport(introducedDiagnostics.Count == 0, introducedDiagnostics);
     }

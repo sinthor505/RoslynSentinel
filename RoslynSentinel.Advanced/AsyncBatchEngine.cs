@@ -1,9 +1,9 @@
+using System.Diagnostics;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
-
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Advanced;
 
@@ -466,6 +466,7 @@ public class AsyncBatchEngine
             }
 
             // Step C: validate in-memory — no MSBuild required.
+            Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } },
                 cancellationToken);
