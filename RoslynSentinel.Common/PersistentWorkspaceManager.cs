@@ -696,13 +696,12 @@ public partial class PersistentWorkspaceManager : IDisposable
                 string lastError = "";
 
                 preImages.TryGetValue(filePath, out var preImage);
-                if (preImage?.ToString() == newContent)
+                if (preImage == newContent)
                 {
-                    _logger.LogWarning("Proposed content for {FilePath} is identical to existing content.", filePath);
-                    if (Debugger.IsAttached)
-                    {
-                        Debugger.Break();
-                    }
+                    _logger.LogWarning("Skipping no-op write for {FilePath}: proposed content is identical to existing content.", filePath);
+                    Debug.WriteLine($"[Warning] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
+                    succeeded.Add(filePath);
+                    continue;
                 }
 
                 // Mark as internal change before writing to avoid FileSystemWatcher loop
