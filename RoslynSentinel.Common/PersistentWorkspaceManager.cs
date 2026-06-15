@@ -764,7 +764,7 @@ public partial class PersistentWorkspaceManager : IDisposable
                 }
                 try
                 {
-                    await RefreshWorkspaceInternalAsync(succeeded);
+                    await RefreshWorkspaceInternalAsync(succeeded, CancellationToken.None);
                     workspaceInSync = true;
                     Interlocked.Increment(ref _workspaceVersion);
                 }
@@ -787,7 +787,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         }
     }
 
-    private async Task RefreshWorkspaceInternalAsync(List<string> affectedFiles)
+    private async Task RefreshWorkspaceInternalAsync(List<string> affectedFiles, CancellationToken cancellationToken = default)
     {
         if (_workspace == null || CurrentSolution == null)
         {
@@ -806,8 +806,15 @@ public partial class PersistentWorkspaceManager : IDisposable
                 _logger.LogInformation("Reloading solution to synchronize changes: {SlnPath}", slnPath);
             }
 
-            // We create a new workspace instance to ensure no cached metadata remains
-            var newWorkspace = MSBuildWorkspace.Create();
+            // We create a new workspace instance to ensure no cached metadata remains.
+            // IMPORTANT: pass the same MSBuild properties used in LoadSolutionAsync so that
+            // NuGet vulnerability audit (NU1901-NU1904) does not run during design-time
+            // evaluation — those errors block project loading and are irrelevant here.
+            var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+            {
+                { "NuGetAudit", "false" },
+                { "NuGetAuditLevel", "critical" }
+            });
             newWorkspace.RegisterWorkspaceFailedHandler((d) =>
             {
                 if (_logger.IsEnabled(LogLevel.Warning))
@@ -816,12 +823,25 @@ public partial class PersistentWorkspaceManager : IDisposable
                 }
             });
 
-            CurrentSolution = await newWorkspace.OpenSolutionAsync(slnPath);
+            CurrentSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, cancellationToken);
 
             var oldWorkspace = _workspace;
             _workspace = newWorkspace;
             oldWorkspace.Dispose();
             _lastLoadedAt = DateTime.UtcNow;
+
+            // Prune all expired _internalChanges entries. Without pruning this dictionary
+            // grows unboundedly and every entry eventually expires, causing the FileSystemWatcher
+            // to treat every subsequent event for those files as external — arming the debounce
+            // timer and triggering a redundant full reload immediately after this one completes.
+            var cutoff = DateTime.UtcNow.AddSeconds(-5);
+            foreach (var key in _internalChanges.Keys.ToList())
+            {
+                if (_internalChanges.TryGetValue(key, out var ts) && ts < cutoff)
+                {
+                    _internalChanges.TryRemove(key, out _);
+                }
+            }
         }
     }
 
