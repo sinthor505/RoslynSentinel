@@ -1213,7 +1213,7 @@ public class SentinelAsyncifyTools
                     for (int i = 0; i < flagResults.Count; i++)
                     {
                         var r = flagResults[i];
-                        if (r.Line == -1) { continue; }
+                        if (r == null || r.Line == -1) { continue; }
 
                         foreach (var kv in r.Changes) { allChanges[kv.Key] = kv.Value; }
                         items.Add(new OperationItemRecord

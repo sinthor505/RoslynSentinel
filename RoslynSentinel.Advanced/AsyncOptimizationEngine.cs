@@ -1681,6 +1681,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 foreach (var i in indices)
                 {
                     errors.Add((i, $"File '{filePath}' not found in the loaded solution."));
+                    resultSlots[i] = new FlagMigrationCandidateEngineResult(
+                        new Dictionary<FilePath, string>(), false, null, false, -1);
                 }
 
                 continue;
@@ -1692,6 +1694,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 foreach (var i in indices)
                 {
                     errors.Add((i, $"Could not get syntax root for '{filePath}'."));
+                    resultSlots[i] = new FlagMigrationCandidateEngineResult(
+                        new Dictionary<FilePath, string>(), false, null, false, -1);
                 }
 
                 continue;
