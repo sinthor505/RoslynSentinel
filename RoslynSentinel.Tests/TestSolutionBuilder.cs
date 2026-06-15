@@ -71,4 +71,65 @@ public static class TestSolutionBuilder
 
         return solution;
     }
+
+    // Overload for tests that need real on-disk file paths.
+    // projectCsprojPath sets the project's FilePath (controls FindContainingProject lookups).
+    // Each document's filePath must be the absolute path that will be written to disk.
+    public static Solution CreateSolutionWithProject(
+        string projectName,
+        string projectCsprojPath,
+        (string name, string content, string filePath)[] documents)
+    {
+        var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
+
+        var references = new List<MetadataReference>();
+        var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+
+        string[] candidateNames = {
+            "System.Runtime.dll",
+            "mscorlib.dll",
+            "System.Collections.dll",
+            "System.Linq.dll",
+            "System.Console.dll",
+            "System.Private.CoreLib.dll",
+            "netstandard.dll",
+            "System.Threading.dll",
+            "System.Threading.Tasks.dll",
+            "System.Net.Http.dll",
+            "System.Collections.Concurrent.dll",
+            "System.Text.RegularExpressions.dll",
+        };
+
+        foreach (var name in candidateNames)
+        {
+            var path = Path.Combine(coreDir, name);
+            if (File.Exists(path))
+            {
+                references.Add(MetadataReference.CreateFromFile(path));
+            }
+        }
+
+        var objectAssembly = typeof(object).Assembly.Location;
+        if (!references.Any(r => r.Display != null && r.Display.Equals(objectAssembly, StringComparison.OrdinalIgnoreCase)))
+        {
+            references.Add(MetadataReference.CreateFromFile(objectAssembly));
+        }
+
+        var projectInfo = ProjectInfo.Create(projectId, VersionStamp.Default, projectName, projectName, LanguageNames.CSharp)
+            .WithMetadataReferences(references)
+            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
+            .WithFilePath(projectCsprojPath)
+            .WithDefaultNamespace(projectName);
+
+        var solution = workspace.CurrentSolution.AddProject(projectInfo);
+
+        foreach (var doc in documents)
+        {
+            var documentId = DocumentId.CreateNewId(projectId, doc.name);
+            solution = solution.AddDocument(documentId, doc.name, SourceText.From(doc.content), filePath: doc.filePath);
+        }
+
+        return solution;
+    }
 }

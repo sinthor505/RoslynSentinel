@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Common;
@@ -648,6 +650,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync();
         var succeeded = new List<string>();
         var failed = new Dictionary<FilePath, string>();
+        bool needsFullReload = false;
 
         // Clear retry cache for this specific batch
         foreach (var key in changes.Keys)
@@ -764,9 +767,12 @@ public partial class PersistentWorkspaceManager : IDisposable
                 }
                 try
                 {
-                    await RefreshWorkspaceInternalAsync(succeeded, CancellationToken.None);
-                    workspaceInSync = true;
-                    Interlocked.Increment(ref _workspaceVersion);
+                    needsFullReload = await ApplyInMemoryDocumentUpdatesAsync(succeeded, CancellationToken.None);
+                    workspaceInSync = !needsFullReload;
+                    if (!needsFullReload)
+                    {
+                        Interlocked.Increment(ref _workspaceVersion);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -784,56 +790,206 @@ public partial class PersistentWorkspaceManager : IDisposable
         finally
         {
             _solutionLock.Release();
+
+            if (needsFullReload && _workspace != null && !string.IsNullOrEmpty(SolutionPath))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ReloadWorkspaceFromDiskAsync(CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(ex, "Background workspace reload failed.");
+                        }
+                    }
+                });
+            }
         }
     }
 
-    private async Task RefreshWorkspaceInternalAsync(List<string> affectedFiles, CancellationToken cancellationToken = default)
+    // Fast in-memory path — O(files), no MSBuild, no I/O beyond reading .cs file content.
+    // Returns true when a structural file (.csproj / .sln) was among the affected files and a
+    // full MSBuild reload is needed; the caller fires that reload after releasing the lock.
+    // Guards only on CurrentSolution == null so it also works in SetTestSolution test scenarios.
+    private async Task<bool> ApplyInMemoryDocumentUpdatesAsync(List<string> affectedFiles, CancellationToken ct)
     {
-        if (_workspace == null || CurrentSolution == null)
+        if (CurrentSolution == null)
+        {
+            return false;
+        }
+
+        bool needsFullReload = false;
+
+        foreach (var filePath in affectedFiles)
+        {
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+
+            if (ext is ".csproj" or ".sln")
+            {
+                needsFullReload = true;
+                continue;
+            }
+
+            if (ext != ".cs")
+            {
+                continue;
+            }
+
+            string content;
+            try
+            {
+                content = await File.ReadAllTextAsync(filePath, ct);
+            }
+            catch (Exception ex)
+            {
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("Could not read {FilePath} for in-memory update: {Message}", filePath, ex.Message);
+                }
+                continue;
+            }
+
+            var sourceText = SourceText.From(content, Encoding.UTF8);
+
+            var doc = CurrentSolution.Projects
+                .SelectMany(p => p.Documents)
+                .FirstOrDefault(d => string.Equals(d.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+
+            if (doc != null)
+            {
+                CurrentSolution = CurrentSolution.WithDocumentText(doc.Id, sourceText);
+            }
+            else
+            {
+                var project = FindContainingProject(CurrentSolution, filePath);
+                if (project != null)
+                {
+                    var docId = DocumentId.CreateNewId(project.Id);
+                    var fileName = Path.GetFileName(filePath);
+                    CurrentSolution = CurrentSolution.AddDocument(docId, fileName, sourceText, filePath: filePath);
+                }
+                else
+                {
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning("New .cs file {FilePath} does not belong to any project in the solution; skipping in-memory update.", filePath);
+                    }
+                }
+            }
+        }
+
+        _lastLoadedAt = DateTime.UtcNow;
+
+        // Prune expired _internalChanges entries to prevent the FileSystemWatcher from
+        // treating stale entries as live and re-arming the debounce timer.
+        var cutoff = DateTime.UtcNow.AddSeconds(-5);
+        foreach (var key in _internalChanges.Keys.ToList())
+        {
+            if (_internalChanges.TryGetValue(key, out var ts) && ts < cutoff)
+            {
+                _internalChanges.TryRemove(key, out _);
+            }
+        }
+
+        return needsFullReload;
+    }
+
+    // Longest-prefix match: returns the project whose .csproj directory is the deepest
+    // ancestor of filePath, or null if no project contains it.
+    private static Project? FindContainingProject(Solution solution, string filePath)
+    {
+        Project? best = null;
+        int bestLen = -1;
+
+        foreach (var project in solution.Projects)
+        {
+            if (project.FilePath == null)
+            {
+                continue;
+            }
+
+            var projectDir = Path.GetDirectoryName(project.FilePath);
+            if (projectDir == null)
+            {
+                continue;
+            }
+
+            if (filePath.StartsWith(projectDir, StringComparison.OrdinalIgnoreCase) &&
+                projectDir.Length > bestLen)
+            {
+                best = project;
+                bestLen = projectDir.Length;
+            }
+        }
+
+        return best;
+    }
+
+    // Full MSBuild reload — runs outside the lock, re-acquires it only to swap CurrentSolution.
+    // Callers fire this on a background Task.Run after releasing the main lock.
+    private async Task ReloadWorkspaceFromDiskAsync(CancellationToken ct)
+    {
+        if (_disposed)
         {
             return;
         }
 
-        // MSBuildWorkspace can be finicky with refreshing individual projects.
-        // The most reliable way to ensure a consistent, fresh view of the solution
-        // after multiple file writes and additions is to trigger a reload.
-
-        var slnPath = _workspace.CurrentSolution.FilePath;
-        if (!string.IsNullOrEmpty(slnPath))
+        var slnPath = SolutionPath;
+        if (string.IsNullOrEmpty(slnPath))
         {
-            if (_logger.IsEnabled(LogLevel.Information))
+            return;
+        }
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("Background MSBuild reload: {SlnPath}", slnPath);
+        }
+
+        // We create a new workspace instance to ensure no cached metadata remains.
+        // Pass the same MSBuild properties used in LoadSolutionAsync so that
+        // NuGet vulnerability audit (NU1901-NU1904) does not block project loading.
+        var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+        {
+            { "NuGetAudit", "false" },
+            { "NuGetAuditLevel", "critical" }
+        });
+        newWorkspace.RegisterWorkspaceFailedHandler(d =>
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
             {
-                _logger.LogInformation("Reloading solution to synchronize changes: {SlnPath}", slnPath);
+                _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
             }
+        });
 
-            // We create a new workspace instance to ensure no cached metadata remains.
-            // IMPORTANT: pass the same MSBuild properties used in LoadSolutionAsync so that
-            // NuGet vulnerability audit (NU1901-NU1904) does not run during design-time
-            // evaluation — those errors block project loading and are irrelevant here.
-            var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+        Solution newSolution;
+        try
+        {
+            newSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, ct);
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Error))
             {
-                { "NuGetAudit", "false" },
-                { "NuGetAuditLevel", "critical" }
-            });
-            newWorkspace.RegisterWorkspaceFailedHandler((d) =>
-            {
-                if (_logger.IsEnabled(LogLevel.Warning))
-                {
-                    _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
-                }
-            });
+                _logger.LogError(ex, "Background MSBuild reload failed for {SlnPath}", slnPath);
+            }
+            newWorkspace.Dispose();
+            return;
+        }
 
-            CurrentSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, cancellationToken);
-
-            var oldWorkspace = _workspace;
+        // Brief re-acquisition of the lock only to swap the workspace and solution.
+        await _solutionLock.WaitAsync(ct);
+        try
+        {
+            var old = _workspace;
             _workspace = newWorkspace;
-            oldWorkspace.Dispose();
+            CurrentSolution = newSolution;
             _lastLoadedAt = DateTime.UtcNow;
+            Interlocked.Increment(ref _workspaceVersion);
 
-            // Prune all expired _internalChanges entries. Without pruning this dictionary
-            // grows unboundedly and every entry eventually expires, causing the FileSystemWatcher
-            // to treat every subsequent event for those files as external — arming the debounce
-            // timer and triggering a redundant full reload immediately after this one completes.
             var cutoff = DateTime.UtcNow.AddSeconds(-5);
             foreach (var key in _internalChanges.Keys.ToList())
             {
@@ -842,6 +998,12 @@ public partial class PersistentWorkspaceManager : IDisposable
                     _internalChanges.TryRemove(key, out _);
                 }
             }
+
+            old?.Dispose();
+        }
+        finally
+        {
+            _solutionLock.Release();
         }
     }
 
