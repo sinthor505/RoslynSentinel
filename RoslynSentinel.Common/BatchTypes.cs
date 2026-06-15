@@ -197,7 +197,7 @@ public class AsyncMigrateInput
     /// File/method targets. Each entry has FilePath and optional MethodNames array.
     /// Used by: propagate_cancellation_token, convert_to_async_bridge, add_cancellation_token.
     /// </summary>
-    public List<BatchTarget>? Targets
+    public List<BatchTarget>? BatchTargets
     {
         get; set;
     }

@@ -1478,7 +1478,7 @@ public class SentinelAsyncifyTools
                 "propagate_cancellation_token" => await PropagateCancellationToken(
                     new BatchTargetInput
                     {
-                        Targets = input.Targets ?? [],
+                        Targets = input.BatchTargets ?? [],
                         DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
@@ -1487,7 +1487,7 @@ public class SentinelAsyncifyTools
                 "convert_to_async_bridge" => await ConvertToAsyncBridge(
                     new BatchTargetInput
                     {
-                        Targets = input.Targets ?? [],
+                        Targets = input.BatchTargets ?? [],
                         DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
@@ -1497,7 +1497,7 @@ public class SentinelAsyncifyTools
                 "add_cancellation_token" => await AddCancellationToken(
                     new BatchTargetInput
                     {
-                        Targets = input.Targets ?? [],
+                        Targets = input.BatchTargets ?? [],
                         DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
@@ -1579,17 +1579,17 @@ public class SentinelAsyncifyTools
             async_migrate — operation values and required input fields:
 
               "propagate_cancellation_token"
-                  input.Targets         — list of { FilePath, MethodNames? }
+                  input.BatchTargets    — list of { FilePath, MethodNames? }
                   input.DryRun          — optional, default false
                   input.MaxItems        — optional, default 100
 
               "convert_to_async_bridge"
-                  input.Targets         — list of { FilePath, MethodNames } (MethodNames required)
+                  input.BatchTargets    — list of { FilePath, MethodNames } (MethodNames required)
                   input.DryRun          — optional, default false
                   input.PropagateCancellationTokens — optional, default true
 
               "add_cancellation_token"
-                  input.Targets         — list of { FilePath, MethodNames? }
+                  input.BatchTargets    — list of { FilePath, MethodNames? }
                   input.DryRun          — optional, default false
                   input.MaxItems        — optional, default 100
 
@@ -1610,7 +1610,7 @@ public class SentinelAsyncifyTools
 
               "asyncify"
                   input.ProjectName     — project; null = entire solution
-                  input.MethodTargets   — explicit method targets (skips discovery phase)
+                  input.MethodTargets   — list of { FilePath, MethodName } (singular MethodName, not MethodNames); skips discovery phase when provided
                   input.Exclusions      — method names to skip
                   input.DryRun          — optional, default false
                   input.PropagateCancellationTokens — optional, default true
@@ -1621,12 +1621,12 @@ public class SentinelAsyncifyTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["propagate_cancellation_token"] = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
-            ["convert_to_async_bridge"] = new { Targets = "list of {FilePath, MethodNames}", DryRun = false, PropagateCancellationTokens = true },
-            ["add_cancellation_token"] = new { Targets = "list of {FilePath, MethodNames?}", DryRun = false, MaxItems = 100 },
-            ["run_uplift"] = new { UpliftTargets = "list of {BridgedMethodName, ProjectName?}", DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
-            ["flag_migration_candidates"] = new { FlagScope = "targets|project", DryRun = false, MinScore = 50, ForceRescan = false },
-            ["asyncify"] = new { DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
+            ["propagate_cancellation_token"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, MaxItems = 100 },
+            ["convert_to_async_bridge"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, PropagateCancellationTokens = true },
+            ["add_cancellation_token"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, MaxItems = 100 },
+            ["run_uplift"] = new { UpliftTargets = new[] { new { BridgedMethodName = "MyMethod", ProjectName = "MyProject" } }, DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
+            ["flag_migration_candidates"] = new { FlagScope = "targets|project", FlagTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MyMethod" } }, DryRun = false, MinScore = 50, ForceRescan = false },
+            ["asyncify"] = new { MethodTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MySingleMethod" } }, Exclusions = new[] { "MethodToSkip" }, DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
         }
     };
 

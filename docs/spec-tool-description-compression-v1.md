@@ -72,7 +72,7 @@ in `describe_tool_options`, not in the `[Description]` attribute.
 ```
 operation values and required input fields:
   "propagate_cancellation_token"
-      input.Targets         — list of { FilePath, MethodNames? }
+      input.BatchTargets    — list of { FilePath, MethodNames? }
       input.DryRun          — optional, default false
       input.MaxItems        — optional, default 100
   "convert_to_async_bridge"
