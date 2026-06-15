@@ -438,8 +438,16 @@ public partial class PersistentWorkspaceManager : IDisposable
         {
             return new Dictionary<FilePath, string>();
         }
-        return _appliedChanges.SelectMany(kvp => kvp.Value ?? new Dictionary<FilePath, string>())
-            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+        var result = new Dictionary<FilePath, string>();
+        foreach (var innerDict in _appliedChanges.Values.Where(d => d != null))
+        {
+            foreach (var kvp in innerDict)
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+        return result;
     }
 
     /// <summary>
@@ -464,8 +472,16 @@ public partial class PersistentWorkspaceManager : IDisposable
         {
             return new Dictionary<FilePath, string>();
         }
-        return _stagedChanges.SelectMany(kvp => kvp.Value ?? new Dictionary<FilePath, string>())
-            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+        var result = new Dictionary<FilePath, string>();
+        foreach (var innerDict in _stagedChanges.Values.Where(d => d != null))
+        {
+            foreach (var kvp in innerDict)
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+        return result;
     }
 
     /// <summary>
