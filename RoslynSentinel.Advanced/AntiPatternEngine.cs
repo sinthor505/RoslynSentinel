@@ -3,8 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public record MagicValueLocation(FilePath FilePath, int Line, string Snippet);
@@ -2752,22 +2750,22 @@ public class AntiPatternEngine
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        foreach (var project in projects)
+        await Parallel.ForEachAsync(projects, async (project, cancellationToken) =>
         {
             var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
             if (compilation == null)
             {
-                continue;
+                return;
             }
 
-            foreach (var document in project.Documents)
+            await Parallel.ForEachAsync(project.Documents, async (document, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var syntaxTree = await document.GetSyntaxTreeAsync(cancellationToken).ConfigureAwait(false);
                 if (syntaxTree == null || !compilation.ContainsSyntaxTree(syntaxTree))
                 {
-                    continue; // generated file or excluded document — skip
+                    return; // generated file or excluded document — skip
                 }
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken).ConfigureAwait(false);
@@ -2784,17 +2782,17 @@ public class AntiPatternEngine
                         method.ReturnType.ToString() == "void")
                     {
                         asyncVoidHandlers++;
-                        continue; // async void methods are not counted in the async-Task bucket
+                        return; // async void methods are not counted in the async-Task bucket
                     }
 
                     if (!isAsync && !returnsTask)
                     {
-                        continue;
+                        return;
                     }
 
                     if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
                     {
-                        continue;
+                        return;
                     }
 
                     totalAsync++;
@@ -2826,8 +2824,8 @@ public class AntiPatternEngine
                         }
                     }
                 }
-            }
-        }
+            }).ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         int withoutCt = totalAsync - withCt;
         double pct = totalAsync > 0 ? Math.Round((double)withCt / totalAsync * 100.0, 1) : 0.0;

@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class AsyncOptimizationEngine
@@ -1892,7 +1890,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var normalizedFilter = filePath?.Replace('\\', '/');
         int totalFilteredDocs = 0;
 
-        foreach (var project in projects)
+        await Parallel.ForEachAsync(projects, async (project, cancellationToken) =>
         {
             var docs = project.Documents.AsEnumerable();
             if (normalizedFilter != null)
@@ -1903,15 +1901,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
 
             var docList = docs.ToList();
-            totalFilteredDocs += docList.Count;
+            Interlocked.Add(ref totalFilteredDocs, docList.Count);
 
-            foreach (var doc in docList)
+            await Parallel.ForEachAsync(docList, async (doc, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var root = await doc.GetSyntaxRootAsync(cancellationToken);
                 if (root == null)
                 {
-                    continue;
+                    return;
                 }
 
                 foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
@@ -1994,8 +1992,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         }
                     }
                 }
-            }
-        }
+            }).ConfigureAwait(false);
+        }).ConfigureAwait(false);
 
         // Guard: if filePath filter matched zero documents across all projects, the caller
         // supplied a path that doesn't exist in the solution — surface this as an actionable error.

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
@@ -658,10 +659,19 @@ public class SentinelScanTools
             }
             ;
 
-            if (result.LargeResult?.SizeBytes > ScanResultHelper.ThresholdBytes)
-            {
+            var dataArray = all.Data as JsonArray
+                ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
+                ?? [];
+            int totalRecords = dataArray.Count;
+            bool hasMore = (offset + limit) < totalRecords;
 
-            }
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result,
+                TotalRecords = totalRecords,
+                HasMore = hasMore,
+            };
         }
         catch (Exception ex)
         {
@@ -672,17 +682,6 @@ public class SentinelScanTools
                               "Failed to read scan file.", ex.Message)
             };
         }
-
-        var page = all.Data.AsArray().Skip(offset).Take(limit).ToList();
-        bool hasMore = (offset + limit) < all.Data.AsArray().Count;
-
-        return new ToolResult<object>
-        {
-            Success = true,
-            Data = page,
-            TotalRecords = all.Data.AsArray().Count,
-            HasMore = hasMore,
-        };
     }
 
     internal static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)

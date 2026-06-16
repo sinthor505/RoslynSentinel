@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +20,11 @@ public class SentinelAsyncifyTools
     private readonly ILogger<SentinelAsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        Converters =
+            {
+                new JsonStringEnumConverter()
+            }
     };
 
     public SentinelAsyncifyTools(
@@ -160,9 +165,9 @@ public class SentinelAsyncifyTools
                 TopCandidates: topCandidates,
                 ByClassTruncated: byClassTruncated);
 
-            // B1 Fix 4: 8 KB overflow safety net — should be unreachable with slim types + caps.
-            const int SummaryThresholdBytes = 8 * 1024;
-            var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary);
+            // B1 Fix 4: 10 KB overflow safety net — should be unreachable with slim types + caps.
+            const int SummaryThresholdBytes = 10 * 1024;
+            var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary, _jsonOptions);
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -171,13 +176,10 @@ public class SentinelAsyncifyTools
 
             if (summaryJson.Length > SummaryThresholdBytes)
             {
-                if (summaryJson.Length > 8 * 1024)
-                {
-                    _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
-                                       "This may indicate an issue with the summarization logic or unusually large data. " +
-                                       "Consider reviewing the summary generation and applying stricter caps if necessary.",
-                                       summaryJson.Length);
-                }
+                _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
+                                   "This may indicate an issue with the summarization logic or unusually large data. " +
+                                   "Consider reviewing the summary generation and applying stricter caps if necessary.",
+                                   summaryJson.Length);
 
                 var scanId = Guid.NewGuid().ToString("N");
                 var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -212,95 +214,74 @@ public class SentinelAsyncifyTools
                 Data = summary
             };
         }
-
-        // ── candidates path: threshold logic follows ──────────────────────
-        List<MigrationCandidateFinding> allFindings;
-        try
+        else
         {
-            allFindings = await _asyncOptimizationEngine
-                .FindMigrationCandidatesAsync(filePath, projectName, pattern);
-        }
-        catch (ArgumentException ex)
-        {
-            return new ToolResult<object>
+            // ── candidates path: threshold logic follows ──────────────────────
+            List<MigrationCandidateFinding> allFindings;
+            try
             {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolResult<object>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
-            };
-        }
-
-        // ── paginate ──────────────────────────────────────────────────────
-        // B7b: apply minScore before pagination — TotalRecords reflects post-filter count
-        if (minScore.HasValue)
-            allFindings = allFindings.Where(f => f.Score >= minScore.Value).ToList();
-
-        int totalCount = allFindings.Count;
-        var page = allFindings.Skip(offset).Take(limit).ToList();
-        bool hasMore = (offset + limit) < totalCount;
-
-        // ── size threshold: 30 KB (stay below VS Code's inline interception limit) ──
-        const int ThresholdBytes = 30 * 1024;
-        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(page);
-
-        if (jsonBytes.Length > ThresholdBytes)
-        {
-            var scanId = Guid.NewGuid().ToString("N");
-            var solutionRoot = _workspaceManager.GetSolutionRoot();
-            string scanFilePath;
-            bool written = false;
-
-            if (!string.IsNullOrEmpty(solutionRoot))
-            {
-                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
-                Directory.CreateDirectory(dir);
-                var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-                scanFilePath = System.IO.Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
-                await File.WriteAllTextAsync(
-                    scanFilePath,
-                    JsonSerializer.Serialize(page, _jsonOptions),
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                written = true;
+                allFindings = await _asyncOptimizationEngine
+                    .FindMigrationCandidatesAsync(filePath, projectName, pattern);
             }
-            else
+            catch (ArgumentException ex)
             {
-                scanFilePath = string.Empty;
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError(MigrationErrorCode.Exception,
+                                  "An unexpected error occurred.", ex.Message)
+                };
             }
 
+            // ── paginate ──────────────────────────────────────────────────────
+            // B7b: apply minScore before pagination — TotalRecords reflects post-filter count
+            if (minScore.HasValue)
+                allFindings = allFindings.Where(f => f.Score >= minScore.Value).ToList();
+
+            int totalCount = allFindings.Count;
+            var page = allFindings.Skip(offset).Take(limit).ToList();
+            bool hasMore = (offset + limit) < totalCount;
+
+            var (offloaded, storedPath, scanId, allBytes) = await SentinelScanTools.StoreScanResultAsync(
+                allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList);
+
+            if (offloaded)
+            {
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    TotalRecords = totalCount,
+                    HasMore = hasMore,
+                    LargeResult = new LargeResultInfo(
+                        resultType: typeof(MigrationCandidateFinding).Name,
+                        writtenToFile: true,
+                        filePath: storedPath.ToString(),
+                        scanId: scanId,
+                        sizeBytes: allBytes.Length,
+                        totalRecords: totalCount,
+                        message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
+                                       $"Use get_scan_result(scanId: \"{scanId}\") to page through results. " +
+                                       "Pass limit and offset to control page size (default limit: 50).")
+                };
+            }
+
+            // ── inline result ─────────────────────────────────────────────────
             return new ToolResult<object>
             {
-                Success = written,
+                Success = true,
+                Data = page,
                 TotalRecords = totalCount,
                 HasMore = hasMore,
-                LargeResult = new LargeResultInfo(
-                    resultType: typeof(MigrationScanSummary).Name,
-                    writtenToFile: written,
-                    filePath: scanFilePath,
-                    scanId: scanId,
-                    sizeBytes: jsonBytes.Length,
-                    totalRecords: totalCount,
-                    message: $"Result written to file ({jsonBytes.Length} bytes, {totalCount} records). " +
-                                   $"Use get_scan_result(scanId: \"{scanId}\") to page through results. " +
-                                   "Pass limit and offset to control page size (default limit: 50).")
             };
         }
-
-        // ── inline result ─────────────────────────────────────────────────
-        return new ToolResult<object>
-        {
-            Success = true,
-            Data = page,
-            TotalRecords = totalCount,
-            HasMore = hasMore,
-        };
     }
 
     // ── Phase 8: get_async_migration_progress ─────────────────────────────────
@@ -1448,12 +1429,168 @@ public class SentinelAsyncifyTools
         };
     }
 
+    [Description("""
+        Pattern-driven bridge conversion for HandlerToAsync candidates. Discovers all methods
+        flagged [MigrationCandidate("HandlerToAsync")] in the specified project (or solution)
+        and converts each to the Asyncify-bridge pattern. Checks the circuit breaker; records
+        outcome; writes a forensic blob.
+
+        input.ProjectName              — scope discovery to one project; null = entire solution.
+        input.DryRun                   — when true, validates without writing files.
+        input.MaxItems                 — max methods to process (default 100).
+        input.PropagateCancellationTokens — propagate CT in the new async overload (default true).
+
+        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-method details.
+        """)]
+    private async Task<BatchResultSummary> HandlerToAsync(
+        string? projectName,
+        bool dryRun,
+        int maxItems,
+        bool propagateCancellationTokens,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        List<MigrationCandidateFinding> candidates;
+        try
+        {
+            candidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                filePath: null, projectName: projectName, pattern: "HandlerToAsync",
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "HandlerToAsync discovery unexpected exception");
+            throw new InvalidOperationException(
+                $"HandlerToAsync discovery failed: {ex.GetType().Name}: {ex.Message}", ex);
+        }
+
+        int overLimit = Math.Max(0, candidates.Count - maxItems);
+        var toProcess = candidates.Take(maxItems).ToList();
+
+        int succeeded = 0;
+        int failed = 0;
+        int processed = 0;
+        var items = new List<OperationItemRecord>();
+        var failures = new List<FailureDetail>();
+
+        foreach (var candidate in toProcess)
+        {
+            if (processed >= maxItems)
+            {
+                break;
+            }
+
+            processed++;
+            var methodName = candidate.MethodName;
+            var filePath = candidate.FilePath;
+
+            if (dryRun)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = filePath,
+                    MethodName = methodName,
+                    Outcome = OperationOutcome.Skipped,
+                    Reason = "dry_run",
+                });
+                succeeded++;
+                continue;
+            }
+
+            try
+            {
+                string? updatedSource;
+                var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                    filePath, methodName, cancellationToken);
+                updatedSource = convertResult.UpdatedText;
+
+                if (propagateCancellationTokens)
+                {
+                    var asyncMethod = methodName + "Async";
+                    var propagationResult = await _asyncOptimizationEngine
+                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, cancellationToken);
+                    if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
+                    {
+                        updatedSource = propagationResult.UpdatedText;
+                    }
+                }
+
+                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { { filePath, updatedSource } });
+
+                string? beforeSource = null;
+                _ = applyResult.PreImages?.TryGetValue(filePath, out beforeSource);
+
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = filePath,
+                    MethodName = methodName,
+                    Outcome = OperationOutcome.Succeeded,
+                    BeforeSource = beforeSource,
+                });
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                var reason = ex.Message;
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = filePath,
+                    MethodName = methodName,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = filePath,
+                        MethodName = methodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                _logger.LogWarning(
+                    "HandlerToAsync: {Method} in {File} failed: {Reason}",
+                    methodName, filePath, reason);
+            }
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: overLimit);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "handler_to_async", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status = _workspaceManager.GetBreakerStatus();
+
+        return new BatchResultSummary
+        {
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = overLimit,
+            RolledBack = 0,
+            Attempted = succeeded + failed + overLimit,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
     // ── Phase 7 — async_migrate dispatcher ────────────────────────────────────
 
     [McpServerTool(Name = "AsyncMigrate")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Unified dispatcher for six async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
+        Unified dispatcher for seven async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
         """)]
     public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
         string operation,
@@ -1541,10 +1678,17 @@ public class SentinelAsyncifyTools
                     },
                     cancellationToken),
 
+                "handler_to_async" => await HandlerToAsync(
+                    input.ProjectName,
+                    input.DryRun,
+                    input.MaxItems,
+                    input.PropagateCancellationTokens,
+                    cancellationToken),
+
                 _ => throw new ArgumentException(
                     $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +
                     "convert_to_async_bridge, add_cancellation_token, run_uplift, " +
-                    "flag_migration_candidates, asyncify.",
+                    "flag_migration_candidates, asyncify, handler_to_async.",
                     nameof(operation))
             };
         }
@@ -1598,15 +1742,22 @@ public class SentinelAsyncifyTools
                   input.DryRun          — optional, default false
                   input.MaxCallersPerMethod       — optional, default 10
                   input.PropagateCancellationTokens — optional, default true
+                  NOTE: also the apply-step for AsyncCallerUplift-flagged candidates.
+                        Call scan_migration_candidates(pattern="AsyncCallerUplift") to identify
+                        which bridge methods have callers that need uplift, then pass those
+                        bridge method names as UpliftTargets.
 
               "flag_migration_candidates"
                   input.FlagScope       — "targets" (default) or "project"
                   input.FlagTargets     — list of { FilePath, MethodName, Pattern, Score?, Reason? } (scope=targets)
                   input.ProjectName     — project name (scope=project); null = entire solution
                   input.Pattern         — optional, default "AsyncBridgeCandidate"
+                                          also accepts: "HandlerExtract", "HandlerToAsync", "AsyncCallerUplift"
                   input.MinScore        — optional, default 50
                   input.DryRun          — optional, default false
                   input.ForceRescan     — optional, default false
+                  NOTE: HandlerExtract is a flagging-only pattern — no migration transform is
+                        available; use it to annotate methods for future structural refactoring.
 
               "asyncify"
                   input.ProjectName     — project; null = entire solution
@@ -1618,6 +1769,14 @@ public class SentinelAsyncifyTools
                   input.MaxCallersPerMethod       — optional, default 10
                   input.MinScore        — optional, default 50
                   input.ScoreThreshold  — optional, default 60
+
+              "handler_to_async"
+                  Auto-discovers all [MigrationCandidate("HandlerToAsync")]-flagged methods and
+                  converts each to the Asyncify-bridge pattern (sync wrapper + async overload).
+                  input.ProjectName     — scope to one project; null = entire solution
+                  input.DryRun          — optional, default false
+                  input.MaxItems        — optional, default 100
+                  input.PropagateCancellationTokens — optional, default true
             """,
         StructuredOptions = new Dictionary<string, object>
         {
@@ -1627,6 +1786,7 @@ public class SentinelAsyncifyTools
             ["run_uplift"] = new { UpliftTargets = new[] { new { BridgedMethodName = "MyMethod", ProjectName = "MyProject" } }, DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
             ["flag_migration_candidates"] = new { FlagScope = "targets|project", FlagTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MyMethod" } }, DryRun = false, MinScore = 50, ForceRescan = false },
             ["asyncify"] = new { MethodTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MySingleMethod" } }, Exclusions = new[] { "MethodToSkip" }, DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
+            ["handler_to_async"] = new { ProjectName = (string?)null, DryRun = false, MaxItems = 100, PropagateCancellationTokens = true },
         }
     };
 
