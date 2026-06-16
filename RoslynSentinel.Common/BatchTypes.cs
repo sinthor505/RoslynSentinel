@@ -68,6 +68,21 @@ public class FailureDetail
 
 // ── Phase 4 — Batch-first input types ─────────────────────────────────────────
 
+/// <summary>One target in a <c>handler_extract</c> call.</summary>
+public class HandlerExtractTarget
+{
+    /// <summary>Absolute path of the .cs file containing the code to extract.</summary>
+    public FilePath FilePath { get; set; } = "";
+    /// <summary>Valid C# identifier for the new extracted method.</summary>
+    public string NewMethodName { get; set; } = "";
+    /// <summary>A short unique code snippet that identifies the block of statements to extract.</summary>
+    public string ContextSnippet { get; set; } = "";
+    /// <summary>Optional line immediately before the snippet for disambiguation.</summary>
+    public string? LineBefore { get; set; }
+    /// <summary>Optional line immediately after the snippet for disambiguation.</summary>
+    public string? LineAfter { get; set; }
+}
+
 /// <summary>A single bridged-method target for <c>run_uplift</c>.</summary>
 public class UpliftTarget
 {
@@ -264,4 +279,12 @@ public class AsyncMigrateInput
 
     /// <summary>Max score eligible for bridge conversion (default 60). asyncify only.</summary>
     public int ScoreThreshold { get; set; } = 60;
+
+    // ── handler_extract ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Extraction targets for <c>handler_extract</c>. Each entry specifies one code block to
+    /// extract into a new private method. ContextSnippet identifies the block to extract.
+    /// </summary>
+    public List<HandlerExtractTarget>? HandlerExtractTargets { get; set; }
 }

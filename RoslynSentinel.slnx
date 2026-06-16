@@ -10,5 +10,6 @@
   <Project Path="RoslynSentinel.Server.Advanced/RoslynSentinel.Server.Advanced.csproj" Id="c76d7d9f-da14-4474-a0ef-fa7e59bb0986" />
   <Project Path="RoslynSentinel.Server.Basic.Http/RoslynSentinel.Server.Basic.Http.csproj" Id="931452b6-6369-40bf-b385-0e89fd0eb878" />
   <Project Path="RoslynSentinel.Server.Basic/RoslynSentinel.Server.Basic.csproj" Id="6de66037-8f7a-44f0-a258-9ec410d44fed" />
+  <Project Path="RoslynSentinel.Tests.Asyncify/RoslynSentinel.Tests.Asyncify.csproj" Id="1a7f4726-11b3-476a-9d7a-13b2f14af9f2" />
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
 </Solution>

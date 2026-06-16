@@ -966,7 +966,7 @@ public class SentinelWorkspaceTools
                                 preview = preview[..120] + "\u2026";
                             }
 
-                            results.Add(new TextSearchMatch(docPath.Relative, i + 1, col + 1, preview));
+                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, col + 1, preview));
                         }
                     }
                 }
@@ -983,7 +983,7 @@ public class SentinelWorkspaceTools
 
     private static bool GlobMatchesFileName([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string glob)
     {
-        var fileName = Path.GetFileName(filePath.Relative);
+        var fileName = Path.GetFileName(filePath.Absolute);
         var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
         return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
     }

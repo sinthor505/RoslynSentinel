@@ -24,6 +24,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _appliedChanges = new();
+    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _revertedChanges = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
@@ -512,12 +513,26 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public Dictionary<FilePath, string> GetStagedChanges(string changeId)
     {
-        if (_stagedChanges.TryGetValue(changeId, out var changes))
+        _stagedChanges.TryGetValue(changeId, out var staged);
+        _appliedChanges.TryGetValue(changeId, out var applied);
+        _revertedChanges.TryGetValue(changeId, out var reverted);
+
+        if (staged != null && staged.Count > 0)
         {
-            return changes;
+            return staged;
         }
 
-        throw new KeyNotFoundException($"Staged change ID '{changeId}' not found.");
+        if (applied != null && applied.Count > 0)
+        {
+            return applied;
+        }
+
+        if (reverted != null && reverted.Count > 0)
+        {
+            return reverted;
+        }
+
+        throw new KeyNotFoundException($"Staged change ID '{changeId}' not found in current staged, applied, or reverted changes. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
     }
 
     /// <summary>
@@ -556,6 +571,13 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// </summary>
     public bool DiscardStagedChanges(string changeId)
     {
+        var reverted = _revertedChanges.TryRemove(changeId, out _);
+
+        if (!reverted)
+        {
+            throw new KeyNotFoundException($"Staged change ID '{changeId}' not found in current staged, applied, or reverted changes. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
+        }
+
         return _stagedChanges.TryRemove(changeId, out _);
     }
 
@@ -1033,7 +1055,7 @@ public partial class PersistentWorkspaceManager : IDisposable
 
         if (toRetry.Count == 0)
         {
-            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), "No matching failed changes found in cache to retry.");
+            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), $"No matching failed changes found in cache to retry. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
         }
 
         return await ApplyProposedChangesAsync(toRetry, retryCount);

@@ -16,6 +16,7 @@ public class SentinelAsyncifyTools
     private readonly AsyncSafetyEngine _asyncSafetyEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly AsyncBatchEngine _asyncBatchEngine;
+    private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelAsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
@@ -32,6 +33,7 @@ public class SentinelAsyncifyTools
         AsyncSafetyEngine asyncSafetyEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         AsyncBatchEngine asyncBatchEngine,
+        MsToolAugmentEngine msToolAugmentEngine,
         PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelAsyncifyTools> logger)
     {
@@ -39,6 +41,7 @@ public class SentinelAsyncifyTools
         _asyncSafetyEngine = asyncSafetyEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _asyncBatchEngine = asyncBatchEngine;
+        _msToolAugmentEngine = msToolAugmentEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
@@ -1585,12 +1588,241 @@ public class SentinelAsyncifyTools
         };
     }
 
+    [Description("""
+        Batch-first method extraction for HandlerExtract candidates. Extracts each nominated
+        code block into a new private method using semantic analysis to determine the correct
+        return type (fixes the standard extract_method bug where selections ending with
+        'return expr' produce void instead of the expression's actual type).
+
+        Each target specifies one extraction via a contextSnippet — a short, unique fragment
+        of the code block to extract. Targets in the same file are processed sequentially so
+        each extraction sees the file as left by the previous one. Checks the circuit breaker;
+        records outcome; writes a forensic blob.
+
+        input.HandlerExtractTargets — list of { FilePath, NewMethodName, ContextSnippet,
+                                       LineBefore?, LineAfter? }
+        input.DryRun               — when true, validates the contextSnippet is locatable
+                                     without writing files.
+
+        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-target details.
+        """)]
+    private async Task<BatchResultSummary> HandlerExtract(
+        List<HandlerExtractTarget> targets,
+        bool dryRun,
+        CancellationToken cancellationToken = default)
+    {
+        var halt = _workspaceManager.CheckBreaker();
+        if (halt != null)
+        {
+            return halt;
+        }
+
+        int succeeded = 0;
+        int failed = 0;
+        var items = new List<OperationItemRecord>();
+        var failures = new List<FailureDetail>();
+
+        foreach (var target in targets)
+        {
+            if (string.IsNullOrWhiteSpace(target.NewMethodName))
+            {
+                var reason = $"NewMethodName is required for handler_extract (file: {target.FilePath})";
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = target.FilePath,
+                        MethodName = target.NewMethodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(target.ContextSnippet))
+            {
+                var reason = $"ContextSnippet is required for handler_extract (file: {target.FilePath})";
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = target.FilePath,
+                        MethodName = target.NewMethodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                continue;
+            }
+
+            MsAugmentResult extractResult;
+            try
+            {
+                extractResult = await _msToolAugmentEngine.ExtractMethodSafeAsync(
+                    target.FilePath,
+                    target.NewMethodName,
+                    target.ContextSnippet,
+                    target.LineBefore,
+                    target.LineAfter,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                var reason = $"{ex.GetType().Name}: {ex.Message}";
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = target.FilePath,
+                        MethodName = target.NewMethodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                _logger.LogWarning(
+                    "HandlerExtract: {Method} in {File} threw: {Reason}",
+                    target.NewMethodName, target.FilePath, reason);
+                continue;
+            }
+
+            if (!extractResult.Success)
+            {
+                var reason = extractResult.Error ?? "ExtractMethodSafeAsync returned failure with no message";
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = target.FilePath,
+                        MethodName = target.NewMethodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                _logger.LogWarning(
+                    "HandlerExtract: {Method} in {File} failed: {Reason}",
+                    target.NewMethodName, target.FilePath, reason);
+                continue;
+            }
+
+            if (dryRun)
+            {
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Skipped,
+                    Reason = "dry_run",
+                });
+                succeeded++;
+                continue;
+            }
+
+            try
+            {
+                var updatedContent = extractResult.UpdatedContent!;
+                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { { target.FilePath, updatedContent } });
+
+                string? beforeSource = null;
+                _ = applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource);
+
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Succeeded,
+                    BeforeSource = beforeSource,
+                });
+                succeeded++;
+            }
+            catch (Exception ex)
+            {
+                var reason = $"apply failed: {ex.GetType().Name}: {ex.Message}";
+                items.Add(new OperationItemRecord
+                {
+                    FilePath = target.FilePath,
+                    MethodName = target.NewMethodName,
+                    Outcome = OperationOutcome.Failed,
+                    Reason = reason,
+                });
+                if (failures.Count < 15)
+                {
+                    failures.Add(new FailureDetail
+                    {
+                        FilePath = target.FilePath,
+                        MethodName = target.NewMethodName,
+                        Reason = reason,
+                        Outcome = OperationOutcome.Failed,
+                    });
+                }
+                failed++;
+                _logger.LogWarning(
+                    "HandlerExtract: apply changes for {Method} in {File} failed: {Reason}",
+                    target.NewMethodName, target.FilePath, reason);
+            }
+        }
+
+        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
+
+        var changeId = Guid.NewGuid().ToString("N")[..8];
+        var blobName = await OperationBlobWriter.WriteAsync(
+            "handler_extract", changeId, items, _workspaceManager.GetSolutionRoot());
+        var status = _workspaceManager.GetBreakerStatus();
+
+        return new BatchResultSummary
+        {
+            ChangeId = changeId,
+            BlobName = blobName,
+            Succeeded = succeeded,
+            Failed = failed,
+            Skipped = 0,
+            RolledBack = 0,
+            Attempted = succeeded + failed,
+            Failures = failures,
+            Severity = status.Severity,
+            Directive = status.Directive,
+            BreakerOpen = status.Open,
+        };
+    }
+
     // ── Phase 7 — async_migrate dispatcher ────────────────────────────────────
 
     [McpServerTool(Name = "AsyncMigrate")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Unified dispatcher for seven async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
+        Unified dispatcher for eight async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
         """)]
     public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
         string operation,
@@ -1685,10 +1917,15 @@ public class SentinelAsyncifyTools
                     input.PropagateCancellationTokens,
                     cancellationToken),
 
+                "handler_extract" => await HandlerExtract(
+                    input.HandlerExtractTargets ?? [],
+                    input.DryRun,
+                    cancellationToken),
+
                 _ => throw new ArgumentException(
                     $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +
                     "convert_to_async_bridge, add_cancellation_token, run_uplift, " +
-                    "flag_migration_candidates, asyncify, handler_to_async.",
+                    "flag_migration_candidates, asyncify, handler_to_async, handler_extract.",
                     nameof(operation))
             };
         }
@@ -1756,8 +1993,6 @@ public class SentinelAsyncifyTools
                   input.MinScore        — optional, default 50
                   input.DryRun          — optional, default false
                   input.ForceRescan     — optional, default false
-                  NOTE: HandlerExtract is a flagging-only pattern — no migration transform is
-                        available; use it to annotate methods for future structural refactoring.
 
               "asyncify"
                   input.ProjectName     — project; null = entire solution
@@ -1777,6 +2012,20 @@ public class SentinelAsyncifyTools
                   input.DryRun          — optional, default false
                   input.MaxItems        — optional, default 100
                   input.PropagateCancellationTokens — optional, default true
+
+              "handler_extract"
+                  Extracts nominated code blocks into new private methods using semantic analysis
+                  (correct return type inference; fixes the standard extract_method void-return bug).
+                  Typical workflow: scan_migration_candidates(pattern="HandlerExtract") to find
+                  candidates → inspect source → call handler_extract with specific snippets.
+                  input.HandlerExtractTargets — list of:
+                      FilePath        — absolute path to the .cs file
+                      NewMethodName   — C# identifier for the new extracted method (required)
+                      ContextSnippet  — short unique fragment of the code block to extract (required)
+                      LineBefore      — optional line before the snippet for disambiguation
+                      LineAfter       — optional line after the snippet for disambiguation
+                  input.DryRun        — when true, validates each contextSnippet is locatable
+                                        without writing files; useful for pre-flight check
             """,
         StructuredOptions = new Dictionary<string, object>
         {
@@ -1787,6 +2036,7 @@ public class SentinelAsyncifyTools
             ["flag_migration_candidates"] = new { FlagScope = "targets|project", FlagTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MyMethod" } }, DryRun = false, MinScore = 50, ForceRescan = false },
             ["asyncify"] = new { MethodTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MySingleMethod" } }, Exclusions = new[] { "MethodToSkip" }, DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
             ["handler_to_async"] = new { ProjectName = (string?)null, DryRun = false, MaxItems = 100, PropagateCancellationTokens = true },
+            ["handler_extract"] = new { HandlerExtractTargets = new[] { new { FilePath = "path/to/file.cs", NewMethodName = "HandleRequest", ContextSnippet = "var result = Process(input);", LineBefore = (string?)null, LineAfter = (string?)null } }, DryRun = false },
         }
     };
 
