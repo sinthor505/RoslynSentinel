@@ -60,7 +60,9 @@ public class SentinelQualityTools
         Returns reference documentation for a named tool's valid input values — operation names, transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set — this does not mean the tool is invalid, only that its schema is self-describing.
         """)]
     public ToolOptionsResult DescribeAdvancedToolOptions(
-        [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName)
+        [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         return toolName switch
         {
@@ -94,7 +96,9 @@ public class SentinelQualityTools
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<ToolResult<object>> GetTestCoverageMap(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string methodName)
+        [Consumes(DataTag.SymbolName, required: true)] string methodName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -122,7 +126,9 @@ public class SentinelQualityTools
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<ToolResult<object>> GetMethodComplexity(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName, required: true)] string methodName)
+        [Consumes(DataTag.SymbolName, required: true)] string methodName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -158,7 +164,9 @@ public class SentinelQualityTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         if (_logger.IsEnabled(LogLevel.Information))
@@ -198,7 +206,9 @@ public class SentinelQualityTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

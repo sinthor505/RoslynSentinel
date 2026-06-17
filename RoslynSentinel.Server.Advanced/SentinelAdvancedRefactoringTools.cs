@@ -127,7 +127,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ExternalInputRequired(DataTag.Order, required: true)] int[] newParameterOrder,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
+        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -154,7 +156,9 @@ public class SentinelAdvancedRefactoringTools
     [Description("Converts the first anonymous object creation expression in the file to a formal named class declaration. Validates and stages the result — pass the returned changeId to staged_change(action=\"apply\") to commit.")]
     public async Task<ToolResult<object>> ConvertAnonymousToNamed(
         [ExternalInputRequired(DataTag.SourceFilepath, required: true)] string filepath,
-        [ExternalInputRequired(DataTag.ClassName, required: true)] string newClassName)
+        [ExternalInputRequired(DataTag.ClassName, required: true)] string newClassName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -182,7 +186,9 @@ public class SentinelAdvancedRefactoringTools
     public async Task<ToolResult<object>> InlineClass(
         [Consumes(DataTag.SourceFilepath, required: true)] string rawSourceFilePath,
         [Consumes(DataTag.SourceFilepath, required: true)] string rawTargetFilePath,
-        [Consumes(DataTag.SymbolName, required: true)] string className)
+        [Consumes(DataTag.SymbolName, required: true)] string className,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath sourceFilePath = FilePath.FromWire(rawSourceFilePath, _workspaceManager.GetSolutionRoot());
         FilePath targetFilePath = FilePath.FromWire(rawTargetFilePath, _workspaceManager.GetSolutionRoot());
@@ -212,7 +218,9 @@ public class SentinelAdvancedRefactoringTools
     public async Task<ToolResult<object>> MoveAllTypesToFiles(
         string scope,
         string? scopeName = null,
-        bool autoStage = true)
+        bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -305,7 +313,9 @@ public class SentinelAdvancedRefactoringTools
     public async Task<ToolResult<object>> InvertAssignments(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine)] int startLine,
-        [Consumes(DataTag.EndLine)] int endLine)
+        [Consumes(DataTag.EndLine)] int endLine,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -336,7 +346,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string className,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
+        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -371,7 +383,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         string? newTypeName = null,
-        string[]? parameterNames = null)
+        string[]? parameterNames = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -402,7 +416,9 @@ public class SentinelAdvancedRefactoringTools
         [ExternalInputRequired(DataTag.SymbolName)] string newName,
         [ExternalInputRequired(DataTag.SymbolKind)] string @as,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -460,7 +476,9 @@ public class SentinelAdvancedRefactoringTools
         [ExternalInputRequired(DataTag.SymbolName)] string[]? memberNames = null,
         [ExternalInputRequired(DataTag.SourceFilepath)] FilePath[]? filePaths = null,
         [ExternalInputRequired(DataTag.ClassName)] string[]? classNames = null,
-        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true)
+        [ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -564,7 +582,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SymbolName, required: true)] string interfaceName,
         [Consumes(DataTag.Action, required: true)] string action,
         [Consumes(DataTag.SymbolName)] string? className = null,
-        [Consumes(DataTag.ProjectName)] string? projectName = null)
+        [Consumes(DataTag.ProjectName)] string? projectName = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -620,7 +640,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [Consumes(DataTag.SymbolKind, required: true)] string kind,
-        [Consumes(DataTag.SymbolName)] string? methodName = null)
+        [Consumes(DataTag.SymbolName)] string? methodName = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -703,7 +725,9 @@ public class SentinelAdvancedRefactoringTools
         [ExternalInputRequired(DataTag.SymbolName)] string? name = null,
         [ExternalInputRequired(DataTag.SymbolName)] string catchVariableName = "ex",
         [ExternalInputRequired(DataTag.SourceCode)] string? catchBody = null,
-        [ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true)
+        [ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
@@ -775,7 +799,9 @@ public class SentinelAdvancedRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         string destination,
-        bool autoStage = true)
+        bool autoStage = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try

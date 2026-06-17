@@ -38,7 +38,9 @@ public class SentinelGenerationTools
     public object GenerateClassesFromJson(
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
-        [ExternalInputRequired(DataTag.Namespace)] string @namespace)
+        [ExternalInputRequired(DataTag.Namespace)] string @namespace,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -56,7 +58,9 @@ public class SentinelGenerationTools
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [ExternalInputRequired(DataTag.ClassName)] string controllerName)
+        [ExternalInputRequired(DataTag.ClassName)] string controllerName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -83,7 +87,9 @@ public class SentinelGenerationTools
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
-        [Consumes(DataTag.ProjectName, required: true)] string projectName)
+        [Consumes(DataTag.ProjectName, required: true)] string projectName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -117,7 +123,9 @@ public class SentinelGenerationTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
-        [Consumes(DataTag.LineAfter)] string? lineAfter = null)
+        [Consumes(DataTag.LineAfter)] string? lineAfter = null,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

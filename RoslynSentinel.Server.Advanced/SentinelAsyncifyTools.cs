@@ -59,7 +59,9 @@ public class SentinelAsyncifyTools
         int? topN = null,
         int? minScore = null,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [ToolOption(ToolOptionTag.Offset)] int offset = 0)
+        [ToolOption(ToolOptionTag.Offset)] int offset = 0,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -296,6 +298,7 @@ public class SentinelAsyncifyTools
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -346,6 +349,7 @@ public class SentinelAsyncifyTools
         """)]
     private async Task<BatchResultSummary> PropagateCancellationToken(
         BatchTargetInput input,
+        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1073,7 +1077,7 @@ public class SentinelAsyncifyTools
         Use get_operation_detail(changeId) to inspect per-phase, per-method results.
         """)]
     private async Task<BatchResultSummary> Asyncify(
-        AsyncifyInput input,
+        AsyncifyInput input, IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1450,6 +1454,7 @@ public class SentinelAsyncifyTools
         bool dryRun,
         int maxItems,
         bool propagateCancellationTokens,
+        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1609,6 +1614,7 @@ public class SentinelAsyncifyTools
     private async Task<BatchResultSummary> HandlerExtract(
         List<HandlerExtractTarget> targets,
         bool dryRun,
+        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1827,6 +1833,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
         string operation,
         AsyncMigrateInput input,
+        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -1851,7 +1858,7 @@ public class SentinelAsyncifyTools
                         DryRun = input.DryRun,
                         MaxItems = input.MaxItems,
                     },
-                    cancellationToken),
+                    progress, cancellationToken),
 
                 "convert_to_async_bridge" => await ConvertToAsyncBridge(
                     new BatchTargetInput
@@ -1908,19 +1915,19 @@ public class SentinelAsyncifyTools
                         MinScore = input.MinScore,
                         ScoreThreshold = input.ScoreThreshold,
                     },
-                    cancellationToken),
+                    progress, cancellationToken),
 
                 "handler_to_async" => await HandlerToAsync(
                     input.ProjectName,
                     input.DryRun,
                     input.MaxItems,
                     input.PropagateCancellationTokens,
-                    cancellationToken),
+                    progress, cancellationToken),
 
                 "handler_extract" => await HandlerExtract(
                     input.HandlerExtractTargets ?? [],
                     input.DryRun,
-                    cancellationToken),
+                    progress, cancellationToken),
 
                 _ => throw new ArgumentException(
                     $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +

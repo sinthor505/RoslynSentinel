@@ -1166,7 +1166,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, IProgress<string> progress = default, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1213,7 +1213,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, IProgress<string> progress = default, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1267,7 +1267,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, IProgress<string> progress = default, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2268,7 +2268,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2330,10 +2330,16 @@ public class RefactoringEngine
         }
 
         // Fallback: append
-        return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, progress, ct);
     }
 
-    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePath filePath, string containerName, string beforeMemberName, string newMemberSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> InsertMemberBeforeAsync(
+        FilePath filePath,
+        string containerName,
+        string beforeMemberName,
+        string newMemberSource,
+        IProgress<string>? progress = null,
+        CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2394,10 +2400,10 @@ public class RefactoringEngine
             };
         }
 
-        return await AddMemberAsync(filePath, containerName, newMemberSource, ct);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, progress, ct);
     }
 
-    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2477,7 +2483,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2530,6 +2536,7 @@ public class RefactoringEngine
     string targetName,
     string oldAttributeName,
     string newAttributeSource,
+    IProgress<string>? progress = null,
     CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -2633,7 +2640,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2696,7 +2703,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2746,7 +2753,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2812,7 +2819,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2876,7 +2883,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, CancellationToken ct = default)
+    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2939,7 +2946,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2996,14 +3003,14 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
-        return await AddMemberAsync(filePath, containerName, source, ct);
+        return await AddMemberAsync(filePath, containerName, source, progress, ct);
     }
 
-    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
@@ -3024,10 +3031,10 @@ public class RefactoringEngine
         }
 
         parts.Append(';');
-        return await AddMemberAsync(filePath, containerName, parts.ToString(), ct);
+        return await AddMemberAsync(filePath, containerName, parts.ToString(), progress, ct);
     }
 
-    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3088,7 +3095,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3201,7 +3208,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, CancellationToken ct = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, IProgress<string>? progress = null, CancellationToken ct = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);

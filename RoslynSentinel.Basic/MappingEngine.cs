@@ -16,7 +16,12 @@ public class MappingEngine
     /// <summary>
     /// Generates a mapping method between two types based on property names.
     /// </summary>
-    public async Task<DocumentEditResult> GenerateMappingAsync(FilePath filePath, string fromType, string toType, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> GenerateMappingAsync(
+        FilePath filePath,
+        string fromType,
+        string toType,
+        IProgress<string> progress,
+        CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();

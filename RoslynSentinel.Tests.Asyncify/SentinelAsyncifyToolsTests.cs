@@ -239,7 +239,9 @@ public class Svc
     {
         var result = await _asyncifyTools.AsyncMigrate(
             "propagate_cancellation_token",
-            new AsyncMigrateInput());
+            new AsyncMigrateInput(),
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -257,7 +259,9 @@ public class Svc
 
         var result = await _asyncifyTools.AsyncMigrate(
             "totally_unknown_operation",
-            new AsyncMigrateInput());
+            new AsyncMigrateInput(),
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -292,7 +296,9 @@ public class Svc
                     }
                 ],
                 DryRun = true,
-            });
+            },
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -320,7 +326,9 @@ public class Svc
                     new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }
                 ],
                 DryRun = true,
-            });
+            },
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -349,7 +357,9 @@ public class Svc
             {
                 BatchTargets = [new BatchTarget { FilePath = "Svc.cs" }],
                 DryRun = true,
-            });
+            },
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -372,7 +382,9 @@ public class Svc
             {
                 BatchTargets = [],
                 DryRun = true,
-            });
+            },
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -403,7 +415,9 @@ public class Svc
                     }
                 ],
                 DryRun = true,
-            });
+            },
+            progress: null,
+            cancellationToken: default);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
