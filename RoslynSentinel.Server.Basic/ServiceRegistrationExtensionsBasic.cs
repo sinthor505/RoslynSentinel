@@ -47,7 +47,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // services.AddSingleton<LogicOptimizationEngine>();
         services.AddSingleton<SemanticSearchEngine>();
         // services.AddSingleton<ModernizationUpgradeEngine>();
-        services.AddSingleton<AsyncSafetyEngine>();
+        // services.AddSingleton<AsyncSafetyEngine>();
         services.AddSingleton<ProjectStructureEngine>();
         // services.AddSingleton<DeadCodeEngine>();
         services.AddSingleton<SyntaxUpgradeEngine>();
@@ -66,7 +66,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<GranularRefactoringEngine>();
         // services.AddSingleton<ApiAutomationEngine>();
         services.AddSingleton<ControlFlowEngine>();
-        services.AddSingleton<HealthOrchestrationEngine>();
+        // services.AddSingleton<HealthOrchestrationEngine>();
         services.AddSingleton<SymbolNavigationEngine>();
         // services.AddSingleton<AntiPatternEngine>();
         // services.AddSingleton<CloneDetectionEngine>();

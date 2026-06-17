@@ -293,17 +293,17 @@ public class SentinelIntelligenceTools
         }
     }
 
-    [McpServerTool(Name = "MoveFileToNamespaceFolder")]
+    [McpServerTool(Name = "PreviewMoveFileToNamespaceFolder")]
     [Produces(DataTag.Report)]
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
-    public async Task<ToolResult<string>> MoveFileToNamespaceFolder(
+    public async Task<ToolResult<string>> PreviewMoveFileToNamespaceFolder(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var result = await _projectStructureEngine.MoveFileToNamespaceFolderAsync(filePath);
+            var result = await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath);
             return new ToolResult<string>
             {
                 Success = true,
@@ -312,11 +312,11 @@ public class SentinelIntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "MoveFileToNamespaceFolder failed for '{FilePath}'", filePath);
+            _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePath}'", filePath);
             return new ToolResult<string>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"MoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"PreviewMoveFileToNamespaceFolder failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

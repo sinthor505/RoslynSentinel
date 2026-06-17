@@ -175,6 +175,7 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
+
     [McpServerTool(Name = "InlineClass")]
     [Produces(DataTag.ChangeId)]
     [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references throughout the solution. Validates and stages the result — pass the returned changeId to staged_change(action=\"apply\") to commit.")]

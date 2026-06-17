@@ -277,6 +277,19 @@ public class SentinelWorkspaceTools
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift() => _workspaceManager.ClearDrift();
 
+    private static string PreviewFileContent(string content)
+    {
+        var lines = content.Split('\n');
+        if (lines.Length <= 20)
+        {
+            return content;
+        }
+
+        var head = lines.Take(10);
+        var tail = lines.TakeLast(10);
+        return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
+    }
+
     [McpServerTool(Name = "ProposedChange")]
     [Produces(DataTag.ChangeId)]
     [Description("""
@@ -493,6 +506,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange failed: {ex.GetType().Name}: {ex.Message}") };
         }
     }
+
 
     /// <summary>
     /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.

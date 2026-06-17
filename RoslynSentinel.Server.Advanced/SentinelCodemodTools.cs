@@ -22,7 +22,7 @@ public class SentinelCodemodTools
     private readonly IDEStyleEngine _ideStyleEngine;
     private readonly CodeHealingEngine _codeHealingEngine;
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
-    private readonly MsToolAugmentEngine _augmentEngine;
+    private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly DocumentationEngine _documentationEngine;
     private readonly ProjectStructureEngine _projectStructureEngine;
     // ── apply_method_codemod engines ──────────────────────────────────────────
@@ -87,7 +87,7 @@ public class SentinelCodemodTools
         _ideStyleEngine = ideStyleEngine;
         _codeHealingEngine = codeHealingEngine;
         _advancedRefactoringEngine = advancedRefactoringEngine;
-        _augmentEngine = augmentEngine;
+        _msToolAugmentEngine = augmentEngine;
         _documentationEngine = documentationEngine;
         _projectStructureEngine = projectStructureEngine;
         _threadSafetyEngine = threadSafetyEngine;
@@ -208,7 +208,7 @@ public class SentinelCodemodTools
                     var result = await _refactoringEngine.FormatDocumentPreviewAsync(filePath);
                     return new ToolResult<object>() { Success = true, Data = result };
                 case "format_document_safe":
-                    var result2 = await _augmentEngine.FormatDocumentSafeAsync(filePath, preview);
+                    var result2 = await _msToolAugmentEngine.FormatDocumentSafeAsync(filePath, preview);
                     return new ToolResult<object>() { Success = true, Data = result2 };
                 case "generate_xml_documentation_stubs":
                     {
@@ -231,7 +231,7 @@ public class SentinelCodemodTools
                         return new ToolResult<object>() { Success = true, Data = result3.Outcome };
                     }
                 case "preview_add_missing_usings":
-                    var result4 = await _augmentEngine.PreviewAddMissingUsingsAsync(filePath);
+                    var result4 = await _msToolAugmentEngine.PreviewAddMissingUsingsAsync(filePath);
                     return new ToolResult<object>() { Success = true, Data = result4 };
                 case "add_configure_await_false":
                     {
@@ -285,7 +285,7 @@ public class SentinelCodemodTools
                     }
                 case "sort_and_deduplicate_usings":
                     {
-                        var result17 = await _augmentEngine.SortAndDeduplicateUsingsAsync(filePath, !preview);
+                        var result17 = await _msToolAugmentEngine.SortAndDeduplicateUsingsAsync(filePath, !preview);
                         if (result17 == null)
                         {
                             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"sort_and_deduplicate_usings failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
@@ -1257,7 +1257,7 @@ public class SentinelCodemodTools
                                      .Select(m => m.Trim())
                                      .Where(m => m.Length > 0)
                                      .ToList();
-                        var result = await _augmentEngine.GenerateToStringSafeAsync(filePath, className, memberList);
+                        var result = await _msToolAugmentEngine.GenerateToStringSafeAsync(filePath, className, memberList);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
                 default:

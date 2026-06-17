@@ -70,7 +70,7 @@ public class ProjectStructureEngine
         };
     }
 
-    public async Task<DocumentEditResult> MoveFileToNamespaceFolderAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.Projects.SelectMany(p => p.Documents)

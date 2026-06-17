@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 
 using RoslynSentinel.Common;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Advanced;
 
 public enum HealthEngineType
 {

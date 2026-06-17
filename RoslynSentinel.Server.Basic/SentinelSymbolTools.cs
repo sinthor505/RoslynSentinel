@@ -19,7 +19,7 @@ public class SentinelSymbolTools
     private readonly DependencyEngine _dependencyEngine;
     private readonly ProjectStructureEngine _projectStructureEngine;
     // private readonly AsyncSafetyEngine _asyncSafetyEngine;
-    private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
+    // private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
     // private readonly ArchitecturalEngine _architecturalEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     // private readonly DependencyInjectionEngine _dependencyInjectionEngine;
@@ -31,15 +31,15 @@ public class SentinelSymbolTools
     public SentinelSymbolTools(
         ImpactAnalyzer impactAnalyzer,
         SemanticSearchEngine semanticSearchEngine,
-        //MetricsEngine metricsEngine,
+        // MetricsEngine metricsEngine,
         InventoryEngine inventoryEngine,
         // DeadCodeEngine deadCodeEngine,
         AnalysisEngine analysisEngine,
-        //DocumentationEngine documentationEngine,
+        // DocumentationEngine documentationEngine,
         DependencyEngine dependencyEngine,
         ProjectStructureEngine projectStructureEngine,
-        //AsyncSafetyEngine asyncSafetyEngine,
-        HealthOrchestrationEngine healthOrchestrationEngine,
+        // AsyncSafetyEngine asyncSafetyEngine,
+        // HealthOrchestrationEngine healthOrchestrationEngine,
         // ArchitecturalEngine architecturalEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         // DependencyInjectionEngine dependencyInjectionEngine,
@@ -59,7 +59,7 @@ public class SentinelSymbolTools
         _dependencyEngine = dependencyEngine;
         _projectStructureEngine = projectStructureEngine;
         // _asyncSafetyEngine = asyncSafetyEngine;
-        _healthOrchestrationEngine = healthOrchestrationEngine;
+        // _healthOrchestrationEngine = healthOrchestrationEngine;
         // _architecturalEngine = architecturalEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         // _dependencyInjectionEngine = dependencyInjectionEngine;

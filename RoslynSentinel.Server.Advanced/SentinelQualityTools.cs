@@ -18,6 +18,7 @@ public class SentinelQualityTools
     private readonly DiagnosticEngine _diagnosticEngine;
     private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
     private readonly StackOverflowEngine _stackOverflowEngine;
+    private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelQualityTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
@@ -34,6 +35,7 @@ public class SentinelQualityTools
         DiagnosticEngine diagnosticEngine,
         CodeStyleAnalysisEngine codeStyleAnalysisEngine,
         StackOverflowEngine stackOverflowEngine,
+        MsToolAugmentEngine toolAugmentEngine,
         PersistentWorkspaceManager workspaceManager,
         ILogger<SentinelQualityTools> logger)
     {
@@ -45,6 +47,7 @@ public class SentinelQualityTools
         _diagnosticEngine = diagnosticEngine;
         _codeStyleAnalysisEngine = codeStyleAnalysisEngine;
         _stackOverflowEngine = stackOverflowEngine;
+        _msToolAugmentEngine = toolAugmentEngine;
         _workspaceManager = workspaceManager;
         _logger = logger;
     }
@@ -139,6 +142,86 @@ public class SentinelQualityTools
             {
                 Success = false,
                 Error = new ResultError(ToolErrorCode.Exception, $"GetMethodComplexity failed: {ex.GetType().Name}: {ex.Message}")
+            };
+        }
+    }
+
+    // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
+
+    [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("""
+        Pre-flight safety check before convert_foreach_linq. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for full output field reference and safety rules.
+        """)]
+    // FIXES MS BUG: the standard tool produces incorrect code when the foreach loop body mutates the collection being iterated (e.g. adding/removing items from a List<T>), which is a common pattern. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect mutations to the collection variable within the loop body, and rejects conversion if any are found.
+    public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
+        }
+        try
+        {
+            var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeForeachForLinqConversion failed: {ex.GetType().Name}: {ex.Message}")
+            };
+        }
+    }
+
+
+    // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
+
+    [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
+    [Produces(DataTag.Analysis)]
+    [Description("""
+        Pre-flight safety check before converting a switch statement to a switch expression. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion") for full output field reference.
+        """)]
+    // FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect all variables assigned within the switch, and rejects conversion if any are assigned in more than one case arm, or if their assigned value is read later in the method (indicating a likely dependency on the variable retaining its value across cases). IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output.
+    public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
+        }
+        try
+        {
+            var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeSwitchForPatternConversion failed: {ex.GetType().Name}: {ex.Message}")
             };
         }
     }

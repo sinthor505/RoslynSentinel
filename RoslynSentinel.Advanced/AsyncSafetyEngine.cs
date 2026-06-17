@@ -2,7 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Advanced;
 
 public class AsyncSafetyEngine
 {

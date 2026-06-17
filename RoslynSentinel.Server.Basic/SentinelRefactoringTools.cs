@@ -24,7 +24,7 @@ public class SentinelRefactoringTools
     // private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
     // private readonly LogicOptimizationEngine _logicOptimizationEngine;
     // private readonly OutParamRefactoringEngine _outParamRefactoringEngine;
-    private readonly MsToolAugmentEngine _augmentEngine;
+    private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
@@ -70,7 +70,7 @@ public class SentinelRefactoringTools
         //_advancedRefactoringEngine = advancedRefactoringEngine;
         // _logicOptimizationEngine = logicOptimizationEngine;
         // _outParamRefactoringEngine = outParamRefactoringEngine;
-        _augmentEngine = augmentEngine;
+        _msToolAugmentEngine = augmentEngine;
         _codeGenerationEngine = codeGenerationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
         _workspaceManager = workspaceManager;
@@ -496,6 +496,45 @@ public class SentinelRefactoringTools
         {
             _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed: {ex.GetType().Name}: {ex.Message}") };
+        }
+    }
+
+    [McpServerTool(Name = "ExtractMethodSafe")]
+    [Produces(DataTag.ResultOnly)]
+    [Description("""
+        extract_method_safe—extracts selected statements into a new method with the CORRECT return type. newMethodName must be a valid C# identifier. contextSnippet: short unique code snippet identifying the selection. lineBefore/lineAfter disambiguate. Returns MsAugmentResult with extracted method code or error on rejection.
+        """)]
+    // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
+    public async Task<ToolResult<object>> ExtractMethodSafe(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
+        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePath, newMethodName);
+        }
+        try
+        {
+            var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
+                filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+            return new ToolResult<object>
+            {
+                Success = true,
+                Data = result
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePath}'", newMethodName, filePath);
+            return new ToolResult<object>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe failed: {ex.GetType().Name}: {ex.Message}")
+            };
         }
     }
 
