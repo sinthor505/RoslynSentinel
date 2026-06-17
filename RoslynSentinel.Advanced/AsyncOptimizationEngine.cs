@@ -1424,8 +1424,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// <param name="filePath">Absolute or workspace-relative path of the source file.</param>
     /// <param name="methodName">Exact (case-sensitive) name of the method to flag.</param>
     /// <param name="pattern">
-    /// The refactoring pattern: <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtract"</c>,
-    /// <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, or any custom string.
+    /// The refactoring pattern: <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtractCandidate"</c>,
+    /// <c>"HandlerToAsyncCandidate"</c>, <c>"AsyncCallerUpliftCandidate"</c>, or any custom string.
     /// </param>
     /// <param name="score">Optional eligibility score (default 0 = unscored).</param>
     /// <param name="reason">Optional human-readable rationale for the flag.</param>

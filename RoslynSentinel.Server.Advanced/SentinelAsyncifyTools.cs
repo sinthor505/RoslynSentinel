@@ -1434,7 +1434,7 @@ public class SentinelAsyncifyTools
 
     [Description("""
         Pattern-driven bridge conversion for HandlerToAsync candidates. Discovers all methods
-        flagged [MigrationCandidate("HandlerToAsync")] in the specified project (or solution)
+        flagged [MigrationCandidate("HandlerToAsyncCandidate")] in the specified project (or solution)
         and converts each to the Asyncify-bridge pattern. Checks the circuit breaker; records
         outcome; writes a forensic blob.
 
@@ -1462,7 +1462,7 @@ public class SentinelAsyncifyTools
         try
         {
             candidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
-                filePath: null, projectName: projectName, pattern: "HandlerToAsync",
+                filePath: null, projectName: projectName, pattern: "HandlerToAsyncCandidate",
                 cancellationToken: cancellationToken);
         }
         catch (Exception ex)
@@ -1980,7 +1980,7 @@ public class SentinelAsyncifyTools
                   input.MaxCallersPerMethod       — optional, default 10
                   input.PropagateCancellationTokens — optional, default true
                   NOTE: also the apply-step for AsyncCallerUplift-flagged candidates.
-                        Call scan_migration_candidates(pattern="AsyncCallerUplift") to identify
+                        Call scan_migration_candidates(pattern="AsyncCallerUpliftCandidate") to identify
                         which bridge methods have callers that need uplift, then pass those
                         bridge method names as UpliftTargets.
 
@@ -1989,7 +1989,7 @@ public class SentinelAsyncifyTools
                   input.FlagTargets     — list of { FilePath, MethodName, Pattern, Score?, Reason? } (scope=targets)
                   input.ProjectName     — project name (scope=project); null = entire solution
                   input.Pattern         — optional, default "AsyncBridgeCandidate"
-                                          also accepts: "HandlerExtract", "HandlerToAsync", "AsyncCallerUplift"
+                                          also accepts: "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate"
                   input.MinScore        — optional, default 50
                   input.DryRun          — optional, default false
                   input.ForceRescan     — optional, default false
@@ -2006,7 +2006,7 @@ public class SentinelAsyncifyTools
                   input.ScoreThreshold  — optional, default 60
 
               "handler_to_async"
-                  Auto-discovers all [MigrationCandidate("HandlerToAsync")]-flagged methods and
+                  Auto-discovers all [MigrationCandidate("HandlerToAsyncCandidate")]-flagged methods and
                   converts each to the Asyncify-bridge pattern (sync wrapper + async overload).
                   input.ProjectName     — scope to one project; null = entire solution
                   input.DryRun          — optional, default false
@@ -2016,7 +2016,7 @@ public class SentinelAsyncifyTools
               "handler_extract"
                   Extracts nominated code blocks into new private methods using semantic analysis
                   (correct return type inference; fixes the standard extract_method void-return bug).
-                  Typical workflow: scan_migration_candidates(pattern="HandlerExtract") to find
+                  Typical workflow: scan_migration_candidates(pattern="HandlerExtractCandidate") to find
                   candidates → inspect source → call handler_extract with specific snippets.
                   input.HandlerExtractTargets — list of:
                       FilePath        — absolute path to the .cs file
@@ -2064,7 +2064,7 @@ public class SentinelAsyncifyTools
             """,
         StructuredOptions = new Dictionary<string, object>
         {
-            ["patterns"] = new[] { "AsyncBridgeCandidate", "HandlerExtract", "HandlerToAsync", "AsyncCallerUplift" },
+            ["patterns"] = new[] { "AsyncBridgeCandidate", "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate" },
             ["scoreBuckets"] = new[] { "<0", "0-25", "26-50", "51-75", "76plus" },
         }
     };

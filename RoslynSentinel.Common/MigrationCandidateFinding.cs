@@ -8,7 +8,7 @@ namespace RoslynSentinel.Common;
 /// <param name="ClassName">The class that declares the method.</param>
 /// <param name="Pattern">
 /// The refactoring pattern the method is earmarked for:
-/// <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtract"</c>, <c>"HandlerToAsync"</c>, <c>"AsyncCallerUplift"</c>, etc.
+/// <c>"AsyncBridgeCandidate"</c>, <c>"HandlerExtractCandidate"</c>, <c>"HandlerToAsyncCandidate"</c>, <c>"AsyncCallerUpliftCandidate"</c>, etc.
 /// </param>
 /// <param name="Score">Eligibility score from the scout tool (0 = unscored).</param>
 /// <param name="Reason">Human-readable rationale for the flag, or <c>null</c> if none was supplied.</param>
