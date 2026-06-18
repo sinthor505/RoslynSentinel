@@ -667,7 +667,11 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// BeforeSource on OperationItemRecords for undo support.
     /// Retries on IOExceptions (e.g. file locks).
     /// </summary>
-    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3)
+    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(
+        Dictionary<FilePath, string> changes,
+        int retryCount = 3,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         await _solutionLock.WaitAsync();
         var succeeded = new List<string>();

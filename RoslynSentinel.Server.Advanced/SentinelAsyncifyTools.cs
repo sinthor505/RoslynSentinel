@@ -424,6 +424,7 @@ public class SentinelAsyncifyTools
                     DryRun = dryRun,
                     ForceRescan = forceRescan,
                 },
+                progress,
                 cancellationToken);
             return new ToolResult<BatchResultSummary> { Success = true, Data = result };
         }
@@ -474,6 +475,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -491,6 +493,7 @@ public class SentinelAsyncifyTools
             var (summary, suggestedUpliftTargets) = await BridgeAsyncMethodsCore(
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
                 propagateCancellationTokens,
+                progress,
                 cancellationToken);
             return new ToolResult<BridgeAsyncMethodsResult>
             {
@@ -547,6 +550,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxCallersPerMethod = 10,
         bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -569,6 +573,7 @@ public class SentinelAsyncifyTools
                     MaxCallersPerMethod = maxCallersPerMethod,
                     PropagateCancellationTokens = propagateCancellationTokens,
                 },
+                progress,
                 cancellationToken);
             return new ToolResult<UpliftCallersResult>
             {
@@ -638,6 +643,7 @@ public class SentinelAsyncifyTools
         {
             var result = await PropagateCancellationTokenCore(
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
+                progress,
                 cancellationToken);
             return new ToolResult<BatchResultSummary> { Success = true, Data = result };
         }
@@ -674,6 +680,7 @@ public class SentinelAsyncifyTools
         List<BatchTarget> targets,
         bool dryRun = false,
         int maxItems = 100,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -690,6 +697,7 @@ public class SentinelAsyncifyTools
         {
             var result = await AddCancellationTokenCore(
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
+                progress,
                 cancellationToken);
             return new ToolResult<BatchResultSummary> { Success = true, Data = result };
         }
@@ -915,6 +923,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> PropagateCancellationTokenCore(
         BatchTargetInput input,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -938,7 +947,7 @@ public class SentinelAsyncifyTools
         PropagateCtBatchResult result;
         try
         {
-            result = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(batchInput, cancellationToken);
+            result = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(batchInput, progress: progress, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -996,6 +1005,7 @@ public class SentinelAsyncifyTools
     private async Task<(BatchResultSummary Summary, List<UpliftTarget> SuggestedUpliftTargets)> BridgeAsyncMethodsCore(
         BatchTargetInput input,
         bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1059,7 +1069,7 @@ public class SentinelAsyncifyTools
                     {
                         var asyncMethod = methodName + "Async";
                         var propagationResult = await _asyncOptimizationEngine
-                            .PropagateCancellationTokenInMethodAsync(target.FilePath, asyncMethod, cancellationToken);
+                            .PropagateCancellationTokenInMethodAsync(target.FilePath, asyncMethod, progress: progress, cancellationToken: cancellationToken);
                         if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
                         {
                             updatedSource = propagationResult.UpdatedText;
@@ -1144,6 +1154,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AddCancellationTokenCore(
         BatchTargetInput input,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1174,7 +1185,7 @@ public class SentinelAsyncifyTools
             {
                 var (updatedSource, modified, skippedMethods) =
                     await _asyncOptimizationEngine.ApplyCancellationTokenToFileAsync(
-                        target.FilePath, target.MethodNames, cancellationToken);
+                        target.FilePath, target.MethodNames, progress: progress, cancellationToken: cancellationToken);
 
                 if (updatedSource.StartsWith("// Error:"))
                 {
@@ -1271,6 +1282,7 @@ public class SentinelAsyncifyTools
 
     private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets)> UpliftCallersCore(
         RunUpliftInput input,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1294,7 +1306,7 @@ public class SentinelAsyncifyTools
         UpliftBatchMultiResult result;
         try
         {
-            result = await _asyncBatchEngine.RunUpliftBatchMultiAsync(multiInput, cancellationToken);
+            result = await _asyncBatchEngine.RunUpliftBatchMultiAsync(multiInput, progress: progress, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -1382,6 +1394,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1565,7 +1578,8 @@ public class SentinelAsyncifyTools
     }
 
     private async Task<BatchResultSummary> AsyncifyCore(
-        AsyncifyInput input, IProgress<string> progress,
+        AsyncifyInput input,
+        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1745,7 +1759,8 @@ public class SentinelAsyncifyTools
                 input.ScoreThreshold,
                 input.DryRun,
                 input.PropagateCancellationTokens,
-                cancellationToken);
+                progress: progress,
+                cancellationToken: cancellationToken);
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -1807,7 +1822,7 @@ public class SentinelAsyncifyTools
                             DryRun = input.DryRun,
                             PropagateCancellationTokens = input.PropagateCancellationTokens,
                         },
-                        cancellationToken);
+                        progress: progress, cancellationToken: cancellationToken);
 
                     foreach (var pm in upliftResult.PerMethod)
                     {
@@ -1869,7 +1884,7 @@ public class SentinelAsyncifyTools
                             MaxFiles = bridgedFiles.Count,
                             FlagFailures = false,
                         },
-                        cancellationToken);
+                        progress: progress, cancellationToken: cancellationToken);
 
                     foreach (var a in ctResult.Applied)
                     {
@@ -1986,14 +2001,14 @@ public class SentinelAsyncifyTools
             {
                 string? updatedSource;
                 var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    filePath, methodName, cancellationToken);
+                    filePath, methodName, progress: progress, cancellationToken: cancellationToken);
                 updatedSource = convertResult.UpdatedText;
 
                 if (propagateCancellationTokens)
                 {
                     var asyncMethod = methodName + "Async";
                     var propagationResult = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, cancellationToken);
+                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, progress: progress, cancellationToken: cancellationToken);
                     if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
                     {
                         updatedSource = propagationResult.UpdatedText;

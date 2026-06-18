@@ -38,7 +38,7 @@ public class ValidationEngine
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
-            return await ValidateChangesAsync(new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken);
+            return await ValidateChangesAsync(new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, progress: null, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -60,7 +60,9 @@ public class ValidationEngine
     /// Files not found in the solution (RS001) are treated as pass-through: the tool
     /// cannot validate new files in-memory, so it allows them rather than blocking.
     /// </summary>
-    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

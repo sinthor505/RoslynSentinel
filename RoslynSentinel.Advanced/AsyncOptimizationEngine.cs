@@ -382,6 +382,7 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> ConvertToAsyncBridgeAsync(
         FilePath filePath,
         string methodName,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -588,7 +589,11 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Adds .ConfigureAwait(false) (or true) to all await expressions that don't already have it.
     /// </summary>
-    public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(FilePath filePath, bool libraryMode = true, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(
+        FilePath filePath,
+        bool libraryMode = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -640,7 +645,10 @@ public class AsyncOptimizationEngine
     /// <summary>
     /// Removes all .ConfigureAwait(x) calls, leaving the bare awaited expression.
     /// </summary>
-    public async Task<DocumentEditResult> RemoveConfigureAwaitFalseAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveConfigureAwaitFalseAsync(
+        FilePath filePath,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -684,7 +692,11 @@ public class AsyncOptimizationEngine
     /// Converts a method returning Task&lt;List&lt;T&gt;&gt; or List&lt;T&gt; to IAsyncEnumerable&lt;T&gt;.
     /// Transforms results.Add(x) patterns to yield return x. Falls back to scaffold for complex bodies.
     /// </summary>
-    public async Task<DocumentEditResult> ConvertToAsyncEnumerableAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ConvertToAsyncEnumerableAsync(
+        FilePath filePath,
+        string methodName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -869,7 +881,11 @@ public class AsyncOptimizationEngine
         }
     }
 
-    public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(
+        FilePath filePath,
+        string methodName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -1065,6 +1081,7 @@ public class AsyncOptimizationEngine
         ApplyCancellationTokenToFileAsync(
             FilePath filePath,
             string[]? methodNames = null,
+            IProgress<string> progress = default,
             CancellationToken cancellationToken = default)
     {
         var modified = new List<string>();
@@ -1130,7 +1147,7 @@ public class AsyncOptimizationEngine
 
             // Build the replacement method node (same logic as AddCancellationTokenToMethodAsync
             // but extracted here so we can batch all replacements into one ReplaceNodes call).
-            var newMethod = BuildMethodWithCancellationToken(method, semanticModel, cancellationToken);
+            var newMethod = BuildMethodWithCancellationToken(method, semanticModel, progress, cancellationToken);
             methodReplacements[method] = newMethod;
             modified.Add(name);
         }
@@ -1159,7 +1176,8 @@ public class AsyncOptimizationEngine
     private static MethodDeclarationSyntax BuildMethodWithCancellationToken(
         MethodDeclarationSyntax methodNode,
         SemanticModel? semanticModel,
-        CancellationToken cancellationToken)
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         // Build CancellationToken parameter — trailing space becomes whitespace trivia between
         // the type name and the parameter identifier.
@@ -1445,6 +1463,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         string pattern,
         int score = 0,
         string? reason = null,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -1645,9 +1664,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
     /// the error is recorded separately in the caller's error list.
     /// </returns>
     public async Task<(List<FlagMigrationCandidateEngineResult> Results, List<(int Index, string Error)> Errors)>
-        FlagMultipleMigrationCandidatesAsync(
-            IReadOnlyList<(FilePath FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
-            CancellationToken cancellationToken = default)
+        FlagMultipleMigrationCandidatesAsync(IReadOnlyList<(FilePath FilePath, string MethodName, string Pattern, int Score, string? Reason)> items,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
     {
         // Group by file so we rewrite each file once.
         var byFile = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
@@ -1874,6 +1893,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         string? filePath = null,
         string? projectName = null,
         string? pattern = null,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -2088,6 +2108,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         int minScore = 50,
         bool dryRun = false,
         bool forceRescan = false,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -2514,6 +2535,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         PropagateCancellationTokenInMethodAsync(
             FilePath filePath,
             string methodName,
+            IProgress<string> progress = default,
             CancellationToken cancellationToken = default)
     {
         var result = new PropagateCtResult { MethodName = methodName };
@@ -2807,6 +2829,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         PropagateCancellationTokenInFileAsync(
             FilePath filePath,
             string[]? methodNames = null,
+            IProgress<string> progress = default,
             CancellationToken cancellationToken = default)
     {
         var fileResult = new PropagateCtFileResult { FilePath = filePath };
@@ -3040,6 +3063,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             string source,
             FilePath filePath,
             string methodName,
+            IProgress<string> progress = default,
             CancellationToken cancellationToken = default)
     {
         var fileResult = new PropagateCtFileResult { FilePath = filePath };

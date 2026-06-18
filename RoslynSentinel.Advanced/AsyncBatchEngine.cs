@@ -369,6 +369,7 @@ public class AsyncBatchEngine
         int scoreThreshold = 60,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         // 1. Discover eligible candidates.
@@ -417,7 +418,10 @@ public class AsyncBatchEngine
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    candidate.FilePath, candidate.MethodName, cancellationToken);
+                    candidate.FilePath,
+                    candidate.MethodName,
+                    progress,
+                    cancellationToken);
                 newSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
             catch (InvalidOperationException ex)
@@ -453,7 +457,7 @@ public class AsyncBatchEngine
                     var asyncMethodName = candidate.MethodName + "Async";
                     var (propagatedSource, _) = await _asyncOptimizationEngine
                         .PropagateCancellationTokenInSourceAsync(
-                            newSource, candidate.FilePath, asyncMethodName, cancellationToken);
+                            newSource, candidate.FilePath, asyncMethodName, progress, cancellationToken);
                     sourceToValidate = propagatedSource;
                 }
                 catch (Exception propEx)
@@ -469,6 +473,7 @@ public class AsyncBatchEngine
             Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } },
+                progress,
                 cancellationToken);
 
             if (!validation.Success)
@@ -489,6 +494,7 @@ public class AsyncBatchEngine
                         candidate.FilePath, candidate.MethodName, "NeedsManualReview",
                         score: 0,
                         reason: $"Bridge produced {validation.Diagnostics.Count} compiler error(s)",
+                        progress: progress,
                         cancellationToken: cancellationToken);
                     await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
                 }
@@ -519,6 +525,8 @@ public class AsyncBatchEngine
             {
                 BeforeSource = bridgeBeforeSource,
             });
+
+            progress?.Report($"{applied.Count} of {eligible.Count}. Bridged {candidate.MethodName} in {candidate.FilePath}");
         }
 
         // Determine why the batch stopped.
@@ -583,6 +591,7 @@ public class AsyncBatchEngine
         int maxCallers = 10,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         // 1. Find all call sites that invoke the Asyncify-bridge sync wrapper.
@@ -640,7 +649,7 @@ public class AsyncBatchEngine
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    callerFilePath, callerMethodName, cancellationToken);
+                    callerFilePath, callerMethodName, progress, cancellationToken);
                 bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
             catch (InvalidOperationException ex)
@@ -693,7 +702,7 @@ public class AsyncBatchEngine
                     var callerAsyncName = callerMethodName + "Async";
                     var (propagatedSource, _) = await _asyncOptimizationEngine
                         .PropagateCancellationTokenInSourceAsync(
-                            rewrittenSource, callerFilePath, callerAsyncName, cancellationToken);
+                            rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
                     sourceToValidate = propagatedSource;
                 }
                 catch (Exception propEx)
@@ -707,7 +716,7 @@ public class AsyncBatchEngine
             // Step D: validate in-memory.
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } },
-                cancellationToken);
+                progress, cancellationToken);
 
             if (!validation.Success)
             {
@@ -727,8 +736,9 @@ public class AsyncBatchEngine
                         callerFilePath, callerMethodName, "NeedsManualReview",
                         score: 0,
                         reason: $"Uplift produced {validation.Diagnostics.Count} compiler error(s)",
+                        progress: progress,
                         cancellationToken: cancellationToken);
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
                 }
                 catch (Exception flagEx)
                 {
@@ -750,12 +760,14 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } });
+                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } }, progress: progress, cancellationToken: cancellationToken);
 
             uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, callerMethodName + "Async")
             {
                 BeforeSource = upliftBeforeSource,
             });
+
+            progress?.Report($"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}");
         }
 
         // Determine stop reason.
@@ -912,6 +924,7 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<PropagateCtBatchResult> PropagateCancellationTokenBatchAsync(
         PropagateCtBatchInput input,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var batchResult = new PropagateCtBatchResult();
@@ -927,7 +940,7 @@ public class AsyncBatchEngine
                 {
                     var (_, fileResult) = await _asyncOptimizationEngine
                         .PropagateCancellationTokenInFileAsync(
-                            target.FilePath, target.MethodNames, cancellationToken);
+                            target.FilePath, target.MethodNames, progress: progress, cancellationToken: cancellationToken);
                     fileResult.FilePath = target.FilePath;
                     batchResult.Applied.Add(fileResult);
                     batchResult.TotalForwarded += fileResult.TotalForwarded;
@@ -966,7 +979,7 @@ public class AsyncBatchEngine
             {
                 (updatedSource, fileResult) = await _asyncOptimizationEngine
                     .PropagateCancellationTokenInFileAsync(
-                        target.FilePath, target.MethodNames, cancellationToken);
+                        target.FilePath, target.MethodNames, progress: progress, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
@@ -994,7 +1007,8 @@ public class AsyncBatchEngine
             // Validate
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
-                cancellationToken);
+                progress: progress,
+                cancellationToken: cancellationToken);
 
             if (!validation.Success)
             {
@@ -1048,13 +1062,17 @@ public class AsyncBatchEngine
                 : null;
 
             await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } });
+                new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                progress: progress,
+                cancellationToken: cancellationToken);
 
             fileResult.BeforeSource = ctBeforeSource;
             batchResult.Applied.Add(fileResult);
             batchResult.TotalForwarded += fileResult.TotalForwarded;
             batchResult.TotalSkipped += fileResult.TotalSkipped;
             filesProcessed++;
+
+            progress?.Report($"{filesProcessed} of {input.Targets.Count}. Processed {target.FilePath} with {fileResult.TotalForwarded} forwarded and {fileResult.TotalSkipped} skipped methods.");
         }
 
         if (string.IsNullOrEmpty(batchResult.StopReason))
@@ -1076,6 +1094,7 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<UpliftBatchMultiResult> RunUpliftBatchMultiAsync(
         UpliftBatchMultiInput input,
+        IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
         var result = new UpliftBatchMultiResult();
@@ -1102,7 +1121,8 @@ public class AsyncBatchEngine
                     input.MaxCallersPerMethod,
                     input.DryRun,
                     input.PropagateCancellationTokens,
-                    cancellationToken);
+                    progress: progress,
+                    cancellationToken: cancellationToken);
 
                 result.TotalUplifted += methodResult.Result.Uplifted.Count;
                 result.TotalSkipped += methodResult.Result.Skipped.Count;
@@ -1116,6 +1136,8 @@ public class AsyncBatchEngine
             }
 
             result.PerMethod.Add(methodResult);
+
+            progress?.Report($"Completed processing '{target.BridgedMethodName}'. Total uplifted so far: {result.TotalUplifted}, skipped: {result.TotalSkipped}, remaining callers: {result.TotalRemainingCallers}.");
         }
 
         result.StopReason = input.DryRun ? "dry_run" : "batch_complete";
