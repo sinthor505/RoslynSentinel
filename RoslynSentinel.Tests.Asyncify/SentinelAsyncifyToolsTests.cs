@@ -417,4 +417,18 @@ public class Svc
         Assert.That(result.Error, Is.Not.Null);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T16 – Asyncify with maxIterations/maxRuntimeSeconds params, no solution → SolutionNotLoaded
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded()
+    {
+        var result = await _asyncifyTools.Asyncify(maxRuntimeSeconds: 30, maxIterations: 10);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+    }
 }

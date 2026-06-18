@@ -861,9 +861,15 @@ public class SentinelAsyncifyTools
         maxCallersPerMethod: max callers per bridged method in uplift (default 10).
         minScore: minimum discovery score in Phase 1 (default 50).
         scoreThreshold: max score eligible for bridge conversion in Phase 2 (default 60).
+        maxRuntimeSeconds: wall-clock limit in seconds — the current phase item finishes, then
+          remaining phases are skipped and a partial result is returned. 0 = no limit (default).
+          Set this below the MCP transport timeout to guarantee the tool returns in time.
+        maxIterations: total items cap across all phases (bridged + uplifted + CT-propagated).
+          Remaining phases are skipped when the count is reached. 0 = no limit (default).
 
         Returns BatchResultSummary. BlobName = full per-phase, per-method detail on disk.
         Succeeded = bridges + uplifts across all phases. Skipped = below-minScore / remaining candidates.
+        When stopped early, Directive contains "stopped_early" with the reason.
         Use get_operation_detail(changeId) for per-phase breakdown.
         Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker.
         """)]
@@ -877,7 +883,9 @@ public class SentinelAsyncifyTools
         int maxCallersPerMethod = 10,
         int minScore = 50,
         int scoreThreshold = 60,
-        IProgress<string> progress = default,
+        int maxRuntimeSeconds = 0,
+        int maxIterations = 0,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -904,6 +912,8 @@ public class SentinelAsyncifyTools
                     MaxCallersPerMethod = maxCallersPerMethod,
                     MinScore = minScore,
                     ScoreThreshold = scoreThreshold,
+                    MaxRuntimeSeconds = maxRuntimeSeconds,
+                    MaxIterations = maxIterations,
                 },
                 progress, cancellationToken);
             return new ToolResult<BatchResultSummary> { Success = true, Data = result };
@@ -1579,7 +1589,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input,
-        IProgress<string> progress,
+        IProgress<string>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1592,6 +1602,25 @@ public class SentinelAsyncifyTools
         var failures = new List<FailureDetail>();
         int succeeded = 0, failed = 0, skipped = 0;
         var changeId = Guid.NewGuid().ToString("N")[..8];
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (input.MaxRuntimeSeconds > 0)
+            cts.CancelAfter(TimeSpan.FromSeconds(input.MaxRuntimeSeconds));
+
+        var innerToken = cts.Token;
+        int iterationsUsed = 0;
+        bool stoppedEarly = false;
+        string stopReason = "";
+
+        void CheckIterations(int phaseItems)
+        {
+            iterationsUsed += phaseItems;
+            if (input.MaxIterations > 0 && iterationsUsed >= input.MaxIterations && !cts.IsCancellationRequested)
+            {
+                cts.Cancel();
+                stopReason = $"maxIterations ({input.MaxIterations}) reached after {iterationsUsed} items";
+            }
+        }
 
         try
         {
@@ -1760,7 +1789,7 @@ public class SentinelAsyncifyTools
                 input.DryRun,
                 input.PropagateCancellationTokens,
                 progress: progress,
-                cancellationToken: cancellationToken);
+                cancellationToken: innerToken);
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -1800,6 +1829,14 @@ public class SentinelAsyncifyTools
                 skipped += bridgeResult.RemainingCandidates;
             }
 
+            CheckIterations(bridgeResult.Applied.Count + bridgeResult.Skipped.Count);
+            if (innerToken.IsCancellationRequested)
+            {
+                stoppedEarly = true;
+                if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after bridge phase";
+                goto WriteSummary;
+            }
+
             // ── Phase 3: Uplift ───────────────────────────────────────────────
             if (bridgeResult.Applied.Count > 0)
             {
@@ -1822,7 +1859,7 @@ public class SentinelAsyncifyTools
                             DryRun = input.DryRun,
                             PropagateCancellationTokens = input.PropagateCancellationTokens,
                         },
-                        progress: progress, cancellationToken: cancellationToken);
+                        progress: progress, cancellationToken: innerToken);
 
                     foreach (var pm in upliftResult.PerMethod)
                     {
@@ -1859,6 +1896,14 @@ public class SentinelAsyncifyTools
                             failed++;
                         }
                     }
+
+                    CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped);
+                    if (innerToken.IsCancellationRequested)
+                    {
+                        stoppedEarly = true;
+                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after uplift phase";
+                        goto WriteSummary;
+                    }
                 }
             }
 
@@ -1884,7 +1929,7 @@ public class SentinelAsyncifyTools
                             MaxFiles = bridgedFiles.Count,
                             FlagFailures = false,
                         },
-                        progress: progress, cancellationToken: cancellationToken);
+                        progress: progress, cancellationToken: innerToken);
 
                     foreach (var a in ctResult.Applied)
                     {
@@ -1906,6 +1951,8 @@ public class SentinelAsyncifyTools
                     }
                 }
             }
+
+            WriteSummary: ;
         }
         catch (Exception ex)
         {
@@ -1931,7 +1978,9 @@ public class SentinelAsyncifyTools
             Attempted = succeeded + failed + skipped,
             Failures = failures,
             Severity = status2.Severity,
-            Directive = status2.Directive,
+            Directive = stoppedEarly
+                ? $"stopped_early — {stopReason}. Phases completed are in blob: {blobName2}."
+                : status2.Directive,
             BreakerOpen = status2.Open,
         };
     }

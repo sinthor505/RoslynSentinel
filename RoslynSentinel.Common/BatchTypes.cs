@@ -191,6 +191,19 @@ public class AsyncifyInput
 
     /// <summary>Score threshold for bridge conversion (score ≤ threshold eligible). Default 60.</summary>
     public int ScoreThreshold { get; set; } = 60;
+
+    /// <summary>
+    /// Wall-clock limit in seconds. The current phase completes its in-progress item,
+    /// then the macro stops and returns a partial result. 0 = no limit (default).
+    /// </summary>
+    public int MaxRuntimeSeconds { get; set; } = 0;
+
+    /// <summary>
+    /// Total items cap across all phases (methods bridged + callers uplifted + CT files).
+    /// Remaining phases are skipped when the cumulative count meets or exceeds this value.
+    /// 0 = no limit (default).
+    /// </summary>
+    public int MaxIterations { get; set; } = 0;
 }
 
 // ── Phase 7 — per-operation result types with next-step chaining fields ───────

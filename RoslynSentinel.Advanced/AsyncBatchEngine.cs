@@ -369,7 +369,7 @@ public class AsyncBatchEngine
         int scoreThreshold = 60,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         // 1. Discover eligible candidates.
@@ -397,7 +397,7 @@ public class AsyncBatchEngine
 
         for (int i = 0; i < budget; i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested) break;
 
             var candidate = eligible[i];
 
@@ -636,7 +636,7 @@ public class AsyncBatchEngine
         // 3. Process each caller.
         for (int i = 0; i < callerPairs.Count; i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested) break;
 
             var (callerFilePath, callerMethodName) = callerPairs[i];
 
@@ -924,7 +924,7 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<PropagateCtBatchResult> PropagateCancellationTokenBatchAsync(
         PropagateCtBatchInput input,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var batchResult = new PropagateCtBatchResult();
@@ -935,6 +935,7 @@ public class AsyncBatchEngine
             int processed = 0;
             foreach (var target in input.Targets)
             {
+                if (cancellationToken.IsCancellationRequested) break;
                 if (processed >= input.MaxFiles) break;
                 try
                 {
@@ -971,7 +972,7 @@ public class AsyncBatchEngine
                 break;
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested) break;
 
             string updatedSource;
             PropagateCtFileResult fileResult;
@@ -1094,14 +1095,14 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<UpliftBatchMultiResult> RunUpliftBatchMultiAsync(
         UpliftBatchMultiInput input,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var result = new UpliftBatchMultiResult();
 
         foreach (var target in input.Targets)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested) break;
 
             var methodResult = new UpliftBatchMultiMethodResult
             {
