@@ -1954,6 +1954,14 @@ public class SentinelAsyncifyTools
 
             WriteSummary: ;
         }
+        catch (OperationCanceledException) when (innerToken.IsCancellationRequested
+                                                  && !cancellationToken.IsCancellationRequested)
+        {
+            stoppedEarly = true;
+            if (stopReason.Length == 0)
+                stopReason = "maxRuntimeSeconds exceeded mid-phase";
+            _logger.LogInformation("Asyncify stopped early: {Reason}", stopReason);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Asyncify unexpected exception");
