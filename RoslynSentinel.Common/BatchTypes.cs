@@ -193,6 +193,39 @@ public class AsyncifyInput
     public int ScoreThreshold { get; set; } = 60;
 }
 
+// ── Phase 7 — per-operation result types with next-step chaining fields ───────
+
+/// <summary>
+/// Return type for <c>bridge_async_methods</c>. Wraps <see cref="BatchResultSummary"/> and adds
+/// <see cref="SuggestedUpliftTargets"/> — the exact input for the next workflow step
+/// (<c>uplift_callers</c>).
+/// </summary>
+public class BridgeAsyncMethodsResult
+{
+    public BatchResultSummary Summary { get; init; } = new();
+    /// <summary>
+    /// Bridged method names ready to pass as <c>targets</c> to <c>uplift_callers</c>.
+    /// Each entry has <c>BridgedMethodName</c>; <c>ProjectName</c> is null (solution-scoped).
+    /// </summary>
+    public List<UpliftTarget> SuggestedUpliftTargets { get; init; } = new();
+}
+
+/// <summary>
+/// Return type for <c>uplift_callers</c>. Wraps <see cref="BatchResultSummary"/> and adds
+/// <see cref="SuggestedPropagateTargets"/> — the exact input for the next workflow step
+/// (<c>propagate_cancellation_token</c>).
+/// </summary>
+public class UpliftCallersResult
+{
+    public BatchResultSummary Summary { get; init; } = new();
+    /// <summary>
+    /// Files touched during uplift, ready to pass as <c>targets</c> to
+    /// <c>propagate_cancellation_token</c>. Each entry has <c>FilePath</c>;
+    /// <c>MethodNames</c> is null (process whole file).
+    /// </summary>
+    public List<BatchTarget> SuggestedPropagateTargets { get; init; } = new();
+}
+
 // ── Phase 7 — async_migrate combined input ────────────────────────────────────
 
 /// <summary>

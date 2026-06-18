@@ -57,7 +57,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "DescribeAdvancedToolOptions")]
     [Produces(DataTag.Report)]
     [Description("""
-        Returns reference documentation for a named tool's valid input values — operation names, transform/kind/detector catalogues, and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: async_migrate, scan, scan_migration_candidates, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set — this does not mean the tool is invalid, only that its schema is self-describing.
+        Returns reference documentation for a named tool's valid input values — transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set — this does not mean the tool is invalid, only that its schema is self-describing.
         """)]
     public ToolOptionsResult DescribeAdvancedToolOptions(
         [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
@@ -66,9 +66,7 @@ public class SentinelQualityTools
     {
         return toolName switch
         {
-            "async_migrate" => SentinelAsyncifyTools.AsyncMigrateOptions(),
             "scan" => SentinelScanTools.ScanOptions(),
-            "scan_migration_candidates" => SentinelAsyncifyTools.ScanMigrationCandidatesOptions(),
             "apply_file_codemod" => SentinelCodemodTools.ApplyFileCodemodOptions(),
             "apply_method_codemod" => SentinelCodemodTools.ApplyMethodCodemodOptions(),
             "apply_class_codemod" => SentinelCodemodTools.ApplyClassCodemodOptions(),
@@ -80,10 +78,10 @@ public class SentinelQualityTools
             {
                 Description = $"'{toolName}' is not in the describe_advanced_tool_options covered set. " +
                                "This does not mean the tool is invalid — its parameter schema fully " +
-                               "describes its inputs. Covered tools: async_migrate, scan, " +
-                               "scan_migration_candidates, apply_file_codemod, apply_method_codemod, " +
-                               "apply_class_codemod, generate, convert_switch_to_pattern_safe, " +
-                               "analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion.",
+                               "describes its inputs. Covered tools: scan, apply_file_codemod, " +
+                               "apply_method_codemod, apply_class_codemod, generate, " +
+                               "convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, " +
+                               "analyze_foreach_for_linq_conversion.",
                 Error = new ResultError(
                     "NoFurtherDocumentation",
                     $"'{toolName}' has no registered options table. See Description for the covered tool list.")

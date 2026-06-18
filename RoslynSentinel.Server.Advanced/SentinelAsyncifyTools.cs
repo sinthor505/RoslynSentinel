@@ -13,7 +13,6 @@ namespace RoslynSentinel.Server.Advanced;
 public class SentinelAsyncifyTools
 {
     private readonly AntiPatternEngine _antiPatternEngine;
-    private readonly AsyncSafetyEngine _asyncSafetyEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly AsyncBatchEngine _asyncBatchEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
@@ -30,7 +29,6 @@ public class SentinelAsyncifyTools
 
     public SentinelAsyncifyTools(
         AntiPatternEngine antiPatternEngine,
-        AsyncSafetyEngine asyncSafetyEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
         AsyncBatchEngine asyncBatchEngine,
         MsToolAugmentEngine msToolAugmentEngine,
@@ -38,7 +36,6 @@ public class SentinelAsyncifyTools
         ILogger<SentinelAsyncifyTools> logger)
     {
         _antiPatternEngine = antiPatternEngine;
-        _asyncSafetyEngine = asyncSafetyEngine;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _asyncBatchEngine = asyncBatchEngine;
         _msToolAugmentEngine = msToolAugmentEngine;
@@ -46,10 +43,34 @@ public class SentinelAsyncifyTools
         _logger = logger;
     }
 
+    // ── scan_migration_candidates ─────────────────────────────────────────────
+
     [McpServerTool(Name = "ScanMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
     [Description("""
-        Returns [MigrationCandidate]-attributed methods added by flag_migration_candidate. Syntax-level — no compilation needed. pattern: call describe_advanced_tool_options("scan_migration_candidates") for valid values. summarize=true → guaranteed ≤2KB dashboard (byClass capped at 10, TopCandidates capped at 5 regardless of topN; ByClassTruncated=true when truncated). summarize=false + limit/offset → full paged candidate records. minScore filters in both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice. When results exceed the inline threshold, LargeResultInfo is populated instead of Data — call get_scan_result(scanId) to read in pages.
+        Returns [MigrationCandidate]-attributed methods. Entry point for all async-migration workflows.
+
+        pattern — valid values:
+          AsyncBridgeCandidate     — sync wrapper suitable for bridge conversion (main path)
+          HandlerExtractCandidate  — code block to extract into a separate handler method
+          HandlerToAsyncCandidate  — handler method that should be converted to async
+          AsyncCallerUpliftCandidate — sync caller of an already-bridged async method
+          null = all patterns.
+
+        summarize=true → guaranteed ≤2KB dashboard.
+          MigrationScanSummary fields: ByPattern (count per pattern), ByClass (ClassName, ProjectName,
+          Count — sorted desc, capped at 10; ByClassTruncated=true when truncated), ByScoreBucket
+          ("<0", "0-25", "26-50", "51-75", "76plus"), TopCandidates (MethodName, ClassName, Pattern,
+          Score, Summary — only when topN or minScore set, capped at 5 entries).
+
+        summarize=false + limit/offset → full paged List<MigrationCandidateFinding>. minScore filters in
+        both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice.
+
+        To use scan results with flag_migration_candidates(scope: "targets"): map each Candidate.FilePath
+        and Candidate.MethodName to a FlagCandidateTarget entry.
+
+        When results exceed the inline threshold, LargeResultInfo is populated — call get_scan_result(scanId)
+        to page through results.
         """)]
     public async Task<ToolResult<object>> ScanMigrationCandidates(
         string? filePath = null,
@@ -289,12 +310,16 @@ public class SentinelAsyncifyTools
         }
     }
 
-    // ── Phase 8: get_async_migration_progress ─────────────────────────────────
+    // ── get_async_migration_progress ─────────────────────────────────────────
 
     [McpServerTool(Name = "GetAsyncMigrationProgress")]
     [Produces(DataTag.AsyncMigrationProgressReport)]
     [Description("""
-        Returns async migration progress statistics for the solution or a single project. Reports: total async Task/ValueTask methods, how many have a CancellationToken parameter (and how many still need one), percentage coverage, Asyncify-bridge wrapper count ([Obsolete("Asyncify-bridge:...")]), bridge call sites pending migration (CS0618), and async void event handlers (informational — their signatures cannot be extended). projectName=null → entire solution.
+        Returns async migration progress statistics for the solution or a single project. Reports: total
+        async Task/ValueTask methods, how many have a CancellationToken parameter (and how many still need
+        one), percentage coverage, Asyncify-bridge wrapper count ([Obsolete("Asyncify-bridge:...")]),
+        bridge call sites pending migration (CS0618), and async void event handlers (informational —
+        their signatures cannot be extended). projectName=null → entire solution.
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
@@ -332,24 +357,564 @@ public class SentinelAsyncifyTools
         }
     }
 
-    // ── Phase 4 / Phase 7 — async_migrate internal helpers ─────────────────────
+    // ── flag_migration_candidates ─────────────────────────────────────────────
 
+    [McpServerTool(Name = "FlagMigrationCandidates")]
+    [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Batch-first CancellationToken propagation across multiple files. Supersedes
-        propagate_cancellation_token_in_method, propagate_cancellation_token_in_file, and
-        propagate_cancellation_token_batch. Checks the circuit breaker before executing;
-        records batch outcome; writes a forensic blob.
+        Step 1 of the manual bridge path — marks methods with [MigrationCandidate] attributes so that
+        bridge_async_methods can locate them. Skip this step when using the asyncify macro (which flags
+        internally). Call scan_migration_candidates first to identify candidates.
 
-        input.Targets  — list of { FilePath, MethodNames? }. null MethodNames = all eligible methods.
-        input.DryRun   — when true, computes without writing files.
-        input.MaxItems — max files to process (default 100).
+        Full bridge workflow:
+          1. scan_migration_candidates(summarize: true)  — survey candidates
+          2. flag_migration_candidates                   ← you are here
+          3. bridge_async_methods(targets: [...])
+          4. uplift_callers(targets: SuggestedUpliftTargets from bridge result)
+          5. propagate_cancellation_token(targets: SuggestedPropagateTargets from uplift result)
 
-        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-file details.
-        Severity="halt" means the circuit breaker opened — call get_breaker_status then reset_breaker.
+        scope: "targets" (default) or "project".
+          "targets" — flag an explicit list. Required: flagTargets.
+          "project" — autonomous scan; scores and flags qualifying methods.
+                      Required: leave flagTargets null. Optional: projectName, pattern, minScore, forceRescan.
+
+        flagTargets: scope="targets" — list of { FilePath, MethodName, Pattern, Score?, Reason? }.
+        projectName: scope="project" — restrict to one project; null = entire solution.
+        pattern: migration pattern to apply (default "AsyncBridgeCandidate").
+          Also accepts: "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate".
+        minScore: minimum score to flag (scope="project" only, default 50).
+        forceRescan: re-evaluate already-flagged methods (scope="project" only, default false).
+        dryRun: reports what would be flagged without writing files.
+
+        Returns BatchResultSummary. Succeeded = methods flagged. Skipped = below-minScore or already-flagged.
+        BlobName = full per-method detail on disk. Use get_operation_detail(changeId) for details.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
         """)]
-    private async Task<BatchResultSummary> PropagateCancellationToken(
+    public async Task<ToolResult<BatchResultSummary>> FlagMigrationCandidates(
+        string scope = "targets",
+        List<FlagCandidateTarget>? flagTargets = null,
+        string? projectName = null,
+        string pattern = "AsyncBridgeCandidate",
+        int minScore = 50,
+        bool dryRun = false,
+        bool forceRescan = false,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await FlagMigrationCandidatesCore(
+                new FlagCandidatesInput
+                {
+                    Scope = scope,
+                    Targets = flagTargets,
+                    ProjectName = projectName,
+                    Pattern = pattern,
+                    MinScore = minScore,
+                    DryRun = dryRun,
+                    ForceRescan = forceRescan,
+                },
+                cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── bridge_async_methods ──────────────────────────────────────────────────
+
+    [McpServerTool(Name = "BridgeAsyncMethods")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Step 2 of the bridge path — converts each named method to the Asyncify-bridge pattern:
+        a sync wrapper that delegates to an async overload. Call after flag_migration_candidates,
+        or use the asyncify macro to run all steps automatically.
+
+        Full bridge workflow:
+          1. scan_migration_candidates(summarize: true)
+          2. flag_migration_candidates(scope: "project")
+          3. bridge_async_methods                        ← you are here
+          4. uplift_callers(targets: SuggestedUpliftTargets)  ← pass SuggestedUpliftTargets directly
+          5. propagate_cancellation_token(targets: SuggestedPropagateTargets)
+
+        targets: list of { FilePath, MethodNames } — MethodNames is required (not optional here).
+        dryRun: validates without writing files. SuggestedUpliftTargets is still populated.
+        maxItems: max (file × method) items to process (default 100).
+        propagateCancellationTokens: propagate CT in the new async overload (default true).
+
+        Each method is applied sequentially and written immediately so later methods in the same file
+        see the updated source. Errors on one method do not abort others.
+
+        Returns BridgeAsyncMethodsResult:
+          Summary.ChangeId / Summary.BlobName — use with get_operation_detail for per-method detail.
+          Summary.Succeeded / Summary.Failed / Summary.Attempted — aggregate counts.
+          SuggestedUpliftTargets — pass directly as targets to uplift_callers. Each entry has
+            BridgedMethodName. Empty when Succeeded=0.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
+        List<BatchTarget> targets,
+        bool dryRun = false,
+        int maxItems = 100,
+        bool propagateCancellationTokens = true,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BridgeAsyncMethodsResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var (summary, suggestedUpliftTargets) = await BridgeAsyncMethodsCore(
+                new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
+                propagateCancellationTokens,
+                cancellationToken);
+            return new ToolResult<BridgeAsyncMethodsResult>
+            {
+                Success = true,
+                Data = new BridgeAsyncMethodsResult
+                {
+                    Summary = summary,
+                    SuggestedUpliftTargets = suggestedUpliftTargets,
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BridgeAsyncMethodsResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── uplift_callers ────────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "UpliftCallers")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Step 3 of the bridge path — updates sync callers of each bridge wrapper to call the async
+        overload directly. Pass SuggestedUpliftTargets from bridge_async_methods as targets.
+
+        Full bridge workflow:
+          1. scan_migration_candidates(summarize: true)
+          2. flag_migration_candidates(scope: "project")
+          3. bridge_async_methods(targets: [...])
+          4. uplift_callers                              ← you are here
+          5. propagate_cancellation_token(targets: SuggestedPropagateTargets)  ← pass SuggestedPropagateTargets
+
+        targets: list of { BridgedMethodName, ProjectName? }. Pass SuggestedUpliftTargets from
+          bridge_async_methods directly — no transformation required.
+        dryRun: reports without writing files. SuggestedPropagateTargets is still populated.
+        maxCallersPerMethod: max callers per bridged method (default 10).
+        propagateCancellationTokens: propagate CT in updated callers (default true).
+
+        Returns UpliftCallersResult:
+          Summary.ChangeId / Summary.BlobName — use with get_operation_detail for detail.
+          Summary.Succeeded = callers uplifted. Summary.Failed = callers flagged NeedsManualReview.
+          SuggestedPropagateTargets — pass directly as targets to propagate_cancellation_token.
+            Each entry has FilePath (files touched during uplift); MethodNames is null (whole file).
+            Empty when Succeeded=0.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<UpliftCallersResult>> UpliftCallers(
+        List<UpliftTarget> targets,
+        bool dryRun = false,
+        int maxCallersPerMethod = 10,
+        bool propagateCancellationTokens = true,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<UpliftCallersResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var (summary, suggestedPropagateTargets) = await UpliftCallersCore(
+                new RunUpliftInput
+                {
+                    Targets = targets,
+                    DryRun = dryRun,
+                    MaxCallersPerMethod = maxCallersPerMethod,
+                    PropagateCancellationTokens = propagateCancellationTokens,
+                },
+                cancellationToken);
+            return new ToolResult<UpliftCallersResult>
+            {
+                Success = true,
+                Data = new UpliftCallersResult
+                {
+                    Summary = summary,
+                    SuggestedPropagateTargets = suggestedPropagateTargets,
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<UpliftCallersResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── propagate_cancellation_token ──────────────────────────────────────────
+
+    [McpServerTool(Name = "PropagateCancellationToken")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Step 4 of the bridge path — threads CancellationToken through async call chains in the
+        specified files. Pass SuggestedPropagateTargets from uplift_callers as targets.
+        Also usable standalone to clean up CT forwarding in any set of files.
+
+        Full bridge workflow:
+          1. scan_migration_candidates(summarize: true)
+          2. flag_migration_candidates(scope: "project")
+          3. bridge_async_methods(targets: [...])
+          4. uplift_callers(targets: [...])
+          5. propagate_cancellation_token               ← you are here
+               targets: SuggestedPropagateTargets from uplift_callers — no transformation required.
+
+        targets: list of { FilePath, MethodNames? }. null MethodNames = all eligible methods in the file.
+          Pass SuggestedPropagateTargets from uplift_callers directly.
+        dryRun: computes without writing files.
+        maxItems: max files to process (default 100).
+
+        Returns BatchResultSummary. BlobName = full per-file detail on disk.
+        Use get_operation_detail(changeId) for details.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
+        List<BatchTarget> targets,
+        bool dryRun = false,
+        int maxItems = 100,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await PropagateCancellationTokenCore(
+                new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
+                cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── add_cancellation_token ────────────────────────────────────────────────
+
+    [McpServerTool(Name = "AddCancellationToken")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Utility — adds a CancellationToken parameter to async methods that lack one. Independent of
+        the main bridge path; use as needed to ensure async methods accept CT. Differs from
+        propagate_cancellation_token, which threads an existing CT through async call chains — this
+        tool adds the CT parameter to the method signature itself.
+
+        targets: list of { FilePath, MethodNames? }. null MethodNames = all eligible async methods in the file.
+        dryRun: computes without writing files.
+        maxItems: max files to process (default 100).
+
+        Returns BatchResultSummary. Succeeded = files modified. BlobName = full detail on disk.
+        Use get_operation_detail(changeId) for per-file details.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
+        List<BatchTarget> targets,
+        bool dryRun = false,
+        int maxItems = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await AddCancellationTokenCore(
+                new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
+                cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── extract_event_handlers ────────────────────────────────────────────────
+
+    [McpServerTool(Name = "ExtractEventHandlers")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Event handler path, step 1 — extracts a nominated code block from inside a method into a new
+        private method using semantic analysis. Produces the correct return type (fixes the standard
+        extract_method bug where selections ending with 'return expr' produce void).
+
+        Event handler path:
+          1. scan_migration_candidates(pattern: "HandlerExtractCandidate")  — find handlers to extract
+          2. extract_event_handlers                     ← you are here
+          3. event_handlers_to_async(projectName: "...")
+
+        targets: list of { FilePath, NewMethodName, ContextSnippet, LineBefore?, LineAfter? }.
+          FilePath       — absolute path to the .cs file.
+          NewMethodName  — valid C# identifier for the new extracted method (required).
+          ContextSnippet — short unique fragment identifying the code block to extract (required).
+          LineBefore / LineAfter — optional disambiguation lines.
+          Targets in the same file are processed sequentially — each extraction sees the file as left
+          by the previous one.
+        dryRun: validates that each ContextSnippet is locatable without writing files. Use as a
+          pre-flight check before committing.
+
+        Returns BatchResultSummary. Failed = 1 per target where ContextSnippet could not be located
+        or extraction failed. Failures[].Reason contains the diagnostic.
+        BlobName = full per-target detail on disk.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
+        List<HandlerExtractTarget> targets,
+        bool dryRun = false,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await HandlerExtractCore(targets, dryRun, progress, cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── event_handlers_to_async ───────────────────────────────────────────────
+
+    [McpServerTool(Name = "EventHandlersToAsync")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Event handler path, step 2 — converts all [MigrationCandidate("HandlerToAsyncCandidate")]-flagged
+        methods to the Asyncify-bridge pattern (sync wrapper + async overload). Auto-discovers candidates
+        by pattern; no explicit method list required.
+
+        Event handler path:
+          1. scan_migration_candidates(pattern: "HandlerExtractCandidate")
+          2. extract_event_handlers(targets: [...])
+          3. event_handlers_to_async                    ← you are here
+
+        projectName: scope discovery to one project; null = entire solution.
+        dryRun: validates without writing files.
+        maxItems: max methods to process (default 100).
+        propagateCancellationTokens: propagate CT in the new async overload (default true).
+
+        Returns BatchResultSummary. Succeeded = methods converted. Skipped = over maxItems limit.
+        BlobName = full per-method detail on disk. Use get_operation_detail(changeId) for details.
+        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> EventHandlersToAsync(
+        string? projectName = null,
+        bool dryRun = false,
+        int maxItems = 100,
+        bool propagateCancellationTokens = true,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await HandlerToAsyncCore(
+                projectName, dryRun, maxItems, propagateCancellationTokens, progress, cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── asyncify (macro) ──────────────────────────────────────────────────────
+
+    [McpServerTool(Name = "Asyncify")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Full-workflow macro — runs the complete bridge path (Flag → Bridge → Uplift → Propagate CT)
+        in a single call. The server owns and executes the fixed sequence. Use bridge_async_methods,
+        uplift_callers, and propagate_cancellation_token individually for step-by-step control.
+
+        Internal sequence:
+          Phase 1 (Flag)       — discovers qualifying sync methods and flags
+                                 [MigrationCandidate("AsyncBridgeCandidate")].
+                                 Skipped when methodTargets is provided.
+          Phase 2 (Bridge)     — converts flagged methods to the Asyncify-bridge pattern.
+          Phase 3 (Uplift)     — uplifts callers of each bridge wrapper to the async overload.
+          Phase 4 (Propagate)  — propagates CancellationToken in all bridged files.
+                                 Skipped when propagateCancellationTokens=false or dryRun=true.
+
+        Checks the circuit breaker before starting; records total outcome across all phases;
+        writes one forensic blob. Full detail on disk — only summary counts returned inline.
+
+        projectName: project to process; null = entire solution.
+        methodTargets: explicit (FilePath, MethodName) list — skips Phase 1 (flag discovery).
+        exclusions: method names to skip in every phase.
+        dryRun: reports without writing files.
+        propagateCancellationTokens: run Phase 4 after bridge+uplift (default true).
+        maxMethods: max methods in bridge phase (default 50).
+        maxCallersPerMethod: max callers per bridged method in uplift (default 10).
+        minScore: minimum discovery score in Phase 1 (default 50).
+        scoreThreshold: max score eligible for bridge conversion in Phase 2 (default 60).
+
+        Returns BatchResultSummary. BlobName = full per-phase, per-method detail on disk.
+        Succeeded = bridges + uplifts across all phases. Skipped = below-minScore / remaining candidates.
+        Use get_operation_detail(changeId) for per-phase breakdown.
+        Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> Asyncify(
+        string? projectName = null,
+        List<FlagCandidateTarget>? methodTargets = null,
+        List<string>? exclusions = null,
+        bool dryRun = false,
+        bool propagateCancellationTokens = true,
+        int maxMethods = 50,
+        int maxCallersPerMethod = 10,
+        int minScore = 50,
+        int scoreThreshold = 60,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            var result = await AsyncifyCore(
+                new AsyncifyInput
+                {
+                    ProjectName = projectName,
+                    MethodTargets = methodTargets,
+                    Exclusions = exclusions,
+                    DryRun = dryRun,
+                    PropagateCancellationTokens = propagateCancellationTokens,
+                    MaxMethods = maxMethods,
+                    MaxCallersPerMethod = maxCallersPerMethod,
+                    MinScore = minScore,
+                    ScoreThreshold = scoreThreshold,
+                },
+                progress, cancellationToken);
+            return new ToolResult<BatchResultSummary> { Success = true, Data = result };
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              "An unexpected error occurred.", ex.Message)
+            };
+        }
+    }
+
+    // ── internal core implementations ─────────────────────────────────────────
+
+    private async Task<BatchResultSummary> PropagateCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -428,21 +993,7 @@ public class SentinelAsyncifyTools
         };
     }
 
-    [Description("""
-        Batch-first Asyncify-bridge conversion. Supersedes the single-method
-        convert_to_async_bridge_single. Applies the bridge transform to each named method
-        across the provided targets. Checks the circuit breaker; records outcome; writes a forensic blob.
-
-        input.Targets  — list of { FilePath, MethodNames } — MethodNames must be specified.
-        input.DryRun   — when true, validates without writing files.
-        input.MaxItems — max (file×method) items to process (default 100).
-        propagateCancellationTokens — when true (default), propagates CT in the new async overload.
-
-        Each method is applied sequentially and written to disk immediately so that later
-        methods in the same file see the updated source. Errors on one method do not abort others.
-        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-method details.
-        """)]
-    private async Task<BatchResultSummary> ConvertToAsyncBridge(
+    private async Task<(BatchResultSummary Summary, List<UpliftTarget> SuggestedUpliftTargets)> BridgeAsyncMethodsCore(
         BatchTargetInput input,
         bool propagateCancellationTokens = true,
         CancellationToken cancellationToken = default)
@@ -450,7 +1001,7 @@ public class SentinelAsyncifyTools
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
         {
-            return halt;
+            return (halt, new List<UpliftTarget>());
         }
 
         int succeeded = 0;
@@ -466,7 +1017,7 @@ public class SentinelAsyncifyTools
                 var fd = new FailureDetail
                 {
                     FilePath = target.FilePath,
-                    Reason = "MethodNames must be specified for convert_to_async_bridge",
+                    Reason = "MethodNames must be specified for bridge_async_methods",
                     Outcome = OperationOutcome.Failed,
                 };
                 items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = fd.Reason });
@@ -552,7 +1103,7 @@ public class SentinelAsyncifyTools
                     }
                     failed++;
                     _logger.LogWarning(
-                        "ConvertToAsyncBridge batch: {Method} in {File} failed: {Reason}",
+                        "BridgeAsyncMethods: {Method} in {File} failed: {Reason}",
                         methodName, target.FilePath, reason);
                 }
             }
@@ -562,10 +1113,10 @@ public class SentinelAsyncifyTools
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var blobName = await OperationBlobWriter.WriteAsync(
-            "convert_to_async_bridge", changeId, items, _workspaceManager.GetSolutionRoot());
+            "bridge_async_methods", changeId, items, _workspaceManager.GetSolutionRoot());
         var status = _workspaceManager.GetBreakerStatus();
 
-        return new BatchResultSummary
+        var summary = new BatchResultSummary
         {
             ChangeId = changeId,
             BlobName = blobName,
@@ -579,23 +1130,19 @@ public class SentinelAsyncifyTools
             Directive = status.Directive,
             BreakerOpen = status.Open,
         };
+
+        var suggestedUpliftTargets = items
+            .Where(i => (i.Outcome == OperationOutcome.Succeeded ||
+                         (i.Outcome == OperationOutcome.Skipped && i.Reason == "dry_run"))
+                        && i.MethodName != null)
+            .Select(i => new UpliftTarget { BridgedMethodName = i.MethodName! })
+            .DistinctBy(t => t.BridgedMethodName)
+            .ToList();
+
+        return (summary, suggestedUpliftTargets);
     }
 
-    [Description("""
-        Batch-first addition of CancellationToken parameters to async methods across multiple
-        files. Supersedes add_cancellation_token_to_method and apply_cancellation_token_to_file.
-        Checks the circuit breaker; records outcome; writes a forensic blob.
-
-        input.Targets  — list of { FilePath, MethodNames? }. null MethodNames = all eligible async
-                         methods in the file. MethodNames filter = only those specific methods.
-        input.DryRun   — when true, computes without writing files.
-        input.MaxItems — max files to process (default 100).
-
-        Files are processed independently (no cross-file dependency). Each file's changes are
-        collected then applied atomically. Returns BatchResultSummary.
-        Use get_operation_detail(changeId) for per-file details.
-        """)]
-    private async Task<BatchResultSummary> AddCancellationToken(
+    private async Task<BatchResultSummary> AddCancellationTokenCore(
         BatchTargetInput input,
         CancellationToken cancellationToken = default)
     {
@@ -679,14 +1226,13 @@ public class SentinelAsyncifyTools
                     failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
                 }
                 failed++;
-                _logger.LogWarning("AddCancellationToken batch: {File} failed: {Reason}", target.FilePath, reason);
+                _logger.LogWarning("AddCancellationToken: {File} failed: {Reason}", target.FilePath, reason);
             }
         }
 
         if (allChanges.Count > 0)
         {
             var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
-            // Backfill BeforeSource on succeeded records now that PreImages are available.
             if (applyResult941.PreImages != null)
             {
                 foreach (var item in items)
@@ -723,27 +1269,14 @@ public class SentinelAsyncifyTools
         };
     }
 
-    [Description("""
-        Batch-first caller uplift — uplifts callers of Asyncify-bridge sync wrappers to use
-        their async overloads directly. Supersedes run_uplift_batch and run_uplift_batch_multi.
-        Checks the circuit breaker; records outcome; writes a forensic blob.
-
-        input.Targets                    — list of { BridgedMethodName, ProjectName? }.
-        input.DryRun                     — when true, reports without writing files.
-        input.MaxCallersPerMethod        — max callers per bridged method (default 10).
-        input.PropagateCancellationTokens — when true (default), propagates CT in new async overloads.
-
-        Returns BatchResultSummary where Succeeded = total callers uplifted, Failed = total callers
-        skipped (flagged NeedsManualReview). Use get_operation_detail(changeId) for details.
-        """)]
-    private async Task<BatchResultSummary> RunUplift(
+    private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets)> UpliftCallersCore(
         RunUpliftInput input,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
         {
-            return halt;
+            return (halt, new List<BatchTarget>());
         }
 
         var multiInput = new UpliftBatchMultiInput
@@ -765,9 +1298,9 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "RunUplift batch unexpected exception");
+            _logger.LogError(ex, "UpliftCallers batch unexpected exception");
             throw new InvalidOperationException(
-                $"RunUplift failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"UpliftCallers failed: {ex.GetType().Name}: {ex.Message}", ex);
         }
 
         int succeeded = result.TotalUplifted;
@@ -810,7 +1343,7 @@ public class SentinelAsyncifyTools
         }
 
         var blobName = await OperationBlobWriter.WriteAsync(
-            "run_uplift", changeId, items, _workspaceManager.GetSolutionRoot());
+            "uplift_callers", changeId, items, _workspaceManager.GetSolutionRoot());
         var status = _workspaceManager.GetBreakerStatus();
         var failures = result.PerMethod
             .SelectMany(pm => pm.Result.Skipped.Select(s => new FailureDetail
@@ -823,7 +1356,7 @@ public class SentinelAsyncifyTools
             .Take(15)
             .ToList();
 
-        return new BatchResultSummary
+        var summary = new BatchResultSummary
         {
             ChangeId = changeId,
             BlobName = blobName,
@@ -837,26 +1370,17 @@ public class SentinelAsyncifyTools
             Directive = status.Directive,
             BreakerOpen = status.Open,
         };
+
+        var suggestedPropagateTargets = result.PerMethod
+            .SelectMany(pm => pm.Result.Uplifted.Select(u => u.FilePath))
+            .Distinct()
+            .Select(fp => new BatchTarget { FilePath = fp })
+            .ToList();
+
+        return (summary, suggestedPropagateTargets);
     }
 
-    [Description("""
-        Batch-first migration-candidate flagging. Supersedes flag_migration_candidate (single),
-        flag_migration_candidates_batch, and flag_migration_candidates_in_project.
-        Checks the circuit breaker; records outcome; writes a forensic blob.
-
-        input.Scope="targets" (default): flags an explicit list of methods.
-          input.Targets — list of { FilePath, MethodName, Pattern, Score?, Reason? }.
-        input.Scope="project": autonomous scan; scores and flags qualifying methods.
-          input.ProjectName — restrict to one project; null = entire solution.
-          input.Pattern     — migration pattern to apply (default "AsyncBridgeCandidate").
-          input.MinScore    — minimum score to flag (default 50).
-          input.DryRun      — when true, reports what would be flagged without writing files.
-          input.ForceRescan — when true, ignores existing [MigrationCandidate] attributes.
-
-        Returns BatchResultSummary where Succeeded = methods flagged, Skipped = below-minScore
-        or already-flagged, Failed = errors. Use get_operation_detail(changeId) for details.
-        """)]
-    private async Task<BatchResultSummary> FlagMigrationCandidates(
+    private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
         CancellationToken cancellationToken = default)
     {
@@ -883,7 +1407,6 @@ public class SentinelAsyncifyTools
                 if (!input.DryRun && engineResult.Changes.Count > 0)
                 {
                     var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
-                    _ = applyResult1126; // PreImages available below via closure; stored for backfill after loop.
 
                     foreach (var f in engineResult.Flagged)
                     {
@@ -998,7 +1521,6 @@ public class SentinelAsyncifyTools
                 if (allChanges.Count > 0 && !input.DryRun)
                 {
                     var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
-                    // Backfill BeforeSource on succeeded records now that PreImages are available.
                     if (applyResult1223.PreImages != null)
                     {
                         foreach (var item in items)
@@ -1042,41 +1564,7 @@ public class SentinelAsyncifyTools
         };
     }
 
-    // ── Phase 6 — asyncify macro-workflow ─────────────────────────────────────
-
-    [Description("""
-        Runs the full Asyncify migration sequence on a project (or explicit method list) in
-        a single call. The server owns and executes the fixed sequence — the agent only supplies
-        parameters.
-
-        Fixed internal sequence:
-          1. Flag   — discovers qualifying sync methods and flags them
-                      [MigrationCandidate("AsyncBridgeCandidate")].
-                      Skipped when MethodTargets is provided (pre-selected methods).
-          2. Bridge — converts flagged methods to the Asyncify-bridge pattern (sync wrapper +
-                      async overload). Each async overload optionally gets CT propagated.
-          3. Uplift — uplifts callers of each bridge wrapper to use the async overload directly.
-          4. Propagate CT — propagates CancellationToken in all files touched by bridge + uplift.
-                      Skipped when PropagateCancellationTokens=false.
-
-        Checks the circuit breaker before starting; records total outcome across all phases;
-        writes one forensic blob. Returns BatchResultSummary.
-        Succeeded = bridges + uplifts. Skipped = below-minScore / remaining candidates.
-        Failed = bridge + uplift failures.
-
-        input.ProjectName              — project to process; null = entire solution.
-        input.MethodTargets            — explicit (FilePath, MethodName) list; skips flag phase.
-        input.Exclusions               — method names to skip in every phase.
-        input.DryRun                   — reports without writing files.
-        input.PropagateCancellationTokens — run CT propagation after bridge+uplift (default true).
-        input.MaxMethods               — max methods in bridge phase (default 50).
-        input.MaxCallersPerMethod      — max callers per bridged method in uplift (default 10).
-        input.MinScore                 — minimum score to flag in discovery phase (default 50).
-        input.ScoreThreshold           — max score eligible for bridge conversion (default 60).
-
-        Use get_operation_detail(changeId) to inspect per-phase, per-method results.
-        """)]
-    private async Task<BatchResultSummary> Asyncify(
+    private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input, IProgress<string> progress,
         CancellationToken cancellationToken = default)
     {
@@ -1096,7 +1584,6 @@ public class SentinelAsyncifyTools
             // ── Phase 1: Flag ─────────────────────────────────────────────────
             if (input.MethodTargets == null || input.MethodTargets.Count == 0)
             {
-                // Autonomous discovery: scan + flag candidates in the target project/solution.
                 var flagResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
                     input.ProjectName, "AsyncBridgeCandidate", input.MinScore,
                     input.DryRun, forceRescan: false);
@@ -1185,7 +1672,6 @@ public class SentinelAsyncifyTools
             }
             else
             {
-                // Explicit targets: flag just the named methods.
                 var tuples = input.MethodTargets
                     .Where(t => input.Exclusions?.Contains(t.MethodName) != true)
                     .Select(t => (FilePath: t.FilePath, MethodName: t.MethodName,
@@ -1237,7 +1723,6 @@ public class SentinelAsyncifyTools
                     if (!input.DryRun && allChanges.Count > 0)
                     {
                         var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
-                        // Backfill BeforeSource on succeeded records now that PreImages are available.
                         if (applyResult1421.PreImages != null)
                         {
                             foreach (var item in items)
@@ -1436,20 +1921,7 @@ public class SentinelAsyncifyTools
         };
     }
 
-    [Description("""
-        Pattern-driven bridge conversion for HandlerToAsync candidates. Discovers all methods
-        flagged [MigrationCandidate("HandlerToAsyncCandidate")] in the specified project (or solution)
-        and converts each to the Asyncify-bridge pattern. Checks the circuit breaker; records
-        outcome; writes a forensic blob.
-
-        input.ProjectName              — scope discovery to one project; null = entire solution.
-        input.DryRun                   — when true, validates without writing files.
-        input.MaxItems                 — max methods to process (default 100).
-        input.PropagateCancellationTokens — propagate CT in the new async overload (default true).
-
-        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-method details.
-        """)]
-    private async Task<BatchResultSummary> HandlerToAsync(
+    private async Task<BatchResultSummary> HandlerToAsyncCore(
         string? projectName,
         bool dryRun,
         int maxItems,
@@ -1472,9 +1944,9 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "HandlerToAsync discovery unexpected exception");
+            _logger.LogError(ex, "EventHandlersToAsync discovery unexpected exception");
             throw new InvalidOperationException(
-                $"HandlerToAsync discovery failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"EventHandlersToAsync discovery failed: {ex.GetType().Name}: {ex.Message}", ex);
         }
 
         int overLimit = Math.Max(0, candidates.Count - maxItems);
@@ -1565,7 +2037,7 @@ public class SentinelAsyncifyTools
                 }
                 failed++;
                 _logger.LogWarning(
-                    "HandlerToAsync: {Method} in {File} failed: {Reason}",
+                    "EventHandlersToAsync: {Method} in {File} failed: {Reason}",
                     methodName, filePath, reason);
             }
         }
@@ -1574,7 +2046,7 @@ public class SentinelAsyncifyTools
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var blobName = await OperationBlobWriter.WriteAsync(
-            "handler_to_async", changeId, items, _workspaceManager.GetSolutionRoot());
+            "event_handlers_to_async", changeId, items, _workspaceManager.GetSolutionRoot());
         var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
@@ -1593,25 +2065,7 @@ public class SentinelAsyncifyTools
         };
     }
 
-    [Description("""
-        Batch-first method extraction for HandlerExtract candidates. Extracts each nominated
-        code block into a new private method using semantic analysis to determine the correct
-        return type (fixes the standard extract_method bug where selections ending with
-        'return expr' produce void instead of the expression's actual type).
-
-        Each target specifies one extraction via a contextSnippet — a short, unique fragment
-        of the code block to extract. Targets in the same file are processed sequentially so
-        each extraction sees the file as left by the previous one. Checks the circuit breaker;
-        records outcome; writes a forensic blob.
-
-        input.HandlerExtractTargets — list of { FilePath, NewMethodName, ContextSnippet,
-                                       LineBefore?, LineAfter? }
-        input.DryRun               — when true, validates the contextSnippet is locatable
-                                     without writing files.
-
-        Returns BatchResultSummary. Use get_operation_detail(changeId) for per-target details.
-        """)]
-    private async Task<BatchResultSummary> HandlerExtract(
+    private async Task<BatchResultSummary> HandlerExtractCore(
         List<HandlerExtractTarget> targets,
         bool dryRun,
         IProgress<string> progress,
@@ -1632,7 +2086,7 @@ public class SentinelAsyncifyTools
         {
             if (string.IsNullOrWhiteSpace(target.NewMethodName))
             {
-                var reason = $"NewMethodName is required for handler_extract (file: {target.FilePath})";
+                var reason = $"NewMethodName is required for extract_event_handlers (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
@@ -1655,7 +2109,7 @@ public class SentinelAsyncifyTools
 
             if (string.IsNullOrWhiteSpace(target.ContextSnippet))
             {
-                var reason = $"ContextSnippet is required for handler_extract (file: {target.FilePath})";
+                var reason = $"ContextSnippet is required for extract_event_handlers (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
@@ -1710,7 +2164,7 @@ public class SentinelAsyncifyTools
                 }
                 failed++;
                 _logger.LogWarning(
-                    "HandlerExtract: {Method} in {File} threw: {Reason}",
+                    "ExtractEventHandlers: {Method} in {File} threw: {Reason}",
                     target.NewMethodName, target.FilePath, reason);
                 continue;
             }
@@ -1737,7 +2191,7 @@ public class SentinelAsyncifyTools
                 }
                 failed++;
                 _logger.LogWarning(
-                    "HandlerExtract: {Method} in {File} failed: {Reason}",
+                    "ExtractEventHandlers: {Method} in {File} failed: {Reason}",
                     target.NewMethodName, target.FilePath, reason);
                 continue;
             }
@@ -1795,7 +2249,7 @@ public class SentinelAsyncifyTools
                 }
                 failed++;
                 _logger.LogWarning(
-                    "HandlerExtract: apply changes for {Method} in {File} failed: {Reason}",
+                    "ExtractEventHandlers: apply changes for {Method} in {File} failed: {Reason}",
                     target.NewMethodName, target.FilePath, reason);
             }
         }
@@ -1804,7 +2258,7 @@ public class SentinelAsyncifyTools
 
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var blobName = await OperationBlobWriter.WriteAsync(
-            "handler_extract", changeId, items, _workspaceManager.GetSolutionRoot());
+            "extract_event_handlers", changeId, items, _workspaceManager.GetSolutionRoot());
         var status = _workspaceManager.GetBreakerStatus();
 
         return new BatchResultSummary
@@ -1822,257 +2276,4 @@ public class SentinelAsyncifyTools
             BreakerOpen = status.Open,
         };
     }
-
-    // ── Phase 7 — async_migrate dispatcher ────────────────────────────────────
-
-    [McpServerTool(Name = "AsyncMigrate")]
-    [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Unified dispatcher for eight async-migration operations. All operations check the circuit breaker first and return BatchResultSummary. operation: call describe_advanced_tool_options("async_migrate") for valid values and required input fields per operation. Use get_operation_detail(changeId) for per-item details. Severity="halt" → circuit breaker opened; call get_breaker_status then reset_breaker. ErrorCode="SolutionNotLoaded" → call load_solution first. ErrorCode="InvalidArgument" → unknown operation name.
-        """)]
-    public async Task<ToolResult<BatchResultSummary>> AsyncMigrate(
-        string operation,
-        AsyncMigrateInput input,
-        IProgress<string> progress,
-        CancellationToken cancellationToken = default)
-    {
-        if (_workspaceManager.CurrentSolution == null)
-        {
-            return new ToolResult<BatchResultSummary>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                              "No solution is loaded. Call load_solution first.")
-            };
-        }
-
-        BatchResultSummary result;
-        try
-        {
-            result = operation switch
-            {
-                "propagate_cancellation_token" => await PropagateCancellationToken(
-                    new BatchTargetInput
-                    {
-                        Targets = input.BatchTargets ?? [],
-                        DryRun = input.DryRun,
-                        MaxItems = input.MaxItems,
-                    },
-                    progress, cancellationToken),
-
-                "convert_to_async_bridge" => await ConvertToAsyncBridge(
-                    new BatchTargetInput
-                    {
-                        Targets = input.BatchTargets ?? [],
-                        DryRun = input.DryRun,
-                        MaxItems = input.MaxItems,
-                    },
-                    input.PropagateCancellationTokens,
-                    cancellationToken),
-
-                "add_cancellation_token" => await AddCancellationToken(
-                    new BatchTargetInput
-                    {
-                        Targets = input.BatchTargets ?? [],
-                        DryRun = input.DryRun,
-                        MaxItems = input.MaxItems,
-                    },
-                    cancellationToken),
-
-                "run_uplift" => await RunUplift(
-                    new RunUpliftInput
-                    {
-                        Targets = input.UpliftTargets ?? [],
-                        DryRun = input.DryRun,
-                        MaxCallersPerMethod = input.MaxCallersPerMethod,
-                        PropagateCancellationTokens = input.PropagateCancellationTokens,
-                    },
-                    cancellationToken),
-
-                "flag_migration_candidates" => await FlagMigrationCandidates(
-                    new FlagCandidatesInput
-                    {
-                        Scope = input.FlagScope,
-                        Targets = input.FlagTargets,
-                        ProjectName = input.ProjectName,
-                        Pattern = input.Pattern,
-                        MinScore = input.MinScore,
-                        DryRun = input.DryRun,
-                        ForceRescan = input.ForceRescan,
-                    },
-                    cancellationToken),
-
-                "asyncify" => await Asyncify(
-                    new AsyncifyInput
-                    {
-                        ProjectName = input.ProjectName,
-                        MethodTargets = input.MethodTargets,
-                        Exclusions = input.Exclusions,
-                        DryRun = input.DryRun,
-                        PropagateCancellationTokens = input.PropagateCancellationTokens,
-                        MaxMethods = input.MaxMethods,
-                        MaxCallersPerMethod = input.MaxCallersPerMethod,
-                        MinScore = input.MinScore,
-                        ScoreThreshold = input.ScoreThreshold,
-                    },
-                    progress, cancellationToken),
-
-                "handler_to_async" => await HandlerToAsync(
-                    input.ProjectName,
-                    input.DryRun,
-                    input.MaxItems,
-                    input.PropagateCancellationTokens,
-                    progress, cancellationToken),
-
-                "handler_extract" => await HandlerExtract(
-                    input.HandlerExtractTargets ?? [],
-                    input.DryRun,
-                    progress, cancellationToken),
-
-                _ => throw new ArgumentException(
-                    $"Unknown operation '{operation}'. Valid: propagate_cancellation_token, " +
-                    "convert_to_async_bridge, add_cancellation_token, run_uplift, " +
-                    "flag_migration_candidates, asyncify, handler_to_async, handler_extract.",
-                    nameof(operation))
-            };
-        }
-        catch (ArgumentException ex)
-        {
-            return new ToolResult<BatchResultSummary>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
-            };
-        }
-        catch (Exception ex)
-        {
-            return new ToolResult<BatchResultSummary>
-            {
-                Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
-            };
-        }
-
-        return new ToolResult<BatchResultSummary>
-        {
-            Success = true,
-            Data = result
-        };
-    }
-
-    internal static ToolOptionsResult AsyncMigrateOptions() => new()
-    {
-        Description = """
-            async_migrate — operation values and required input fields:
-
-              "propagate_cancellation_token"
-                  input.BatchTargets    — list of { FilePath, MethodNames? }
-                  input.DryRun          — optional, default false
-                  input.MaxItems        — optional, default 100
-
-              "convert_to_async_bridge"
-                  input.BatchTargets    — list of { FilePath, MethodNames } (MethodNames required)
-                  input.DryRun          — optional, default false
-                  input.PropagateCancellationTokens — optional, default true
-
-              "add_cancellation_token"
-                  input.BatchTargets    — list of { FilePath, MethodNames? }
-                  input.DryRun          — optional, default false
-                  input.MaxItems        — optional, default 100
-
-              "run_uplift"
-                  input.UpliftTargets   — list of { BridgedMethodName, ProjectName? }
-                  input.DryRun          — optional, default false
-                  input.MaxCallersPerMethod       — optional, default 10
-                  input.PropagateCancellationTokens — optional, default true
-                  NOTE: also the apply-step for AsyncCallerUplift-flagged candidates.
-                        Call scan_migration_candidates(pattern="AsyncCallerUpliftCandidate") to identify
-                        which bridge methods have callers that need uplift, then pass those
-                        bridge method names as UpliftTargets.
-
-              "flag_migration_candidates"
-                  input.FlagScope       — "targets" (default) or "project"
-                  input.FlagTargets     — list of { FilePath, MethodName, Pattern, Score?, Reason? } (scope=targets)
-                  input.ProjectName     — project name (scope=project); null = entire solution
-                  input.Pattern         — optional, default "AsyncBridgeCandidate"
-                                          also accepts: "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate"
-                  input.MinScore        — optional, default 50
-                  input.DryRun          — optional, default false
-                  input.ForceRescan     — optional, default false
-
-              "asyncify"
-                  input.ProjectName     — project; null = entire solution
-                  input.MethodTargets   — list of { FilePath, MethodName } (singular MethodName, not MethodNames); skips discovery phase when provided
-                  input.Exclusions      — method names to skip
-                  input.DryRun          — optional, default false
-                  input.PropagateCancellationTokens — optional, default true
-                  input.MaxMethods      — optional, default 50
-                  input.MaxCallersPerMethod       — optional, default 10
-                  input.MinScore        — optional, default 50
-                  input.ScoreThreshold  — optional, default 60
-
-              "handler_to_async"
-                  Auto-discovers all [MigrationCandidate("HandlerToAsyncCandidate")]-flagged methods and
-                  converts each to the Asyncify-bridge pattern (sync wrapper + async overload).
-                  input.ProjectName     — scope to one project; null = entire solution
-                  input.DryRun          — optional, default false
-                  input.MaxItems        — optional, default 100
-                  input.PropagateCancellationTokens — optional, default true
-
-              "handler_extract"
-                  Extracts nominated code blocks into new private methods using semantic analysis
-                  (correct return type inference; fixes the standard extract_method void-return bug).
-                  Typical workflow: scan_migration_candidates(pattern="HandlerExtractCandidate") to find
-                  candidates → inspect source → call handler_extract with specific snippets.
-                  input.HandlerExtractTargets — list of:
-                      FilePath        — absolute path to the .cs file
-                      NewMethodName   — C# identifier for the new extracted method (required)
-                      ContextSnippet  — short unique fragment of the code block to extract (required)
-                      LineBefore      — optional line before the snippet for disambiguation
-                      LineAfter       — optional line after the snippet for disambiguation
-                  input.DryRun        — when true, validates each contextSnippet is locatable
-                                        without writing files; useful for pre-flight check
-            """,
-        StructuredOptions = new Dictionary<string, object>
-        {
-            ["propagate_cancellation_token"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, MaxItems = 100 },
-            ["convert_to_async_bridge"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, PropagateCancellationTokens = true },
-            ["add_cancellation_token"] = new { BatchTargets = new[] { new { FilePath = "path/to/file.cs", MethodNames = new[] { "MyMethod" } } }, DryRun = false, MaxItems = 100 },
-            ["run_uplift"] = new { UpliftTargets = new[] { new { BridgedMethodName = "MyMethod", ProjectName = "MyProject" } }, DryRun = false, MaxCallersPerMethod = 10, PropagateCancellationTokens = true },
-            ["flag_migration_candidates"] = new { FlagScope = "targets|project", FlagTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MyMethod" } }, DryRun = false, MinScore = 50, ForceRescan = false },
-            ["asyncify"] = new { MethodTargets = new[] { new { FilePath = "path/to/file.cs", MethodName = "MySingleMethod" } }, Exclusions = new[] { "MethodToSkip" }, DryRun = false, MaxMethods = 50, MaxCallersPerMethod = 10, MinScore = 50, ScoreThreshold = 60 },
-            ["handler_to_async"] = new { ProjectName = (string?)null, DryRun = false, MaxItems = 100, PropagateCancellationTokens = true },
-            ["handler_extract"] = new { HandlerExtractTargets = new[] { new { FilePath = "path/to/file.cs", NewMethodName = "HandleRequest", ContextSnippet = "var result = Process(input);", LineBefore = (string?)null, LineAfter = (string?)null } }, DryRun = false },
-        }
-    };
-
-    internal static ToolOptionsResult ScanMigrationCandidatesOptions() => new()
-    {
-        Description = """
-            scan_migration_candidates — valid pattern values:
-              AsyncBridgeCandidate   — method is a sync wrapper suitable for async-bridge conversion
-              HandlerExtract         — method body can be extracted into a separate handler class
-              HandlerToAsync         — handler method that should be made async
-              AsyncCallerUplift      — sync caller of an already-bridged async method
-
-            MigrationScanSummary fields (when summarize=true):
-              ByPattern        — candidate count keyed by pattern name.
-              ByClass          — List<ClassCandidateSummarySlim> sorted descending by Count, capped at 10.
-                                 Each entry has ClassName, ProjectName (.csproj name), Count.
-                                 ByClassTruncated=true when more than 10 classes were found.
-              ByScoreBucket    — counts in "<0", "0-25", "26-50", "51-75", "76plus" buckets.
-                                 The '<0' bucket is valid but rare; it applies to methods flagged
-                                 manually with a negative score (auto-flagging discards sub-zero
-                                 results before writing the attribute).
-              TopCandidates    — List<TopCandidateSummaryEntry> populated when topN or minScore is
-                                 set; null otherwise. Each entry has MethodName, ClassName, Pattern,
-                                 Score, Summary (truncated to 120 chars). Capped at 5 entries.
-            """,
-        StructuredOptions = new Dictionary<string, object>
-        {
-            ["patterns"] = new[] { "AsyncBridgeCandidate", "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate" },
-            ["scoreBuckets"] = new[] { "<0", "0-25", "26-50", "51-75", "76plus" },
-        }
-    };
 }

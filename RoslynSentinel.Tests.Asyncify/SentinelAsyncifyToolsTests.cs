@@ -12,13 +12,15 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T4  – ScanMigrationCandidates, minScore above all scores → empty list
 ///   T5  – GetAsyncMigrationProgress, no solution → SolutionNotLoaded
 ///   T6  – GetAsyncMigrationProgress, solution with async methods → report populated
-///   T7  – AsyncMigrate, no solution → SolutionNotLoaded
-///   T8  – AsyncMigrate, unknown operation → InvalidArgument
-///   T9  – AsyncMigrate, flag_migration_candidates, scope=targets, DryRun=true → succeeded
-///   T10 – AsyncMigrate, convert_to_async_bridge, DryRun=true → all items skipped
-///   T11 – AsyncMigrate, add_cancellation_token, DryRun=true → returns without error
-///   T12 – AsyncMigrate, propagate_cancellation_token, empty targets → 0 attempted, success
-///   T13 – AsyncMigrate, handler_extract, DryRun=true, missing ContextSnippet → failed items
+///   T7  – FlagMigrationCandidates, no solution → SolutionNotLoaded
+///   T8  – BridgeAsyncMethods, empty targets → 0 attempted, success
+///   T9  – FlagMigrationCandidates, scope=targets, DryRun=true → succeeded
+///   T10 – BridgeAsyncMethods, DryRun=true → all items attempted, none failed
+///   T11 – AddCancellationToken, DryRun=true → returns without error
+///   T12 – PropagateCancellationToken, empty targets → 0 attempted, success
+///   T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet → failed items
+///   T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
+///   T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
 /// </summary>
 [TestFixture]
 public class SentinelAsyncifyToolsTests
@@ -92,7 +94,6 @@ public class SentinelAsyncifyToolsTests
 
         _asyncifyTools = new SentinelAsyncifyTools(
             antiPatternEngine,
-            new AsyncSafetyEngine(_workspaceManager),
             asyncOptEngine,
             asyncBatchEngine,
             new MsToolAugmentEngine(_workspaceManager),
@@ -231,17 +232,15 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – AsyncMigrate, no solution → SolutionNotLoaded
+    // T7 – FlagMigrationCandidates, no solution → SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
-    public async Task T7_AsyncMigrate_NoSolution_ReturnsSolutionNotLoaded()
+    public async Task T7_FlagMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.AsyncMigrate(
-            "propagate_cancellation_token",
-            new AsyncMigrateInput(),
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.FlagMigrationCandidates(
+            scope: "targets",
+            flagTargets: []);
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -249,56 +248,45 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T8 – AsyncMigrate, unknown operation → InvalidArgument
+    // T8 – BridgeAsyncMethods, empty targets → 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
-    public async Task T8_AsyncMigrate_UnknownOperation_ReturnsInvalidArgument()
+    public async Task T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted()
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "totally_unknown_operation",
-            new AsyncMigrateInput(),
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.BridgeAsyncMethods(targets: []);
 
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.InvalidArgument));
-        Assert.That(result.Error.Message, Does.Contain("propagate_cancellation_token").Or.Contain("asyncify"),
-            "Error message should list valid operation names.");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.Data.SuggestedUpliftTargets, Is.Empty);
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T9 – AsyncMigrate, flag_migration_candidates, scope=targets, DryRun=true → succeeded
+    // T9 – FlagMigrationCandidates, scope=targets, DryRun=true → succeeded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T9_AsyncMigrate_FlagMigrationCandidates_DryRunTargets_Succeeds()
+    public async Task T9_FlagMigrationCandidates_DryRunTargets_Succeeds()
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "flag_migration_candidates",
-            new AsyncMigrateInput
-            {
-                FlagScope = "targets",
-                FlagTargets =
-                [
-                    new FlagCandidateTarget
-                    {
-                        FilePath = "RegionForm.cs",
-                        MethodName = "loadList",
-                        Pattern = "AsyncBridgeCandidate",
-                        Score = 50,
-                        Reason = "calls-CommonSearch:30 calls-obsolete-wrapper:20",
-                    }
-                ],
-                DryRun = true,
-            },
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.FlagMigrationCandidates(
+            scope: "targets",
+            flagTargets:
+            [
+                new FlagCandidateTarget
+                {
+                    FilePath = "RegionForm.cs",
+                    MethodName = "loadList",
+                    Pattern = "AsyncBridgeCandidate",
+                    Score = 50,
+                    Reason = "calls-CommonSearch:30 calls-obsolete-wrapper:20",
+                }
+            ],
+            dryRun: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -309,40 +297,30 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T10 – AsyncMigrate, convert_to_async_bridge, DryRun=true → all items skipped
+    // T10 – BridgeAsyncMethods, DryRun=true → all items attempted, none failed
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T10_AsyncMigrate_ConvertToAsyncBridge_DryRun_AllItemsSkipped()
+    public async Task T10_BridgeAsyncMethods_DryRun_AllItemsAttempted()
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "convert_to_async_bridge",
-            new AsyncMigrateInput
-            {
-                BatchTargets =
-                [
-                    new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }
-                ],
-                DryRun = true,
-            },
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.BridgeAsyncMethods(
+            targets: [new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }],
+            dryRun: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
-        // DryRun=true short-circuits each method as Skipped but counts toward Succeeded.
-        Assert.That(result.Data!.Attempted, Is.EqualTo(1));
-        Assert.That(result.Data.Failed, Is.EqualTo(0));
+        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(1));
+        Assert.That(result.Data.Summary.Failed, Is.EqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T11 – AsyncMigrate, add_cancellation_token, DryRun=true → returns without error
+    // T11 – AddCancellationToken, DryRun=true → returns without error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T11_AsyncMigrate_AddCancellationToken_DryRun_ReturnsWithoutError()
+    public async Task T11_AddCancellationToken_DryRun_ReturnsWithoutError()
     {
         SetSource(@"
 using System.Threading.Tasks;
@@ -351,15 +329,9 @@ public class Svc
     public async Task DoWorkAsync() { await Task.Delay(1); }
 }", "Svc.cs");
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "add_cancellation_token",
-            new AsyncMigrateInput
-            {
-                BatchTargets = [new BatchTarget { FilePath = "Svc.cs" }],
-                DryRun = true,
-            },
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.AddCancellationToken(
+            targets: [new BatchTarget { FilePath = "Svc.cs" }],
+            dryRun: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -368,23 +340,17 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T12 – AsyncMigrate, propagate_cancellation_token, empty targets → 0 attempted, success
+    // T12 – PropagateCancellationToken, empty targets → 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T12_AsyncMigrate_PropagateCancellationToken_EmptyTargets_ZeroAttempted()
+    public async Task T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted()
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "propagate_cancellation_token",
-            new AsyncMigrateInput
-            {
-                BatchTargets = [],
-                DryRun = true,
-            },
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.PropagateCancellationToken(
+            targets: [],
+            dryRun: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -393,31 +359,25 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T13 – AsyncMigrate, handler_extract, DryRun=true, missing ContextSnippet → failed items
+    // T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet → failed items
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T13_AsyncMigrate_HandlerExtract_MissingContextSnippet_ReturnsFailed()
+    public async Task T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed()
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.AsyncMigrate(
-            "handler_extract",
-            new AsyncMigrateInput
-            {
-                HandlerExtractTargets =
-                [
-                    new HandlerExtractTarget
-                    {
-                        FilePath = "RegionForm.cs",
-                        NewMethodName = "DoSearch",
-                        ContextSnippet = "",   // intentionally empty → validation failure
-                    }
-                ],
-                DryRun = true,
-            },
-            progress: null,
-            cancellationToken: default);
+        var result = await _asyncifyTools.ExtractEventHandlers(
+            targets:
+            [
+                new HandlerExtractTarget
+                {
+                    FilePath = "RegionForm.cs",
+                    NewMethodName = "DoSearch",
+                    ContextSnippet = "",   // intentionally empty → validation failure
+                }
+            ],
+            dryRun: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -425,5 +385,36 @@ public class Svc
             "An empty ContextSnippet should produce one failed item.");
         Assert.That(result.Data.Failures, Is.Not.Empty);
         Assert.That(result.Data.Failures[0].Reason, Does.Contain("ContextSnippet"));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task T14_UpliftCallers_EmptyTargets_ZeroAttempted()
+    {
+        SetSource("public class C { public void M() {} }", "C.cs");
+
+        var result = await _asyncifyTools.UpliftCallers(targets: []);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.Data!.Summary.Attempted, Is.EqualTo(0));
+        Assert.That(result.Data.SuggestedPropagateTargets, Is.Empty);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded()
+    {
+        var result = await _asyncifyTools.EventHandlersToAsync();
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
 }
