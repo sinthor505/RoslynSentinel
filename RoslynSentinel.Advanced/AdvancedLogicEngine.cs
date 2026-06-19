@@ -3,8 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class AdvancedLogicEngine

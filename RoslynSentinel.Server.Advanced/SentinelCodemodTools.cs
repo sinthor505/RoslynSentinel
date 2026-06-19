@@ -119,8 +119,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.DataType)] string transform,
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
         [ToolOption(ToolOptionTag.Preview)] bool preview = false,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -402,8 +402,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -746,8 +746,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -1076,8 +1076,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
         [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {

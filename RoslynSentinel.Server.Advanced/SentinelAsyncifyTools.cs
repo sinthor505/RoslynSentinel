@@ -81,8 +81,8 @@ public class SentinelAsyncifyTools
         int? minScore = null,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -323,7 +323,7 @@ public class SentinelAsyncifyTools
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -398,7 +398,7 @@ public class SentinelAsyncifyTools
         int minScore = 50,
         bool dryRun = false,
         bool forceRescan = false,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -475,7 +475,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -550,7 +550,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxCallersPerMethod = 10,
         bool propagateCancellationTokens = true,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -744,7 +744,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         List<HandlerExtractTarget> targets,
         bool dryRun = false,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -801,7 +801,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -1015,7 +1015,7 @@ public class SentinelAsyncifyTools
     private async Task<(BatchResultSummary Summary, List<UpliftTarget> SuggestedUpliftTargets)> BridgeAsyncMethodsCore(
         BatchTargetInput input,
         bool propagateCancellationTokens = true,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1103,28 +1103,79 @@ public class SentinelAsyncifyTools
                 }
                 catch (Exception ex)
                 {
-                    var reason = ex.Message;
-                    items.Add(new OperationItemRecord
+                    string reason = ex.Message;
+                    bool handled = false;
+
+                    if (ex is InvalidOperationException && ex.Message.Contains("already exists"))
                     {
-                        FilePath = target.FilePath,
-                        MethodName = methodName,
-                        Outcome = OperationOutcome.Failed,
-                        Reason = reason,
-                    });
-                    if (failures.Count < 15)
+                        var asyncMethodName = methodName + "Async";
+                        try
+                        {
+                            var ctResult = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(
+                                target.FilePath, asyncMethodName);
+                            if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
+                            {
+                                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                                    new Dictionary<FilePath, string> { { target.FilePath, ctResult.UpdatedText } });
+                                string? beforeSrc = null;
+                                applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSrc);
+                                items.Add(new OperationItemRecord
+                                {
+                                    FilePath = target.FilePath,
+                                    MethodName = methodName,
+                                    Outcome = OperationOutcome.Succeeded,
+                                    Reason = $"CT added to existing async overload '{asyncMethodName}'",
+                                    BeforeSource = beforeSrc,
+                                });
+                                succeeded++;
+                                handled = true;
+                            }
+                            else if (ctResult.Outcome == EditOutcome.NoChange)
+                            {
+                                items.Add(new OperationItemRecord
+                                {
+                                    FilePath = target.FilePath,
+                                    MethodName = methodName,
+                                    Outcome = OperationOutcome.Skipped,
+                                    Reason = $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
+                                });
+                                handled = true;
+                            }
+                            else
+                            {
+                                reason = $"{ex.Message}; CT-add fallback: {ctResult.Message ?? ctResult.Outcome.ToString()}";
+                            }
+                        }
+                        catch (Exception ctEx)
+                        {
+                            reason = $"{ex.Message}; CT-add fallback failed: {ctEx.Message}";
+                        }
+                    }
+
+                    if (!handled)
                     {
-                        failures.Add(new FailureDetail
+                        items.Add(new OperationItemRecord
                         {
                             FilePath = target.FilePath,
                             MethodName = methodName,
-                            Reason = reason,
                             Outcome = OperationOutcome.Failed,
+                            Reason = reason,
                         });
+                        if (failures.Count < 15)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = target.FilePath,
+                                MethodName = methodName,
+                                Reason = reason,
+                                Outcome = OperationOutcome.Failed,
+                            });
+                        }
+                        failed++;
+                        _logger.LogWarning(
+                            "BridgeAsyncMethods: {Method} in {File} failed: {Reason}",
+                            methodName, target.FilePath, reason);
                     }
-                    failed++;
-                    _logger.LogWarning(
-                        "BridgeAsyncMethods: {Method} in {File} failed: {Reason}",
-                        methodName, target.FilePath, reason);
                 }
             }
         }
@@ -1164,7 +1215,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AddCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1292,7 +1343,7 @@ public class SentinelAsyncifyTools
 
     private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets)> UpliftCallersCore(
         RunUpliftInput input,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1404,8 +1455,8 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
@@ -1590,7 +1641,7 @@ public class SentinelAsyncifyTools
     private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input,
         IProgress<string>? progress,
-        CancellationToken cancellationToken = default)
+        CancellationToken? cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
         if (halt != null)
@@ -1603,7 +1654,7 @@ public class SentinelAsyncifyTools
         int succeeded = 0, failed = 0, skipped = 0;
         var changeId = Guid.NewGuid().ToString("N")[..8];
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken ?? CancellationToken.None);
         if (input.MaxRuntimeSeconds > 0)
             cts.CancelAfter(TimeSpan.FromSeconds(input.MaxRuntimeSeconds));
 
@@ -1805,24 +1856,32 @@ public class SentinelAsyncifyTools
             }
             foreach (var s in bridgeResult.Skipped)
             {
+                bool isValidationFailure = s.Reason.Contains("NeedsManualReview");
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = isValidationFailure ? OperationOutcome.Skipped : OperationOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                 });
-                if (failures.Count < 15)
+                if (isValidationFailure)
                 {
-                    failures.Add(new FailureDetail
-                    {
-                        FilePath = s.FilePath,
-                        MethodName = s.MethodName,
-                        Reason = s.Reason,
-                        Outcome = OperationOutcome.Failed,
-                    });
+                    skipped++;
                 }
-                failed++;
+                else
+                {
+                    if (failures.Count < 15)
+                    {
+                        failures.Add(new FailureDetail
+                        {
+                            FilePath = s.FilePath,
+                            MethodName = s.MethodName,
+                            Reason = s.Reason,
+                            Outcome = OperationOutcome.Failed,
+                        });
+                    }
+                    failed++;
+                }
             }
             if (bridgeResult.RemainingCandidates > 0)
             {
@@ -1952,10 +2011,10 @@ public class SentinelAsyncifyTools
                 }
             }
 
-            WriteSummary: ;
+        WriteSummary:;
         }
         catch (OperationCanceledException) when (innerToken.IsCancellationRequested
-                                                  && !cancellationToken.IsCancellationRequested)
+                                                  && !(cancellationToken?.IsCancellationRequested ?? false))
         {
             stoppedEarly = true;
             if (stopReason.Length == 0)
@@ -1998,7 +2057,7 @@ public class SentinelAsyncifyTools
         bool dryRun,
         int maxItems,
         bool propagateCancellationTokens,
-        IProgress<string> progress,
+        IProgress<string>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -2058,14 +2117,14 @@ public class SentinelAsyncifyTools
             {
                 string? updatedSource;
                 var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    filePath, methodName, progress: progress, cancellationToken: cancellationToken);
+                    filePath, methodName, progress: progress!, cancellationToken: cancellationToken);
                 updatedSource = convertResult.UpdatedText;
 
                 if (propagateCancellationTokens)
                 {
                     var asyncMethod = methodName + "Async";
                     var propagationResult = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, progress: progress, cancellationToken: cancellationToken);
+                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, progress: progress!, cancellationToken: cancellationToken);
                     if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
                     {
                         updatedSource = propagationResult.UpdatedText;

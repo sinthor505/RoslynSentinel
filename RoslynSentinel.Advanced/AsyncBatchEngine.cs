@@ -424,9 +424,71 @@ public class AsyncBatchEngine
                     cancellationToken);
                 newSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+            {
+                // The async overload already exists — try adding CT to it instead of failing
+                var asyncMethodName = candidate.MethodName + "Async";
+                _logger.LogInformation(
+                    "Async overload '{AsyncMethod}' already exists — attempting CT add fallback",
+                    asyncMethodName);
+                bool fallbackHandled = false;
+                try
+                {
+                    var ctResult = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(
+                        candidate.FilePath, asyncMethodName, progress, cancellationToken);
+                    if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
+                    {
+                        var ctValidation = await _validationEngine.ValidateChangesAsync(
+                            new Dictionary<FilePath, string> { { candidate.FilePath, ctResult.UpdatedText } },
+                            progress, cancellationToken);
+                        if (ctValidation.Success)
+                        {
+                            string? beforeSource = File.Exists(candidate.FilePath)
+                                ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
+                            await _workspaceManager.ApplyProposedChangesAsync(
+                                new Dictionary<FilePath, string> { { candidate.FilePath, ctResult.UpdatedText } });
+                            applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
+                            {
+                                BeforeSource = beforeSource,
+                            });
+                            progress?.Report($"Added CT to existing async overload '{asyncMethodName}' in {candidate.FilePath}");
+                            fallbackHandled = true;
+                        }
+                        else
+                        {
+                            var diagMessages = ctValidation.Diagnostics
+                                .Select(d => $"[{d.Id}] {d.Message}").ToList();
+                            skipped.Add(new BridgeSkippedInfo(
+                                candidate.FilePath, candidate.MethodName,
+                                $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s); flagged NeedsManualReview",
+                                diagMessages));
+                            fallbackHandled = true;
+                        }
+                    }
+                    else if (ctResult.Outcome == EditOutcome.NoChange)
+                    {
+                        skipped.Add(new BridgeSkippedInfo(
+                            candidate.FilePath, candidate.MethodName,
+                            $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
+                            new List<string>()));
+                        fallbackHandled = true;
+                    }
+                }
+                catch (Exception ctEx)
+                {
+                    _logger.LogWarning(ctEx, "CT-add fallback failed for '{AsyncMethod}'", asyncMethodName);
+                }
+                if (!fallbackHandled)
+                {
+                    skipped.Add(new BridgeSkippedInfo(
+                        candidate.FilePath, candidate.MethodName,
+                        $"Pre-condition: {ex.Message}", new List<string>()));
+                }
+                continue;
+            }
             catch (InvalidOperationException ex)
             {
-                // Pre-condition failure (abstract, already async, async overload exists, etc.)
+                // Other pre-condition failure (abstract, already async, event handler, etc.)
                 _logger.LogWarning(
                     "ConvertToAsyncBridge pre-condition failed for {Method}: {Message}",
                     candidate.MethodName, ex.Message);

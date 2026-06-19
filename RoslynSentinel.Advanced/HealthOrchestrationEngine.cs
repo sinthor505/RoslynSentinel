@@ -3,8 +3,6 @@ using System.Diagnostics;
 
 using Microsoft.CodeAnalysis;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public enum HealthEngineType

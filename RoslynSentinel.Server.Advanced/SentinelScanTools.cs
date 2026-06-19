@@ -114,7 +114,7 @@ public class SentinelScanTools
         [ExternalInputRequired(DataTag.Scope)] string scope,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Consumes(DataTag.ProjectName, required: false)] string? scopeName = null,
-        IProgress<string> progress = default,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         //string? filePath = scope == "file" ? scopeName : null;
@@ -465,8 +465,8 @@ public class SentinelScanTools
     public Task<ToolResult<object>> DescribeScanDetectors(
         [ToolOption(ToolOptionTag.Domain)] string? domain = null,
         [ToolOption(ToolOptionTag.Detector)] string? detector = null,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -505,8 +505,8 @@ public class SentinelScanTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -567,8 +567,8 @@ public class SentinelScanTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
@@ -881,8 +881,8 @@ public class SentinelScanTools
        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
        [Consumes(DataTag.ProjectName)] string? projectName = null,
        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-       IProgress<string> progress = default,
-       CancellationToken cancellationToken = default)
+       IProgress<string>? progress = null,
+       CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -915,8 +915,8 @@ public class SentinelScanTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName)] string className,
         [ToolOption(ToolOptionTag.Filter)] int minStatements = 4,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -950,8 +950,8 @@ public class SentinelScanTools
         [ToolOption(ToolOptionTag.IncludeMethods)] bool includeMethods = true,
         [ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true,
         [ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {

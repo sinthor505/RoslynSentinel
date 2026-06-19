@@ -79,8 +79,8 @@ public class SentinelIntelligenceTools
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 10,
         [ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
@@ -109,8 +109,8 @@ public class SentinelIntelligenceTools
     [Description("Returns deep metrics for the entire solution or a single project. projectName=null → solution-wide.")]
     public async Task<ToolResult<object>> GetSolutionMetrics(
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         try
         {
@@ -137,8 +137,8 @@ public class SentinelIntelligenceTools
     [Description("Returns a structured report of all namespaces, classes, methods, and properties in a file.")]
     public async Task<ToolResult<object>> GetCodeInventory(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -200,8 +200,8 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
@@ -232,8 +232,8 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         [ToolOption(ToolOptionTag.Direction)] string direction = "forward",
         [ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -308,8 +308,8 @@ public class SentinelIntelligenceTools
     [Description("Returns the folder path where a file should reside based on its declared namespace. Use to plan file moves.")]
     public async Task<ToolResult<string>> PreviewMoveFileToNamespaceFolder(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -342,8 +342,8 @@ public class SentinelIntelligenceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName)] string variableName,
         [Consumes(DataTag.StartLine)] int lineNumber,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+        IProgress<string>? progress = null,
+        CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

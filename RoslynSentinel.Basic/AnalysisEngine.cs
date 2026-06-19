@@ -6,8 +6,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record DuplicateMethodGroup(string Hash, List<MethodLocation> Locations);
