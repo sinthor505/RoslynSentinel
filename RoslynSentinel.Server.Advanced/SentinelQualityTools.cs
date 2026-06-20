@@ -61,7 +61,7 @@ public class SentinelQualityTools
         """)]
     public ToolOptionsResult DescribeAdvancedToolOptions(
         [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         return toolName switch
@@ -95,7 +95,7 @@ public class SentinelQualityTools
     public async Task<ToolResult<object>> GetTestCoverageMap(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -125,7 +125,7 @@ public class SentinelQualityTools
     public async Task<ToolResult<object>> GetMethodComplexity(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -163,7 +163,7 @@ public class SentinelQualityTools
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -205,7 +205,7 @@ public class SentinelQualityTools
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());

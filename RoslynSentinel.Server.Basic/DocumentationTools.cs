@@ -184,7 +184,7 @@ public class DocumentationTools
         string docType,
         string? name = null,
         string? content = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         try

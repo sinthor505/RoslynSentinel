@@ -99,7 +99,7 @@ public class SentinelSymbolTools
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
@@ -145,7 +145,7 @@ public class SentinelSymbolTools
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -215,7 +215,7 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         try
@@ -300,7 +300,7 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [ExternalInputRequired(DataTag.MemberKind)] string memberKind,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -334,7 +334,7 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -379,7 +379,7 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         try
@@ -429,7 +429,7 @@ public class SentinelSymbolTools
         [ToolOptionAttribute(ToolOptionTag.Filter)] string include = "both",
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         try
