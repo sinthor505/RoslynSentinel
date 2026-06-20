@@ -382,6 +382,7 @@ public class AsyncBatchEngine
         var eligible = candidates
             .Where(c => c.Score <= scoreThreshold)
             .OrderBy(c => c.Score)  // lowest score (easiest) first
+            .DistinctBy(c => (c.FilePath, c.MethodName))
             .ToList();
 
         var applied = new List<BridgeAppliedInfo>();

@@ -81,7 +81,7 @@ public class SentinelAsyncifyTools
         int? minScore = null,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -323,7 +323,7 @@ public class SentinelAsyncifyTools
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -398,7 +398,7 @@ public class SentinelAsyncifyTools
         int minScore = 50,
         bool dryRun = false,
         bool forceRescan = false,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -475,7 +475,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -550,7 +550,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxCallersPerMethod = 10,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -626,7 +626,7 @@ public class SentinelAsyncifyTools
         List<BatchTarget> targets,
         bool dryRun = false,
         int maxItems = 100,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -680,7 +680,7 @@ public class SentinelAsyncifyTools
         List<BatchTarget> targets,
         bool dryRun = false,
         int maxItems = 100,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -744,7 +744,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         List<HandlerExtractTarget> targets,
         bool dryRun = false,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -801,7 +801,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -885,7 +885,7 @@ public class SentinelAsyncifyTools
         int scoreThreshold = 60,
         int maxRuntimeSeconds = 0,
         int maxIterations = 0,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -933,7 +933,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> PropagateCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1015,7 +1015,7 @@ public class SentinelAsyncifyTools
     private async Task<(BatchResultSummary Summary, List<UpliftTarget> SuggestedUpliftTargets)> BridgeAsyncMethodsCore(
         BatchTargetInput input,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1215,7 +1215,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AddCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1343,7 +1343,7 @@ public class SentinelAsyncifyTools
 
     private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets)> UpliftCallersCore(
         RunUpliftInput input,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1455,7 +1455,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
-        IProgress<string>? progress = null,
+        Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1640,7 +1640,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input,
-        IProgress<string>? progress,
+        Progress<string>? progress,
         CancellationToken? cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1856,7 +1856,9 @@ public class SentinelAsyncifyTools
             }
             foreach (var s in bridgeResult.Skipped)
             {
-                bool isValidationFailure = s.Reason.Contains("NeedsManualReview");
+                bool isValidationFailure = s.Reason.Contains("NeedsManualReview")
+                    || s.Reason.Contains("already has CancellationToken")
+                    || s.Reason.Contains("event handler");
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
@@ -2057,7 +2059,7 @@ public class SentinelAsyncifyTools
         bool dryRun,
         int maxItems,
         bool propagateCancellationTokens,
-        IProgress<string>? progress,
+        Progress<string>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -2199,7 +2201,7 @@ public class SentinelAsyncifyTools
     private async Task<BatchResultSummary> HandlerExtractCore(
         List<HandlerExtractTarget> targets,
         bool dryRun,
-        IProgress<string> progress,
+        Progress<string> progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -2238,7 +2240,7 @@ public class SentinelAsyncifyTools
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(target.ContextSnippet))
+            if (string.IsNullOrWhiteSpace(target.ContextSnippet) && !target.ExtractEntireBody)
             {
                 var reason = $"ContextSnippet is required for extract_event_handlers (file: {target.FilePath})";
                 items.Add(new OperationItemRecord
@@ -2271,6 +2273,7 @@ public class SentinelAsyncifyTools
                     target.ContextSnippet,
                     target.LineBefore,
                     target.LineAfter,
+                    target.ExtractEntireBody,
                     cancellationToken);
             }
             catch (Exception ex)

@@ -1273,12 +1273,23 @@ public class MsToolAugmentEngine
     /// </summary>
     /// <param name="filePath">Absolute path to the .cs file (must be in loaded solution).</param>
     /// <param name="newMethodName">Valid C# identifier for the new method.</param>
-    /// <param name="contextSnippet">A short unique code snippet identifying the selection.</param>
+    /// <param name="contextSnippet">
+    /// A short unique code snippet identifying the selection.
+    /// When <paramref name="extractEntireBody"/> is <c>true</c>, treated as the name of
+    /// the source method whose entire body is extracted.
+    /// </param>
     /// <param name="lineBefore">Optional line immediately before the snippet for disambiguation.</param>
     /// <param name="lineAfter">Optional line immediately after the snippet for disambiguation.</param>
+    /// <param name="extractEntireBody">
+    /// When <c>true</c>, <paramref name="contextSnippet"/> is interpreted as a method name
+    /// and the entire block body of that method is used as the selection.
+    /// <paramref name="lineBefore"/> and <paramref name="lineAfter"/> are ignored.
+    /// Expression-bodied methods are not supported in this mode.
+    /// </param>
     public async Task<MsAugmentResult> ExtractMethodSafeAsync(
         FilePath filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
+        bool extractEntireBody = false,
         CancellationToken ct = default)
     {
         if (!SyntaxFacts.IsValidIdentifier(newMethodName))
@@ -1303,38 +1314,70 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not load semantic model.");
         }
 
-        int pos;
-        try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-        catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+        BlockSyntax block;
+        List<StatementSyntax> stmtsInSelection;
 
-        var selectionSpan = new TextSpan(pos, contextSnippet.Length);
-        var node = root.FindNode(selectionSpan);
-
-        // Walk up to the nearest block so we can work with statement-level items
-        var block = node.AncestorsAndSelf().OfType<BlockSyntax>().FirstOrDefault();
-        if (block == null)
+        if (extractEntireBody)
         {
-            return MsAugmentResult.Fail(
-                "Selection must be inside a method body (no enclosing block found).");
+            var candidates = root.DescendantNodes()
+                .OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Identifier.Text == contextSnippet)
+                .ToList();
+
+            if (candidates.Count == 0)
+                return MsAugmentResult.Fail($"No method named '{contextSnippet}' found in {filePath}.");
+            if (candidates.Count > 1)
+                return MsAugmentResult.Fail(
+                    $"'{contextSnippet}' is overloaded ({candidates.Count} declarations). " +
+                    "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.");
+
+            var sourceMethod = candidates[0];
+            if (sourceMethod.Body == null)
+                return MsAugmentResult.Fail(
+                    $"'{contextSnippet}' has an expression body (=> ...) which is not supported " +
+                    "with extractEntireBody. Use the contextSnippet path instead.");
+
+            block = sourceMethod.Body;
+            stmtsInSelection = block.Statements.ToList();
+
+            if (stmtsInSelection.Count == 0)
+                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.");
         }
-
-        // Find statements that overlap the selection
-        var stmtsInSelection = block.Statements
-            .Where(s => selectionSpan.Contains(s.Span) || selectionSpan.OverlapsWith(s.Span))
-            .ToList();
-
-        if (stmtsInSelection.Count == 0)
+        else
         {
-            // Fall back to the single statement that contains the selection
-            var single = node.AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault();
-            if (single != null && block.Statements.Contains(single))
-            {
-                stmtsInSelection.Add(single);
-            }
-            else
+            int pos;
+            try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+            catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+
+            var selectionSpan = new TextSpan(pos, contextSnippet.Length);
+            var node = root.FindNode(selectionSpan);
+
+            // Walk up to the nearest block so we can work with statement-level items
+            block = node.AncestorsAndSelf().OfType<BlockSyntax>().FirstOrDefault();
+            if (block == null)
             {
                 return MsAugmentResult.Fail(
-                    "No statements found at the contextSnippet location. Try a broader snippet.");
+                    "Selection must be inside a method body (no enclosing block found).");
+            }
+
+            // Find statements that overlap the selection
+            stmtsInSelection = block.Statements
+                .Where(s => selectionSpan.Contains(s.Span) || selectionSpan.OverlapsWith(s.Span))
+                .ToList();
+
+            if (stmtsInSelection.Count == 0)
+            {
+                // Fall back to the single statement that contains the selection
+                var single = node.AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault();
+                if (single != null && block.Statements.Contains(single))
+                {
+                    stmtsInSelection.Add(single);
+                }
+                else
+                {
+                    return MsAugmentResult.Fail(
+                        "No statements found at the contextSnippet location. Try a broader snippet.");
+                }
             }
         }
 

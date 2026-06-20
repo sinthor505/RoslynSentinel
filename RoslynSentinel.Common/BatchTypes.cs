@@ -81,6 +81,12 @@ public class HandlerExtractTarget
     public string? LineBefore { get; set; }
     /// <summary>Optional line immediately after the snippet for disambiguation.</summary>
     public string? LineAfter { get; set; }
+    /// <summary>
+    /// When <c>true</c>, <see cref="ContextSnippet"/> is the name of the source method
+    /// whose entire body is extracted. <see cref="LineBefore"/> and <see cref="LineAfter"/>
+    /// are ignored. Mutually exclusive with providing a code snippet.
+    /// </summary>
+    public bool ExtractEntireBody { get; set; } = false;
 }
 
 /// <summary>A single bridged-method target for <c>run_uplift</c>.</summary>
