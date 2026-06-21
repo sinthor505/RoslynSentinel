@@ -1653,6 +1653,7 @@ public class SentinelAsyncifyTools
         string stopReason = "";
         int? bridgeMinScore = null;
         string bridgeStopReason = "";
+        int bridgeSkippedCount = 0;
         int flagPhaseScanned = 0;
         int flagPhaseNewFlags = 0;
 
@@ -1840,6 +1841,7 @@ public class SentinelAsyncifyTools
 
             bridgeMinScore = bridgeResult.MinCandidateScore;
             bridgeStopReason = bridgeResult.StopReason;
+            bridgeSkippedCount = bridgeResult.Skipped.Count;
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -2062,6 +2064,13 @@ public class SentinelAsyncifyTools
             directive = $"No candidates were within scoreThreshold={input.ScoreThreshold}; " +
                         $"the lowest-scoring candidate found has score={bridgeMinScore.Value}. " +
                         $"Re-run with scoreThreshold={bridgeMinScore.Value} (or higher) to include it.";
+        }
+        else if (succeeded == 0 && !status2.Open && !stoppedEarly
+                 && bridgeStopReason == "batch_complete" && bridgeSkippedCount > 0)
+        {
+            directive = $"{bridgeSkippedCount} candidate(s) were attempted but all required manual review — " +
+                        $"the async transform produced compiler errors (likely no async API equivalent exists for the called sync methods). " +
+                        $"Call get_operation_detail(changeId=\"{changeId}\") to see per-method skip reasons and compiler diagnostics.";
         }
         else
         {
