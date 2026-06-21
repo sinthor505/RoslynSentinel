@@ -554,25 +554,25 @@ public class AsyncOptimizationEngine
                     SyntaxFactory.AttributeArgument(
                         SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression))
                 })));
-        var obsoleteAttrList = SyntaxFactory.AttributeList(
-            SyntaxFactory.SingletonSeparatedList(obsoleteAttr));
-
         // ── Apply both changes to the class node ─────────────────────────────
         // Step 1: replace original method node with the bridge wrapper.
         // Strip [MigrationCandidate] from the bridge wrapper — the method has been processed
-        // so the candidate marker is no longer applicable.
+        // so the candidate marker is no longer applicable. Also strip any pre-existing [Obsolete]
+        // before re-adding, so repeated conversions don't accumulate duplicate attributes.
         var bridgeAttributeLists = SyntaxFactory.List(
             methodNode.AttributeLists.Where(al =>
                 !al.Attributes.Any(a =>
                     a.Name.ToString() == MigrationCandidateShortName ||
                     a.Name.ToString() == MigrationCandidateFullName)));
 
-        var bridgeWrapper = methodNode
+        var bridgeBase = methodNode
             .WithAttributeLists(bridgeAttributeLists)
             .WithBody(bridgeBlock)
             .WithExpressionBody(null)
-            .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken))
-            .AddAttributeLists(obsoleteAttrList);
+            .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken));
+
+        var (bridgeWrapper, _) = ReplaceOrAddAttribute(
+            bridgeBase, "Obsolete", "ObsoleteAttribute", null, obsoleteAttr);
 
         var classWithBridge = classNode.ReplaceNode(methodNode, bridgeWrapper);
 
@@ -1494,73 +1494,17 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
-        // ── Detect whether the method is already flagged with this pattern ───
-        bool wasAlreadyFlagged = false;
-        string? previousPattern = null;
-        foreach (var al in methodNode.AttributeLists)
-        {
-            foreach (var a in al.Attributes)
-            {
-                var name = a.Name.ToString();
-                if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
-                {
-                    continue;
-                }
-
-                var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
-                var argPattern = (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-                if (previousPattern == null)
-                {
-                    previousPattern = argPattern; // record first found
-                }
-
-                if (argPattern == pattern) { wasAlreadyFlagged = true; break; }
-            }
-            if (wasAlreadyFlagged)
-            {
-                break;
-            }
-        }
-
-        // ── Strip any existing [MigrationCandidate("pattern")] for idempotency ─
-        // Only strips attributes whose first positional argument matches the given pattern
-        // so that multiple different-pattern flags on the same method are preserved.
-        var strippedAttributeLists = SyntaxFactory.List(
-            methodNode.AttributeLists
-                .Select(al =>
-                {
-                    var filteredAttrs = al.Attributes.Where(a =>
-                    {
-                        var name = a.Name.ToString();
-                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
-                        {
-                            return true; // keep — unrelated attribute
-                        }
-                        // Remove only if the pattern positional arg matches.
-                        var firstArg = a.ArgumentList?.Arguments
-                            .FirstOrDefault(arg => arg.NameEquals == null);
-                        var argPattern = (firstArg?.Expression as LiteralExpressionSyntax)
-                            ?.Token.ValueText;
-                        return argPattern != pattern; // keep if different pattern
-                    }).ToList();
-
-                    if (filteredAttrs.Count == al.Attributes.Count)
-                    {
-                        return al; // unchanged
-                    }
-
-                    return filteredAttrs.Count == 0
-                        ? null
-                        : al.WithAttributes(SyntaxFactory.SeparatedList(filteredAttrs));
-                })
-                .Where(al => al != null)
-                .Select(al => al!));
+        // Find any pre-existing MigrationCandidate for the audit trail.
+        string? previousPattern = methodNode.AttributeLists
+            .SelectMany(al => al.Attributes)
+            .Where(a => { var n = a.Name.ToString(); return n == MigrationCandidateShortName || n == MigrationCandidateFullName; })
+            .Select(a => (a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null)?.Expression as LiteralExpressionSyntax)?.Token.ValueText)
+            .FirstOrDefault();
 
         // ── Build the new [MigrationCandidate(...)] attribute ────────────────
         var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
         var arguments = new System.Collections.Generic.List<AttributeArgumentSyntax>
         {
-            // Positional: "pattern"
             SyntaxFactory.AttributeArgument(
                 SyntaxFactory.LiteralExpression(
                     SyntaxKind.StringLiteralExpression,
@@ -1569,7 +1513,6 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (score != 0)
         {
-            // Named: Score = N
             arguments.Add(SyntaxFactory.AttributeArgument(
                 SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Score")),
                 null,
@@ -1580,7 +1523,6 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (!string.IsNullOrWhiteSpace(reason))
         {
-            // Named: Reason = "..."
             arguments.Add(SyntaxFactory.AttributeArgument(
                 SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("Reason")),
                 null,
@@ -1589,7 +1531,6 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     SyntaxFactory.Literal(reason))));
         }
 
-        // Named: FlaggedDate = "yyyy-MM-dd"
         arguments.Add(SyntaxFactory.AttributeArgument(
             SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")),
             null,
@@ -1602,12 +1543,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
             SyntaxFactory.AttributeArgumentList(
                 SyntaxFactory.SeparatedList(arguments)));
 
-        var newAttrList = SyntaxFactory.AttributeList(
-            SyntaxFactory.SingletonSeparatedList(newAttr));
-
-        var updatedMethod = methodNode
-            .WithAttributeLists(strippedAttributeLists)
-            .AddAttributeLists(newAttrList);
+        var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttribute(
+            methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
         var newSource = newRoot.NormalizeWhitespace().ToFullString();
@@ -1737,56 +1674,12 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
-                // Detect previous flag.
-                bool wasAlreadyFlagged = false;
-                string? previousPattern = null;
-                foreach (var al in methodNode.AttributeLists)
-                {
-                    foreach (var a in al.Attributes)
-                    {
-                        var name = a.Name.ToString();
-                        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
-                        {
-                            continue;
-                        }
-
-                        var fp2 = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
-                        var ap = (fp2?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-                        if (previousPattern == null)
-                        {
-                            previousPattern = ap;
-                        }
-
-                        if (ap == pattern) { wasAlreadyFlagged = true; break; }
-                    }
-                }
-
-                // Strip existing same-pattern attribute.
-                var stripped = SyntaxFactory.List(
-                    methodNode.AttributeLists
-                        .Select(al =>
-                        {
-                            var filtered = al.Attributes.Where(a =>
-                            {
-                                var n = a.Name.ToString();
-                                if (n != MigrationCandidateShortName && n != MigrationCandidateFullName)
-                                {
-                                    return true;
-                                }
-
-                                var fa = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
-                                var ap2 = (fa?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
-                                return ap2 != pattern;
-                            }).ToList();
-                            if (filtered.Count == al.Attributes.Count)
-                            {
-                                return al;
-                            }
-
-                            return filtered.Count == 0 ? null : al.WithAttributes(SyntaxFactory.SeparatedList(filtered));
-                        })
-                        .Where(al => al != null)
-                        .Select(al => al!));
+                // Find any pre-existing MigrationCandidate for the audit trail.
+                string? previousPattern = methodNode.AttributeLists
+                    .SelectMany(al => al.Attributes)
+                    .Where(a => { var n = a.Name.ToString(); return n == MigrationCandidateShortName || n == MigrationCandidateFullName; })
+                    .Select(a => (a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null)?.Expression as LiteralExpressionSyntax)?.Token.ValueText)
+                    .FirstOrDefault();
 
                 // Build new attribute.
                 var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
@@ -1817,9 +1710,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     SyntaxFactory.IdentifierName(MigrationCandidateShortName),
                     SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
 
-                var updatedMethod = methodNode
-                    .WithAttributeLists(stripped)
-                    .AddAttributeLists(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttr)));
+                var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttribute(
+                    methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
                 root = root.ReplaceNode(methodNode, updatedMethod);
 
@@ -2298,9 +2190,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         SyntaxFactory.IdentifierName(MigrationCandidateShortName),
                         SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
 
-                    rewrittenRoot = rewrittenRoot.ReplaceNode(methodNode,
-                        methodNode.AddAttributeLists(SyntaxFactory.AttributeList(
-                            SyntaxFactory.SingletonSeparatedList(newAttr))));
+                    var (updatedMethodNode, _) = ReplaceOrAddAttribute(
+                        methodNode, MigrationCandidateShortName, MigrationCandidateFullName, item.Pattern, newAttr);
+                    rewrittenRoot = rewrittenRoot.ReplaceNode(methodNode, updatedMethodNode);
                     fileModified = true;
                 }
 
@@ -2517,6 +2409,63 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
 
         return (score, reasons.ToString().TrimEnd());
+    }
+
+    // ── ReplaceOrAddAttribute ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Strips any existing <paramref name="shortName"/>/<paramref name="fullName"/> attributes
+    /// whose first positional argument equals <paramref name="patternKey"/> (or ALL instances when
+    /// <paramref name="patternKey"/> is null), then appends <paramref name="newAttribute"/>.
+    /// Returns the updated method and whether a matching attribute was already present.
+    /// </summary>
+    private static (MethodDeclarationSyntax Updated, bool WasPresent) ReplaceOrAddAttribute(
+        MethodDeclarationSyntax method,
+        string shortName,
+        string fullName,
+        string? patternKey,
+        AttributeSyntax newAttribute)
+    {
+        bool wasPresent = false;
+
+        var strippedLists = SyntaxFactory.List(
+            method.AttributeLists
+                .Select(al =>
+                {
+                    var filtered = al.Attributes.Where(a =>
+                    {
+                        var n = a.Name.ToString();
+                        if (n != shortName && n != fullName)
+                            return true; // keep — unrelated attribute
+
+                        if (patternKey == null)
+                        {
+                            wasPresent = true;
+                            return false; // strip all instances
+                        }
+
+                        var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                        var argVal = (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
+                        if (argVal == patternKey)
+                        {
+                            wasPresent = true;
+                            return false; // strip matching pattern
+                        }
+
+                        return true;
+                    }).ToList();
+
+                    if (filtered.Count == al.Attributes.Count) return al;
+                    return filtered.Count == 0 ? null : al.WithAttributes(SyntaxFactory.SeparatedList(filtered));
+                })
+                .Where(al => al != null)
+                .Select(al => al!));
+
+        var updated = method
+            .WithAttributeLists(strippedLists)
+            .AddAttributeLists(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute)));
+
+        return (updated, wasPresent);
     }
 
     // ── PropagateCancellationToken ────────────────────────────────────────────
