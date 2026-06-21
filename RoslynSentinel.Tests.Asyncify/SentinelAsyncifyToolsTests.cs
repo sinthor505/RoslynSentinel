@@ -6,15 +6,15 @@ namespace RoslynSentinel.Tests.Asyncify;
 
 /// <summary>
 /// Tests for SentinelAsyncifyTools public MCP methods:
-///   T1  – ScanMigrationCandidates, no solution → SolutionNotLoaded
-///   T2  – ScanMigrationCandidates, loadList with [MigrationCandidate] → finding returned
-///   T3  – ScanMigrationCandidates, summarize=true → MigrationScanSummary with 5 bucket keys
-///   T4  – ScanMigrationCandidates, minScore above all scores → empty list
+///   T1  – ScanAsyncMigrationCandidates, no solution → SolutionNotLoaded
+///   T2  – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] → finding returned
+///   T3  – ScanAsyncMigrationCandidates, summarize=true → MigrationScanSummary with 5 bucket keys
+///   T4  – ScanAsyncMigrationCandidates, minScore above all scores → empty list
 ///   T5  – GetAsyncMigrationProgress, no solution → SolutionNotLoaded
 ///   T6  – GetAsyncMigrationProgress, solution with async methods → report populated
-///   T7  – FlagMigrationCandidates, no solution → SolutionNotLoaded
+///   T7  – FlagAsyncMigrationCandidates, no solution → SolutionNotLoaded
 ///   T8  – BridgeAsyncMethods, empty targets → 0 attempted, success
-///   T9  – FlagMigrationCandidates, scope=targets, DryRun=true → succeeded
+///   T9  – FlagAsyncMigrationCandidates, scope=targets, DryRun=true → succeeded
 ///   T10 – BridgeAsyncMethods, DryRun=true → all items attempted, none failed
 ///   T11 – AddCancellationToken, DryRun=true → returns without error
 ///   T12 – PropagateCancellationToken, empty targets → 0 attempted, success
@@ -116,13 +116,13 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T1 – ScanMigrationCandidates, no solution → SolutionNotLoaded
+    // T1 – ScanAsyncMigrationCandidates, no solution → SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
-    public async Task T1_ScanMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
+    public async Task T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.ScanMigrationCandidates();
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates();
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -130,15 +130,15 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – ScanMigrationCandidates, loadList with [MigrationCandidate] → finding returned
+    // T2 – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] → finding returned
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T2_ScanMigrationCandidates_LoadListWithAttribute_FindsCandidate()
+    public async Task T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate()
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanMigrationCandidates();
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates();
 
         Assert.That(result.Success, Is.True);
         var findings = result.Data as List<MigrationCandidateFinding>;
@@ -152,15 +152,15 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T3 – ScanMigrationCandidates, summarize=true → MigrationScanSummary, 5 bucket keys
+    // T3 – ScanAsyncMigrationCandidates, summarize=true → MigrationScanSummary, 5 bucket keys
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T3_ScanMigrationCandidates_Summarize_ReturnsMigrationScanSummary()
+    public async Task T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary()
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanMigrationCandidates(summarize: true);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
 
         Assert.That(result.Success, Is.True);
         var summary = result.Data as MigrationScanSummary;
@@ -176,15 +176,15 @@ public class SentinelAsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – ScanMigrationCandidates, minScore above all → empty list
+    // T4 – ScanAsyncMigrationCandidates, minScore above all → empty list
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T4_ScanMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList()
+    public async Task T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList()
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanMigrationCandidates(minScore: 100);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(minScore: 100);
 
         Assert.That(result.Success, Is.True);
         var findings = result.Data as List<MigrationCandidateFinding>;
@@ -232,13 +232,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – FlagMigrationCandidates, no solution → SolutionNotLoaded
+    // T7 – FlagAsyncMigrationCandidates, no solution → SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
-    public async Task T7_FlagMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
+    public async Task T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.FlagMigrationCandidates(
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(
             scope: "targets",
             flagTargets: []);
 
@@ -265,15 +265,15 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T9 – FlagMigrationCandidates, scope=targets, DryRun=true → succeeded
+    // T9 – FlagAsyncMigrationCandidates, scope=targets, DryRun=true → succeeded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T9_FlagMigrationCandidates_DryRunTargets_Succeeds()
+    public async Task T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds()
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.FlagMigrationCandidates(
+        var result = await _asyncifyTools.FlagAsyncMigrationCandidates(
             scope: "targets",
             flagTargets:
             [

@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Shared helpers for computing score summaries over migration candidate collections.
-/// Used by FlagMigrationCandidates, ScanMigrationCandidates, and Asyncify to surface
+/// Used by FlagAsyncMigrationCandidates, ScanAsyncMigrationCandidates, and Asyncify to surface
 /// consistent score distribution data so callers can calibrate scoreThreshold.
 /// </summary>
 public static class CandidateScoreAnalyzer

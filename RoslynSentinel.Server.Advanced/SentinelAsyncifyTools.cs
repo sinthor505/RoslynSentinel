@@ -45,7 +45,7 @@ public class SentinelAsyncifyTools
 
     // ── scan_migration_candidates ─────────────────────────────────────────────
 
-    [McpServerTool(Name = "ScanMigrationCandidates")]
+    [McpServerTool(Name = "ScanAsyncMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
     [Description("""
         Returns [MigrationCandidate]-attributed methods. Entry point for all async-migration workflows.
@@ -72,7 +72,7 @@ public class SentinelAsyncifyTools
         When results exceed the inline threshold, LargeResultInfo is populated — call get_scan_result(scanId)
         to page through results.
         """)]
-    public async Task<ToolResult<object>> ScanMigrationCandidates(
+    public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         string? filePath = null,
         string? projectName = null,
         string? pattern = null,
@@ -344,7 +344,7 @@ public class SentinelAsyncifyTools
 
     // ── flag_migration_candidates ─────────────────────────────────────────────
 
-    [McpServerTool(Name = "FlagMigrationCandidates")]
+    [McpServerTool(Name = "FlagAsyncMigrationCandidates")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
         Step 1 of the manual bridge path — marks methods with [MigrationCandidate] attributes so that
@@ -375,7 +375,7 @@ public class SentinelAsyncifyTools
         BlobName = full per-method detail on disk. Use get_operation_detail(changeId) for details.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
         """)]
-    public async Task<ToolResult<BatchResultSummary>> FlagMigrationCandidates(
+    public async Task<ToolResult<BatchResultSummary>> FlagAsyncMigrationCandidates(
         string scope = "targets",
         List<FlagCandidateTarget>? flagTargets = null,
         string? projectName = null,
@@ -426,7 +426,7 @@ public class SentinelAsyncifyTools
 
     // ── remove_migration_candidates ──────────────────────────────────────────
 
-    [McpServerTool(Name = "RemoveMigrationCandidates")]
+    [McpServerTool(Name = "ClearAsyncMigrationCandidateFlags")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
         Removes [MigrationCandidate] attributes from methods, optionally filtered by pattern.
@@ -443,7 +443,7 @@ public class SentinelAsyncifyTools
 
         Returns BatchResultSummary. Succeeded = attributes removed. BlobName = full per-method detail.
         """)]
-    public async Task<ToolResult<BatchResultSummary>> RemoveMigrationCandidates(
+    public async Task<ToolResult<BatchResultSummary>> ClearAsyncMigrationCandidateFlags(
         string scope = "project",
         string? projectName = null,
         string? filePath = null,
@@ -531,12 +531,12 @@ public class SentinelAsyncifyTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "RemoveMigrationCandidates failed");
+            _logger.LogError(ex, "ClearAsyncMigrationCandidateFlags failed");
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
                 Error = new ResultError(MigrationErrorCode.Exception,
-                              $"RemoveMigrationCandidates failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}")
+                              $"ClearAsyncMigrationCandidateFlags failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}")
             };
         }
     }

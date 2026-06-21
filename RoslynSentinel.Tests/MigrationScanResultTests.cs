@@ -177,7 +177,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true);
 
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
@@ -225,7 +225,7 @@ public class Svc
         // 10 candidates — request page of 3 starting at offset 2.
         SetSource(BuildManyFlaggedMethods(10));
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 3, offset: 2);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 3, offset: 2);
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -251,7 +251,7 @@ public class Svc
         // The server threshold is 256 KB. This must stay inline.
         SetSource(BuildManyFlaggedMethods(55));
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(); // default limit=50, offset=0
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(); // default limit=50, offset=0
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -277,7 +277,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Use a large limit to capture all findings in one page.
-        var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -304,7 +304,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Run the scan to produce the spill file (same as T4).
-        var scanRaw = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
+        var scanRaw = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
         var scanResult = scanRaw.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
@@ -358,13 +358,13 @@ public class Svc
         _workspaceManager.SetTestSolution(solution);
 
         // Query using only the filename (suffix match).
-        var rawSuffix = await _qualityTools.ScanMigrationCandidates(filePath: "Service.cs");
+        var rawSuffix = await _qualityTools.ScanAsyncMigrationCandidates(filePath: "Service.cs");
         var suffixResult = rawSuffix.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(suffixResult?.Success, Is.True, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.Data?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path — should yield the same finding.
-        var rawAbs = await _qualityTools.ScanMigrationCandidates(filePath: AbsPath);
+        var rawAbs = await _qualityTools.ScanAsyncMigrationCandidates(filePath: AbsPath);
         var absResult = rawAbs.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(absResult?.Success, Is.True, "Full absolute filePath should succeed.");
         Assert.That(absResult!.Data?.Count, Is.EqualTo(1));
@@ -390,7 +390,7 @@ public class Svc
 }}
 {AttrStub}", "RealFile.cs");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(filePath: "NonExistent.cs");
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(filePath: "NonExistent.cs");
 
         var result = rawResult.Data as MigrationEnvelope<object>;
         Assert.That(result, Is.Not.Null);
@@ -458,7 +458,7 @@ public class Svc
         sb.AppendLine(AttrStub);
         SetSource(sb.ToString());
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, topN: 5, minScore: 70);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true, topN: 5, minScore: 70);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -495,7 +495,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -599,7 +599,7 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
-    public async Task T16_ScanMigrationCandidates_AllReasonTokensStructured()
+    public async Task T16_ScanAsyncMigrationCandidates_AllReasonTokensStructured()
     {
         // Set up methods with structured Reason strings (as produced by the scoring engine).
         SetSource($@"
@@ -616,7 +616,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates();
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates();
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);
@@ -685,7 +685,7 @@ public class Svc
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(limit: 5000, offset: 0);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
@@ -729,7 +729,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(summarize: true, minScore: 80);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true, minScore: 80);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -781,7 +781,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanMigrationCandidates(minScore: 85, limit: 20);
+        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(minScore: 85, limit: 20);
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);
