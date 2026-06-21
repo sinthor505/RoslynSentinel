@@ -3142,5 +3142,113 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var newRoot2 = root.ReplaceNodes(allReplacements.Keys, (orig, _) => allReplacements[orig]);
         return Task.FromResult((newRoot2.ToFullString(), fileResult));
     }
+
+    // ── Remove migration candidates ──────────────────────────────────────────
+
+    public record RemovedCandidateInfo(FilePath FilePath, string MethodName, string RemovedPattern, int Line);
+
+    public record RemoveMigrationCandidatesEngineResult(
+        Dictionary<FilePath, string> Changes,
+        int TotalRemoved,
+        int FilesModified,
+        IReadOnlyList<RemovedCandidateInfo> Removed);
+
+    /// <summary>
+    /// Strips <c>[MigrationCandidate]</c> attributes from all methods in the solution,
+    /// optionally filtered by project, file, or pattern.
+    /// </summary>
+    /// <param name="pattern">Pattern string to match (e.g. "AsyncBridgeCandidate"). Null removes all patterns.</param>
+    public async Task<RemoveMigrationCandidatesEngineResult> RemoveMigrationCandidatesAsync(
+        string? projectName = null,
+        string? filePath = null,
+        string? pattern = null,
+        bool dryRun = false,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+
+        IEnumerable<Document> documents;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            documents = solution.GetDocumentIdsWithFilePath(filePath)
+                .Select(id => solution.GetDocument(id)!)
+                .Where(d => d != null);
+        }
+        else if (!string.IsNullOrEmpty(projectName))
+        {
+            var proj = solution.Projects.FirstOrDefault(p =>
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            documents = proj?.Documents ?? [];
+        }
+        else
+        {
+            documents = solution.Projects.SelectMany(p => p.Documents);
+        }
+
+        var changes = new Dictionary<FilePath, string>();
+        var removed = new List<RemovedCandidateInfo>();
+
+        foreach (var doc in documents)
+        {
+            if (doc.FilePath == null) continue;
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
+            if (root == null) continue;
+
+            // Collect removal info before rewriting (node identity is stable at this point).
+            foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
+            {
+                foreach (var attr in attrList.Attributes)
+                {
+                    if (!IsMatchingMigrationAttr(attr, pattern)) continue;
+                    var methodName = attrList.Parent switch
+                    {
+                        MethodDeclarationSyntax m => m.Identifier.Text,
+                        _ => attrList.Parent?.Ancestors().OfType<MethodDeclarationSyntax>()
+                                 .FirstOrDefault()?.Identifier.Text ?? "Unknown"
+                    };
+                    var removedPattern = (attr.ArgumentList?.Arguments
+                        .FirstOrDefault(arg => arg.NameEquals == null)?.Expression
+                        as LiteralExpressionSyntax)?.Token.ValueText ?? "";
+                    var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                    removed.Add(new RemovedCandidateInfo(doc.FilePath, methodName, removedPattern, line));
+                }
+            }
+
+            var rewriter = new MigrationCandidateRemover(pattern);
+            var newRoot = rewriter.Visit(root)!;
+
+            if (newRoot != root && !dryRun)
+                changes[(FilePath)doc.FilePath] = newRoot.ToFullString();
+        }
+
+        return new RemoveMigrationCandidatesEngineResult(
+            Changes: changes,
+            TotalRemoved: removed.Count,
+            FilesModified: changes.Count,
+            Removed: removed);
+    }
+
+    private static bool IsMatchingMigrationAttr(AttributeSyntax attr, string? pattern)
+    {
+        var name = attr.Name.ToString();
+        if (name != MigrationCandidateShortName && name != MigrationCandidateFullName)
+            return false;
+        if (pattern == null) return true;
+        var firstArg = attr.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+        return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
+    }
+
+    private sealed class MigrationCandidateRemover(string? pattern) : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
+        {
+            var keep = node.Attributes
+                .Where(a => !IsMatchingMigrationAttr(a, pattern))
+                .ToList();
+            if (keep.Count == node.Attributes.Count) return node;
+            if (keep.Count == 0) return null;
+            return node.WithAttributes(SyntaxFactory.SeparatedList(keep));
+        }
+    }
 }
 

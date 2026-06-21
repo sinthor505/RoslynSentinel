@@ -424,6 +424,123 @@ public class SentinelAsyncifyTools
         }
     }
 
+    // ── remove_migration_candidates ──────────────────────────────────────────
+
+    [McpServerTool(Name = "RemoveMigrationCandidates")]
+    [Produces(DataTag.BatchResultSummary)]
+    [Description("""
+        Removes [MigrationCandidate] attributes from methods, optionally filtered by pattern.
+        Use before forceRescan to get a completely clean slate, or to undo a flagging run.
+        Does NOT delete the MigrationCandidateAttribute.cs helper file — remove that manually
+        if you want to remove all traces.
+
+        scope: "project" (default) or "file".
+        projectName: restrict removal to one project (scope="project"). Null = entire solution.
+        filePath: restrict removal to one file (scope="file").
+        pattern: remove only attributes with this pattern string (e.g. "AsyncBridgeCandidate",
+                 "NeedsManualReview"). Null or omitted = remove all [MigrationCandidate] attributes.
+        dryRun: reports what would be removed without writing files.
+
+        Returns BatchResultSummary. Succeeded = attributes removed. BlobName = full per-method detail.
+        """)]
+    public async Task<ToolResult<BatchResultSummary>> RemoveMigrationCandidates(
+        string scope = "project",
+        string? projectName = null,
+        string? filePath = null,
+        string? pattern = null,
+        bool dryRun = false,
+        Progress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        try
+        {
+            FilePath? resolvedFilePath = null;
+            if (scope == "file")
+            {
+                if (string.IsNullOrEmpty(filePath))
+                    return new ToolResult<BatchResultSummary>
+                    {
+                        Success = false,
+                        Error = new ResultError(MigrationErrorCode.InvalidArgument,
+                                      "scope=\"file\" requires a filePath.")
+                    };
+                resolvedFilePath = FilePath.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+            }
+
+            var engineResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                projectName: scope == "project" ? projectName : null,
+                filePath: resolvedFilePath.HasValue ? (string)resolvedFilePath.Value : null,
+                pattern: pattern,
+                dryRun: dryRun,
+                cancellationToken: cancellationToken);
+
+            if (!dryRun && engineResult.Changes.Count > 0)
+                await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+
+            var items = engineResult.Removed.Select(r => new OperationItemRecord
+            {
+                FilePath = r.FilePath,
+                MethodName = r.MethodName,
+                Outcome = dryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
+                Reason = dryRun ? $"dry_run — would remove [{r.RemovedPattern}]"
+                                : $"removed [{r.RemovedPattern}]",
+            }).ToList();
+
+            _workspaceManager.RecordBatchOutcome(
+                succeeded: dryRun ? 0 : engineResult.TotalRemoved,
+                failed: 0, rolledBack: 0, skipped: dryRun ? engineResult.TotalRemoved : 0);
+
+            var changeId = Guid.NewGuid().ToString("N")[..8];
+            var blobName = await OperationBlobWriter.WriteAsync(
+                "remove_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
+
+            var patternLabel = pattern == null ? "all patterns" : $"pattern={pattern}";
+            var directive = engineResult.TotalRemoved == 0
+                ? $"No [MigrationCandidate] attributes found for {patternLabel}. Nothing was changed."
+                : dryRun
+                    ? $"dry_run: {engineResult.TotalRemoved} attribute(s) would be removed from {engineResult.FilesModified} file(s). Re-run with dryRun=false to apply."
+                    : $"Removed {engineResult.TotalRemoved} [MigrationCandidate] attribute(s) from {engineResult.FilesModified} file(s). " +
+                      $"Run flag_migration_candidates(scope=\"project\", forceRescan=true) to re-score all methods.";
+
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = true,
+                Data = new BatchResultSummary
+                {
+                    BlobName = blobName,
+                    ChangeId = changeId,
+                    Succeeded = dryRun ? 0 : engineResult.TotalRemoved,
+                    Skipped = dryRun ? engineResult.TotalRemoved : 0,
+                    Failed = 0,
+                    Attempted = engineResult.TotalRemoved,
+                    Severity = "ok",
+                    Directive = directive,
+                    BreakerOpen = false,
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "RemoveMigrationCandidates failed");
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              $"RemoveMigrationCandidates failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}")
+            };
+        }
+    }
+
     // ── bridge_async_methods ──────────────────────────────────────────────────
 
     [McpServerTool(Name = "BridgeAsyncMethods")]
