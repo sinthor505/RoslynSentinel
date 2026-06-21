@@ -390,7 +390,14 @@ public class AsyncBatchEngine
 
         if (eligible.Count == 0)
         {
-            return new BridgeBatchResult(applied, skipped, 0, "no_candidates");
+            var allScores = candidates.Select(c => c.Score);
+            return new BridgeBatchResult(applied, skipped, 0, "no_candidates")
+            {
+                MinCandidateScore = CandidateScoreAnalyzer.ComputeMin(allScores),
+                AllCandidatesBuckets = candidates.Count > 0
+                    ? CandidateScoreAnalyzer.ComputeBuckets(allScores)
+                    : null,
+            };
         }
 
         // 2. Process up to maxBridges candidates.

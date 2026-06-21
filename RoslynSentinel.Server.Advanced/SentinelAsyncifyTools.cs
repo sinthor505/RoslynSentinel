@@ -126,23 +126,7 @@ public class SentinelAsyncifyTools
                 ? summaryFindings.Where(f => f.Score >= minScore.Value).ToList()
                 : summaryFindings;
 
-            var buckets = new Dictionary<string, int>
-            {
-                ["<0"] = 0,
-                ["0-25"] = 0,
-                ["26-50"] = 0,
-                ["51-75"] = 0,
-                ["76plus"] = 0,
-            };
-            foreach (var f in aggregateFindings)
-            {
-                var key = f.Score < 0 ? "<0"
-                        : f.Score <= 25 ? "0-25"
-                        : f.Score <= 50 ? "26-50"
-                        : f.Score <= 75 ? "51-75"
-                        : "76plus";
-                buckets[key]++;
-            }
+            var buckets = CandidateScoreAnalyzer.ComputeBuckets(aggregateFindings.Select(f => f.Score));
 
             var byPattern = aggregateFindings
                 .GroupBy(f => f.Pattern)
@@ -189,7 +173,8 @@ public class SentinelAsyncifyTools
                 ByClass: byClass,
                 ByScoreBucket: buckets,
                 TopCandidates: topCandidates,
-                ByClassTruncated: byClassTruncated);
+                ByClassTruncated: byClassTruncated,
+                MinScore: CandidateScoreAnalyzer.ComputeMin(aggregateFindings.Select(f => f.Score)));
 
             // B1 Fix 4: 10 KB overflow safety net — should be unreachable with slim types + caps.
             const int SummaryThresholdBytes = 10 * 1024;
@@ -963,7 +948,7 @@ public class SentinelAsyncifyTools
         {
             _logger.LogError(ex, "PropagateCancellationToken batch unexpected exception");
             throw new InvalidOperationException(
-                $"PropagateCancellationToken failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"PropagateCancellationToken failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
         int succeeded = result.Applied.Count;
@@ -1373,7 +1358,7 @@ public class SentinelAsyncifyTools
         {
             _logger.LogError(ex, "UpliftCallers batch unexpected exception");
             throw new InvalidOperationException(
-                $"UpliftCallers failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"UpliftCallers failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
         int succeeded = result.TotalUplifted;
@@ -1470,6 +1455,7 @@ public class SentinelAsyncifyTools
         var items = new List<OperationItemRecord>();
         var failures = new List<FailureDetail>();
         var changeId = Guid.NewGuid().ToString("N")[..8];
+        int? minCandidateScore = null;
 
         try
         {
@@ -1533,6 +1519,8 @@ public class SentinelAsyncifyTools
                     });
                     skipped++;
                 }
+
+                minCandidateScore = CandidateScoreAnalyzer.ComputeMin(engineResult.Flagged.Select(f => f.Score));
             }
             else
             {
@@ -1613,7 +1601,7 @@ public class SentinelAsyncifyTools
         {
             _logger.LogError(ex, "FlagMigrationCandidates batch unexpected exception");
             throw new InvalidOperationException(
-                $"FlagMigrationCandidates failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"FlagMigrationCandidates failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
@@ -1635,6 +1623,7 @@ public class SentinelAsyncifyTools
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
+            MinCandidateScore = minCandidateScore,
         };
     }
 
@@ -1662,6 +1651,8 @@ public class SentinelAsyncifyTools
         int iterationsUsed = 0;
         bool stoppedEarly = false;
         string stopReason = "";
+        int? bridgeMinScore = null;
+        string bridgeStopReason = "";
 
         void CheckIterations(int phaseItems)
         {
@@ -1841,6 +1832,9 @@ public class SentinelAsyncifyTools
                 input.PropagateCancellationTokens,
                 progress: progress,
                 cancellationToken: innerToken);
+
+            bridgeMinScore = bridgeResult.MinCandidateScore;
+            bridgeStopReason = bridgeResult.StopReason;
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -2027,7 +2021,7 @@ public class SentinelAsyncifyTools
         {
             _logger.LogError(ex, "Asyncify unexpected exception");
             throw new InvalidOperationException(
-                $"Asyncify failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"Asyncify failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
@@ -2035,6 +2029,29 @@ public class SentinelAsyncifyTools
         var blobName2 = await OperationBlobWriter.WriteAsync(
             "asyncify", changeId, items, _workspaceManager.GetSolutionRoot());
         var status2 = _workspaceManager.GetBreakerStatus();
+
+        string directive;
+        if (stoppedEarly)
+        {
+            directive = $"stopped_early — {stopReason}. Phases completed are in blob: {blobName2}.";
+        }
+        else if (succeeded == 0 && !status2.Open && !stoppedEarly
+                 && bridgeStopReason == "no_candidates" && !bridgeMinScore.HasValue)
+        {
+            directive = "No [MigrationCandidate] attributes found in the solution. " +
+                        "Run flag_migration_candidates(scope=\"project\", minScore=50) first to identify " +
+                        "and tag async migration candidates, then re-run asyncify.";
+        }
+        else if (succeeded == 0 && !status2.Open && !stoppedEarly && bridgeMinScore.HasValue)
+        {
+            directive = $"No candidates were within scoreThreshold={input.ScoreThreshold}; " +
+                        $"the lowest-scoring candidate found has score={bridgeMinScore.Value}. " +
+                        $"Re-run with scoreThreshold={bridgeMinScore.Value} (or higher) to include it.";
+        }
+        else
+        {
+            directive = status2.Directive;
+        }
 
         return new BatchResultSummary
         {
@@ -2047,10 +2064,9 @@ public class SentinelAsyncifyTools
             Attempted = succeeded + failed + skipped,
             Failures = failures,
             Severity = status2.Severity,
-            Directive = stoppedEarly
-                ? $"stopped_early — {stopReason}. Phases completed are in blob: {blobName2}."
-                : status2.Directive,
+            Directive = directive,
             BreakerOpen = status2.Open,
+            MinCandidateScore = bridgeMinScore,
         };
     }
 
@@ -2079,7 +2095,7 @@ public class SentinelAsyncifyTools
         {
             _logger.LogError(ex, "EventHandlersToAsync discovery unexpected exception");
             throw new InvalidOperationException(
-                $"EventHandlersToAsync discovery failed: {ex.GetType().Name}: {ex.Message}", ex);
+                $"EventHandlersToAsync discovery failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
         int overLimit = Math.Max(0, candidates.Count - maxItems);
@@ -2363,7 +2379,7 @@ public class SentinelAsyncifyTools
             }
             catch (Exception ex)
             {
-                var reason = $"apply failed: {ex.GetType().Name}: {ex.Message}";
+                var reason = $"apply failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,

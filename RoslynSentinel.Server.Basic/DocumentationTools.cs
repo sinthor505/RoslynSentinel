@@ -103,7 +103,7 @@ public class DocumentationTools
 
         if (!File.Exists(fullPath))
         {
-            return new DocReadResult { Found = false, Filename = filename };
+            return new DocReadResult { Found = false, Filename = filename, Error = $"File '{filename}' does not exist in the docs directory. Use list_doc_files to see available files." };
         }
 
         return new DocReadResult

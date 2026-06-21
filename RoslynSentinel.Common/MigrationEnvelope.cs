@@ -67,5 +67,10 @@ public record MigrationScanSummary(
     List<ClassCandidateSummarySlim> ByClass,
     Dictionary<string, int> ByScoreBucket,
     List<TopCandidateSummaryEntry>? TopCandidates = null,
-    bool ByClassTruncated = false
+    bool ByClassTruncated = false,
+    /// <summary>
+    /// Minimum score across all scanned candidates.
+    /// Use as the lower bound when setting <c>scoreThreshold</c> in Asyncify.
+    /// </summary>
+    int? MinScore = null
 );

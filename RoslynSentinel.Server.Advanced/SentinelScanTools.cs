@@ -450,10 +450,14 @@ public class SentinelScanTools
                     return new ToolResult<object>() { Success = false, Data = ($"Unknown detector '{detector}'. Call describe_scan_detectors() for the full list.") };
             }
         }
+        catch (ArgumentException aex)
+        {
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, aex.Message) };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Scan ({Detector}) failed", detector);
-            return new ToolResult<object>() { Success = false, Data = ($"Scan ({detector}) failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Scan ({detector}) failed unexpectedly. Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -492,7 +496,7 @@ public class SentinelScanTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "DescribeScanDetectors failed");
-            return Task.FromResult(new ToolResult<object>() { Success = false, Data = $"DescribeScanDetectors failed: {ex.GetType().Name}: {ex.Message}" });
+            return Task.FromResult(new ToolResult<object>() { Success = false, Data = $"DescribeScanDetectors failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}" });
         }
     }
 
@@ -533,16 +537,16 @@ public class SentinelScanTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePath}'", aspect, methodName, filePath);
-            return new ToolResult<object>() { Success = false, Data = ($"AnalyzeMethod failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Data = ($"AnalyzeMethod failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
-    private static string RequireFile(string scope, string? scopeName)
+    private static FilePath RequireFile(string scope, string? scopeName)
     {
         if (scope != "file" || string.IsNullOrEmpty(scopeName))
-        {
-            return ("This detector requires scope='file' with a filePath as scopeName.");
-        }
+            throw new ArgumentException(
+                $"This detector requires scope=\"file\" with a valid filePath as scopeName. " +
+                $"Received scope=\"{scope}\", scopeName={(scopeName == null ? "null" : $"\"{scopeName}\"")}.");
         return scopeName;
     }
 
@@ -901,7 +905,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ScanBreakingChanges failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanBreakingChanges failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -935,7 +939,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ScanDuplicateBlocksInClass failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ScanDuplicateBlocksInClass failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -1056,7 +1060,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }

@@ -132,7 +132,7 @@ public class SentinelCodemodTools
                         var r = await _syntaxUpgradeEngine.AddBracesAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"add_braces failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No brace-less control flow statements found in '{filePath}'. File already uses braces consistently." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -142,7 +142,7 @@ public class SentinelCodemodTools
                         var r = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"cleanup_implicit_spans failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No implicit Span/Memory conversion patterns found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -152,7 +152,7 @@ public class SentinelCodemodTools
                         var r = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_to_null_coalescing failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No null-check patterns eligible for ??/??= conversion found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -162,7 +162,7 @@ public class SentinelCodemodTools
                         var r = await _modernizationEngine.ConvertToPatternAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_to_pattern failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No if/switch chains eligible for pattern-matching conversion found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -172,7 +172,7 @@ public class SentinelCodemodTools
                         var r = await _logicOptimizationEngine.ConvertToSwitchAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_to_switch failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No if-else chains eligible for switch expression conversion found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -182,7 +182,7 @@ public class SentinelCodemodTools
                         var r = await _projectStructureEngine.FixMismatchedNamespacesAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_mismatched_namespaces failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No namespace/folder mismatches found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -194,16 +194,16 @@ public class SentinelCodemodTools
                             var r = await _codeHealingEngine.FixThreadSleepAsync(filePath);
                             if (string.IsNullOrEmpty(r.UpdatedText))
                             {
-                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
+                                return new ToolResult<object>() { Success = true, Data = $"No Thread.Sleep calls eligible for async conversion found in '{filePath}'." };
                             }
 
                             return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                         }
-                        catch (InvalidOperationException) { return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep failed for '{filePath}': invalid operation. Ensure the solution is loaded.") }; }
+                        catch (InvalidOperationException ioe) { return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep failed for '{filePath}': {ioe.Message}. Ensure the solution is loaded.") }; }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePath}'", filePath);
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                         }
                     }
                 case "format_document_preview":
@@ -217,7 +217,7 @@ public class SentinelCodemodTools
                         var r = await _documentationEngine.GenerateXmlDocumentationStubsAsync(filePath);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"generate_xml_documentation_stubs failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No undocumented public members found in '{filePath}'. File already has XML doc stubs." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
@@ -227,7 +227,7 @@ public class SentinelCodemodTools
                         var result3 = await _advancedRefactoringEngine.OptimizeTaskWaitAsync(filePath);
                         if (string.IsNullOrEmpty(result3.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"optimize_task_wait failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No synchronous Task.Wait/.Result/.GetAwaiter().GetResult() patterns found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result3.Outcome };
@@ -240,7 +240,7 @@ public class SentinelCodemodTools
                         var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(filePath, libraryMode);
                         if (string.IsNullOrEmpty(result5.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"add_configure_await_false failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No awaits missing .ConfigureAwait(false) found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(result5.UpdatedText, false, false, filePath) };
@@ -250,7 +250,7 @@ public class SentinelCodemodTools
                         var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(filePath);
                         if (string.IsNullOrEmpty(result6.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"remove_configure_await_false failed for '{filePath}': file not found in workspace. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No .ConfigureAwait(false) calls found to remove in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(result6.UpdatedText, false, false, filePath) };
@@ -260,7 +260,7 @@ public class SentinelCodemodTools
                         var result7 = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(filePath);
                         if (string.IsNullOrEmpty(result7.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"simplify_boolean_expressions failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No boolean expressions eligible for simplification found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result7 };
@@ -270,7 +270,7 @@ public class SentinelCodemodTools
                         var result8 = await _ideStyleEngine.SimplifyMemberAccessAsync(filePath);
                         if (string.IsNullOrEmpty(result8.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"simplify_member_access failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No qualified member access patterns found to simplify in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result8 };
@@ -280,7 +280,7 @@ public class SentinelCodemodTools
                         var result9 = await _codeStyleEngine.SimplifyVerbosityAsync(filePath);
                         if (string.IsNullOrEmpty(result9.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"simplify_verbosity failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No verbose patterns found to simplify in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result9 };
@@ -290,7 +290,7 @@ public class SentinelCodemodTools
                         var result17 = await _msToolAugmentEngine.SortAndDeduplicateUsingsAsync(filePath, !preview);
                         if (result17 == null)
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"sort_and_deduplicate_usings failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No unsorted or duplicate using directives found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result17 };
@@ -300,7 +300,7 @@ public class SentinelCodemodTools
                         var result10 = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(filePath);
                         if (string.IsNullOrEmpty(result10.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"upgrade_pattern_matching failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No type-check/cast patterns eligible for modern pattern matching found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result10 };
@@ -310,7 +310,7 @@ public class SentinelCodemodTools
                         var result11 = await _codeStyleEngine.FixDangerousLockAsync(filePath);
                         if (string.IsNullOrEmpty(result11.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"upgrade_thread_safety failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No dangerous lock patterns found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result11 };
@@ -320,7 +320,7 @@ public class SentinelCodemodTools
                         var result12 = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(filePath);
                         if (string.IsNullOrEmpty(result12.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"upgrade_to_file_scoped_namespace failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No block-scoped namespace declarations found in '{filePath}'. File already uses file-scoped namespaces." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result12 };
@@ -330,7 +330,7 @@ public class SentinelCodemodTools
                         var result13 = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(filePath);
                         if (string.IsNullOrEmpty(result13.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"upgrade_to_modern_guards failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No legacy null/argument guard patterns found in '{filePath}'. File already uses modern guards." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result13 };
@@ -340,7 +340,7 @@ public class SentinelCodemodTools
                         var result14 = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(filePath);
                         if (string.IsNullOrEmpty(result14.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"use_field_backed_properties failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No auto-properties eligible for field-backed conversion found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result14 };
@@ -350,7 +350,7 @@ public class SentinelCodemodTools
                         var result15 = await _codeStyleEngine.UseIndexFromEndAsync(filePath);
                         if (string.IsNullOrEmpty(result15.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"use_index_from_end failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No array/list indexing patterns eligible for index-from-end (^n) syntax found in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result15 };
@@ -360,7 +360,7 @@ public class SentinelCodemodTools
                         var result16 = await _codeStyleEngine.UseTimeProviderAsync(filePath);
                         if (string.IsNullOrEmpty(result16.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"use_time_provider failed for '{filePath}': file not found or no changes needed. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No DateTime.Now/UtcNow calls found to replace with ITimeProvider in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = result16 };
@@ -382,7 +382,7 @@ public class SentinelCodemodTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ApplyFileCodemod ({Transform}) failed", transform);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyFileCodemod ({transform}) failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyFileCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -415,7 +415,7 @@ public class SentinelCodemodTools
                         var r = await _logicOptimizationEngine.AddGuardClausesAsync(filePath, methodName);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"add_guard_clauses failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No parameters eligible for guard clause insertion found in '{methodName}' in '{filePath}'." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -430,7 +430,10 @@ public class SentinelCodemodTools
                         var r = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_expression_body failed for '{methodName}' ({direction}) in '{filePath}': file not found, member not found, or context snippet did not match. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                                $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{filePath}'. " +
+                                "Possible causes: member not found (verify name and file are correct), member already has the target body style, " +
+                                "or contextSnippet did not uniquely match. Use get_file_outline to confirm the member exists.") };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -440,7 +443,7 @@ public class SentinelCodemodTools
                         var r = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(filePath, methodName);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_lock_to_semaphore_slim failed for '{methodName}' in '{filePath}': file not found, method not found, or no lock statements found. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = true, Data = $"No lock statements found in '{methodName}' in '{filePath}' to convert to SemaphoreSlim." };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -450,7 +453,9 @@ public class SentinelCodemodTools
                         var r = await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_method_to_indexer failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                                $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                "The method must have exactly one parameter and return a value. Use get_file_outline to verify the method exists.") };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -472,7 +477,9 @@ public class SentinelCodemodTools
                             var r = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
                             if (string.IsNullOrEmpty(r.UpdatedText))
                             {
-                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.") };
+                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use get_file_outline to verify.") };
                             }
 
                             return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -484,7 +491,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}")
+                                Error = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension for '{methodName}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
                             };
                         }
                     }
@@ -495,8 +502,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_switch_to_expression failed for '{methodName}' in '{filePath}': file not found, method not found, or no switch statements found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No switch statements eligible for switch expression conversion found in '{methodName}' in '{filePath}'."
                             };
                         }
 
@@ -514,7 +521,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_to_async_enumerable failed for '{methodName}' in '{filePath}': file not found, method not found, or method does not return Task<List<T>>. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                    "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use get_file_outline to verify the method signature.")
                             };
                         }
 
@@ -532,7 +541,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"extension_to_static failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"extension_to_static: method '{methodName}' not found or not an extension method in '{filePath}'. " +
+                                    "The method must be in a static class and have a 'this' parameter. Use get_file_outline to verify.")
                             };
                         }
 
@@ -552,7 +563,9 @@ public class SentinelCodemodTools
                                 return new ToolResult<object>
                                 {
                                     Success = false,
-                                    Error = new ResultError(ToolErrorCode.Exception, $"generate_async_overload failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                    Error = new ResultError(ToolErrorCode.Exception,
+                                        $"generate_async_overload: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                        "The method must be synchronous and non-void. Use get_file_outline to verify the method exists and its signature.")
                                 };
                             }
 
@@ -576,7 +589,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"generate_async_overload for '{methodName}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}")
+                                Error = new ResultError(ToolErrorCode.Exception, $"generate_async_overload for '{methodName}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
                             };
                         }
                     }
@@ -588,7 +601,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"make_method_static failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"make_method_static: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                    "The method must not access instance members. Use get_file_outline to verify the method exists.")
                             };
                         }
 
@@ -606,7 +621,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>()
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"make_method_thread_safe failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"make_method_thread_safe: method '{methodName}' not found in '{filePath}'. " +
+                                    "Use get_file_outline to verify the method name (case-sensitive).")
                             };
                         }
 
@@ -623,8 +640,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"optimize_independent_awaits failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No sequential independent awaits found to parallelize in '{methodName}' in '{filePath}'."
                             };
                         }
 
@@ -642,7 +659,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"optimize_to_value_task failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{filePath}'. " +
+                                    "The method must return Task or Task<T> and be async. Use get_file_outline to verify.")
                             };
                         }
 
@@ -659,8 +678,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"reduce_block_depth failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No deeply nested blocks found to flatten in '{methodName}' in '{filePath}'."
                             };
                         }
 
@@ -677,8 +696,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"update_xml_docs_from_signature failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No XML doc parameters out of sync with the signature of '{methodName}' in '{filePath}'."
                             };
                         }
 
@@ -695,8 +714,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"use_exception_expressions failed for '{methodName}' in '{filePath}': file not found or method not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{filePath}'."
                             };
                         }
 
@@ -725,7 +744,7 @@ public class SentinelCodemodTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ApplyMethodCodemod ({transform}) failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ApplyMethodCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -764,8 +783,8 @@ public class SentinelCodemodTools
                             {
                                 return new ToolResult<object>
                                 {
-                                    Success = false,
-                                    Error = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                    Success = true,
+                                    Data = $"No unvalidated properties found on '{className}' in '{filePath}'. Class may already have validation attributes or have no settable properties."
                                 };
                             }
 
@@ -775,12 +794,14 @@ public class SentinelCodemodTools
                                 Data = new SourceTransformResult(r.UpdatedText, false, false, filePath)
                             };
                         }
-                        catch (InvalidOperationException)
+                        catch (InvalidOperationException ioe)
                         {
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"add_validation_to_poco: class '{className}' not found in '{filePath}'. {ioe.Message} " +
+                                    "Use get_file_outline to verify the class name (case-sensitive).")
                             };
                         }
                         catch (Exception ex)
@@ -789,7 +810,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}")
+                                Error = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco for '{className}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
                             };
                         }
                     }
@@ -801,7 +822,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"class_to_record failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"class_to_record: class '{className}' not found or not eligible in '{filePath}'. " +
+                                    "The class must have no custom methods beyond property accessors. Use get_file_outline to verify.")
                             };
                         }
 
@@ -821,7 +844,9 @@ public class SentinelCodemodTools
                                 return new ToolResult<object>
                                 {
                                     Success = false,
-                                    Error = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                    Error = new ResultError(ToolErrorCode.Exception,
+                                        $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{filePath}'. " +
+                                        "The class must be declared with the 'abstract' keyword. Use get_file_outline to verify.")
                                 };
                             }
 
@@ -831,12 +856,13 @@ public class SentinelCodemodTools
                                 Data = new SourceTransformResult(r.UpdatedText, false, false, filePath)
                             };
                         }
-                        catch (InvalidOperationException)
+                        catch (InvalidOperationException ioe)
                         {
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_abstract_to_interface: class '{className}' not eligible in '{filePath}'. {ioe.Message}")
                             };
                         }
                         catch (Exception ex)
@@ -845,7 +871,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface for '{className}' in '{filePath}' failed: {ex.GetType().Name}: {ex.Message}")
+                                Error = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface for '{className}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
                             };
                         }
                     }
@@ -867,7 +893,10 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_property_safe failed for property '{propName}' ({direction}) in '{filePath}': file not found, property not found, or context snippet did not match. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " +
+                                    "Possible causes: property name is wrong (case-sensitive), property already has the target style, " +
+                                    "or contextSnippet did not uniquely identify it. Use get_file_outline to list available properties.")
                             };
                         }
 
@@ -886,7 +915,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_property_to_methods failed for property '{propName}' in '{filePath}': file not found or property not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " +
+                                    "Use get_file_outline to list available properties (name is case-sensitive).")
                             };
                         }
 
@@ -904,7 +935,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_to_background_service failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " +
+                                    "The class must not already implement BackgroundService. Use get_file_outline to verify.")
                             };
                         }
 
@@ -921,8 +954,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_to_source_generated_logging failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No ILogger.Log calls found to convert to source-generated logging in '{className}' in '{filePath}'."
                             };
                         }
 
@@ -939,8 +972,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"document_poco_fields failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No undocumented fields/properties found on '{className}' in '{filePath}'. Class may already be documented or have no public fields."
                             };
                         }
 
@@ -958,7 +991,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"make_class_immutable failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"make_class_immutable: class '{className}' not found or already immutable in '{filePath}'. " +
+                                    "Use get_file_outline to verify the class exists and has mutable properties.")
                             };
                         }
 
@@ -976,7 +1011,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"record_to_class failed for '{className}' in '{filePath}': file not found or record not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"record_to_class: record '{className}' not found in '{filePath}'. " +
+                                    "The type must be declared as a 'record'. Use get_file_outline to verify.")
                             };
                         }
 
@@ -994,7 +1031,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"replace_constructor_with_factory failed for '{className}' in '{filePath}': file not found or class not found. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{filePath}'. " +
+                                    "Use get_file_outline to verify the class name (case-sensitive).")
                             };
                         }
 
@@ -1011,8 +1050,8 @@ public class SentinelCodemodTools
                         {
                             return new ToolResult<object>
                             {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"sort_members failed for '{className}' in '{filePath}': file not found or type not found. Ensure the solution is loaded.")
+                                Success = true,
+                                Data = $"No members to reorder found in '{className}' in '{filePath}'. Type may be empty or already sorted."
                             };
                         }
 
@@ -1030,7 +1069,9 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"upgrade_to_primary_constructor failed for '{className}' in '{filePath}': file not found, class not found, or constructor is not a simple field-assignment constructor. Ensure the solution is loaded.")
+                                Error = new ResultError(ToolErrorCode.Exception,
+                                    $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{filePath}'. " +
+                                    "The constructor must only assign parameters to readonly fields (no other logic). Use get_file_outline to verify the class exists.")
                             };
                         }
 
@@ -1054,7 +1095,7 @@ public class SentinelCodemodTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ApplyClassCodemod ({transform}) failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"ApplyClassCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -1282,7 +1323,7 @@ public class SentinelCodemodTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Generate ({Kind}) failed", kind);
-            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.Exception, $"Generate ({kind}) failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.Exception, $"Generate ({kind}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 

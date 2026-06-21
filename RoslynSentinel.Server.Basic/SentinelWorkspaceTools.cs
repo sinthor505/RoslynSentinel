@@ -78,7 +78,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Features ({Action}) failed", action);
-            return $"Features failed: {ex.GetType().Name}: {ex.Message}";
+            return $"Features failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
         }
     }
 
@@ -127,7 +127,7 @@ public class SentinelWorkspaceTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List files for project '{projectName}' failed: {ex.GetType().Name}: {ex.Message}") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List files for project '{projectName}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                 }
             }
             if (kind == "dependencies")
@@ -144,7 +144,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "List ({Kind}) failed", kind);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -214,7 +214,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -355,7 +355,7 @@ public class SentinelWorkspaceTools
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                         }
 
                         if (!validation.Success)
@@ -378,7 +378,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ProposedChange validate unexpected exception");
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
                 }
             }
@@ -421,7 +421,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff apply for '{filePath}' failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff apply for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
                 }
                 if (action == "validate")
@@ -435,7 +435,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ProposedChange ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -455,7 +455,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "RetryFailedChanges failed");
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RetryFailedChanges failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RetryFailedChanges failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -495,7 +495,7 @@ public class SentinelWorkspaceTools
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {ex.GetType().Name}: {ex.Message}") };
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
 
                     if (!validation.Success)
@@ -532,7 +532,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "StagedChange ({Action}) failed for '{ChangeId}'", action, changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -677,7 +677,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GetDiagnostics failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GetDiagnostics failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -701,7 +701,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePath}' at {Line}:{Column}", filePath, line, column);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -722,7 +722,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"CreateProject failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"CreateProject failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -744,7 +744,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SplitProjectByFolder failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SplitProjectByFolder failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -846,7 +846,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("GetMethodSourceFailed", $"GetMethodSource failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetMethodSourceFailed", $"GetMethodSource failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -946,7 +946,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetFileOutline failed for '{FilePath}'", filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("GetFileOutlineFailed", $"GetFileOutline failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetFileOutlineFailed", $"GetFileOutline failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1036,7 +1036,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("SearchSolutionTextFailed", $"SearchSolutionText failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("SearchSolutionTextFailed", $"SearchSolutionText failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1128,7 +1128,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("GetOperationDetailFailed", $"GetOperationDetail failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("GetOperationDetailFailed", $"GetOperationDetail failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1201,7 +1201,7 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError("UndoLastApplyFailed", $"UndoLastApply failed: {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError("UndoLastApplyFailed", $"UndoLastApply failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1324,7 +1324,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -1351,7 +1351,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetProjectFrameworkSummary failed: {ex.GetType().Name}: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetProjectFrameworkSummary failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }

@@ -40,6 +40,22 @@ public sealed record BridgeBatchResult : EngineResultBase
         get; init;
     }
 
+    /// <summary>
+    /// Minimum score across all <c>[MigrationCandidate]</c> methods found in the solution,
+    /// regardless of <c>scoreThreshold</c>. Populated when <see cref="StopReason"/> is
+    /// <c>"no_candidates"</c> (i.e., candidates exist but all scored above the threshold).
+    /// Use this to calibrate <c>scoreThreshold</c> in subsequent Asyncify calls.
+    /// </summary>
+    public int? MinCandidateScore { get; init; }
+
+    /// <summary>
+    /// Score bucket breakdown of all candidates found, keyed by the same bucket labels as
+    /// <c>scan_migration_candidates</c>: "&lt;0", "0-25", "26-50", "51-75", "76plus".
+    /// Populated alongside <see cref="MinCandidateScore"/> when <see cref="StopReason"/> is
+    /// <c>"no_candidates"</c>.
+    /// </summary>
+    public Dictionary<string, int>? AllCandidatesBuckets { get; init; }
+
     public BridgeBatchResult(
         List<BridgeAppliedInfo> applied,
         List<BridgeSkippedInfo> skipped,

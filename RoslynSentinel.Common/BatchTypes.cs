@@ -51,6 +51,14 @@ public record BatchResultSummary : EngineResultBase
     {
         get; init;
     }
+    /// <summary>
+    /// Minimum score among all candidates evaluated during this operation.
+    /// Populated by FlagMigrationCandidates (scope="project") and Asyncify.
+    /// Use this to calibrate <c>scoreThreshold</c> on subsequent Asyncify calls:
+    /// set scoreThreshold ≥ MinCandidateScore to include the easiest candidates.
+    /// Null when no candidates were scored or the operation used scope="targets".
+    /// </summary>
+    public int? MinCandidateScore { get; init; }
 }
 
 /// <summary>Per-failure detail included inline in BatchResultSummary (capped at 15).</summary>

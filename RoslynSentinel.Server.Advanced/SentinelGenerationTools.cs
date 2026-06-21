@@ -49,7 +49,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName);
-            return $"GenerateClassesFromJson failed: {ex.GetType().Name}: {ex.Message}";
+            return $"GenerateClassesFromJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
         }
     }
 
@@ -64,14 +64,18 @@ public class SentinelGenerationTools
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
+        var fileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
+        if (fileIds == null || fileIds.Value.Length == 0)
+            return $"GenerateHttpClient: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
+                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
+
         try
         {
             var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return (
-                    $"GenerateHttpClient failed for controller '{controllerName}' in '{filePath}': " +
-                    "file not found in workspace or controller class not found. Ensure the solution is loaded.");
+                return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(filePath)}'. " +
+                       "Verify the class name (case-sensitive). Use get_file_outline to list available classes.";
             }
 
             return result.ToJsonSummary();
@@ -79,7 +83,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath);
-            return $"GenerateHttpClient failed: {ex.GetType().Name}: {ex.Message}";
+            return $"GenerateHttpClient failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }
 
@@ -91,14 +95,24 @@ public class SentinelGenerationTools
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
+        var projectExists = _workspaceManager.CurrentSolution?.Projects
+            .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? false;
+        if (!projectExists)
+        {
+            var loadedProjects = _workspaceManager.CurrentSolution?.Projects
+                .Select(p => p.Name).Take(10).ToList() ?? [];
+            var projectList = loadedProjects.Count > 0 ? string.Join(", ", loadedProjects) : "none";
+            return $"GenerateDefaultConfigJson: project '{projectName}' not found in the loaded solution. " +
+                   $"Loaded projects: {projectList}.";
+        }
+
         try
         {
             var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return (
-                    $"GenerateDefaultConfigJson failed for project '{projectName}': " +
-                    "project not found in workspace or no configuration keys found. Ensure the solution is loaded.");
+                return $"GenerateDefaultConfigJson: no configuration keys found in project '{projectName}'. " +
+                       "The project may not use IConfiguration or config[\"Key\"] patterns.";
             }
 
             return result.UpdatedText;
@@ -106,7 +120,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName);
-            return $"GenerateDefaultConfigJson failed: {ex.GetType().Name}: {ex.Message}";
+            return $"GenerateDefaultConfigJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }
 
@@ -129,14 +143,18 @@ public class SentinelGenerationTools
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
+        var interpFileIds = _workspaceManager.CurrentSolution?.GetDocumentIdsWithFilePath(filePath);
+        if (interpFileIds == null || interpFileIds.Value.Length == 0)
+            return $"InterpolateStringSafe: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
+                   $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
+
         try
         {
             var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return (
-                    $"InterpolateStringSafe failed in '{filePath}': " +
-                    "file not found in workspace, context snippet did not match, or target is not a string.Format() call. Ensure the solution is loaded.");
+                return $"InterpolateStringSafe: context snippet did not match or target is not a string.Format() call in '{Path.GetFileName(filePath)}'. " +
+                       "Verify the snippet is verbatim text from the file and the call uses string.Format(...) (not interpolation or concatenation already).";
             }
 
             return result.ToJsonSummary();
@@ -144,7 +162,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath);
-            return $"InterpolateStringSafe failed: {ex.GetType().Name}: {ex.Message}";
+            return $"InterpolateStringSafe failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }
 
