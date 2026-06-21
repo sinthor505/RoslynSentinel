@@ -1653,6 +1653,8 @@ public class SentinelAsyncifyTools
         string stopReason = "";
         int? bridgeMinScore = null;
         string bridgeStopReason = "";
+        int flagPhaseScanned = 0;
+        int flagPhaseNewFlags = 0;
 
         void CheckIterations(int phaseItems)
         {
@@ -1672,6 +1674,9 @@ public class SentinelAsyncifyTools
                 var flagResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
                     input.ProjectName, "AsyncBridgeCandidate", input.MinScore,
                     input.DryRun, forceRescan: false);
+
+                flagPhaseNewFlags = flagResult.Flagged.Count;
+                flagPhaseScanned = flagResult.Flagged.Count + flagResult.Skipped.Count + flagResult.AlreadyFlagged.Count;
 
                 if (!input.DryRun && flagResult.Changes.Count > 0)
                 {
@@ -2038,9 +2043,19 @@ public class SentinelAsyncifyTools
         else if (succeeded == 0 && !status2.Open && !stoppedEarly
                  && bridgeStopReason == "no_candidates" && !bridgeMinScore.HasValue)
         {
-            directive = "No [MigrationCandidate] attributes found in the solution. " +
-                        "Run flag_migration_candidates(scope=\"project\", minScore=50) first to identify " +
-                        "and tag async migration candidates, then re-run asyncify.";
+            if (flagPhaseScanned > 0 && flagPhaseNewFlags == 0)
+            {
+                directive = $"Phase 1 (flag) scanned {flagPhaseScanned} methods but none qualified for async bridging " +
+                            $"— all scored below minScore={input.MinScore} or were already marked for manual review. " +
+                            $"Re-run Asyncify with a lower minScore (e.g., minScore=25), or run " +
+                            $"flag_migration_candidates(scope=\"project\", minScore=25) first to review the candidate pool.";
+            }
+            else
+            {
+                directive = "No [MigrationCandidate] attributes found in the solution. " +
+                            "Run flag_migration_candidates(scope=\"project\", minScore=50) first to identify " +
+                            "and tag async migration candidates, then re-run asyncify.";
+            }
         }
         else if (succeeded == 0 && !status2.Open && !stoppedEarly && bridgeMinScore.HasValue)
         {
