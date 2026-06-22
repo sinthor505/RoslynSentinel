@@ -671,6 +671,10 @@ public class AsyncOptimizationEngine
             rewrittenMethod = (MethodDeclarationSyntax)rewriter.Visit(rewrittenMethod)!;
         }
 
+        // Strip all [MigrationCandidate] attributes — the handler is now converted and no
+        // longer needs any migration marker. Leaving them causes stale-flag failures on re-runs.
+        rewrittenMethod = StripMigrationCandidateAttributes(rewrittenMethod);
+
         var newRoot2 = root.ReplaceNode(methodNode, rewrittenMethod);
         return new DocumentEditResult
         {
@@ -678,6 +682,26 @@ public class AsyncOptimizationEngine
             UpdatedText = newRoot2.NormalizeWhitespace().ToFullString(),
             FilePath = filePath,
         };
+    }
+
+    private static MethodDeclarationSyntax StripMigrationCandidateAttributes(MethodDeclarationSyntax method)
+    {
+        var stripped = SyntaxFactory.List(
+            method.AttributeLists
+                .Select(al =>
+                {
+                    var kept = al.Attributes
+                        .Where(a => a.Name.ToString() != MigrationCandidateShortName &&
+                                    a.Name.ToString() != MigrationCandidateFullName)
+                        .ToList();
+                    if (kept.Count == al.Attributes.Count) return al;
+                    return kept.Count == 0
+                        ? null
+                        : al.WithAttributes(SyntaxFactory.SeparatedList(kept));
+                })
+                .Where(al => al != null)
+                .Select(al => al!));
+        return method.WithAttributeLists(stripped);
     }
 
     /// <summary>

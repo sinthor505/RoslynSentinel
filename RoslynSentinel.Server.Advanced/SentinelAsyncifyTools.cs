@@ -2163,34 +2163,35 @@ public class SentinelAsyncifyTools
                         });
                         succeeded++;
                     }
-                    catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
+                    catch (Exception ex) when (
+                        ex.Message.Contains("is already async") ||
+                        ex.Message.Contains("does not call any Asyncify-bridge"))
                     {
-                        // Stale AsyncHandlerCandidate flag — the handler was flagged under the old
-                        // "convert all event handlers" approach but doesn't call an Asyncify bridge
-                        // wrapper. Clear it silently so future runs skip it.
+                        // Stale AsyncHandlerCandidate flag: either already converted in a prior run
+                        // or flagged under the old broad approach for non-bridge obsolete calls.
+                        // Just strip the attribute — no NeedsManualReview needed.
                         _logger.LogInformation(
-                            "AsyncifyCore Phase 3b: '{Method}' has no Asyncify bridge call — clearing stale flag",
-                            handler.MethodName);
+                            "AsyncifyCore Phase 3b: '{Method}' stale flag — stripping", handler.MethodName);
                         try
                         {
-                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                                handler.FilePath, handler.MethodName, "NeedsManualReview",
-                                score: 0,
-                                reason: "Stale AsyncHandlerCandidate: handler does not call an Asyncify bridge wrapper",
+                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                                filePath: handler.FilePath.Absolute,
+                                pattern: "AsyncHandlerCandidate",
                                 cancellationToken: innerToken);
-                            await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                            if (removeResult.Changes.Count > 0)
+                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
                         }
-                        catch (Exception flagEx)
+                        catch (Exception removeEx)
                         {
-                            _logger.LogWarning(flagEx,
-                                "Could not clear stale flag for '{Method}'", handler.MethodName);
+                            _logger.LogWarning(removeEx,
+                                "Could not strip stale flag for '{Method}'", handler.MethodName);
                         }
                         items.Add(new OperationItemRecord
                         {
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
                             Outcome = OperationOutcome.Skipped,
-                            Reason = "stale-flag: no Asyncify bridge call",
+                            Reason = "stale-flag: stripped",
                         });
                         skipped++;
                     }
@@ -2201,6 +2202,14 @@ public class SentinelAsyncifyTools
 
                         try
                         {
+                            // Remove AsyncHandlerCandidate first so it doesn't stack with NeedsManualReview.
+                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                                filePath: handler.FilePath.Absolute,
+                                pattern: "AsyncHandlerCandidate",
+                                cancellationToken: innerToken);
+                            if (removeResult.Changes.Count > 0)
+                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+
                             var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                                 handler.FilePath, handler.MethodName, "NeedsManualReview",
                                 score: 0,
