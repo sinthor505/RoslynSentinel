@@ -1101,6 +1101,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed + skipped,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -1136,7 +1138,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                 };
                 items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = fd.Reason });
-                if (failures.Count < 15) { failures.Add(fd); }
+                if (failures.Count < 10) { failures.Add(fd); }
                 failed++;
                 continue;
             }
@@ -1256,7 +1258,7 @@ public class SentinelAsyncifyTools
                             Outcome = OperationOutcome.Failed,
                             Reason = reason,
                         });
-                        if (failures.Count < 15)
+                        if (failures.Count < 10)
                         {
                             failures.Add(new FailureDetail
                             {
@@ -1292,6 +1294,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -1347,7 +1351,7 @@ public class SentinelAsyncifyTools
                 {
                     var reason = updatedSource;
                     items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
-                    if (failures.Count < 15)
+                    if (failures.Count < 10)
                     {
                         failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
                     }
@@ -1388,7 +1392,7 @@ public class SentinelAsyncifyTools
             {
                 var reason = ex.Message;
                 items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
                 }
@@ -1430,6 +1434,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed + skipped,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -1534,6 +1540,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -1677,7 +1685,7 @@ public class SentinelAsyncifyTools
                         Outcome = OperationOutcome.Failed,
                         Reason = err,
                     });
-                    if (failures.Count < 15)
+                    if (failures.Count < 10)
                     {
                         failures.Add(new FailureDetail
                         {
@@ -1730,6 +1738,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed + skipped,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -1911,7 +1921,7 @@ public class SentinelAsyncifyTools
                             Outcome = OperationOutcome.Failed,
                             Reason = $"phase:flag — {err}",
                         });
-                        if (failures.Count < 15)
+                        if (failures.Count < 10)
                         {
                             failures.Add(new FailureDetail
                             {
@@ -1986,7 +1996,7 @@ public class SentinelAsyncifyTools
                 }
                 else
                 {
-                    if (failures.Count < 15)
+                    if (failures.Count < 10)
                     {
                         failures.Add(new FailureDetail
                         {
@@ -2058,7 +2068,7 @@ public class SentinelAsyncifyTools
                                 Outcome = OperationOutcome.Failed,
                                 Reason = $"phase:uplift — {s.Reason}",
                             });
-                            if (failures.Count < 15)
+                            if (failures.Count < 10)
                             {
                                 failures.Add(new FailureDetail
                                 {
@@ -2219,7 +2229,7 @@ public class SentinelAsyncifyTools
                             Outcome = OperationOutcome.Failed,
                             Reason = ex.Message,
                         });
-                        if (failures.Count < 15)
+                        if (failures.Count < 10)
                         {
                             failures.Add(new FailureDetail
                             {
@@ -2363,6 +2373,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed + skipped,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status2.Severity,
             Directive = directive,
             BreakerOpen = status2.Open,
@@ -2474,7 +2486,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2508,6 +2520,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed + overLimit,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,
@@ -2542,7 +2556,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2566,7 +2580,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2602,7 +2616,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2629,7 +2643,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2687,7 +2701,7 @@ public class SentinelAsyncifyTools
                     Outcome = OperationOutcome.Failed,
                     Reason = reason,
                 });
-                if (failures.Count < 15)
+                if (failures.Count < 10)
                 {
                     failures.Add(new FailureDetail
                     {
@@ -2721,6 +2735,8 @@ public class SentinelAsyncifyTools
             RolledBack = 0,
             Attempted = succeeded + failed,
             Failures = failures,
+            FailuresTruncated = failed > 10,
+            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
             Directive = status.Directive,
             BreakerOpen = status.Open,

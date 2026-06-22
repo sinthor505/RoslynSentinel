@@ -42,8 +42,12 @@ public record BatchResultSummary : EngineResultBase
     {
         get; init;
     }
-    /// <summary>Inline failures, capped at 15. Enough to course-correct; not enough to flood.</summary>
+    /// <summary>Inline failures, capped at 10. When Failed>10, this is a sample; check FailuresByReason for the full breakdown.</summary>
     public List<FailureDetail> Failures { get; init; } = new();
+    /// <summary>True when Failed>10 and Failures is a partial sample rather than the full list.</summary>
+    public bool FailuresTruncated { get; init; }
+    /// <summary>Populated when FailuresTruncated=true. Reason→count over the captured sample (first 10 failures).</summary>
+    public Dictionary<string, int>? FailuresByReason { get; init; }
     /// <summary>"ok" | "caution" | "halt" — keyed field, never infer from prose.</summary>
     public string Severity { get; init; } = "ok";
     public string Directive { get; init; } = "";
@@ -62,7 +66,7 @@ public record BatchResultSummary : EngineResultBase
     public int? MinCandidateScore { get; init; }
 }
 
-/// <summary>Per-failure detail included inline in BatchResultSummary (capped at 15).</summary>
+/// <summary>Per-failure detail included inline in BatchResultSummary (capped at 10 when Failed>10).</summary>
 public class FailureDetail
 {
     public string FilePath { get; set; } = "";
