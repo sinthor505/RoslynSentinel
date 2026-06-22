@@ -223,12 +223,12 @@ public class SentinelAdvancedRefactoringTools
     [McpServerTool(Name = "MoveAllTypesToFiles")]
     [Produces(DataTag.Report)]
     [Description("""
-        Moves all secondary types to their own files. scope=file → requires scopeName (file path), returns ChangeId + first-15-line content previews. scope=project → requires scopeName (project name), returns ChangeId + affected file list. scope=solution → scopeName ignored. autoStage=false → returns raw changes dictionary without staging.
+        Moves all secondary types to their own files. scope=file → requires target (file path), returns ChangeId + first-15-line content previews. scope=project → requires target (project name), returns ChangeId + affected file list. scope=solution → target ignored. autoStage=false → returns raw changes dictionary without staging.
         """)]
     public async Task<ToolResult<object>> MoveAllTypesToFiles(
         [ExternalInputRequired(DataTag.Scope)] string scope,
-        string? target = null,
-        bool autoStage = true,
+        [ExternalInputRequired(DataTag.SourceFilepath), ExternalInputRequired(DataTag.ProjectName)] string? target = null,
+        [ToolOption(ToolOptionTag.AutoStage)] bool autoStage = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
