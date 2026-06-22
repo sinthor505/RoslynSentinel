@@ -107,7 +107,7 @@ public class SentinelScanTools
     scope: file | project | solution. scopeName: filePath when scope=file;
     projectName when scope=project; root type name for duplicate_blocks_in_hierarchy.
     File-scope-only detectors require scope=file. unused_references requires scope=project.
-    Call describe_scan_detectors(domain?) for descriptions and scope hints.
+    detectorId values and scope hints: call describe_scan_detectors(domain?) for the full list.
     """)]
     public async Task<ToolResult<object>> RunScanDetector(
         [Consumes(DataTag.DetectorName)] DetectorId detector,
@@ -880,7 +880,7 @@ public class SentinelScanTools
 
     [McpServerTool(Name = "ScanBreakingChanges")]
     [Produces(DataTag.ApiBaseline)]
-    [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. Workflow: (1) call get_public_api_surface with persistBaseline=true to capture baseline, (2) make code changes, (3) call this tool with the baseline list. Scope with projectName/filePath matching step 1.")]
+    [Description("Compares a previously captured API surface baseline against current code and reports breaking changes: removed types, removed/renamed members, signature changes. baseline: the list returned by get_public_api_surface. Scope with projectName/filePath to match the baseline's original scope.")]
     public async Task<ToolResult<object>> ScanBreakingChanges(
        [ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline,
        [Consumes(DataTag.ProjectName)] string? projectName = null,

@@ -112,7 +112,7 @@ public class SentinelCodemodTools
     [McpServerTool(Name = "ApplyFileCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
-        Applies a file-wide code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
+        Applies a file-wide code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_file_codemod") for valid values. libraryMode=true → .ConfigureAwait(false) on all awaits (for add_configure_await_false). preview=true → returns updated content without writing (for format_document_safe / sort_and_deduplicate_usings). Some transforms return type-specific results (SourceTransformResult, UsingsCleanupResult, etc.). Throws InvalidOperationException if file not found or no changes needed.
         """)]
     public async Task<ToolResult<object>> ApplyFileCodemod(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -391,7 +391,7 @@ public class SentinelCodemodTools
     [McpServerTool(Name = "ApplyMethodCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
-        Applies a method-scoped code transformation; most transforms return updated file content — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
+        Applies a method-scoped code transformation; most transforms return updated file content. transform: call describe_advanced_tool_options("apply_method_codemod") for valid values. direction: required for convert_expression_body — "ToExpression" or "ToBlock". lockFieldName names the lock field for make_method_thread_safe (default "_lock"). contextSnippet/lineBefore/lineAfter disambiguate convert_expression_body. Some transforms return type-specific results (SourceTransformResult, OutParamConversionResult). Throws InvalidOperationException if file or method not found.
         """)]
     public async Task<ToolResult<object>> ApplyMethodCodemod(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -754,7 +754,7 @@ public class SentinelCodemodTools
     [McpServerTool(Name = "ApplyClassCodemod")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
-        Applies a class-scoped code transformation; returns updated file content as a string — pass to apply_proposed_changes to write to disk. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
+        Applies a class-scoped code transformation; returns updated file content as a string. transform: call describe_advanced_tool_options("apply_class_codemod") for valid values. direction: required for convert_property_safe — "ToFullProperty" or "ToAutoProperty". contextSnippet/lineBefore/lineAfter disambiguate convert_property_safe. Throws InvalidOperationException if file or class not found.
         """)]
     public async Task<ToolResult<object>> ApplyClassCodemod(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,

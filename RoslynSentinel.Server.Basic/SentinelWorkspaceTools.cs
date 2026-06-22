@@ -57,9 +57,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Queries or updates analysis/refactoring feature flags. action values: list (all features and current status; names/enabled ignored), get (enabled status of specific features by names), update (batch-update via enabled as [{ Key: featureName, Value: bool }] pairs).
-        """)]
+    [Description("Queries or updates feature flags. action: \"list\" (all features) | \"get\" (by names) | \"update\" (batch-update via enabled as [{Key: featureName, Value: bool}] pairs).")]
     public object Features(
         string action,
         List<string>? names = null,
@@ -94,7 +92,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, or dependencies in the loaded solution. kind: projects (all projects), files (all source files in a project, requires projectName), dependencies (NuGet and project references for a project, requires projectName).")]
+    [Description("Lists projects, files, or dependencies. kind: \"projects\" (all projects) | \"files\" (all source files; requires projectName) | \"dependencies\" (NuGet + project refs; requires projectName).")]
     public async Task<ToolResult<object>> ListSolutionItems(
         [ExternalInputRequired(DataTag.Scope)] string kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
@@ -151,13 +149,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ListWorkspaceSolutions")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.SolutionList)]
-    [Description("""
-    Lists all solution files (*.sln, *.slnx) under a given directory.
-    Call this before load_solution when the solution path is not known.
-    Pass the workspace folder path from your workspace_info context.
-    Returns absolute paths suitable for passing directly to load_solution.
-    If HasLoadedSolution is false in get_workspace_health, call this tool first.
-    """)]
+    [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath.")]
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
         string workspacePath,
         Progress<string>? progress = null,
@@ -220,7 +212,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Diagnose")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Checks Roslyn MCP server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Prefer get_workspace_health — this tool has a known false-negative bug where healthy workspaces are reported as unhealthy.")]
+    [Description("Checks server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Known bug: may report healthy workspaces as unhealthy — prefer GetWorkspaceHealth.")]
     public async Task<HealthReport> Diagnose(
         [Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false,
         Progress<string>? progress = null,
@@ -315,9 +307,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ProposedChange")]
     [Produces(DataTag.ChangeId)]
-    [Description("""
-        Applies or validates a proposed change set. changesetFormat=files → supply changes dict (filePath → newContent). changesetFormat=diff → supply filePath + unifiedDiff. action: apply (write to disk) or validate (dry-run compiler diagnostics). validateOnApply=true (default) → runs delta compile before writing; returns validation errors without touching disk if new errors are introduced. Set false only for intentional intermediate-broken-state edits. On successful apply, returns ApplyChangesResult with UndoChangeId — pass to undo_last_apply to revert.
-        """)]
+    [Description("Applies or validates a change set. changesetFormat: \"files\" (changes dict filePath→newContent) | \"diff\" (filepath + unifiedDiff). action: \"apply\" (write to disk) | \"validate\" (dry-run diagnostics). Returns ApplyChangesResult with UndoChangeId on successful apply.")]
     public async Task<ToolResult<object>> ProposedChange(
         [ExternalInputRequired(DataTag.ChangeseFormat)] string changesetFormat,
         [ExternalInputRequired(DataTag.Action)] string action,
@@ -326,7 +316,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        [ToolOption(ToolOptionTag.ValidateOnApply)] bool validateOnApply = true,
+        [ToolOption(ToolOptionTag.ValidateOnApply)] [Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
@@ -441,7 +431,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Retries committing previously failed file changes using server-side cached content — no need to re-send file contents. specificFiles limits the retry to a subset of files. retryCount defaults to 3.")]
+    [Description("Retries failed file writes using server-cached content — no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]
     public async Task<ToolResult<object>> RetryFailedChanges(
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
@@ -461,21 +451,12 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "StagedChange")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Manages a staged change set produced by a refactoring tool.
-        action: apply (write to disk), get (return file contents dict), validate (dry-run compiler diagnostics), discard (remove without applying).
-        changeId: the id returned by the refactoring tool that staged the changes.
-        retryCount: only used for action=apply (default 3).
-        validateOnApply: when true (default), runs a delta compile before writing and returns validation
-        errors without touching disk if new errors are introduced. Set false only for intentional
-        intermediate-broken-state edits that are part of a multi-step refactor.
-        On successful apply, the same changeId can be passed to undo_last_apply to revert.
-        """)]
+    [Description("Manages a staged change set. action: \"apply\" (write to disk) | \"get\" (return file dict) | \"validate\" (dry-run diagnostics) | \"discard\" (remove). retryCount applies to apply only (default 3).")]
     public async Task<ToolResult<object>> StagedChange(
         [Consumes(DataTag.Action, required: true)] string action,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        [ToolOption(ToolOptionTag.ValidateOnApply)] bool validateOnApply = true,
+        [ToolOption(ToolOptionTag.ValidateOnApply)] [Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
@@ -587,14 +568,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Gets compiler diagnostics for a file, project, or the entire solution.
-        scope: file|project|solution.
-        scopeName: filePath when scope=file, projectName when scope=project; ignored for scope=solution.
-        summarize: when true, groups results by diagnostic ID and returns counts instead of raw details.
-        maxDetails: caps the raw detail list (default 50); error/warning counts are always full totals. Only used when summarize=false.
-        topN: max groups to return sorted by count descending (default 20). Only used when summarize=true.
-        """)]
+    [Description("Gets compiler diagnostics. scope: \"file\" (scopeName=filePath) | \"project\" (scopeName=projectName) | \"solution\". summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20).")]
     public async Task<ToolResult<object>> GetDiagnostics(
         [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] string scope,
         string? scopeName = null,
@@ -1297,9 +1271,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
-    [Description("""
-        Targeted workspace health check. Returns: IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false is normal — no solution loaded yet, not an error.
-        """)]
+    [Description("Targeted workspace health check. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error.")]
     // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
     public async Task<ToolResult<object>> GetWorkspaceHealth(
         Progress<string>? progress = null,
@@ -1331,7 +1303,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ListProjectFrameworkTargets")]
     [Produces(DataTag.Report)]
-    [Description("Returns each project's TargetFramework value. Use before check_project_consistency to see the full framework landscape. No parameters.")]
+    [Description("Returns each project's TargetFramework value. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets(
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)

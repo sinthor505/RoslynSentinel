@@ -155,7 +155,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
     [Produces(DataTag.ResultOnly)]
     [Description("""
-        Pre-flight safety check before convert_foreach_linq. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Call describe_advanced_tool_options("analyze_foreach_for_linq_conversion") for full output field reference and safety rules.
+        Pre-flight safety check before convert_foreach_linq. contextSnippet: short foreach snippet (e.g. "foreach (var item in"). lineBefore/lineAfter disambiguate multiple matches. Returns IsSafeToConvert and rejection reasons.
         """)]
     // FIXES MS BUG: the standard tool produces incorrect code when the foreach loop body mutates the collection being iterated (e.g. adding/removing items from a List<T>), which is a common pattern. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect mutations to the collection variable within the loop body, and rejects conversion if any are found.
     public async Task<ToolResult<object>> AnalyzeForeachForLinqConversion(
@@ -197,7 +197,7 @@ public class SentinelQualityTools
     [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
     [Produces(DataTag.Analysis)]
     [Description("""
-        Pre-flight safety check before converting a switch statement to a switch expression. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Call describe_advanced_tool_options("analyze_switch_for_pattern_conversion") for full output field reference.
+        Pre-flight safety check before converting a switch statement to a switch expression. contextSnippet: verbatim substring from the switch keyword line (e.g. "switch (unit)"). lineBefore/lineAfter disambiguate. Returns IsSafeToConvert and rejection reasons.
         """)]
     // FIXES MS BUG: the standard tool silently drops variable assignments in multi-variable cases. This tool uses Roslyn's ControlFlowAnalysis and DataFlowAnalysis to detect all variables assigned within the switch, and rejects conversion if any are assigned in more than one case arm, or if their assigned value is read later in the method (indicating a likely dependency on the variable retaining its value across cases). IsSafeToConvert=true means the standard tool or convert_switch_to_pattern_safe will produce correct output.
     public async Task<ToolResult<object>> AnalyzeSwitchForPatternConversion(

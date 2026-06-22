@@ -157,28 +157,7 @@ public class DocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("""
-        Unified documentation accessor for all project doc files stored under docs/.
-
-        action  : read | write | append | list
-        docType : plan | handoff | completed_work | documentation | state
-
-        Routing table:
-          list   × documentation   — lists all files in docs/ (name is ignored).
-          read   × plan            — reads docs/plans/<name>.
-          write  × plan            — writes docs/plans/<name> with content.
-          read   × handoff         — reads docs/handoffs/<name>.
-          write  × handoff         — writes docs/handoffs/<name> with content.
-          read   × completed_work  — reads docs/completed/<name>.
-          append × completed_work  — appends content to docs/completed/<name> (audit trail, no overwrite).
-          read   × documentation   — reads docs/documentation/<name>.
-          write  × documentation   — writes docs/documentation/<name> with content.
-          read   × state           — reads docs/migration-state.yaml (name is ignored).
-          write  × state           — writes docs/migration-state.yaml with content (name is ignored).
-
-        name    : required for all file-scoped operations except state.
-        content : required for write and append.
-        """)]
+    [Description("Unified accessor for project doc files under docs/. action: \"read\"|\"write\"|\"append\"|\"list\". docType: \"plan\" (docs/plans/), \"handoff\" (docs/handoffs/), \"completed_work\" (docs/completed/; append only), \"documentation\" (docs/documentation/), \"state\" (docs/migration-state.yaml — name ignored). name required for all file-based operations. content required for write/append.")]
     public object ProjectDoc(
         string action,
         string docType,

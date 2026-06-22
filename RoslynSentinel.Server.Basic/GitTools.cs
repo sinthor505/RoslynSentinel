@@ -154,39 +154,28 @@ public class GitTools
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("""
-        Unified git tool. The `operation` parameter must be exactly one of:
-          "status", "log", "diff", "commit", "revert"
+        Unified git tool. operation: "status"|"log"|"diff"|"stage"|"add"|"commit"|"revert"
 
-        There is no "stage", "add", "push", or "checkout" operation.
-        Staging is handled automatically inside "commit" — do not call a separate stage step.
+        OPERATION: "status" — branch name, staged, unstaged, and untracked files. No params.
 
-        OPERATION: "status"
-          Returns branch name, staged changes, unstaged changes, and untracked files.
-          No additional parameters required.
+        OPERATION: "log" — recent commits (hash, short hash, author, ISO date, subject).
+          count: number of commits to return (default 20, max 100).
 
-        OPERATION: "log"
-          Returns recent commit history (hash, short hash, author, ISO date, subject line).
-          - count: how many commits to return (default 20, max 100).
+        OPERATION: "diff" — unified diff.
+          target: "working" (unstaged, default)|"staged"|<commit hash>.
+          paths: optional comma-separated repo-relative paths.
+          maxBytes: byte cap on output (default 65536, max 524288).
 
-        OPERATION: "diff"
-          Returns a unified diff.
-          - target: exactly "working" (unstaged changes, default), "staged" (staged changes),
-            or a commit hash string (shows what that commit changed). No other values.
-          - paths: optional comma-separated repo-relative file paths to narrow the diff.
-          - maxBytes: byte limit on output (default 65536, max 524288).
+        OPERATION: "stage" (also: "add") — stages files, returns status. Does not commit.
+          stageAll: true → git add -A (all changes including new/untracked files). Default false.
+          files: comma-separated repo-relative paths. Omit to stage tracked changes (git add -u).
 
-        OPERATION: "commit"
-          Stages files then creates a commit. Do NOT call a separate staging operation first.
-          - message: required. The commit message string.
-          - files: optional comma-separated repo-relative paths to stage. If omitted, all
-            tracked modifications and deletions are staged (equivalent to git add -u).
-            Untracked new files are never staged automatically — include them in `files`.
+        OPERATION: "commit" — stages files then creates a commit.
+          message: required. stageAll and files behave the same as in "stage".
 
-        OPERATION: "revert"
-          Creates a new commit that undoes a previous commit. Non-destructive.
-          - commitHash: required. Full or short commit hash to revert (obtain from "log").
-          - noCommit: when true, stages the revert changes without committing so you can
-            inspect before finalising with "commit". Default false.
+        OPERATION: "revert" — creates an inverse commit. Non-destructive.
+          commitHash: required (full or short hash, from "log").
+          noCommit: true → stage the revert without committing; call "commit" to finalise.
         """)]
     public async Task<object> Git(
         string operation,
@@ -198,6 +187,7 @@ public class GitTools
         int maxBytes = 65536,
         // commit
         string? message = null,
+        bool stageAll = false,
         string? files = null,
         // revert
         string? commitHash = null,
@@ -212,12 +202,13 @@ public class GitTools
 
         return operation switch
         {
-            "status" => await StatusAsync(gitRoot, ct),
-            "log"    => await LogAsync(gitRoot, count, ct),
-            "diff"   => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
-            "commit" => await CommitAsync(gitRoot, message, files, ct),
-            "revert" => await RevertAsync(gitRoot, commitHash, noCommit, ct),
-            _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'. Valid: status, log, diff, commit, revert." }
+            "status"        => await StatusAsync(gitRoot, ct),
+            "log"           => await LogAsync(gitRoot, count, ct),
+            "diff"          => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
+            "stage" or "add" => await StageAsync(gitRoot, stageAll, files, ct),
+            "commit"        => await CommitAsync(gitRoot, message, stageAll, files, ct),
+            "revert"        => await RevertAsync(gitRoot, commitHash, noCommit, ct),
+            _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'. Valid: status, log, diff, stage, add, commit, revert." }
         };
     }
 
@@ -361,19 +352,16 @@ public class GitTools
         }
     }
 
-    private async Task<GitCommitResult> CommitAsync(
-        string gitRoot, string? message, string? files, CancellationToken ct)
+    private async Task<GitStatusResult> StageAsync(
+        string gitRoot, bool stageAll, string? files, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(message))
-            return new GitCommitResult { Success = false, Error = "message is required for operation=commit." };
-
         try
         {
             string[] stageArgs;
-            if (string.IsNullOrWhiteSpace(files))
-            {
+            if (stageAll)
+                stageArgs = ["add", "-A"];
+            else if (string.IsNullOrWhiteSpace(files))
                 stageArgs = ["add", "-u"];
-            }
             else
             {
                 var filePaths = files.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -382,7 +370,28 @@ public class GitTools
 
             var (stageExit, _, stageErr) = await RunGitAsync(gitRoot, stageArgs, ct);
             if (stageExit != 0)
-                return new GitCommitResult { Success = false, Error = $"git add failed: {stageErr.Trim()}" };
+                return new GitStatusResult { Success = false, Error = $"git add failed: {stageErr.Trim()}" };
+
+            return await StatusAsync(gitRoot, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Git stage failed");
+            return new GitStatusResult { Success = false, Error = $"Git stage failed: {ex.Message}" };
+        }
+    }
+
+    private async Task<GitCommitResult> CommitAsync(
+        string gitRoot, string? message, bool stageAll, string? files, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return new GitCommitResult { Success = false, Error = "message is required for operation=commit." };
+
+        try
+        {
+            var stageResult = await StageAsync(gitRoot, stageAll, files, ct);
+            if (!stageResult.Success)
+                return new GitCommitResult { Success = false, Error = stageResult.Error };
 
             var (commitExit, _, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], ct);
             if (commitExit != 0)

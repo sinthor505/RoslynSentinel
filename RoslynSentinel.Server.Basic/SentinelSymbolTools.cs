@@ -73,27 +73,10 @@ public class SentinelSymbolTools
     [Produces(DataTag.SymbolId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
-    [Description("""
-        Locates all declaration sites for a symbol by name.
-        Returns a SymbolHandle that can be passed directly to inspect_symbol, find_references, get_call_graph, rename_symbol, and all other
-        SymbolHandle-gated tools, eliminating the need for search_solution_text as a bootstrap step.
-
-        symbolName: simple, partial, FQN, or fully-qualified name (e.g. "MySymbol" or "MyType.MySymbol" or "MyNamespace.MyType.MySymbol").
-        symbolKind: optional filter — "type", "method", "property", "field", "event", or "any" (default).
-        containingType: optional filter for member symbols within a type (e.g. "MyType").
-        containingNamespace: optional filter for symbols within a specific namespace (e.g. "MyNamespace").
-        projectName: optional — restricts search to a single project.
-        filepath: optional - restricts search to a single file. Must be an absolute path or relative to the solution root.
-        exactMatch: true (default) for exact name match; false for prefix/contains search (discovery mode).
-
-        Filtering by Type or Namespace is recommended to disambiguate common symbol names.
-
-        When multiple results are returned (overloads, partial classes), inspect Signature and
-        ContainingType to identify the target, then pass the chosen SymbolHandle to the next tool call.
-        """)]
+    [Description("Locates declaration sites for a symbol by name. Returns SymbolHandles containing projectName, docCommentId, and filePath. symbolKind: \"type\"|\"method\"|\"property\"|\"field\"|\"event\"|\"any\" (default). exactMatch=false enables prefix/contains search. Filter by containingType or containingNamespace to disambiguate common names.")]
     public async Task<ToolResult<object>> LocateSymbol(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
-        [ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
+        [Description(ToolParams.SymbolKindFilter)][ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
@@ -138,13 +121,13 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.SymbolId)]
-    [Description("Inspects a symbol in depth. aspect: info (type, searchKind, accessibility, attributes, documentation → SymbolHoverInfo) or blastRadius (all call sites and affected projects if symbol changes → ImpactReport). contextSnippet: verbatim substring identifying the symbol. lineBefore/lineAfter disambiguate. Use locate_symbol first if the filepath and contextSnippet are unknown.")]
+    [Description("Inspects a symbol in depth. aspect: \"info\" (type, kind, accessibility, attributes, documentation) | \"blastRadius\" (all call sites and affected projects).")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [ToolOption(ToolOptionTag.Aspect)] string aspect,
-        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
@@ -194,21 +177,7 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "FindUsages")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Queries symbol relationships by name. Use locate_symbol instead when you want to find
-        where a symbol is declared and get its file path.
-
-        searchKind values and what they return:
-          implementorsOf     — all classes/structs implementing a named interface or deriving from a class
-          attributeUsages    — all sites where a named attribute is applied
-          objectCreations    — all instantiation sites for a named type (new T(...))
-          extensionsFor      — all extension methods defined for a named type
-          typesWithAttribute — all types decorated with a named attribute (syntax-level; faster than attributeUsages)
-          methodsByReturnType — all methods whose return type matches the given name
-
-        projectName/filePath narrow scope where supported.
-        sortByFrequency=true ranks by frequency (supported for objectCreations).
-        """)]
+    [Description("Queries symbol relationships by name. searchKind: \"implementorsOf\"|\"attributeUsages\"|\"objectCreations\"|\"extensionsFor\"|\"typesWithAttribute\"|\"methodsByReturnType\". projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only).")]
     public async Task<ToolResult<object>> FindUsages(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [ExternalInputRequired(DataTag.SymbolKind)] string searchKind,
@@ -327,13 +296,13 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
-    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.")]
+    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName)] string symbolName,
-        [Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
-        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
@@ -361,24 +330,14 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
-    [Description("""
-        Finds all call sites or implementations for a symbol.
-        kind: callers (→ List<CallerInfo>) or implementations (→ List<ImplementationInfo>).
-
-        filePath is optional. When omitted, the symbol is resolved by name across the solution —
-        use this when you don't yet have the file path (e.g. before calling locate_symbol).
-        Supply filePath to pin resolution to a specific declaring file (required when symbolName
-        is ambiguous across multiple files).
-
-        contextSnippet disambiguates overloads; lineBefore/lineAfter provide further disambiguation.
-        """)]
+    [Description("Finds all call sites or implementations for a symbol. kind: \"callers\"|\"implementations\". filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files.")]
     public async Task<ToolResult<object>> FindReferences(
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Consumes(DataTag.SymbolKind)] string kind,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
-        [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
-        [ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-        [ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {

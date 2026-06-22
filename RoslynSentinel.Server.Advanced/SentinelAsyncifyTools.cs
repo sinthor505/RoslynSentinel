@@ -50,12 +50,7 @@ public class SentinelAsyncifyTools
     [Description("""
         Returns [MigrationCandidate]-attributed methods. Entry point for all async-migration workflows.
 
-        pattern — valid values:
-          AsyncBridgeCandidate     — sync wrapper suitable for bridge conversion (main path)
-          HandlerExtractCandidate  — code block to extract into a separate handler method
-          HandlerToAsyncCandidate  — handler method that should be converted to async
-          AsyncCallerUpliftCandidate — sync caller of an already-bridged async method
-          null = all patterns.
+        pattern: "AsyncBridgeCandidate"|"HandlerExtractCandidate"|"HandlerToAsyncCandidate"|"AsyncCallerUpliftCandidate"|null (default, all patterns).
 
         summarize=true → guaranteed ≤2KB dashboard.
           MigrationScanSummary fields: ByPattern (count per pattern), ByClass (ClassName, ProjectName,
@@ -65,12 +60,7 @@ public class SentinelAsyncifyTools
 
         summarize=false + limit/offset → full paged List<MigrationCandidateFinding>. minScore filters in
         both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice.
-
-        To use scan results with flag_migration_candidates(scope: "targets"): map each Candidate.FilePath
-        and Candidate.MethodName to a FlagCandidateTarget entry.
-
-        When results exceed the inline threshold, LargeResultInfo is populated — call get_scan_result(scanId)
-        to page through results.
+        When results exceed the inline threshold, LargeResultInfo is populated with a scanId for paging.
         """)]
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         string? filePath = null,
