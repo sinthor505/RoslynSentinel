@@ -1826,6 +1826,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
+                    // Methods flagged NeedsManualReview are excluded from all automatic processing.
+                    bool isBlockedByManualReview = method.AttributeLists
+                        .SelectMany(al => al.Attributes)
+                        .Any(a =>
+                        {
+                            var n = a.Name.ToString();
+                            if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return false;
+                            var firstPositional = a.ArgumentList?.Arguments
+                                .FirstOrDefault(arg => arg.NameEquals == null);
+                            return (firstPositional?.Expression as LiteralExpressionSyntax)
+                                ?.Token.ValueText == "NeedsManualReview";
+                        });
+                    if (isBlockedByManualReview) continue;
+
                     foreach (var attrList in method.AttributeLists)
                     {
                         foreach (var attr in attrList.Attributes)
@@ -2059,6 +2073,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
             foreach (var method in methods)
             {
                 totalExamined++;
+
+                // Skip compiler-generated method names (e.g. <top-level>, state-machine methods).
+                if (method.Identifier.Text.StartsWith('<'))
+                    continue;
 
                 var containingClass = method.Ancestors()
                     .OfType<ClassDeclarationSyntax>()

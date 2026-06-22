@@ -497,9 +497,26 @@ public class AsyncBatchEngine
             catch (InvalidOperationException ex)
             {
                 // Other pre-condition failure (abstract, already async, event handler, etc.)
+                // Flag NeedsManualReview so this method is excluded from future bridge batches.
                 _logger.LogWarning(
                     "ConvertToAsyncBridge pre-condition failed for {Method}: {Message}",
                     candidate.MethodName, ex.Message);
+                try
+                {
+                    var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                        candidate.FilePath, candidate.MethodName, "NeedsManualReview",
+                        score: 0,
+                        reason: $"Bridge pre-condition: {ex.Message}",
+                        progress: progress,
+                        cancellationToken: cancellationToken);
+                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                }
+                catch (Exception flagEx)
+                {
+                    _logger.LogWarning(flagEx,
+                        "Could not flag {Method} as NeedsManualReview after pre-condition failure",
+                        candidate.MethodName);
+                }
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
                     $"Pre-condition: {ex.Message}", new List<string>()));
@@ -507,8 +524,25 @@ public class AsyncBatchEngine
             }
             catch (Exception ex)
             {
+                // Unexpected error — also flag NeedsManualReview to prevent infinite retries.
                 _logger.LogError(ex,
                     "Unexpected error in ConvertToAsyncBridge for {Method}", candidate.MethodName);
+                try
+                {
+                    var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                        candidate.FilePath, candidate.MethodName, "NeedsManualReview",
+                        score: 0,
+                        reason: $"Unexpected bridge error: {ex.Message}",
+                        progress: progress,
+                        cancellationToken: cancellationToken);
+                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                }
+                catch (Exception flagEx)
+                {
+                    _logger.LogWarning(flagEx,
+                        "Could not flag {Method} as NeedsManualReview after unexpected error",
+                        candidate.MethodName);
+                }
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
                     $"Unexpected error: {ex.Message}", new List<string>()));

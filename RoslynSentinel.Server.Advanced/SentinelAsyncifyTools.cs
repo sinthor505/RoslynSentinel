@@ -1773,6 +1773,7 @@ public class SentinelAsyncifyTools
         int? bridgeMinScore = null;
         string bridgeStopReason = "";
         int bridgeSkippedCount = 0;
+        int bridgeRemainingCandidates = 0;
         int flagPhaseScanned = 0;
         int flagPhaseNewFlags = 0;
 
@@ -1961,6 +1962,7 @@ public class SentinelAsyncifyTools
             bridgeMinScore = bridgeResult.MinCandidateScore;
             bridgeStopReason = bridgeResult.StopReason;
             bridgeSkippedCount = bridgeResult.Skipped.Count;
+            bridgeRemainingCandidates = bridgeResult.RemainingCandidates;
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -2193,7 +2195,17 @@ public class SentinelAsyncifyTools
         }
         else
         {
-            directive = status2.Directive;
+            var stopDesc = bridgeStopReason switch
+            {
+                "batch_complete" => "All eligible candidates were processed in this run.",
+                "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit — {bridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
+                "dry_run" => "Dry run complete — no files were written.",
+                _ when bridgeStopReason.Length > 0 => $"Bridge phase ended: {bridgeStopReason}.",
+                _ => string.Empty,
+            };
+            directive = stopDesc.Length > 0
+                ? $"{stopDesc} {status2.Directive}".TrimEnd()
+                : status2.Directive;
         }
 
         return new BatchResultSummary
