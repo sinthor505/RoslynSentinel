@@ -2231,14 +2231,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 if (docSemanticModel != null)
                 {
+                    // Only give the bridge-caller bonus when the called method is specifically an
+                    // Asyncify bridge wrapper (starts with "Asyncify-bridge:"). Matching any
+                    // [Obsolete] attribute would incorrectly flag handlers that call unrelated
+                    // deprecated APIs (e.g. BackgroundWorker.RunWorkerCompleted callbacks).
                     bool callsObsolete = method.Body?.DescendantNodes()
                         .OfType<InvocationExpressionSyntax>()
                         .Any(inv =>
                         {
                             var sym = docSemanticModel.GetSymbolInfo(inv, cancellationToken).Symbol
                                 as IMethodSymbol;
-                            return sym?.GetAttributes()
-                                .Any(a => a.AttributeClass?.Name is "ObsoleteAttribute") == true;
+                            var msg = sym?.GetAttributes()
+                                .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
+                                ?.ConstructorArguments.FirstOrDefault().Value as string;
+                            return msg?.StartsWith("Asyncify-bridge:", StringComparison.Ordinal) == true;
                         }) == true;
                     if (callsObsolete)
                     {

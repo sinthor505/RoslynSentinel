@@ -2163,6 +2163,37 @@ public class SentinelAsyncifyTools
                         });
                         succeeded++;
                     }
+                    catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
+                    {
+                        // Stale AsyncHandlerCandidate flag — the handler was flagged under the old
+                        // "convert all event handlers" approach but doesn't call an Asyncify bridge
+                        // wrapper. Clear it silently so future runs skip it.
+                        _logger.LogInformation(
+                            "AsyncifyCore Phase 3b: '{Method}' has no Asyncify bridge call — clearing stale flag",
+                            handler.MethodName);
+                        try
+                        {
+                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                                handler.FilePath, handler.MethodName, "NeedsManualReview",
+                                score: 0,
+                                reason: "Stale AsyncHandlerCandidate: handler does not call an Asyncify bridge wrapper",
+                                cancellationToken: innerToken);
+                            await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                        }
+                        catch (Exception flagEx)
+                        {
+                            _logger.LogWarning(flagEx,
+                                "Could not clear stale flag for '{Method}'", handler.MethodName);
+                        }
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = handler.FilePath,
+                            MethodName = handler.MethodName,
+                            Outcome = OperationOutcome.Skipped,
+                            Reason = "stale-flag: no Asyncify bridge call",
+                        });
+                        skipped++;
+                    }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex,
