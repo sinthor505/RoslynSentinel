@@ -962,7 +962,9 @@ public class SentinelAsyncifyTools
         maxMethods: max methods in bridge phase (default 50).
         maxCallersPerMethod: max callers per bridged method in uplift (default 10).
         minScore: minimum discovery score in Phase 1 (default 50).
-        scoreThreshold: max score eligible for bridge conversion in Phase 2 (default 60).
+        scoreThreshold: min score eligible for bridge conversion in Phase 2 (default 60). Only methods
+          scoring ≥ scoreThreshold are bridged. Raise to focus on highest-impact candidates; lower to
+          include more. Use MinCandidateScore from a prior run to calibrate.
         maxRuntimeSeconds: wall-clock limit in seconds — the current phase item finishes, then
           remaining phases are skipped and a partial result is returned. 0 = no limit (default).
           Set this below the MCP transport timeout to guarantee the tool returns in time.
@@ -2178,9 +2180,9 @@ public class SentinelAsyncifyTools
         }
         else if (succeeded == 0 && !status2.Open && !stoppedEarly && bridgeMinScore.HasValue)
         {
-            directive = $"No candidates were within scoreThreshold={input.ScoreThreshold}; " +
-                        $"the lowest-scoring candidate found has score={bridgeMinScore.Value}. " +
-                        $"Re-run with scoreThreshold={bridgeMinScore.Value} (or higher) to include it.";
+            directive = $"No candidates scored at or above scoreThreshold={input.ScoreThreshold}; " +
+                        $"the highest-scoring candidate found has score={bridgeMinScore.Value}. " +
+                        $"Re-run with scoreThreshold={bridgeMinScore.Value} (or lower) to include it.";
         }
         else if (succeeded == 0 && !status2.Open && !stoppedEarly
                  && bridgeStopReason == "batch_complete" && bridgeSkippedCount > 0)

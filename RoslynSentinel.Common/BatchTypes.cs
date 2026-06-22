@@ -52,10 +52,11 @@ public record BatchResultSummary : EngineResultBase
         get; init;
     }
     /// <summary>
-    /// Minimum score among all candidates evaluated during this operation.
-    /// Populated by FlagAsyncMigrationCandidates (scope="project") and Asyncify.
-    /// Use this to calibrate <c>scoreThreshold</c> on subsequent Asyncify calls:
-    /// set scoreThreshold ≥ MinCandidateScore to include the easiest candidates.
+    /// Score value to help calibrate <c>scoreThreshold</c> on subsequent Asyncify calls.
+    /// From FlagAsyncMigrationCandidates: the lowest score among newly-flagged methods — set
+    /// scoreThreshold at or below this to include all flagged candidates.
+    /// From Asyncify when no candidates qualified: the highest score among candidates that fell
+    /// below scoreThreshold — lower scoreThreshold to this value to include the best one.
     /// Null when no candidates were scored or the operation used scope="targets".
     /// </summary>
     public int? MinCandidateScore { get; init; }
@@ -203,7 +204,7 @@ public class AsyncifyInput
     /// <summary>Minimum score to flag a method in the discovery phase. Default 50.</summary>
     public int MinScore { get; set; } = 50;
 
-    /// <summary>Score threshold for bridge conversion (score ≤ threshold eligible). Default 60.</summary>
+    /// <summary>Score threshold for bridge conversion (score ≥ threshold eligible). Default 60. Raise to focus on highest-impact candidates; lower to include more.</summary>
     public int ScoreThreshold { get; set; } = 60;
 
     /// <summary>
@@ -337,7 +338,7 @@ public class AsyncMigrateInput
     /// <summary>Max methods to convert in the bridge phase (default 50). asyncify only.</summary>
     public int MaxMethods { get; set; } = 50;
 
-    /// <summary>Max score eligible for bridge conversion (default 60). asyncify only.</summary>
+    /// <summary>Min score eligible for bridge conversion (score ≥ threshold eligible, default 60). asyncify only.</summary>
     public int ScoreThreshold { get; set; } = 60;
 
     // ── handler_extract ────────────────────────────────────────────────────────

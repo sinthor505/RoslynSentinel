@@ -34,4 +34,13 @@ public static class CandidateScoreAnalyzer
             if (min is null || s < min) min = s;
         return min;
     }
+
+    /// <summary>Returns the maximum score, or <c>null</c> when the sequence is empty.</summary>
+    public static int? ComputeMax(IEnumerable<int> scores)
+    {
+        int? max = null;
+        foreach (var s in scores)
+            if (max is null || s > max) max = s;
+        return max;
+    }
 }

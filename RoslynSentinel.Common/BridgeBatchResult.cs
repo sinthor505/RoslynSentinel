@@ -41,10 +41,11 @@ public sealed record BridgeBatchResult : EngineResultBase
     }
 
     /// <summary>
-    /// Minimum score across all <c>[MigrationCandidate]</c> methods found in the solution,
-    /// regardless of <c>scoreThreshold</c>. Populated when <see cref="StopReason"/> is
-    /// <c>"no_candidates"</c> (i.e., candidates exist but all scored above the threshold).
-    /// Use this to calibrate <c>scoreThreshold</c> in subsequent Asyncify calls.
+    /// Highest score among all <c>[MigrationCandidate]</c> methods found that did not qualify
+    /// for this batch. Populated when <see cref="StopReason"/> is <c>"no_candidates"</c>
+    /// (i.e., candidates exist but all scored below <c>scoreThreshold</c>).
+    /// Use this to calibrate <c>scoreThreshold</c>: set scoreThreshold at or below this value
+    /// to include the highest-impact remaining candidate.
     /// </summary>
     public int? MinCandidateScore { get; init; }
 

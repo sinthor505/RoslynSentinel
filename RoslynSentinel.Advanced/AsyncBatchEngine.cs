@@ -380,8 +380,8 @@ public class AsyncBatchEngine
             cancellationToken: cancellationToken);
 
         var eligible = candidates
-            .Where(c => c.Score <= scoreThreshold)
-            .OrderBy(c => c.Score)  // lowest score (easiest) first
+            .Where(c => c.Score >= scoreThreshold)
+            .OrderByDescending(c => c.Score)  // highest score (highest impact) first
             .DistinctBy(c => (c.FilePath, c.MethodName))
             .ToList();
 
@@ -393,7 +393,7 @@ public class AsyncBatchEngine
             var allScores = candidates.Select(c => c.Score);
             return new BridgeBatchResult(applied, skipped, 0, "no_candidates")
             {
-                MinCandidateScore = CandidateScoreAnalyzer.ComputeMin(allScores),
+                MinCandidateScore = CandidateScoreAnalyzer.ComputeMax(allScores),
                 AllCandidatesBuckets = candidates.Count > 0
                     ? CandidateScoreAnalyzer.ComputeBuckets(allScores)
                     : null,
