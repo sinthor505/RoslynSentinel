@@ -749,12 +749,40 @@ public class AsyncBatchEngine
                 i + 1, callerPairs.Count, callerMethodName, callerFilePath);
 
             // Step A: bridge the caller — creates callerAsync(CT) with original body.
+            // For event handlers, falls back to in-place async void conversion instead.
             string bridgedCallerSource;
+            bool isEventHandlerInPlace = false;
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                     callerFilePath, callerMethodName, progress, cancellationToken);
-                bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException();
+                bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
+            {
+                // Event handler delegates have fixed signatures — cannot gain a CancellationToken
+                // parameter. Convert in-place: make async void and replace bridge calls with await.
+                _logger.LogInformation(
+                    "RunUpliftBatch: '{Method}' is an event handler — attempting in-place async void conversion",
+                    callerMethodName);
+                try
+                {
+                    var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
+                        callerFilePath, callerMethodName, cancellationToken: cancellationToken);
+                    bridgedCallerSource = inPlace.UpdatedText
+                        ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
+                    isEventHandlerInPlace = true;
+                }
+                catch (Exception inPlaceEx)
+                {
+                    _logger.LogWarning(
+                        "In-place async void conversion failed for '{Method}': {Message}",
+                        callerMethodName, inPlaceEx.Message);
+                    skipped.Add(new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Event handler in-place: {inPlaceEx.Message}", new List<string>()));
+                    continue;
+                }
             }
             catch (InvalidOperationException ex)
             {
@@ -778,28 +806,37 @@ public class AsyncBatchEngine
 
             // Step B: rewrite callerAsync body — replace bridgedMethod(args)
             //         → await bridgedMethodAsync(args, cancellationToken).
+            //         Skipped for in-place event handler conversions (already fully rewritten).
             string rewrittenSource;
-            try
+            if (isEventHandlerInPlace)
             {
-                rewrittenSource = RewriteCallerAsyncBody(
-                    bridgedCallerSource,
-                    callerMethodName + "Async",
-                    bridgedMethodName);
+                rewrittenSource = bridgedCallerSource;
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(
-                    "Body rewrite failed for {Method}: {Message}",
-                    callerMethodName + "Async", ex.Message);
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    $"Body rewrite failed: {ex.Message}", new List<string>()));
-                continue;
+                try
+                {
+                    rewrittenSource = RewriteCallerAsyncBody(
+                        bridgedCallerSource,
+                        callerMethodName + "Async",
+                        bridgedMethodName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        "Body rewrite failed for {Method}: {Message}",
+                        callerMethodName + "Async", ex.Message);
+                    skipped.Add(new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Body rewrite failed: {ex.Message}", new List<string>()));
+                    continue;
+                }
             }
 
             // Step C (optional): propagate CT in the new callerAsync overload.
+            //                    Skipped for in-place event handlers — they have no CT to propagate.
             string sourceToValidate = rewrittenSource;
-            if (propagateCancellationTokens)
+            if (propagateCancellationTokens && !isEventHandlerInPlace)
             {
                 try
                 {
@@ -866,7 +903,9 @@ public class AsyncBatchEngine
             await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } }, progress: progress, cancellationToken: cancellationToken);
 
-            uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, callerMethodName + "Async")
+            uplifted.Add(new UpliftCallerInfo(
+                callerFilePath, callerMethodName,
+                isEventHandlerInPlace ? callerMethodName : callerMethodName + "Async")
             {
                 BeforeSource = upliftBeforeSource,
             });

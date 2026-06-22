@@ -948,7 +948,9 @@ public class SentinelAsyncifyTools
                                  Skipped when methodTargets is provided.
           Phase 2 (Bridge)     — converts flagged methods to the Asyncify-bridge pattern.
           Phase 3 (Uplift)     — uplifts callers of each bridge wrapper to the async overload.
-          Phase 4 (Propagate)  — propagates CancellationToken in all bridged files.
+          Phase 3b (Handler)   — converts AsyncHandlerCandidate event handlers in-place to
+                                 async void (replaces bridge calls with await asyncCall()).
+          Phase 4 (Propagate)  — propagates CancellationToken in all bridged/handler files.
                                  Skipped when propagateCancellationTokens=false or dryRun=true.
 
         Checks the circuit breaker before starting; records total outcome across all phases;
@@ -1776,6 +1778,7 @@ public class SentinelAsyncifyTools
         int bridgeRemainingCandidates = 0;
         int flagPhaseScanned = 0;
         int flagPhaseNewFlags = 0;
+        var handlerConvertedFiles = new List<FilePath>();
 
         void CheckIterations(int phaseItems)
         {
@@ -2090,11 +2093,124 @@ public class SentinelAsyncifyTools
                 }
             }
 
+            // ── Phase 3b: Convert AsyncHandlerCandidate event handlers in-place ──
+            // Event handlers flagged as AsyncHandlerCandidate call obsolete bridge wrappers but
+            // cannot be uplifted via the standard caller-bridge path (fixed delegate signatures).
+            // Convert each in-place: add async modifier, replace bridge call with await asyncCall().
+            {
+                List<MigrationCandidateFinding> handlerCandidates;
+                try
+                {
+                    handlerCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                        filePath: null, projectName: input.ProjectName, pattern: "AsyncHandlerCandidate",
+                        cancellationToken: innerToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AsyncifyCore Phase 3b: candidate discovery failed — skipping handler phase");
+                    handlerCandidates = new List<MigrationCandidateFinding>();
+                }
+
+                var handlerTargets = handlerCandidates
+                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+                    .ToList();
+
+                foreach (var handler in handlerTargets)
+                {
+                    CheckIterations(1);
+                    if (innerToken.IsCancellationRequested)
+                    {
+                        stoppedEarly = true;
+                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler phase";
+                        goto WriteSummary;
+                    }
+
+                    if (input.DryRun)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = handler.FilePath,
+                            MethodName = handler.MethodName,
+                            Outcome = OperationOutcome.Skipped,
+                            Reason = "dry_run phase:handler",
+                        });
+                        succeeded++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        var handlerResult = await _asyncOptimizationEngine
+                            .ConvertEventHandlerCallerToAsyncVoidAsync(
+                                handler.FilePath, handler.MethodName, cancellationToken: innerToken);
+
+                        if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
+                        {
+                            await _workspaceManager.ApplyProposedChangesAsync(
+                                new Dictionary<FilePath, string>
+                                {
+                                    { handler.FilePath, handlerResult.UpdatedText },
+                                });
+                            handlerConvertedFiles.Add(handler.FilePath);
+                        }
+
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = handler.FilePath,
+                            MethodName = handler.MethodName,
+                            Outcome = OperationOutcome.Succeeded,
+                            Reason = "phase:handler",
+                        });
+                        succeeded++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "AsyncifyCore Phase 3b: handler conversion failed for '{Method}'", handler.MethodName);
+
+                        try
+                        {
+                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                                handler.FilePath, handler.MethodName, "NeedsManualReview",
+                                score: 0,
+                                reason: $"Handler in-place: {ex.Message}",
+                                cancellationToken: innerToken);
+                            await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                        }
+                        catch (Exception flagEx)
+                        {
+                            _logger.LogWarning(flagEx,
+                                "Could not flag handler '{Method}' as NeedsManualReview", handler.MethodName);
+                        }
+
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = handler.FilePath,
+                            MethodName = handler.MethodName,
+                            Outcome = OperationOutcome.Failed,
+                            Reason = ex.Message,
+                        });
+                        if (failures.Count < 15)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = handler.FilePath.Absolute,
+                                MethodName = handler.MethodName,
+                                Reason = ex.Message,
+                                Outcome = OperationOutcome.Failed,
+                            });
+                        }
+                        failed++;
+                    }
+                }
+            }
+
             // ── Phase 4: Propagate CT ─────────────────────────────────────────
             if (input.PropagateCancellationTokens && !input.DryRun)
             {
                 var bridgedFiles = bridgeResult.Applied
                     .Select(a => a.FilePath)
+                    .Concat(handlerConvertedFiles)
                     .Distinct()
                     .ToList();
 

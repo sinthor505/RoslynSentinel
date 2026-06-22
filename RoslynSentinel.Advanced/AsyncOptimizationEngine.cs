@@ -587,6 +587,100 @@ public class AsyncOptimizationEngine
     }
 
     /// <summary>
+    /// Converts an event handler that calls Asyncify-bridge sync wrappers in-place to <c>async void</c>.
+    /// Uses semantic analysis to identify calls to <c>[Obsolete("Asyncify-bridge: call … instead.")]</c>
+    /// wrappers, replaces each with <c>await wrapperAsync(args)</c>, and adds the <c>async</c>
+    /// modifier to the handler.
+    /// Unlike <see cref="ConvertToAsyncBridgeAsync"/>, this does NOT create a new async overload —
+    /// event handler delegate signatures are fixed and cannot gain a <c>CancellationToken</c>
+    /// parameter. The async method is called without an explicit CT; its default-parameter value
+    /// covers the common case.
+    /// </summary>
+    public async Task<DocumentEditResult> ConvertEventHandlerCallerToAsyncVoidAsync(
+        FilePath filePath,
+        string methodName,
+        IProgress<string> progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+            throw new InvalidOperationException(
+                $"File '{filePath}' not found in the loaded solution. Ensure load_solution has been called.");
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+
+        var methodNode = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == methodName)
+            ?? throw new InvalidOperationException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+
+        if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
+            throw new InvalidOperationException($"Method '{methodName}' is already async.");
+
+        if (methodNode.ReturnType.ToString() != "void")
+            throw new InvalidOperationException(
+                $"Method '{methodName}' does not return void — only void-returning methods can be converted to async void.");
+
+        // Semantic: find calls to [Obsolete("Asyncify-bridge:...")] bridge wrappers in the body.
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+        var bridgeCallNames = new HashSet<string>(StringComparer.Ordinal);
+        if (semanticModel != null)
+        {
+            foreach (var inv in methodNode.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var sym = semanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
+                var obsoleteMsg = sym?.GetAttributes()
+                    .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
+                    ?.ConstructorArguments.FirstOrDefault().Value as string;
+                if (obsoleteMsg != null && obsoleteMsg.StartsWith("Asyncify-bridge:", StringComparison.Ordinal))
+                {
+                    string? calledName = inv.Expression switch
+                    {
+                        IdentifierNameSyntax id => id.Identifier.Text,
+                        MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                        _ => null,
+                    };
+                    if (calledName != null)
+                        bridgeCallNames.Add(calledName);
+                }
+            }
+        }
+
+        if (bridgeCallNames.Count == 0)
+            throw new InvalidOperationException(
+                $"Method '{methodName}' does not call any Asyncify-bridge sync wrapper. " +
+                "Bridge wrappers must be marked [Obsolete(\"Asyncify-bridge: call … instead.\")].");
+
+        // Add async modifier.
+        var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword)
+            .WithTrailingTrivia(SyntaxFactory.Space);
+        var asyncMethod = methodNode.WithModifiers(methodNode.Modifiers.Add(asyncToken));
+
+        // Rewrite each bridge call: bridgeMethod(args) → await bridgeMethodAsync(args).
+        // No cancellationToken argument — event handlers have none to forward.
+        var rewrittenMethod = asyncMethod;
+        foreach (var bridgeName in bridgeCallNames)
+        {
+            var rewriter = new EventHandlerBridgeCallRewriter(bridgeName);
+            rewrittenMethod = (MethodDeclarationSyntax)rewriter.Visit(rewrittenMethod)!;
+        }
+
+        var newRoot2 = root.ReplaceNode(methodNode, rewrittenMethod);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = newRoot2.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath,
+        };
+    }
+
+    /// <summary>
     /// Adds .ConfigureAwait(false) (or true) to all await expressions that don't already have it.
     /// </summary>
     public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(
@@ -3254,6 +3348,44 @@ internal sealed class MigrationCandidateAttribute : Attribute
         if (pattern == null) return true;
         var firstArg = attr.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
         return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
+    }
+
+    /// <summary>
+    /// Rewrites calls to a specific Asyncify-bridge sync wrapper as awaited calls to its async
+    /// counterpart, without appending a <c>cancellationToken</c> argument. Used when the calling
+    /// method is an event handler that has no CT to forward.
+    /// <code>bridgedMethod(args) → await bridgedMethodAsync(args)</code>
+    /// </summary>
+    private sealed class EventHandlerBridgeCallRewriter(string bridgedMethodName) : CSharpSyntaxRewriter
+    {
+        private readonly string _asyncMethodName = bridgedMethodName + "Async";
+
+        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
+
+            ExpressionSyntax newExpression;
+            switch (visited.Expression)
+            {
+                case IdentifierNameSyntax id when id.Identifier.Text == bridgedMethodName:
+                    newExpression = SyntaxFactory.IdentifierName(_asyncMethodName).WithTriviaFrom(id);
+                    break;
+                case MemberAccessExpressionSyntax ma when ma.Name.Identifier.Text == bridgedMethodName:
+                    newExpression = ma.WithName(
+                        SyntaxFactory.IdentifierName(_asyncMethodName).WithTriviaFrom(ma.Name));
+                    break;
+                default:
+                    return visited;
+            }
+
+            // If already the direct operand of an await expression, just rename — don't double-wrap.
+            if (visited.Parent is AwaitExpressionSyntax)
+                return visited.WithExpression(newExpression);
+
+            return SyntaxFactory.AwaitExpression(
+                SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                visited.WithExpression(newExpression));
+        }
     }
 
     private sealed class MigrationCandidateRemover(string? pattern) : CSharpSyntaxRewriter
