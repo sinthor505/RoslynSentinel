@@ -24,6 +24,13 @@ public class GitStatusResult
     public List<GitStatusEntry> Unstaged { get; set; } = [];
     public List<string> Untracked { get; set; } = [];
     public string? Error { get; set; }
+    // Populated when IsTruncated=true; lists above are capped to first 10 entries each as a sample.
+    public bool IsTruncated { get; set; }
+    public int? TotalStagedCount { get; set; }
+    public int? TotalUnstagedCount { get; set; }
+    public int? TotalUntrackedCount { get; set; }
+    public Dictionary<string, int>? StagedByStatus { get; set; }
+    public Dictionary<string, int>? UnstagedByStatus { get; set; }
 }
 
 public class GitCommitEntry
@@ -157,6 +164,7 @@ public class GitTools
         Unified git tool.
 
         OPERATION: status — branch name, staged, unstaged, and untracked files. No params.
+          When total changed files >50: IsTruncated=true; lists capped at 10 each (sample); TotalStagedCount/TotalUnstagedCount/TotalUntrackedCount and ByStatus breakdowns populated.
 
         OPERATION: log — recent commits (hash, short hash, author, ISO date, subject).
           count: number of commits to return (default 20, max 100).
@@ -249,11 +257,35 @@ public class GitTools
                     unstaged.Add(new GitStatusEntry { Status = StatusLabel(y), Path = path });
             }
 
+            bool isClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0;
+            int total = staged.Count + unstaged.Count + untracked.Count;
+            const int threshold = 50;
+            const int sampleSize = 10;
+
+            if (total > threshold)
+            {
+                return new GitStatusResult
+                {
+                    Success = true,
+                    Branch = branch,
+                    IsClean = isClean,
+                    IsTruncated = true,
+                    TotalStagedCount = staged.Count,
+                    TotalUnstagedCount = unstaged.Count,
+                    TotalUntrackedCount = untracked.Count,
+                    StagedByStatus = staged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
+                    UnstagedByStatus = unstaged.GroupBy(e => e.Status).ToDictionary(g => g.Key, g => g.Count()),
+                    Staged = staged.Take(sampleSize).ToList(),
+                    Unstaged = unstaged.Take(sampleSize).ToList(),
+                    Untracked = untracked.Take(sampleSize).ToList(),
+                };
+            }
+
             return new GitStatusResult
             {
                 Success = true,
                 Branch = branch,
-                IsClean = staged.Count == 0 && unstaged.Count == 0 && untracked.Count == 0,
+                IsClean = isClean,
                 Staged = staged,
                 Unstaged = unstaged,
                 Untracked = untracked,
