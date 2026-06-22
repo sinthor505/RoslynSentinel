@@ -154,37 +154,39 @@ public class GitTools
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("""
-        Unified git tool. Select an operation via the `operation` parameter.
+        Unified git tool. The `operation` parameter must be exactly one of:
+          "status", "log", "diff", "commit", "revert"
 
-        ┌─────────────────────────────────────────────────────────────────────┐
-        │ operation  │ description                                            │
-        ├─────────────────────────────────────────────────────────────────────┤
-        │ status     │ Branch name, staged, unstaged, and untracked files.    │
-        │ log        │ Recent commits (hash, author, date, subject).          │
-        │ diff       │ Unified diff of working tree, staged area, or a commit.│
-        │ commit     │ Stage files and create a commit.                       │
-        │ revert     │ Undo a commit by creating a new inverse commit.        │
-        └─────────────────────────────────────────────────────────────────────┘
+        There is no "stage", "add", "push", or "checkout" operation.
+        Staging is handled automatically inside "commit" — do not call a separate stage step.
 
-        Parameters by operation
-        ───────────────────────
-        status  — no additional parameters.
+        OPERATION: "status"
+          Returns branch name, staged changes, unstaged changes, and untracked files.
+          No additional parameters required.
 
-        log     — count : number of commits to return (default 20, max 100).
+        OPERATION: "log"
+          Returns recent commit history (hash, short hash, author, ISO date, subject line).
+          - count: how many commits to return (default 20, max 100).
 
-        diff    — target   : "working" (unstaged, default), "staged", or a commit hash.
-                  paths    : optional comma-separated repo-relative paths to restrict the diff.
-                  maxBytes : truncate output at this many bytes (default 65536, max 524288).
+        OPERATION: "diff"
+          Returns a unified diff.
+          - target: exactly "working" (unstaged changes, default), "staged" (staged changes),
+            or a commit hash string (shows what that commit changed). No other values.
+          - paths: optional comma-separated repo-relative file paths to narrow the diff.
+          - maxBytes: byte limit on output (default 65536, max 524288).
 
-        commit  — message : required commit message.
-                  files   : optional comma-separated paths to stage. If omitted, all
-                            tracked modifications and deletions are staged (git add -u).
-                            Untracked files are never staged automatically — list them
-                            explicitly in files when they should be included.
+        OPERATION: "commit"
+          Stages files then creates a commit. Do NOT call a separate staging operation first.
+          - message: required. The commit message string.
+          - files: optional comma-separated repo-relative paths to stage. If omitted, all
+            tracked modifications and deletions are staged (equivalent to git add -u).
+            Untracked new files are never staged automatically — include them in `files`.
 
-        revert  — commitHash : full or short hash of the commit to revert (from log).
-                  noCommit   : when true, stages the revert without committing — call
-                               commit afterwards to finalise. Default false.
+        OPERATION: "revert"
+          Creates a new commit that undoes a previous commit. Non-destructive.
+          - commitHash: required. Full or short commit hash to revert (obtain from "log").
+          - noCommit: when true, stages the revert changes without committing so you can
+            inspect before finalising with "commit". Default false.
         """)]
     public async Task<object> Git(
         string operation,
