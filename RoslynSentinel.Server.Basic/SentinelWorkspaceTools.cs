@@ -57,9 +57,9 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
-    [Description("Queries or updates feature flags. action: \"list\" (all features) | \"get\" (by names) | \"update\" (batch-update via enabled as [{Key: featureName, Value: bool}] pairs).")]
+    [Description("Queries or updates feature flags. list → all; get → by names; update → batch-update via enabled as [{Key: featureName, Value: bool}] pairs.")]
     public object Features(
-        string action,
+        FeaturesAction action,
         List<string>? names = null,
         List<KeyValuePair<string, bool>>? enabled = null)
     {
@@ -67,10 +67,10 @@ public class SentinelWorkspaceTools
         {
             return action switch
             {
-                "list" => (object)_config.GetFeatureStatuses(),
-                "get" => _config.GetFeatureStatuses(names),
-                "update" => (object)UpdateFeaturesInternal(enabled ?? []),
-                _ => (object)$"Unknown action '{action}'. Valid: list, get, update."
+                FeaturesAction.list   => (object)_config.GetFeatureStatuses(),
+                FeaturesAction.get    => _config.GetFeatureStatuses(names),
+                FeaturesAction.update => (object)UpdateFeaturesInternal(enabled ?? []),
+                _ => (object)$"Unknown action '{action}'."
             };
         }
         catch (Exception ex)
@@ -92,21 +92,21 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, or dependencies. kind: \"projects\" (all projects) | \"files\" (all source files; requires projectName) | \"dependencies\" (NuGet + project refs; requires projectName).")]
+    [Description("Lists projects, files, or dependencies. files and dependencies require projectName.")]
     public async Task<ToolResult<object>> ListSolutionItems(
-        [ExternalInputRequired(DataTag.Scope)] string kind,
+        [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
     {
         try
         {
-            if (kind == "projects")
+            if (kind == SolutionItemsKind.projects)
             {
                 var solution = await _workspaceManager.GetBranchedSolutionAsync();
                 return new ToolResult<object>() { Success = true, Data = solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList() };
             }
-            if (kind == "files")
+            if (kind == SolutionItemsKind.files)
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
@@ -128,7 +128,7 @@ public class SentinelWorkspaceTools
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"List files for project '{projectName}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                 }
             }
-            if (kind == "dependencies")
+            if (kind == SolutionItemsKind.dependencies)
             {
                 if (string.IsNullOrEmpty(projectName))
                 {
@@ -137,7 +137,7 @@ public class SentinelWorkspaceTools
                 var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName);
                 return new ToolResult<object>() { Success = true, Data = result };
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: projects, files, dependencies.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.") };
         }
         catch (Exception ex)
         {
@@ -307,10 +307,10 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ProposedChange")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat: \"files\" (changes dict filePath→newContent) | \"diff\" (filepath + unifiedDiff). action: \"apply\" (write to disk) | \"validate\" (dry-run diagnostics). Returns ApplyChangesResult with UndoChangeId on successful apply.")]
+    [Description("Applies or validates a change set. changesetFormat files → changes dict filePath→newContent; diff → filepath + unifiedDiff. Returns ApplyChangesResult with UndoChangeId on successful apply.")]
     public async Task<ToolResult<object>> ProposedChange(
-        [ExternalInputRequired(DataTag.ChangeseFormat)] string changesetFormat,
-        [ExternalInputRequired(DataTag.Action)] string action,
+        [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
+        [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>?
         changes = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
@@ -324,13 +324,13 @@ public class SentinelWorkspaceTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            if (changesetFormat == "files")
+            if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
                 {
                     return new ToolResult<object>() { Success = false, Data = "changes is required when changesetFormat=files." };
                 }
-                if (action == "apply")
+                if (action == ProposedChangeAction.apply)
                 {
                     // ── Validate-on-apply gate ────────────────────────────────────
                     // Runs a delta compile (introduced errors only) before writing.
@@ -358,7 +358,7 @@ public class SentinelWorkspaceTools
                     await WriteBlobForApplyAsync("proposed_change", result);
                     return new ToolResult<object>() { Success = true, Data = result };
                 }
-                if (action == "validate")
+                if (action == ProposedChangeAction.validate)
                 {
                     try
                     {
@@ -372,13 +372,13 @@ public class SentinelWorkspaceTools
                     }
                 }
             }
-            else if (changesetFormat == "diff")
+            else if (changesetFormat == ChangesetFormat.diff)
             {
                 if (!filePath.Validated || string.IsNullOrEmpty(unifiedDiff))
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath and unifiedDiff are required when changesetFormat=diff.") };
                 }
-                if (action == "apply")
+                if (action == ProposedChangeAction.apply)
                 {
                     try
                     {
@@ -414,13 +414,13 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff apply for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
                 }
-                if (action == "validate")
+                if (action == ProposedChangeAction.validate)
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
                     return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validationResult}") };
                 }
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown changesetFormat '{changesetFormat}' or action '{action}'. Valid formats: files, diff. Valid actions: apply, validate.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.") };
         }
         catch (Exception ex)
         {
@@ -451,9 +451,9 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "StagedChange")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Manages a staged change set. action: \"apply\" (write to disk) | \"get\" (return file dict) | \"validate\" (dry-run diagnostics) | \"discard\" (remove). retryCount applies to apply only (default 3).")]
+    [Description("Manages a staged change set. apply → write to disk; get → return file dict; validate → dry-run diagnostics; discard → remove. retryCount applies to apply only (default 3).")]
     public async Task<ToolResult<object>> StagedChange(
-        [Consumes(DataTag.Action, required: true)] string action,
+        [Consumes(DataTag.Action, required: true)] StagedChangeAction action,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         [ToolOption(ToolOptionTag.ValidateOnApply)] [Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
@@ -462,7 +462,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            if (action == "apply")
+            if (action == StagedChangeAction.apply)
             {
                 // ── Validate-on-apply gate ────────────────────────────────────────
                 if (validateOnApply)
@@ -494,21 +494,21 @@ public class SentinelWorkspaceTools
                 _logger.LogInformation(resultMessage);
                 return new ToolResult<object>() { Success = true, Data = resultMessage };
             }
-            if (action == "get")
+            if (action == StagedChangeAction.get)
             {
                 return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetStagedChanges(changeId) };
             }
-            if (action == "validate")
+            if (action == StagedChangeAction.validate)
             {
                 var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
                 return new ToolResult<object>() { Success = true, Data = await _validationEngine.ValidateChangesAsync(stagingChanges) };
             }
-            if (action == "discard")
+            if (action == StagedChangeAction.discard)
             {
                 var success = _workspaceManager.DiscardStagedChanges(changeId);
                 return success ? new ToolResult<object>() { Success = true, Data = $"Staged change '{changeId}' discarded." } : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Staged change '{changeId}' not found.") };
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown action '{action}'. Valid values: apply, get, validate, discard.") };
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.") };
         }
         catch (Exception ex)
         {
@@ -568,9 +568,9 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetDiagnostics")]
     [Produces(DataTag.Report)]
-    [Description("Gets compiler diagnostics. scope: \"file\" (scopeName=filePath) | \"project\" (scopeName=projectName) | \"solution\". summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20).")]
+    [Description("Gets compiler diagnostics. file → scopeName=filePath; project → scopeName=projectName; solution → scopeName ignored. summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20).")]
     public async Task<ToolResult<object>> GetDiagnostics(
-        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] string scope,
+        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] DiagnosticScope scope,
         string? scopeName = null,
         bool summarize = false,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
@@ -582,7 +582,7 @@ public class SentinelWorkspaceTools
         {
             EngineResultWrapper<DiagnosticSummary> result;
             DiagnosticSummary summary;
-            if (scope == "file")
+            if (scope == DiagnosticScope.file)
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
@@ -591,7 +591,7 @@ public class SentinelWorkspaceTools
                 result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
                 summary = result.Data;
             }
-            else if (scope == "project")
+            else if (scope == DiagnosticScope.project)
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
@@ -600,14 +600,14 @@ public class SentinelWorkspaceTools
                 result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
                 summary = result.Data;
             }
-            else if (scope == "solution")
+            else if (scope == DiagnosticScope.solution)
             {
                 result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
                 summary = result.Data;
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown scope '{scope}'. Valid values: file, project, solution.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled scope '{scope}'.") };
             }
 
             if (!summarize)

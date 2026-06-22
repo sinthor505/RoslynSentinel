@@ -525,13 +525,13 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an attribute on a type or member. action: \"add\"|\"replace\"|\"remove\". existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace.")]
+    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace.")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [ExternalInputRequired(DataTag.AttributeName, required: true)] string existingAttribute,
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string newAttribute,
-        [ExternalInputRequired(DataTag.Action, required: true)] string action,
+        [ExternalInputRequired(DataTag.Action, required: true)] AttributeModifyAction action,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
@@ -540,21 +540,21 @@ public class SentinelRefactoringTools
         try
         {
             DocumentEditResult updated;
-            if (action == "add")
+            if (action == AttributeModifyAction.add)
             {
                 updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, existingAttribute);
             }
-            else if (action == "replace")
+            else if (action == AttributeModifyAction.replace)
             {
                 updated = await _refactoringEngine.ReplaceAttributeAsync(filePath, targetName, existingAttribute, newAttribute);
             }
-            else if (action == "remove")
+            else if (action == AttributeModifyAction.remove)
             {
                 updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, existingAttribute);
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, replace, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
             }
             if (!autoStage)
             {
@@ -564,7 +564,7 @@ public class SentinelRefactoringTools
             var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute");
             if (stageError is not null)
                 return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : action == "replace" ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -576,12 +576,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyModifier")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. action: \"add\"|\"remove\".")]
+    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [ExternalInputRequired(DataTag.Modifier, required: true)] string modifier,
-        [Description(ToolParams.AddOrRemoveAction)][Consumes(DataTag.Action, required: true)] string action,
+        [Consumes(DataTag.Action, required: true)] AddRemoveAction action,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
@@ -590,17 +590,17 @@ public class SentinelRefactoringTools
         try
         {
             DocumentEditResult updated;
-            if (action == "add")
+            if (action == AddRemoveAction.add)
             {
                 updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
             }
-            else if (action == "remove")
+            else if (action == AddRemoveAction.remove)
             {
                 updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
             }
             if (!autoStage)
             {
@@ -610,7 +610,7 @@ public class SentinelRefactoringTools
             var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier");
             if (stageError is not null)
                 return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -622,12 +622,12 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration. action: \"add\"|\"remove\".")]
+    [Description("Adds or removes a base type or interface from a type declaration.")]
     public async Task<ToolResult<object>> ModifyBaseType(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         string baseTypeName,
-        [Description(ToolParams.AddOrRemoveAction)] string action,
+        AddRemoveAction action,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
@@ -636,17 +636,17 @@ public class SentinelRefactoringTools
         try
         {
             DocumentEditResult updated;
-            if (action == "add")
+            if (action == AddRemoveAction.add)
             {
                 updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
             }
-            else if (action == "remove")
+            else if (action == AddRemoveAction.remove)
             {
                 updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: add, remove.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled action '{action}'.") };
             }
             if (!autoStage)
             {
@@ -656,7 +656,7 @@ public class SentinelRefactoringTools
             var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType");
             if (stageError is not null)
                 return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == "add" ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
+            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -724,13 +724,13 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddMemberTyped")]
     [Produces(DataTag.ChangeId)]
-    [Description("Generates a typed member and adds it to a type. kind: \"property\" (auto-property) | \"field\". Property defaults: hasSetter=true, accessibility=public. Field defaults: isReadonly=false, isStatic=false, accessibility=private.")]
+    [Description("Generates a typed member and adds it to a type. property → auto-property (defaults: hasSetter=true, accessibility=public). field → field (defaults: isReadonly=false, isStatic=false, accessibility=private).")]
     public async Task<ToolResult<object>> AddMemberTyped(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName, required: true)] string containerName,
         [ExternalInputRequired(DataTag.SymbolName)] string name,
         [ExternalInputRequired(DataTag.DataType)] string type,
-        [ExternalInputRequired(DataTag.SymbolKind)] string kind,
+        [ExternalInputRequired(DataTag.SymbolKind)] TypedMemberKind kind,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
         [ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
         [ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
@@ -746,19 +746,19 @@ public class SentinelRefactoringTools
         {
             DocumentEditResult updated;
             string description;
-            if (kind == "property")
+            if (kind == TypedMemberKind.property)
             {
                 updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit);
                 description = $"Added '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
-            else if (kind == "field")
+            else if (kind == TypedMemberKind.field)
             {
                 updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer);
                 description = $"Added '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown kind '{kind}'. Valid values: property, field.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.") };
             }
             if (!autoStage)
             {

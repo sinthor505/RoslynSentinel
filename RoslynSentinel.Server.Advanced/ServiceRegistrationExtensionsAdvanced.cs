@@ -98,6 +98,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             mcpBuilder.WithTools<DocumentationTools>();
             services.AddSingleton<SentinelSymbolTools>();
             mcpBuilder.WithTools<SentinelSymbolTools>();
+            services.AddSingleton<GitTools>();
+            mcpBuilder.WithTools<GitTools>();
         }
         if (activeModes.Contains("Intelligence"))
         {

@@ -154,31 +154,31 @@ public class GitTools
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("""
-        Unified git tool. operation: "status"|"log"|"diff"|"stage"|"add"|"commit"|"revert"
+        Unified git tool.
 
-        OPERATION: "status" — branch name, staged, unstaged, and untracked files. No params.
+        OPERATION: status — branch name, staged, unstaged, and untracked files. No params.
 
-        OPERATION: "log" — recent commits (hash, short hash, author, ISO date, subject).
+        OPERATION: log — recent commits (hash, short hash, author, ISO date, subject).
           count: number of commits to return (default 20, max 100).
 
-        OPERATION: "diff" — unified diff.
+        OPERATION: diff — unified diff.
           target: "working" (unstaged, default)|"staged"|<commit hash>.
           paths: optional comma-separated repo-relative paths.
           maxBytes: byte cap on output (default 65536, max 524288).
 
-        OPERATION: "stage" (also: "add") — stages files, returns status. Does not commit.
+        OPERATION: stage (also: add) — stages files, returns status. Does not commit.
           stageAll: true → git add -A (all changes including new/untracked files). Default false.
           files: comma-separated repo-relative paths. Omit to stage tracked changes (git add -u).
 
-        OPERATION: "commit" — stages files then creates a commit.
-          message: required. stageAll and files behave the same as in "stage".
+        OPERATION: commit — stages files then creates a commit.
+          message: required. stageAll and files behave the same as in stage.
 
-        OPERATION: "revert" — creates an inverse commit. Non-destructive.
-          commitHash: required (full or short hash, from "log").
-          noCommit: true → stage the revert without committing; call "commit" to finalise.
+        OPERATION: revert — creates an inverse commit. Non-destructive.
+          commitHash: required (full or short hash, from log).
+          noCommit: true → stage the revert without committing; call commit to finalise.
         """)]
     public async Task<object> Git(
-        string operation,
+        GitOperation operation,
         // log
         int count = 20,
         // diff
@@ -202,13 +202,13 @@ public class GitTools
 
         return operation switch
         {
-            "status"        => await StatusAsync(gitRoot, ct),
-            "log"           => await LogAsync(gitRoot, count, ct),
-            "diff"          => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
-            "stage" or "add" => await StageAsync(gitRoot, stageAll, files, ct),
-            "commit"        => await CommitAsync(gitRoot, message, stageAll, files, ct),
-            "revert"        => await RevertAsync(gitRoot, commitHash, noCommit, ct),
-            _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'. Valid: status, log, diff, stage, add, commit, revert." }
+            GitOperation.status => await StatusAsync(gitRoot, ct),
+            GitOperation.log    => await LogAsync(gitRoot, count, ct),
+            GitOperation.diff   => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
+            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, stageAll, files, ct),
+            GitOperation.commit => await CommitAsync(gitRoot, message, stageAll, files, ct),
+            GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, ct),
+            _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
         };
     }
 

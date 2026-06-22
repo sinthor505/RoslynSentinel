@@ -50,7 +50,7 @@ public class SentinelAsyncifyTools
     [Description("""
         Returns [MigrationCandidate]-attributed methods. Entry point for all async-migration workflows.
 
-        pattern: "AsyncBridgeCandidate"|"HandlerExtractCandidate"|"HandlerToAsyncCandidate"|"AsyncCallerUpliftCandidate"|null (default, all patterns).
+        pattern: null (default) = all patterns.
 
         summarize=true → guaranteed ≤2KB dashboard.
           MigrationScanSummary fields: ByPattern (count per pattern), ByClass (ClassName, ProjectName,
@@ -65,7 +65,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
         string? filePath = null,
         string? projectName = null,
-        string? pattern = null,
+        AsyncMigrationPattern? pattern = null,
         bool summarize = false,
         int? topN = null,
         int? minScore = null,
@@ -91,7 +91,7 @@ public class SentinelAsyncifyTools
             try
             {
                 summaryFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(filePath, projectName, pattern);
+                    .FindMigrationCandidatesAsync(filePath, projectName, pattern?.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -222,7 +222,7 @@ public class SentinelAsyncifyTools
             try
             {
                 allFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(filePath, projectName, pattern);
+                    .FindMigrationCandidatesAsync(filePath, projectName, pattern?.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -355,8 +355,7 @@ public class SentinelAsyncifyTools
 
         flagTargets: scope="targets" — list of { FilePath, MethodName, Pattern, Score?, Reason? }.
         projectName: scope="project" — restrict to one project; null = entire solution.
-        pattern: migration pattern to apply (default "AsyncBridgeCandidate").
-          Also accepts: "HandlerExtractCandidate", "HandlerToAsyncCandidate", "AsyncCallerUpliftCandidate".
+        pattern: migration pattern to apply (default AsyncBridgeCandidate).
         minScore: minimum score to flag (scope="project" only, default 50).
         forceRescan: re-evaluate already-flagged methods (scope="project" only, default false).
         dryRun: reports what would be flagged without writing files.
@@ -369,7 +368,7 @@ public class SentinelAsyncifyTools
         string scope = "targets",
         List<FlagCandidateTarget>? flagTargets = null,
         string? projectName = null,
-        string pattern = "AsyncBridgeCandidate",
+        AsyncMigrationPattern pattern = AsyncMigrationPattern.AsyncBridgeCandidate,
         int minScore = 50,
         bool dryRun = false,
         bool forceRescan = false,
@@ -394,7 +393,7 @@ public class SentinelAsyncifyTools
                     Scope = scope,
                     Targets = flagTargets,
                     ProjectName = projectName,
-                    Pattern = pattern,
+                    Pattern = pattern.ToString(),
                     MinScore = minScore,
                     DryRun = dryRun,
                     ForceRescan = forceRescan,

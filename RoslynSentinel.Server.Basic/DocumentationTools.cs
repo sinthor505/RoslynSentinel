@@ -157,10 +157,10 @@ public class DocumentationTools
 
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
-    [Description("Unified accessor for project doc files under docs/. action: \"read\"|\"write\"|\"append\"|\"list\". docType: \"plan\" (docs/plans/), \"handoff\" (docs/handoffs/), \"completed_work\" (docs/completed/; append only), \"documentation\" (docs/documentation/), \"state\" (docs/migration-state.yaml — name ignored). name required for all file-based operations. content required for write/append.")]
+    [Description("Unified accessor for project doc files under docs/. plan → docs/plans/; handoff → docs/handoffs/; completed_work → docs/completed/ (append only); documentation → docs/documentation/; state → docs/migration-state.yaml (name ignored). name required for all file-based operations. content required for write/append.")]
     public object ProjectDoc(
-        string action,
-        string docType,
+        DocAction action,
+        DocType docType,
         string? name = null,
         string? content = null,
         Progress<string>? progress = null,
@@ -171,7 +171,7 @@ public class DocumentationTools
             var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);
             if (rateLimitError is not null)
             {
-                return action is "read" or "list"
+                return action == DocAction.read || action == DocAction.list
                     ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
                     : new DocWriteResult { Success = false, Filename = name ?? "", Error = rateLimitError };
             }
@@ -179,13 +179,13 @@ public class DocumentationTools
             var docsRoot = TryGetDocsRoot(out var error);
             if (docsRoot is null)
             {
-                return action is "read" or "list"
+                return action == DocAction.read || action == DocAction.list
                     ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
                     : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
             }
 
             // ── list ─────────────────────────────────────────────────────────────
-            if (action == "list")
+            if (action == DocAction.list)
             {
                 if (!Directory.Exists(docsRoot))
                 {
@@ -200,9 +200,9 @@ public class DocumentationTools
             }
 
             // ── state (special: fixed path, no filename) ─────────────────────────
-            if (docType == "state")
+            if (docType == DocType.state)
             {
-                if (action == "read")
+                if (action == DocAction.read)
                 {
                     var fullPath = Path.Combine(docsRoot, "migration-state.yaml");
                     if (!File.Exists(fullPath))
@@ -212,7 +212,7 @@ public class DocumentationTools
 
                     return new DocReadResult { Found = true, Filename = "migration-state.yaml", Content = File.ReadAllText(fullPath) };
                 }
-                if (action == "write")
+                if (action == DocAction.write)
                 {
                     if (content is null)
                     {
@@ -237,45 +237,45 @@ public class DocumentationTools
             // ── file-based doc types ──────────────────────────────────────────────
             if (name is null)
             {
-                return action is "read"
+                return action == DocAction.read
                     ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
                     : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
             }
 
             var subdir = docType switch
             {
-                "plan" => Path.Combine(docsRoot, "plans"),
-                "handoff" => Path.Combine(docsRoot, "handoffs"),
-                "completed_work" => Path.Combine(docsRoot, "completed"),
-                "documentation" => Path.Combine(docsRoot, "documentation"),
+                DocType.plan => Path.Combine(docsRoot, "plans"),
+                DocType.handoff => Path.Combine(docsRoot, "handoffs"),
+                DocType.completed_work => Path.Combine(docsRoot, "completed"),
+                DocType.documentation => Path.Combine(docsRoot, "documentation"),
                 _ => null
             };
 
             if (subdir is null)
             {
-                return action is "read"
-                    ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." }
-                    : new DocWriteResult { Success = false, Filename = name, Error = $"Unknown docType '{docType}'. Valid: plan, handoff, completed_work, documentation, state." };
+                return action == DocAction.read
+                    ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unhandled docType '{docType}'." }
+                    : new DocWriteResult { Success = false, Filename = name, Error = $"Unhandled docType '{docType}'." };
             }
 
-            if (action == "write" && content is null)
+            if (action == DocAction.write && content is null)
             {
                 return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
             }
 
-            if (action == "append" && content is null)
+            if (action == DocAction.append && content is null)
             {
                 return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
             }
 
             return action switch
             {
-                "read" => (object)ReadFile(subdir, name),
-                "write" => WriteFile(subdir, name, content!),
-                "append" => docType == "completed_work"
+                DocAction.read => (object)ReadFile(subdir, name),
+                DocAction.write => WriteFile(subdir, name, content!),
+                DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)
                     : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
-                _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unknown action '{action}'. Valid: read, write, append, list." }
+                _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unhandled action '{action}'." }
             };
         }
         catch (Exception ex)

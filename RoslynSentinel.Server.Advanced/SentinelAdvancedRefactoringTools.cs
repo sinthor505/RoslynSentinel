@@ -226,8 +226,8 @@ public class SentinelAdvancedRefactoringTools
         Moves all secondary types to their own files. scope=file → requires scopeName (file path), returns ChangeId + first-15-line content previews. scope=project → requires scopeName (project name), returns ChangeId + affected file list. scope=solution → scopeName ignored. autoStage=false → returns raw changes dictionary without staging.
         """)]
     public async Task<ToolResult<object>> MoveAllTypesToFiles(
-        string scope,
-        string? scopeName = null,
+        [ExternalInputRequired(DataTag.Scope)] string scope,
+        string? target = null,
         bool autoStage = true,
         Progress<string>? progress = null,
         CancellationToken? cancellationToken = default)
@@ -236,28 +236,28 @@ public class SentinelAdvancedRefactoringTools
         {
             if (scope == "file")
             {
-                if (scopeName is null)
+                if (target is null)
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (file path) is required for scope=file.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "target (file path) is required for scope=file.") };
                 }
 
                 return await MoveAllTypesToFilesCore(
-                    await _refactoringEngine.MoveAllTypesToFilesAsync(scopeName),
+                    await _refactoringEngine.MoveAllTypesToFilesAsync(target),
                     autoStage,
-                    $"Move all types to files in '{Path.GetFileName(scopeName)}'",
+                    $"Move all types to files in '{Path.GetFileName(target)}'",
                     previewFiles: true);
             }
             if (scope == "project")
             {
-                if (scopeName is null)
+                if (target is null)
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (project name) is required for scope=project.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "target (project name) is required for scope=project.") };
                 }
 
                 return await MoveAllTypesToFilesCore(
-                    await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(scopeName),
+                    await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(target),
                     autoStage,
-                    $"Move all types to files in project '{scopeName}'",
+                    $"Move all types to files in project '{target}'",
                     previewFiles: false);
             }
             if (scope == "solution")
@@ -405,9 +405,13 @@ public class SentinelAdvancedRefactoringTools
 
             var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(filePath, methodName, newTypeName, parameterNames);
             if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception,
                     $"IntroduceParameterObject: method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " +
-                    "Verify the method name (case-sensitive) or use get_file_outline to list available methods.") };
+                    "Verify the method name (case-sensitive) or use get_file_outline to list available methods.")
+                };
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
             var (id, stageError) = await ValidateAndStageAsync(changes, $"Introduce parameter object for '{methodName}'.", "IntroduceParameterObject");
@@ -614,9 +618,13 @@ public class SentinelAdvancedRefactoringTools
 
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(filePath, className, interfaceName);
                 if (string.IsNullOrEmpty(implResult.UpdatedText))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception,
                         $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " +
-                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.") };
+                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.")
+                    };
 
                 var implChanges = new Dictionary<FilePath, string> { [filePath] = implResult.UpdatedText };
                 var (implId, implError) = await ValidateAndStageAsync(implChanges, $"Implement '{interfaceName}' on '{className}'.", "SyncInterface/implement");
@@ -634,9 +642,13 @@ public class SentinelAdvancedRefactoringTools
 
                 var syncResult = await _refactoringEngine.SyncInterfaceToImplementationAsync(filePath, className, interfaceName);
                 if (string.IsNullOrEmpty(syncResult.UpdatedText))
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                    return new ToolResult<object>()
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception,
                         $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " +
-                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.") };
+                        "Verify both names are spelled correctly (case-sensitive). Use locate_symbol to confirm the interface exists in the solution.")
+                    };
 
                 var syncChanges = new Dictionary<FilePath, string> { [filePath] = syncResult.UpdatedText };
                 var (syncId, syncError) = await ValidateAndStageAsync(syncChanges, $"Sync '{interfaceName}' to '{className}' implementation.", "SyncInterface/sync");

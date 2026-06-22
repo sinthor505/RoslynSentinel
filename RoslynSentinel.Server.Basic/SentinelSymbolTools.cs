@@ -73,10 +73,10 @@ public class SentinelSymbolTools
     [Produces(DataTag.SymbolId)]
     [Produces(DataTag.SessionId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Locates declaration sites for a symbol by name. Returns SymbolHandles containing projectName, docCommentId, and filePath. symbolKind: \"type\"|\"method\"|\"property\"|\"field\"|\"event\"|\"any\" (default). exactMatch=false enables prefix/contains search. Filter by containingType or containingNamespace to disambiguate common names.")]
+    [Description("Locates declaration sites for a symbol by name. Returns SymbolHandles containing projectName, docCommentId, and filePath. exactMatch=false enables prefix/contains search. Filter by containingType or containingNamespace to disambiguate common names.")]
     public async Task<ToolResult<object>> LocateSymbol(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string symbolName,
-        [Description(ToolParams.SymbolKindFilter)][ExternalInputRequired(DataTag.SymbolKind)] string symbolKind = "any",
+        [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
@@ -89,7 +89,7 @@ public class SentinelSymbolTools
 
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePath, exactMatch);
             if (result.Count == 0)
             {
                 return new ToolResult<object>
@@ -121,11 +121,11 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.SymbolId)]
-    [Description("Inspects a symbol in depth. aspect: \"info\" (type, kind, accessibility, attributes, documentation) | \"blastRadius\" (all call sites and affected projects).")]
+    [Description("Inspects a symbol in depth. info → type, kind, accessibility, attributes, documentation. blastRadius → all call sites and affected projects.")]
     public async Task<ToolResult<object>> InspectSymbol(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [ToolOption(ToolOptionTag.Aspect)] string aspect,
+        [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         Progress<string>? progress = null,
@@ -135,7 +135,7 @@ public class SentinelSymbolTools
 
         try
         {
-            if (aspect == "info")
+            if (aspect == InspectSymbolAspect.info)
             {
                 var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
                 if (symbolInfo == null) return new ToolResult<object>
@@ -149,7 +149,7 @@ public class SentinelSymbolTools
                     Data = symbolInfo
                 };
             }
-            if (aspect == "blastRadius")
+            if (aspect == InspectSymbolAspect.blastRadius)
             {
                 var result = await _impactAnalyzer.AnalyzeImpactAsync(filePath, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
@@ -161,7 +161,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown aspect '{aspect}'. Valid values: info, blastRadius.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
             };
         }
         catch (Exception ex)
@@ -177,10 +177,10 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "FindUsages")]
     [Produces(DataTag.Report)]
-    [Description("Queries symbol relationships by name. searchKind: \"implementorsOf\"|\"attributeUsages\"|\"objectCreations\"|\"extensionsFor\"|\"typesWithAttribute\"|\"methodsByReturnType\". projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only).")]
+    [Description("Queries symbol relationships by name. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only).")]
     public async Task<ToolResult<object>> FindUsages(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
-        [ExternalInputRequired(DataTag.SymbolKind)] string searchKind,
+        [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
@@ -191,7 +191,7 @@ public class SentinelSymbolTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            if (searchKind == "implementorsOf")
+            if (searchKind == FindUsagesSearchKind.implementorsOf)
             {
                 var result = await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName);
                 return new ToolResult<object>
@@ -200,7 +200,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (searchKind == "attributeUsages")
+            if (searchKind == FindUsagesSearchKind.attributeUsages)
             {
                 var result = await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath);
                 return new ToolResult<object>
@@ -209,7 +209,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (searchKind == "objectCreations")
+            if (searchKind == FindUsagesSearchKind.objectCreations)
             {
                 var result = await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency);
                 return new ToolResult<object>
@@ -218,7 +218,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (searchKind == "extensionsFor")
+            if (searchKind == FindUsagesSearchKind.extensionsFor)
             {
                 var result = await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName);
                 return new ToolResult<object>
@@ -227,7 +227,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (searchKind == "typesWithAttribute")
+            if (searchKind == FindUsagesSearchKind.typesWithAttribute)
             {
                 var result = await _semanticSearchEngine.FindTypesByAttributeAsync(name);
                 return new ToolResult<object>
@@ -236,7 +236,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (searchKind == "methodsByReturnType")
+            if (searchKind == FindUsagesSearchKind.methodsByReturnType)
             {
                 var result = await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name);
                 return new ToolResult<object>
@@ -248,7 +248,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown searchKind '{searchKind}'. Valid values: implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled searchKind '{searchKind}'.")
             };
         }
         catch (Exception ex)
@@ -330,10 +330,10 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
-    [Description("Finds all call sites or implementations for a symbol. kind: \"callers\"|\"implementations\". filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files.")]
+    [Description("Finds all call sites or implementations for a symbol. filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files.")]
     public async Task<ToolResult<object>> FindReferences(
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
-        [Consumes(DataTag.SymbolKind)] string kind,
+        [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
@@ -345,7 +345,7 @@ public class SentinelSymbolTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            if (kind == "callers")
+            if (kind == FindReferencesKind.callers)
             {
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
@@ -354,7 +354,7 @@ public class SentinelSymbolTools
                     Data = result
                 };
             }
-            if (kind == "implementations")
+            if (kind == FindReferencesKind.implementations)
             {
                 var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
                 return new ToolResult<object>
@@ -366,7 +366,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown searchKind '{kind}'. Valid values: callers, implementations.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
             };
         }
         catch (Exception ex)
@@ -382,10 +382,10 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
-    [Description("Returns type information. include: hierarchy (base class chain, interfaces, derived types → TypeHierarchyReport), members (all public/protected members with full metadata → List<TypeMemberDetail>), both (default → object with Hierarchy and Members). includeInherited=false excludes inherited members (applies to members and both).")]
+    [Description("Returns type information. hierarchy → TypeHierarchyReport (base class chain, interfaces, derived types); members → List<TypeMemberDetail> (all public/protected members); both → object with Hierarchy and Members (default). includeInherited=false excludes inherited members (members and both only).")]
     public async Task<ToolResult<object>> GetTypeInfo(
         [Consumes(DataTag.DataType)] string typeName,
-        [ToolOptionAttribute(ToolOptionTag.Filter)] string include = "both",
+        [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
         Progress<string>? progress = null,
@@ -395,15 +395,15 @@ public class SentinelSymbolTools
         {
             TypeHierarchyReport? hierarchy = null;
             List<TypeMemberDetail>? members = null;
-            if (include == "hierarchy" || include == "both")
+            if (include == TypeInfoInclude.hierarchy || include == TypeInfoInclude.both)
             {
                 hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
             }
-            if (include == "members" || include == "both")
+            if (include == TypeInfoInclude.members || include == TypeInfoInclude.both)
             {
                 members = await _symbolNavigationEngine.GetTypeMembersDetailAsync(typeName, projectName, includeInherited);
             }
-            if (include == "hierarchy")
+            if (include == TypeInfoInclude.hierarchy)
             {
                 return new ToolResult<object>
                 {
@@ -411,7 +411,7 @@ public class SentinelSymbolTools
                     Data = hierarchy!
                 };
             }
-            if (include == "members")
+            if (include == TypeInfoInclude.members)
             {
                 return new ToolResult<object>
                 {
@@ -419,7 +419,7 @@ public class SentinelSymbolTools
                     Data = members!
                 };
             }
-            if (include == "both")
+            if (include == TypeInfoInclude.both)
             {
                 return new ToolResult<object>
                 {
@@ -430,7 +430,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown include '{include}'. Valid values: hierarchy, members, both.")
+                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
             };
         }
         catch (Exception ex)
