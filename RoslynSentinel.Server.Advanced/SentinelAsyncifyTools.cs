@@ -808,11 +808,15 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "ExtractEventHandlers")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Event handler path, step 1 — extracts a nominated code block from inside a method into a new
-        private method using semantic analysis. Produces the correct return type (fixes the standard
+        Targeted extraction — extracts a nominated code block from inside a method into a new private
+        method using semantic analysis. Produces the correct return type (fixes the standard
         extract_method bug where selections ending with 'return expr' produce void).
 
-        Event handler path:
+        The asyncify macro (Phase 0) automates full-body extraction for HandlerExtractCandidate
+        methods. Use this tool when you need a custom extracted method name, partial-body (snippet)
+        extraction, or targeted one-off extraction outside the macro workflow.
+
+        Event handler path (manual):
           1. scan_migration_candidates(pattern: "HandlerExtractCandidate")  — find handlers to extract
           2. extract_event_handlers                     ← you are here
           3. event_handlers_to_async(projectName: "...")
@@ -932,15 +936,27 @@ public class SentinelAsyncifyTools
         uplift_callers, and propagate_cancellation_token individually for step-by-step control.
 
         Internal sequence:
+          Phase 0 (Extract)    — extracts the entire body of each HandlerExtractCandidate event
+                                 handler into a new private method (name = PascalCase of the
+                                 handler name, e.g. "button1_Click" → "Button1Click"). Uses
+                                 ExtractEntireBody so no ContextSnippet or manual input is needed.
+                                 The extracted method is then picked up by Phase 3a.
           Phase 1 (Flag)       — discovers qualifying sync methods and flags
                                  [MigrationCandidate("AsyncBridgeCandidate")].
                                  Skipped when methodTargets is provided.
           Phase 2 (Bridge)     — converts flagged methods to the Asyncify-bridge pattern.
           Phase 3 (Uplift)     — uplifts callers of each bridge wrapper to the async overload.
+          Phase 3a (HandlerBridge) — bridges HandlerToAsyncCandidate methods (extracted event
+                                 handler bodies from Phase 0, or pre-existing flags). After
+                                 bridging, their event-handler callers become AsyncHandlerCandidate
+                                 and are picked up by Phase 3b.
           Phase 3b (Handler)   — converts AsyncHandlerCandidate event handlers in-place to
                                  async void (replaces bridge calls with await asyncCall()).
           Phase 4 (Propagate)  — propagates CancellationToken in all bridged/handler files.
                                  Skipped when propagateCancellationTokens=false or dryRun=true.
+
+        extract_event_handlers remains available for targeted extraction with custom method names
+        or snippet-based (partial-body) extraction not covered by Phase 0.
 
         Checks the circuit breaker before starting; records total outcome across all phases;
         writes one forensic blob. Full detail on disk — only summary counts returned inline.
@@ -1778,6 +1794,7 @@ public class SentinelAsyncifyTools
         int flagPhaseScanned = 0;
         int flagPhaseNewFlags = 0;
         var handlerConvertedFiles = new List<FilePath>();
+        var handlerBridgedFiles = new List<FilePath>();
 
         void CheckIterations(int phaseItems)
         {
@@ -1791,6 +1808,127 @@ public class SentinelAsyncifyTools
 
         try
         {
+            // ── Phase 0: Extract HandlerExtractCandidate event handler bodies ──
+            // Event handlers flagged HandlerExtractCandidate have async-eligible business logic
+            // inline. Extract the entire body into a new private method (PascalCase name derived
+            // from the handler name) so Phase 3a can bridge it. ExtractEntireBody=true means the
+            // method name from the scan finding is the only input needed — no ContextSnippet.
+            {
+                List<MigrationCandidateFinding> extractCandidates;
+                try
+                {
+                    extractCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                        filePath: null, projectName: input.ProjectName, pattern: "HandlerExtractCandidate",
+                        cancellationToken: innerToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AsyncifyCore Phase 0: HandlerExtractCandidate discovery failed — skipping");
+                    extractCandidates = new List<MigrationCandidateFinding>();
+                }
+
+                var extractTargets = extractCandidates
+                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+                    .ToList();
+
+                foreach (var candidate in extractTargets)
+                {
+                    CheckIterations(1);
+                    if (innerToken.IsCancellationRequested)
+                    {
+                        stoppedEarly = true;
+                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler-extract phase";
+                        goto WriteSummary;
+                    }
+
+                    var newMethodName = ToPascalCase(candidate.MethodName);
+
+                    if (input.DryRun)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Skipped,
+                            Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
+                        });
+                        succeeded++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        var extractResult = await _msToolAugmentEngine.ExtractMethodSafeAsync(
+                            candidate.FilePath,
+                            newMethodName,
+                            candidate.MethodName,
+                            lineBefore: null,
+                            lineAfter: null,
+                            extractEntireBody: true,
+                            ct: innerToken);
+
+                        if (!extractResult.Success)
+                        {
+                            var reason = extractResult.Error ?? "extraction returned no error message";
+                            items.Add(new OperationItemRecord
+                            {
+                                FilePath = candidate.FilePath,
+                                MethodName = candidate.MethodName,
+                                Outcome = OperationOutcome.Failed,
+                                Reason = reason,
+                            });
+                            if (failures.Count < 10)
+                            {
+                                failures.Add(new FailureDetail
+                                {
+                                    FilePath = candidate.FilePath,
+                                    MethodName = candidate.MethodName,
+                                    Reason = reason,
+                                    Outcome = OperationOutcome.Failed,
+                                });
+                            }
+                            failed++;
+                            continue;
+                        }
+
+                        await _workspaceManager.ApplyProposedChangesAsync(
+                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } });
+
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Succeeded,
+                            Reason = $"phase:handler_extract → '{newMethodName}'",
+                        });
+                        succeeded++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "AsyncifyCore Phase 0: extraction failed for '{Method}'", candidate.MethodName);
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Failed,
+                            Reason = ex.Message,
+                        });
+                        if (failures.Count < 10)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = candidate.FilePath,
+                                MethodName = candidate.MethodName,
+                                Reason = ex.Message,
+                                Outcome = OperationOutcome.Failed,
+                            });
+                        }
+                        failed++;
+                    }
+                }
+            }
+
             // ── Phase 1: Flag ─────────────────────────────────────────────────
             if (input.MethodTargets == null || input.MethodTargets.Count == 0)
             {
@@ -2092,6 +2230,107 @@ public class SentinelAsyncifyTools
                 }
             }
 
+            // ── Phase 3a: Bridge HandlerToAsyncCandidate extracted methods ─────────
+            // Extracted event-handler bodies that have been flagged HandlerToAsyncCandidate need
+            // the same bridge conversion as AsyncBridgeCandidate — but they weren't discovered in
+            // Phase 1 (which only flags AsyncBridgeCandidate). After bridging, their event-handler
+            // callers typically become AsyncHandlerCandidate and are picked up by Phase 3b below.
+            {
+                List<MigrationCandidateFinding> handlerToAsyncCandidates;
+                try
+                {
+                    handlerToAsyncCandidates = await _asyncOptimizationEngine.FindMigrationCandidatesAsync(
+                        filePath: null, projectName: input.ProjectName, pattern: "HandlerToAsyncCandidate",
+                        cancellationToken: innerToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "AsyncifyCore Phase 3a: HandlerToAsyncCandidate discovery failed — skipping");
+                    handlerToAsyncCandidates = new List<MigrationCandidateFinding>();
+                }
+
+                var handlerToAsyncTargets = handlerToAsyncCandidates
+                    .Where(h => input.Exclusions?.Contains(h.MethodName) != true)
+                    .ToList();
+
+                foreach (var candidate in handlerToAsyncTargets)
+                {
+                    CheckIterations(1);
+                    if (innerToken.IsCancellationRequested)
+                    {
+                        stoppedEarly = true;
+                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded during handler-to-async phase";
+                        goto WriteSummary;
+                    }
+
+                    if (input.DryRun)
+                    {
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Skipped,
+                            Reason = "dry_run phase:handler_to_async",
+                        });
+                        succeeded++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        string? updatedSource;
+                        var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                            candidate.FilePath, candidate.MethodName, progress: progress!, cancellationToken: innerToken);
+                        updatedSource = convertResult.UpdatedText;
+
+                        if (input.PropagateCancellationTokens)
+                        {
+                            var asyncMethod = candidate.MethodName + "Async";
+                            var propagationResult = await _asyncOptimizationEngine
+                                .PropagateCancellationTokenInMethodAsync(candidate.FilePath, asyncMethod, progress: progress!, cancellationToken: innerToken);
+                            if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
+                                updatedSource = propagationResult.UpdatedText;
+                        }
+
+                        await _workspaceManager.ApplyProposedChangesAsync(
+                            new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } });
+                        handlerBridgedFiles.Add(candidate.FilePath);
+
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Succeeded,
+                            Reason = "phase:handler_to_async",
+                        });
+                        succeeded++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "AsyncifyCore Phase 3a: bridge conversion failed for '{Method}'", candidate.MethodName);
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = candidate.FilePath,
+                            MethodName = candidate.MethodName,
+                            Outcome = OperationOutcome.Failed,
+                            Reason = ex.Message,
+                        });
+                        if (failures.Count < 10)
+                        {
+                            failures.Add(new FailureDetail
+                            {
+                                FilePath = candidate.FilePath,
+                                MethodName = candidate.MethodName,
+                                Reason = ex.Message,
+                                Outcome = OperationOutcome.Failed,
+                            });
+                        }
+                        failed++;
+                    }
+                }
+            }
+
             // ── Phase 3b: Convert AsyncHandlerCandidate event handlers in-place ──
             // Event handlers flagged as AsyncHandlerCandidate call obsolete bridge wrappers but
             // cannot be uplifted via the standard caller-bridge path (fixed delegate signatures).
@@ -2250,6 +2489,7 @@ public class SentinelAsyncifyTools
                 var bridgedFiles = bridgeResult.Applied
                     .Select(a => a.FilePath)
                     .Concat(handlerConvertedFiles)
+                    .Concat(handlerBridgedFiles)
                     .Distinct()
                     .ToList();
 
@@ -2741,5 +2981,13 @@ public class SentinelAsyncifyTools
             Directive = status.Directive,
             BreakerOpen = status.Open,
         };
+    }
+
+    // Converts an event-handler name to PascalCase by splitting on '_' and capitalising each part.
+    // Example: "button1_Click" → "Button1Click", "Form_Load" → "FormLoad".
+    private static string ToPascalCase(string name)
+    {
+        var parts = name.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Select(p => char.ToUpper(p[0]) + p[1..]));
     }
 }

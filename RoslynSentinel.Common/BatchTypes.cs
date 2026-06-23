@@ -11,7 +11,12 @@ public class BatchTargetInput
 /// <summary>One unit of batch work: a file path plus an optional method-name filter (null = whole file).</summary>
 public class BatchTarget
 {
-    public string FilePath { get; set; } = "";
+    private string _filePath = "";
+    public string FilePath
+    {
+        get => _filePath;
+        set => _filePath = RoslynSentinel.Common.FilePath.NormalizeWirePath(value ?? "");
+    }
     public string[]? MethodNames
     {
         get; set;

@@ -698,7 +698,7 @@ public class SentinelScanTools
     internal static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-        if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot))
+        if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
         {
             return (false, null, null, jsonBytes);
         }
@@ -1024,7 +1024,7 @@ public class SentinelScanTools
                         LargeResult = new LargeResultInfo(
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
-                            filePath: summaryResults.filePath.ToString(),
+                            filePath: summaryResults.filePath.Absolute.ToString(),
                             scanId: summaryResults.scanId,
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,

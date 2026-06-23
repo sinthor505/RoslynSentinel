@@ -21,10 +21,22 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     // construct from whatever the wire sent, against the known root
     public static FilePath FromWire(string pathArg, string solutionRoot)
     {
-        string abs = Path.IsPathRooted(pathArg)
-            ? Path.GetFullPath(pathArg)
-            : Path.GetFullPath(Path.Combine(solutionRoot, pathArg));
+        var clean = NormalizeWirePath(pathArg);
+        string abs = Path.IsPathRooted(clean)
+            ? Path.GetFullPath(clean)
+            : Path.GetFullPath(Path.Combine(solutionRoot, clean));
         return new FilePath(abs, solutionRoot, validated: true);
+    }
+
+    // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo → c:\foo).
+    // Preserves the leading \\ of UNC paths.
+    public static string NormalizeWirePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return path;
+        bool isUnc = path.StartsWith(@"\\", StringComparison.Ordinal);
+        string body = isUnc ? path.Substring(2) : path;
+        body = body.Replace(@"\\", @"\");
+        return isUnc ? @"\\" + body : body;
     }
 
     public string RelativeTo(string solutionRoot)
@@ -93,14 +105,14 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
 public sealed class FilePathJsonConverter : JsonConverter<FilePath>
 {
     public override FilePath Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePath(reader.GetString()!);
+        => new FilePath(FilePath.NormalizeWirePath(reader.GetString()!));
 
     public override void Write(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
 
     // Required for Dictionary<FilePath, TValue> key serialization
     public override FilePath ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => new FilePath(reader.GetString()!);
+        => new FilePath(FilePath.NormalizeWirePath(reader.GetString()!));
 
     public override void WriteAsPropertyName(Utf8JsonWriter writer, FilePath value, JsonSerializerOptions options)
         => writer.WritePropertyName(value.ToString());

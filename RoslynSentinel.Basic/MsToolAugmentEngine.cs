@@ -1314,7 +1314,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not load semantic model.");
         }
 
-        BlockSyntax block;
+        BlockSyntax? block;
         List<StatementSyntax> stmtsInSelection;
 
         if (extractEntireBody)

@@ -226,7 +226,7 @@ public class GetScanResultTests
     {
         // Write a file that looks like a scan file but is outside the scans directory.
         var outsidePath = Path.Combine(_tempDir, "scan_20260101T000000Z_fakeid.json");
-        File.WriteAllText(outsidePath, "{}");
+        await File.WriteAllTextAsync(outsidePath, "{}");
 
         var result = await _scanTools.GetScanResult(filepath: outsidePath);
 

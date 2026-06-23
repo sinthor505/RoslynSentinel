@@ -425,9 +425,16 @@ public class GitTools
             if (!stageResult.Success)
                 return new GitCommitResult { Success = false, Error = stageResult.Error };
 
-            var (commitExit, _, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], ct);
+            var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], ct);
             if (commitExit != 0)
-                return new GitCommitResult { Success = false, Error = $"git commit failed: {commitErr.Trim()}" };
+            {
+                var detail = string.Join("\n", new[] { commitOut.Trim(), commitErr.Trim() }
+                    .Where(s => !string.IsNullOrEmpty(s)));
+                var errorText = string.IsNullOrEmpty(detail)
+                    ? $"git commit exited with code {commitExit}"
+                    : detail;
+                return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}" };
+            }
 
             var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], ct);
             var hash = hashExit == 0 ? hashOut.Trim() : "";
