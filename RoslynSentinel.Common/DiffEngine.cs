@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Common;
 
 public class DiffEngine
 {

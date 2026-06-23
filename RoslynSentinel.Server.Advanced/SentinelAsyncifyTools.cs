@@ -17,6 +17,7 @@ public class SentinelAsyncifyTools
     private readonly AsyncBatchEngine _asyncBatchEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly ValidationEngine _validationEngine;
     private readonly ILogger<SentinelAsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -33,6 +34,7 @@ public class SentinelAsyncifyTools
         AsyncBatchEngine asyncBatchEngine,
         MsToolAugmentEngine msToolAugmentEngine,
         PersistentWorkspaceManager workspaceManager,
+        ValidationEngine validationEngine,
         ILogger<SentinelAsyncifyTools> logger)
     {
         _antiPatternEngine = antiPatternEngine;
@@ -40,6 +42,7 @@ public class SentinelAsyncifyTools
         _asyncBatchEngine = asyncBatchEngine;
         _msToolAugmentEngine = msToolAugmentEngine;
         _workspaceManager = workspaceManager;
+        _validationEngine = validationEngine;
         _logger = logger;
     }
 
@@ -474,7 +477,7 @@ public class SentinelAsyncifyTools
                 cancellationToken: cancellationToken);
 
             if (!dryRun && engineResult.Changes.Count > 0)
-                await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+                await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true);
 
             var items = engineResult.Removed.Select(r => new OperationItemRecord
             {
@@ -558,7 +561,8 @@ public class SentinelAsyncifyTools
           Summary.ChangeId / Summary.BlobName — use with get_operation_detail for per-method detail.
           Summary.Succeeded / Summary.Failed / Summary.Attempted — aggregate counts.
           SuggestedUpliftTargets — pass directly as targets to uplift_callers. Each entry has
-            BridgedMethodName. Empty when Succeeded=0.
+            BridgedMethodName; SymbolId is null (enrich from ObsoleteCallerFinding.SymbolId when
+            disambiguation is needed). Empty when Succeeded=0.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
         """)]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
@@ -1199,8 +1203,27 @@ public class SentinelAsyncifyTools
                         }
                     }
 
+                    var bridgeValidation = await _validationEngine.ValidateChangesAsync(
+                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                        cancellationToken: cancellationToken);
+                    if (!bridgeValidation.Success)
+                    {
+                        var diagMsg = string.Join("; ", bridgeValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                        var reason782 = $"Validation: {bridgeValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = target.FilePath,
+                            MethodName = methodName,
+                            Outcome = OperationOutcome.Failed,
+                            Reason = reason782,
+                        });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason782, Outcome = OperationOutcome.Failed });
+                        failed++;
+                        continue;
+                    }
+
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } });
+                        new Dictionary<FilePath, string> { { target.FilePath, updatedSource } }, validateChanges: true);
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
@@ -1228,20 +1251,29 @@ public class SentinelAsyncifyTools
                                 target.FilePath, asyncMethodName);
                             if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
                             {
-                                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePath, string> { { target.FilePath, ctResult.UpdatedText } });
-                                string? beforeSrc = null;
-                                applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSrc);
-                                items.Add(new OperationItemRecord
+                                var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                                    new Dictionary<FilePath, string> { { target.FilePath, ctResult.UpdatedText } },
+                                    validateChanges: true);
+                                if (ctApplyResult.Success)
                                 {
-                                    FilePath = target.FilePath,
-                                    MethodName = methodName,
-                                    Outcome = OperationOutcome.Succeeded,
-                                    Reason = $"CT added to existing async overload '{asyncMethodName}'",
-                                    BeforeSource = beforeSrc,
-                                });
-                                succeeded++;
-                                handled = true;
+                                    string? beforeSrc = null;
+                                    ctApplyResult.PreImages?.TryGetValue(target.FilePath, out beforeSrc);
+                                    items.Add(new OperationItemRecord
+                                    {
+                                        FilePath = target.FilePath,
+                                        MethodName = methodName,
+                                        Outcome = OperationOutcome.Succeeded,
+                                        Reason = $"CT added to existing async overload '{asyncMethodName}'",
+                                        BeforeSource = beforeSrc,
+                                    });
+                                    succeeded++;
+                                    handled = true;
+                                }
+                                else if (ctApplyResult.ValidationResult != null)
+                                {
+                                    var diagMsg = string.Join("; ", ctApplyResult.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                                    reason = $"Validation: {ctApplyResult.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}";
+                                }
                             }
                             else if (ctResult.Outcome == EditOutcome.NoChange)
                             {
@@ -1387,6 +1419,19 @@ public class SentinelAsyncifyTools
                 {
                     if (!input.DryRun)
                     {
+                        var ctFileValidation = await _validationEngine.ValidateChangesAsync(
+                            new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
+                            cancellationToken: cancellationToken);
+                        if (!ctFileValidation.Success)
+                        {
+                            var diagMsg = string.Join("; ", ctFileValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                            var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                            items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = valReason });
+                            if (failures.Count < 10)
+                                failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = OperationOutcome.Failed });
+                            failed++;
+                            continue;
+                        }
                         allChanges[target.FilePath] = updatedSource;
                     }
 
@@ -1419,7 +1464,7 @@ public class SentinelAsyncifyTools
 
         if (allChanges.Count > 0)
         {
-            var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+            var applyResult941 = await _workspaceManager.ApplyProposedChangesAsync(allChanges, validateChanges: true);
             if (applyResult941.PreImages != null)
             {
                 foreach (var item in items)
@@ -1475,6 +1520,7 @@ public class SentinelAsyncifyTools
             {
                 BridgedMethodName = t.BridgedMethodName,
                 ProjectName = t.ProjectName,
+                SymbolId = t.SymbolId,
             }).ToList(),
             MaxCallersPerMethod = input.MaxCallersPerMethod,
             DryRun = input.DryRun,
@@ -1600,7 +1646,11 @@ public class SentinelAsyncifyTools
 
                 if (!input.DryRun && engineResult.Changes.Count > 0)
                 {
-                    var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes);
+                    var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(
+                        engineResult.Changes, validateChanges: true);
+                    if (!applyResult1126.Success && applyResult1126.ValidationResult != null)
+                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes — skipping write",
+                            applyResult1126.ValidationResult.Diagnostics.Count);
 
                     foreach (var f in engineResult.Flagged)
                     {
@@ -1716,7 +1766,11 @@ public class SentinelAsyncifyTools
 
                 if (allChanges.Count > 0 && !input.DryRun)
                 {
-                    var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                    var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(
+                        allChanges, validateChanges: true);
+                    if (!applyResult1223.Success && applyResult1223.ValidationResult != null)
+                        _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes — skipping write",
+                            applyResult1223.ValidationResult.Diagnostics.Count);
                     if (applyResult1223.PreImages != null)
                     {
                         foreach (var item in items)
@@ -1891,8 +1945,22 @@ public class SentinelAsyncifyTools
                             continue;
                         }
 
+                        var extractValidation = await _validationEngine.ValidateChangesAsync(
+                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                            cancellationToken: innerToken);
+                        if (!extractValidation.Success)
+                        {
+                            var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                            var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
+                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = OperationOutcome.Failed, Reason = valReason });
+                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = OperationOutcome.Failed });
+                            failed++;
+                            continue;
+                        }
+
                         await _workspaceManager.ApplyProposedChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } });
+                            new Dictionary<FilePath, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
+                            validateChanges: true);
 
                         items.Add(new OperationItemRecord
                         {
@@ -1941,7 +2009,11 @@ public class SentinelAsyncifyTools
 
                 if (!input.DryRun && flagResult.Changes.Count > 0)
                 {
-                    var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
+                        flagResult.Changes, validateChanges: true);
+                    if (!applyResult1317.Success && applyResult1317.ValidationResult != null)
+                        _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes — skipping write",
+                            applyResult1317.ValidationResult.Diagnostics.Count);
 
                     foreach (var f in flagResult.Flagged)
                     {
@@ -2073,7 +2145,11 @@ public class SentinelAsyncifyTools
                     }
                     if (!input.DryRun && allChanges.Count > 0)
                     {
-                        var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(allChanges);
+                        var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
+                            allChanges, validateChanges: true);
+                        if (!applyResult1421.Success && applyResult1421.ValidationResult != null)
+                            _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes — skipping write",
+                                applyResult1421.ValidationResult.Diagnostics.Count);
                         if (applyResult1421.PreImages != null)
                         {
                             foreach (var item in items)
@@ -2292,8 +2368,14 @@ public class SentinelAsyncifyTools
                                 updatedSource = propagationResult.UpdatedText;
                         }
 
-                        await _workspaceManager.ApplyProposedChangesAsync(
-                            new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } });
+                        var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
+                            new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } },
+                            validateChanges: true, cancellationToken: innerToken);
+                        if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
+                        {
+                            var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                            throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                        }
                         handlerBridgedFiles.Add(candidate.FilePath);
 
                         items.Add(new OperationItemRecord
@@ -2384,11 +2466,14 @@ public class SentinelAsyncifyTools
 
                         if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
                         {
-                            await _workspaceManager.ApplyProposedChangesAsync(
-                                new Dictionary<FilePath, string>
-                                {
-                                    { handler.FilePath, handlerResult.UpdatedText },
-                                });
+                            var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
+                                new Dictionary<FilePath, string> { { handler.FilePath, handlerResult.UpdatedText } },
+                                validateChanges: true, cancellationToken: innerToken);
+                            if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
+                            {
+                                var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                                throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}");
+                            }
                             handlerConvertedFiles.Add(handler.FilePath);
                         }
 
@@ -2699,6 +2784,15 @@ public class SentinelAsyncifyTools
                     {
                         updatedSource = propagationResult.UpdatedText;
                     }
+                }
+
+                var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(
+                    new Dictionary<FilePath, string> { { filePath, updatedSource } },
+                    cancellationToken: cancellationToken);
+                if (!handlerToAsyncValidation.Success)
+                {
+                    var diagMsg = string.Join("; ", handlerToAsyncValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                    throw new InvalidOperationException($"Validation: {handlerToAsyncValidation.Diagnostics.Count} error(s) — {diagMsg}");
                 }
 
                 var applyResult = await _workspaceManager.ApplyProposedChangesAsync(

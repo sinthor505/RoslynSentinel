@@ -539,10 +539,10 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// Commits a previously staged set of changes to disk.
     /// On partial success, only successfully written files are removed from the staged set.
     /// </summary>
-    public async Task<ApplyChangesResult> ApplyStagedChangesAsync(string changeId, int retryCount = 3)
+    public async Task<ApplyChangesResult> ApplyStagedChangesAsync(string changeId, int retryCount = 3, bool validateChanges = false)
     {
         var changes = GetStagedChanges(changeId);
-        var result = await ApplyProposedChangesAsync(changes, retryCount);
+        var result = await ApplyProposedChangesAsync(changes, retryCount, validateChanges);
 
         if (result.Success)
         {
@@ -658,7 +658,8 @@ public partial class PersistentWorkspaceManager : IDisposable
         string Summary,
         bool WorkspaceInSync = false,
         int WorkspaceVersion = 0,
-        IReadOnlyDictionary<string, string?>? PreImages = null
+        IReadOnlyDictionary<string, string?>? PreImages = null,
+        DiagnosticReport? ValidationResult = null
     );
 
     /// <summary>
@@ -670,9 +671,27 @@ public partial class PersistentWorkspaceManager : IDisposable
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(
         Dictionary<FilePath, string> changes,
         int retryCount = 3,
-        IProgress<string> progress = default,
+        bool validateChanges = false,
+        IProgress<string>? progress = default,
         CancellationToken cancellationToken = default)
     {
+        // Pre-lock validation: compiles an in-memory fork without holding the write lock,
+        // consistent with the existing external validate-then-apply pattern.
+        DiagnosticReport? validationReport = null;
+        if (validateChanges && CurrentSolution != null)
+        {
+            validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, cancellationToken);
+            if (!validationReport.Success)
+            {
+                return new ApplyChangesResult(
+                    Success: false,
+                    SucceededFiles: [],
+                    FailedFiles: [],
+                    Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
+                    ValidationResult: validationReport);
+            }
+        }
+
         await _solutionLock.WaitAsync();
         var succeeded = new List<string>();
         var failed = new Dictionary<FilePath, string>();
@@ -738,7 +757,7 @@ public partial class PersistentWorkspaceManager : IDisposable
                     try
                     {
                         var directory = Path.GetDirectoryName(filePath);
-                        if (directory != null && !Directory.Exists(directory))
+                        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                         {
                             Directory.CreateDirectory(directory);
                         }
@@ -810,7 +829,7 @@ public partial class PersistentWorkspaceManager : IDisposable
 
             var summary = $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
             return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
-                workspaceInSync, _workspaceVersion, preImages);
+                workspaceInSync, _workspaceVersion, preImages, validationReport);
         }
         finally
         {

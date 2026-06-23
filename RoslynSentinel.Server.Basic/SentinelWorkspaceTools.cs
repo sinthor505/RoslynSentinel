@@ -332,29 +332,9 @@ public class SentinelWorkspaceTools
                 }
                 if (action == ProposedChangeAction.apply)
                 {
-                    // ── Validate-on-apply gate ────────────────────────────────────
-                    // Runs a delta compile (introduced errors only) before writing.
-                    // Returns the DiagnosticReport without touching disk if new errors found.
-                    if (validateOnApply)
-                    {
-                        DiagnosticReport validation;
-                        try
-                        {
-                            validation = await _validationEngine.ValidateChangesAsync(changes);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "ProposedChange pre-apply validate unexpected exception");
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
-                        }
-
-                        if (!validation.Success)
-                        {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
-                        }
-                    }
-
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount);
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
+                    if (!result.Success && result.ValidationResult != null)
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
                     await WriteBlobForApplyAsync("proposed_change", result);
                     return new ToolResult<object>() { Success = true, Data = result };
                 }
@@ -394,17 +374,9 @@ public class SentinelWorkspaceTools
                         var targetPath = document.FilePath ?? filePath;
                         var diffChanges = new Dictionary<FilePath, string> { [targetPath] = newContent };
 
-                        // ── Validate-on-apply gate (diff path) ───────────────────
-                        if (validateOnApply)
-                        {
-                            var validation = await _validationEngine.ValidateChangesAsync(diffChanges);
-                            if (!validation.Success)
-                            {
-                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validation.Diagnostics}") };
-                            }
-                        }
-
-                        var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges);
+                        var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
+                        if (!result.Success && result.ValidationResult != null)
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
                         await WriteBlobForApplyAsync("proposed_change", result);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
@@ -464,28 +436,9 @@ public class SentinelWorkspaceTools
         {
             if (action == StagedChangeAction.apply)
             {
-                // ── Validate-on-apply gate ────────────────────────────────────────
-                if (validateOnApply)
-                {
-                    var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
-                    DiagnosticReport validation;
-                    try
-                    {
-                        validation = await _validationEngine.ValidateChangesAsync(stagingChanges);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "StagedChange pre-apply validate unexpected exception for '{ChangeId}'", changeId);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
-                    }
-
-                    if (!validation.Success)
-                    {
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {validation.Diagnostics.ToJson()}") };
-                    }
-                }
-
-                var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount);
+                var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount, validateChanges: validateOnApply);
+                if (!result.Success && result.ValidationResult != null)
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
                 // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
                 await WriteBlobForApplyAsync("staged_change", result, changeId);
                 string resultMessage = result.SucceededFiles.Count > 0

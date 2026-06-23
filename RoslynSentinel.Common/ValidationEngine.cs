@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Basic;
+namespace RoslynSentinel.Common;
 
 public class ValidationEngine
 {
@@ -38,7 +38,7 @@ public class ValidationEngine
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
-            return await ValidateChangesAsync(new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, progress: null, cancellationToken: cancellationToken);
+            return await ValidateChangesAsync(solution, new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -50,54 +50,51 @@ public class ValidationEngine
     }
 
     /// <summary>
-    /// Validates proposed file changes by compiling each affected project in-memory and
-    /// returning only NEWLY INTRODUCED errors — i.e. errors present in the candidate
-    /// compilation that were not already present in the baseline (unmodified) compilation.
-    ///
-    /// This delta approach means a project with pre-existing errors does not block a
-    /// clean edit, and IsValid=false reliably means "your change broke something new."
+    /// Validates proposed file changes using the current workspace snapshot.
+    /// Returns only NEWLY INTRODUCED errors — errors present after the change that were
+    /// not already present before it (delta approach).
+    /// </summary>
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
+        IProgress<string>? progress = default,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        return await ValidateChangesAsync(solution, fileChanges, cancellationToken);
+    }
+
+    /// <summary>
+    /// Static core — takes a Solution snapshot directly so it can be called without a
+    /// workspace manager instance (e.g. from inside ApplyProposedChangesAsync using
+    /// CurrentSolution, avoiding re-acquiring the solution lock).
     ///
     /// Files not found in the solution (RS001) are treated as pass-through: the tool
     /// cannot validate new files in-memory, so it allows them rather than blocking.
     /// </summary>
-    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
-        IProgress<string> progress = default,
-        CancellationToken cancellationToken = default)
+    public static async Task<DiagnosticReport> ValidateChangesAsync(
+        Solution baseline, Dictionary<FilePath, string> fileChanges, CancellationToken ct = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var candidateSolution = solution;
+        var candidate = baseline;
         var affectedProjectIds = new HashSet<ProjectId>();
-
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("Applying {Count} file changes to in-memory solution fork...", fileChanges.Count);
-        }
 
         foreach (var change in fileChanges)
         {
             var filePath = change.Key;
             var newContent = change.Value;
-            var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+            var documentId = baseline.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
 
             Debug.WriteLine($"Processing change for {filePath} (mapped to DocumentId: {documentId})...");
 
             if (documentId == null)
             {
-                // File not found in solution — cannot validate in-memory (new file or not in .csproj).
-                // Treat as pass-through rather than blocking a legitimate add-file operation.
-                if (_logger.IsEnabled(LogLevel.Information))
-                {
-                    _logger.LogInformation("File not found in solution, skipping in-memory validation: {FilePath}", filePath);
-                }
+                Debug.WriteLine($"File not found in solution, skipping in-memory validation: {filePath}");
                 continue;
             }
 
-            candidateSolution = candidateSolution.WithDocumentText(documentId, SourceText.From(newContent));
+            candidate = candidate.WithDocumentText(documentId, SourceText.From(newContent));
             affectedProjectIds.Add(documentId.ProjectId);
         }
 
-        // If no files could be mapped to solution documents, nothing to validate.
         if (affectedProjectIds.Count == 0)
         {
             Debug.WriteLine("No files could be mapped to solution documents, nothing to validate.");
@@ -108,68 +105,48 @@ public class ValidationEngine
 
         foreach (var projectId in affectedProjectIds)
         {
-            var baselineProject = solution.GetProject(projectId)!;
-            var candidateProject = candidateSolution.GetProject(projectId)!;
+            var baselineProject = baseline.GetProject(projectId)!;
+            var candidateProject = candidate.GetProject(projectId)!;
 
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Compiling project {ProjectName} (baseline + candidate)...", baselineProject.Name);
-            }
             Debug.WriteLine($"Compiling project {baselineProject.Name} (baseline + candidate)...");
 
-            // ApiBaseline compile — errors that already exist before our changes.
-            var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
+            var baselineCompilation = await baselineProject.GetCompilationAsync(ct);
             if (baselineCompilation == null)
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
                     $"Failed to create baseline compilation for project {baselineProject.Name}.", "", 0, 0, 0, 0));
-                Debug.WriteLine($"Failed to create baseline compilation for project {baselineProject.Name}.");
                 continue;
             }
 
             var baselineErrors = baselineCompilation
-                .GetDiagnostics(cancellationToken)
+                .GetDiagnostics(ct)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
-                .Select(d => DiagnosticKey(d))
+                .Select(DiagnosticKey)
                 .ToHashSet();
 
-            // Candidate compile — errors after applying the proposed changes.
-            var candidateCompilation = await candidateProject.GetCompilationAsync(cancellationToken);
+            var candidateCompilation = await candidateProject.GetCompilationAsync(ct);
             if (candidateCompilation == null)
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
                     $"Failed to create candidate compilation for project {candidateProject.Name}.", "", 0, 0, 0, 0));
-                Debug.WriteLine($"Failed to create candidate compilation for project {candidateProject.Name}.");
                 continue;
             }
 
-            foreach (var diagnostic in candidateCompilation.GetDiagnostics(cancellationToken))
+            foreach (var diagnostic in candidateCompilation.GetDiagnostics(ct))
             {
                 if (diagnostic.Severity != DiagnosticSeverity.Error)
-                {
                     continue;
-                }
 
                 Debug.WriteLine($"Found new error in project {candidateProject.Name}: {diagnostic.GetMessage()}");
-                // Only report errors that are NEW — not present in the baseline.
                 if (!baselineErrors.Contains(DiagnosticKey(diagnostic)))
-                {
                     introducedDiagnostics.Add(diagnostic.ToInfo());
-                }
             }
         }
 
         Debug.WriteLine($"Validation complete. Introduced errors: {introducedDiagnostics.Count}");
-
         return new DiagnosticReport(introducedDiagnostics.Count == 0, introducedDiagnostics);
     }
 
-    /// <summary>
-    /// Produces a stable key for deduplicating diagnostics across baseline and candidate
-    /// compilations. Uses diagnostic ID + message + file + line so that the same logical
-    /// error at the same location matches across two independent compiles. Column is
-    /// intentionally excluded — reformatting can shift columns without changing the error.
-    /// </summary>
     private static string DiagnosticKey(Diagnostic d)
     {
         var location = d.Location.GetLineSpan();
