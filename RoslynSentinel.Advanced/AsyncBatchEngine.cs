@@ -84,10 +84,9 @@ public class UpliftBatchMultiTarget
     /// <summary>Name of the Asyncify-bridge sync method whose callers should be uplifted.</summary>
     public string BridgedMethodName { get; set; } = "";
     /// <summary>Optional project name to restrict the caller scan. <c>null</c> = entire solution.</summary>
-    public string? ProjectName
-    {
-        get; set;
-    }
+    public string? ProjectName { get; set; }
+    /// <summary>Optional Roslyn documentation-comment ID. When set, only callers of this exact overload are uplifted.</summary>
+    public string? SymbolId { get; set; }
 }
 
 /// <summary>Input for <c>run_uplift_batch_multi</c>.</summary>
@@ -695,6 +694,7 @@ public class AsyncBatchEngine
         int maxCallers = 10,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
+        string? symbolId = null,
         IProgress<string> progress = default,
         CancellationToken cancellationToken = default)
     {
@@ -708,6 +708,7 @@ public class AsyncBatchEngine
             messagePattern: messageFilter,
             filePath: null,
             projectName: projectName,
+            symbolId: symbolId,
             cancellationToken: cancellationToken);
 
         int totalFound = callerFindings.Count;
@@ -956,6 +957,8 @@ public class AsyncBatchEngine
         // Apply the rewriter scoped to only this method's subtree.
         var rewriter = new BridgeCallRewriter(bridgedMethodName);
         var newMethod = (MethodDeclarationSyntax)rewriter.Visit(callerAsyncMethod)!;
+        // Any delegate/lambda that now contains await must itself be marked async.
+        newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
         return newRoot.NormalizeWhitespace().ToFullString();
@@ -1025,9 +1028,11 @@ public class AsyncBatchEngine
 
             _ = calledName; // suppress unused-variable warning
 
+            // Use node.Parent (original, tree-rooted) for parent context — visited may be detached.
+
             // If the invocation is already the direct operand of an await expression,
             // only rename the method — don't add another await or another cancellationToken arg.
-            if (visited.Parent is AwaitExpressionSyntax)
+            if (node.Parent is AwaitExpressionSyntax)
             {
                 return visited.WithExpression(newExpression);
             }
@@ -1038,14 +1043,27 @@ public class AsyncBatchEngine
 
             var rewrittenCall = visited
                 .WithExpression(newExpression)
-                .WithArgumentList(newArgList);
+                .WithArgumentList(newArgList)
+                .WithoutLeadingTrivia();
 
-            // Wrap the rewritten call in an await expression.
-            return SyntaxFactory.AwaitExpression(
+            // When the bridge call is chained — Foo().Rows, Foo().AsDataView(), Foo()[i] — the
+            // await must be parenthesised so that member/element access binds to the awaited value,
+            // not to the Task:  Foo().Rows → (await FooAsync(ct)).Rows
+            // Without parens, `await FooAsync(ct).Rows` is parsed as `await (FooAsync(ct).Rows)`,
+            // which fails to compile because Task<T> has no such member.
+            bool needsParens = node.Parent is MemberAccessExpressionSyntax
+                            || node.Parent is ElementAccessExpressionSyntax
+                            || node.Parent is ConditionalAccessExpressionSyntax;
+
+            var awaitExpr = SyntaxFactory.AwaitExpression(
                     SyntaxFactory.Token(SyntaxKind.AwaitKeyword)
                                  .WithTrailingTrivia(SyntaxFactory.Space),
-                    rewrittenCall)
-                .WithLeadingTrivia(visited.GetLeadingTrivia());
+                    rewrittenCall);
+
+            return needsParens
+                ? (SyntaxNode)SyntaxFactory.ParenthesizedExpression(awaitExpr)
+                    .WithLeadingTrivia(visited.GetLeadingTrivia())
+                : awaitExpr.WithLeadingTrivia(visited.GetLeadingTrivia());
         }
     }
 
@@ -1265,6 +1283,7 @@ public class AsyncBatchEngine
                     input.MaxCallersPerMethod,
                     input.DryRun,
                     input.PropagateCancellationTokens,
+                    symbolId: target.SymbolId,
                     progress: progress,
                     cancellationToken: cancellationToken);
 

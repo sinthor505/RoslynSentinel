@@ -21,6 +21,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet → failed items
 ///   T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
 ///   T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
+///   T17 – UpliftCallers, qualified static call → qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
 /// </summary>
 [TestFixture]
 public class SentinelAsyncifyToolsTests
@@ -98,6 +99,7 @@ public class SentinelAsyncifyToolsTests
             asyncBatchEngine,
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
+            validationEngine,
             NullLogger<SentinelAsyncifyTools>.Instance);
     }
 
@@ -430,5 +432,124 @@ public class Svc
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
         Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T17 – UpliftCallers, qualified static call → type qualifier preserved
+    // Regression: callers using FooType.BridgedMethod(args) were incorrectly
+    // rewritten to BridgedMethodAsync(args) (qualifier stripped).
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private const string QualifiedStaticCallSource = @"
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class CallerClass
+{
+    public void DoWork()
+    {
+        Service.SyncMethod(""arg"");
+    }
+}
+
+public static class Service
+{
+    [Obsolete(""Asyncify-bridge: call SyncMethodAsync instead."", false)]
+    public static void SyncMethod(string arg)
+    {
+        SyncMethodAsync(arg).GetAwaiter().GetResult();
+    }
+
+    public static async Task SyncMethodAsync(string arg, CancellationToken cancellationToken = default)
+    {
+        await Task.Delay(1, cancellationToken);
+    }
+}
+";
+
+    private const string ChainedCallSource = @"
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+public class CallerClass
+{
+    public string LoadTrimmed() { return DataHelper.GetData().Trim(); }
+}
+public static class DataHelper
+{
+    [Obsolete(""Asyncify-bridge: call GetDataAsync instead."", false)]
+    public static string GetData() { return GetDataAsync().GetAwaiter().GetResult(); }
+    public static async Task<string> GetDataAsync(CancellationToken cancellationToken = default)
+    { await Task.Delay(1, cancellationToken); return string.Empty; }
+}
+";
+
+    [Test, CancelAfter(30000)]
+    public async Task T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised()
+    {
+        SetSource(ChainedCallSource, "Chained.cs");
+
+        var result = await _asyncifyTools.UpliftCallers(
+            targets: [new UpliftTarget { BridgedMethodName = "GetData" }],
+            maxCallersPerMethod: 5,
+            dryRun: false,
+            propagateCancellationTokens: false);
+
+        Assert.That(result.Success, Is.True, result.Error?.ToString());
+
+        var solution = _workspaceManager.CurrentSolution;
+        var doc = solution?.Projects.SelectMany(p => p.Documents)
+            .FirstOrDefault(d => string.Equals(d.FilePath, "Chained.cs", StringComparison.OrdinalIgnoreCase));
+        Assert.That(doc, Is.Not.Null);
+        var text = (await doc!.GetTextAsync()).ToString();
+
+        // The await must be wrapped in parens so the member access binds to the awaited value:
+        //   (await GetDataAsync(cancellationToken)).Trim()
+        // not:
+        //   await GetDataAsync(cancellationToken).Trim()
+        Assert.That(text, Does.Contain("(await "),
+            "chained await must be parenthesised: `(await GetDataAsync(...)).Member`.");
+        Assert.That(text, Does.Not.Contain("await DataHelper.GetDataAsync(cancellationToken)."),
+            "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
+        Assert.That(text, Does.Not.Contain("await GetDataAsync(cancellationToken)."),
+            "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
+    }
+
+    [Test, CancelAfter(30000)]
+    public async Task T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier()
+    {
+        SetSource(QualifiedStaticCallSource, "QualifiedCall.cs");
+
+        var result = await _asyncifyTools.UpliftCallers(
+            targets: [new UpliftTarget { BridgedMethodName = "SyncMethod" }],
+            maxCallersPerMethod: 5,
+            dryRun: false,
+            propagateCancellationTokens: true);
+
+        Assert.That(result.Success, Is.True, result.Error?.ToString());
+        Assert.That(result.Data, Is.Not.Null);
+        Assert.That(result.Data!.Summary.Succeeded, Is.EqualTo(1),
+            "DoWork should be uplifted as the caller of SyncMethod.");
+
+        // Read back the updated document from the in-memory workspace.
+        var solution = _workspaceManager.CurrentSolution;
+        var doc = solution?.Projects
+            .SelectMany(p => p.Documents)
+            .FirstOrDefault(d => string.Equals(d.FilePath, "QualifiedCall.cs", StringComparison.OrdinalIgnoreCase));
+
+        Assert.That(doc, Is.Not.Null, "QualifiedCall.cs document must exist in workspace after uplift.");
+        var sourceText = await doc!.GetTextAsync();
+        var updatedSource = sourceText.ToString();
+
+        // The qualifier 'Service.' must be preserved in the rewritten async body.
+        Assert.That(updatedSource, Does.Contain("Service.SyncMethodAsync"),
+            "Qualified call 'Service.SyncMethod' must be rewritten as 'Service.SyncMethodAsync', not plain 'SyncMethodAsync'.");
+
+        // Confirm the unqualified form is absent from the DoWorkAsync body.
+        // (The bridge body 'DoWorkAsync().GetAwaiter().GetResult()' is unqualified, but that is
+        //  the caller-bridge call, not the rewritten callee call — so we check the specific pattern.)
+        Assert.That(updatedSource, Does.Not.Contain("await SyncMethodAsync("),
+            "Unqualified 'await SyncMethodAsync(' must not appear; the qualifier 'Service.' must be kept.");
     }
 }

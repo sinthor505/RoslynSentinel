@@ -316,10 +316,16 @@ public class AsyncOptimizationEngine
             .WithType(SyntaxFactory.ParseTypeName("CancellationToken"))
             .WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
 
+        var asyncModifiers = SyntaxFactory.TokenList(
+            methodNode.Modifiers
+                .Where(m => !m.IsKind(SyntaxKind.OverrideKeyword) &&
+                            !m.IsKind(SyntaxKind.SealedKeyword))
+                .Append(SyntaxFactory.Token(SyntaxKind.AsyncKeyword)));
+
         var asyncMethod = methodNode
             .WithIdentifier(SyntaxFactory.Identifier(asyncMethodName))
             .WithReturnType(SyntaxFactory.ParseTypeName(newReturnType))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword))
+            .WithModifiers(asyncModifiers)
             .AddParameterListParameters(ctParam);
 
         // Scaffold body - caller must replace placeholder with real async I/O
@@ -485,11 +491,24 @@ public class AsyncOptimizationEngine
                     a.Name.ToString() == MigrationCandidateShortName ||
                     a.Name.ToString() == MigrationCandidateFullName)));
 
+        // Build async overload modifiers explicitly so that instance/static and virtual are
+        // preserved while modifiers that are wrong on a new method are stripped:
+        //   'override' — the async overload is a new method; there is no base counterpart
+        //                to override, so keeping 'override' causes CS0115.
+        //   'sealed'   — meaningless on a freshly introduced method.
+        //   'static'   — kept; the async version of a static method must also be static.
+        //   'async'    — added.
+        var asyncModifiers = SyntaxFactory.TokenList(
+            methodNode.Modifiers
+                .Where(m => !m.IsKind(SyntaxKind.OverrideKeyword) &&
+                            !m.IsKind(SyntaxKind.SealedKeyword))
+                .Append(SyntaxFactory.Token(SyntaxKind.AsyncKeyword)));
+
         var asyncMethod = methodNode
             .WithAttributeLists(cleanAttributeLists)
             .WithIdentifier(SyntaxFactory.Identifier(asyncMethodName))
             .WithReturnType(SyntaxFactory.ParseTypeName(newReturnType))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword))
+            .WithModifiers(asyncModifiers)
             .AddParameterListParameters(ctParam);
 
         // Convert expression-bodied originals to block-bodied async overloads so that
@@ -627,9 +646,14 @@ public class AsyncOptimizationEngine
             throw new InvalidOperationException(
                 $"Method '{methodName}' does not return void — only void-returning methods can be converted to async void.");
 
-        // Semantic: find calls to [Obsolete("Asyncify-bridge:...")] bridge wrappers in the body.
+        // Semantic: identify the SPECIFIC bridge-call invocations — not all calls sharing the same name.
+        // Collecting only the method name (e.g. "search") then rewriting every call by that name
+        // incorrectly rewrites unrelated calls on types that have no async counterpart (e.g.
+        // BaseService.search when only CommonSearch.search is the bridge wrapper).
+        // Instead, annotate the exact nodes the semantic model confirms are bridge calls, then
+        // replace only those.
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
-        var bridgeCallNames = new HashSet<string>(StringComparer.Ordinal);
+        var bridgeTargets = new Dictionary<InvocationExpressionSyntax, string>(ReferenceEqualityComparer.Instance);
         if (semanticModel != null)
         {
             foreach (var inv in methodNode.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -639,37 +663,69 @@ public class AsyncOptimizationEngine
                     .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
                 if (obsoleteMsg != null && obsoleteMsg.StartsWith("Asyncify-bridge:", StringComparison.Ordinal))
-                {
-                    string? calledName = inv.Expression switch
-                    {
-                        IdentifierNameSyntax id => id.Identifier.Text,
-                        MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
-                        _ => null,
-                    };
-                    if (calledName != null)
-                        bridgeCallNames.Add(calledName);
-                }
+                    bridgeTargets[inv] = sym!.Name + "Async";
             }
         }
 
-        if (bridgeCallNames.Count == 0)
+        if (bridgeTargets.Count == 0)
             throw new InvalidOperationException(
                 $"Method '{methodName}' does not call any Asyncify-bridge sync wrapper. " +
                 "Bridge wrappers must be marked [Obsolete(\"Asyncify-bridge: call … instead.\")].");
 
+        // Annotate the exact bridge-call nodes in one batch; annotations survive WithModifiers().
+        const string BridgeCallAnnotation = "AsyncifyBridgeCall";
+        var annotatedMethodNode = methodNode.ReplaceNodes(
+            bridgeTargets.Keys,
+            (original, _) => original.WithAdditionalAnnotations(
+                new SyntaxAnnotation(BridgeCallAnnotation, bridgeTargets[original])));
+
         // Add async modifier.
         var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword)
             .WithTrailingTrivia(SyntaxFactory.Space);
-        var asyncMethod = methodNode.WithModifiers(methodNode.Modifiers.Add(asyncToken));
+        var asyncMethod = annotatedMethodNode.WithModifiers(annotatedMethodNode.Modifiers.Add(asyncToken));
 
-        // Rewrite each bridge call: bridgeMethod(args) → await bridgeMethodAsync(args).
-        // No cancellationToken argument — event handlers have none to forward.
-        var rewrittenMethod = asyncMethod;
-        foreach (var bridgeName in bridgeCallNames)
-        {
-            var rewriter = new EventHandlerBridgeCallRewriter(bridgeName);
-            rewrittenMethod = (MethodDeclarationSyntax)rewriter.Visit(rewrittenMethod)!;
-        }
+        // Replace ONLY the annotated bridge-call invocations: bridgeMethod(args) → await bridgeMethodAsync(args).
+        // Calls with the same name on unrelated types are untouched. No CT — event handlers have none.
+        var rewrittenMethod = asyncMethod.ReplaceNodes(
+            asyncMethod.DescendantNodes()
+                       .OfType<InvocationExpressionSyntax>()
+                       .Where(inv => inv.HasAnnotations(BridgeCallAnnotation))
+                       .ToList(),
+            (original, _) =>
+            {
+                var asyncMethodName = original.GetAnnotations(BridgeCallAnnotation).First().Data!;
+                ExpressionSyntax? newExpr = original.Expression switch
+                {
+                    IdentifierNameSyntax id =>
+                        SyntaxFactory.IdentifierName(asyncMethodName).WithTriviaFrom(id),
+                    MemberAccessExpressionSyntax ma =>
+                        ma.WithName(SyntaxFactory.IdentifierName(asyncMethodName).WithTriviaFrom(ma.Name)),
+                    _ => null,
+                };
+                if (newExpr == null) return original;
+
+                // When the bridge call is chained (e.g. bridge().Rows, bridge().AsDataView()),
+                // parenthesise the await so member/element access binds to the awaited value:
+                //   bridge().Rows → (await bridgeAsync()).Rows
+                bool needsParens = original.Parent is MemberAccessExpressionSyntax
+                                || original.Parent is ElementAccessExpressionSyntax
+                                || original.Parent is ConditionalAccessExpressionSyntax;
+
+                var awaitedCall = original.WithExpression(newExpr).WithoutLeadingTrivia();
+                ExpressionSyntax awaitExpr = SyntaxFactory.AwaitExpression(
+                    SyntaxFactory.Token(SyntaxKind.AwaitKeyword)
+                                 .WithTrailingTrivia(SyntaxFactory.Space),
+                    awaitedCall);
+
+                return (needsParens
+                    ? (ExpressionSyntax)SyntaxFactory.ParenthesizedExpression(awaitExpr)
+                    : awaitExpr)
+                    .WithLeadingTrivia(original.GetLeadingTrivia());
+            });
+
+        // Any delegate/lambda that now contains await (because a bridge call was rewritten) must
+        // itself be marked async — the rewriter above adds await but not the async modifier.
+        rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
 
         // Strip all [MigrationCandidate] attributes — the handler is now converted and no
         // longer needs any migration marker. Leaving them causes stale-flag failures on re-runs.
@@ -3380,44 +3436,6 @@ internal sealed class MigrationCandidateAttribute : Attribute
         return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
     }
 
-    /// <summary>
-    /// Rewrites calls to a specific Asyncify-bridge sync wrapper as awaited calls to its async
-    /// counterpart, without appending a <c>cancellationToken</c> argument. Used when the calling
-    /// method is an event handler that has no CT to forward.
-    /// <code>bridgedMethod(args) → await bridgedMethodAsync(args)</code>
-    /// </summary>
-    private sealed class EventHandlerBridgeCallRewriter(string bridgedMethodName) : CSharpSyntaxRewriter
-    {
-        private readonly string _asyncMethodName = bridgedMethodName + "Async";
-
-        public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
-        {
-            var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
-
-            ExpressionSyntax newExpression;
-            switch (visited.Expression)
-            {
-                case IdentifierNameSyntax id when id.Identifier.Text == bridgedMethodName:
-                    newExpression = SyntaxFactory.IdentifierName(_asyncMethodName).WithTriviaFrom(id);
-                    break;
-                case MemberAccessExpressionSyntax ma when ma.Name.Identifier.Text == bridgedMethodName:
-                    newExpression = ma.WithName(
-                        SyntaxFactory.IdentifierName(_asyncMethodName).WithTriviaFrom(ma.Name));
-                    break;
-                default:
-                    return visited;
-            }
-
-            // If already the direct operand of an await expression, just rename — don't double-wrap.
-            if (visited.Parent is AwaitExpressionSyntax)
-                return visited.WithExpression(newExpression);
-
-            return SyntaxFactory.AwaitExpression(
-                SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space),
-                visited.WithExpression(newExpression));
-        }
-    }
-
     private sealed class MigrationCandidateRemover(string? pattern) : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
@@ -3428,6 +3446,57 @@ internal sealed class MigrationCandidateAttribute : Attribute
             if (keep.Count == node.Attributes.Count) return node;
             if (keep.Count == 0) return null;
             return node.WithAttributes(SyntaxFactory.SeparatedList(keep));
+        }
+    }
+
+    /// <summary>
+    /// Adds the <c>async</c> modifier to any anonymous function (delegate, lambda) whose body
+    /// contains an <c>await</c> expression that is directly in that function's scope — i.e. not
+    /// nested inside a further inner anonymous function or local function. This fixes the case
+    /// where a bridge-call rewriter introduces <c>await</c> inside a delegate that was not
+    /// previously async, producing a compile error.
+    /// </summary>
+    internal sealed class AsyncifyAnonymousFunctionsRewriter : CSharpSyntaxRewriter
+    {
+        public override SyntaxNode? VisitAnonymousMethodExpression(AnonymousMethodExpressionSyntax node)
+        {
+            var visited = (AnonymousMethodExpressionSyntax)base.VisitAnonymousMethodExpression(node)!;
+            if (visited.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword) || !HasDirectAwait(visited.Block))
+                return visited;
+            return visited.WithAsyncKeyword(
+                SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
+
+        public override SyntaxNode? VisitParenthesizedLambdaExpression(ParenthesizedLambdaExpressionSyntax node)
+        {
+            var visited = (ParenthesizedLambdaExpressionSyntax)base.VisitParenthesizedLambdaExpression(node)!;
+            if (visited.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword) || !HasDirectAwait(visited.Body))
+                return visited;
+            return visited.WithAsyncKeyword(
+                SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
+
+        public override SyntaxNode? VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node)
+        {
+            var visited = (SimpleLambdaExpressionSyntax)base.VisitSimpleLambdaExpression(node)!;
+            if (visited.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword) || !HasDirectAwait(visited.Body))
+                return visited;
+            return visited.WithAsyncKeyword(
+                SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
+
+        // Returns true if `body` contains an AwaitExpressionSyntax that is NOT nested inside an
+        // inner anonymous function or local function (which would be its own async scope).
+        private static bool HasDirectAwait(SyntaxNode? body)
+        {
+            if (body == null) return false;
+            return body.DescendantNodes(n =>
+                    n is not AnonymousMethodExpressionSyntax &&
+                    n is not ParenthesizedLambdaExpressionSyntax &&
+                    n is not SimpleLambdaExpressionSyntax &&
+                    n is not LocalFunctionStatementSyntax)
+                .OfType<AwaitExpressionSyntax>()
+                .Any();
         }
     }
 }

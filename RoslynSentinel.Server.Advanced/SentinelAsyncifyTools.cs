@@ -46,6 +46,10 @@ public class SentinelAsyncifyTools
         _logger = logger;
     }
 
+    // Score thresholds — used as parameter defaults and referenced in zero-result Directive messages.
+    private const int DefaultMinScore = 50;
+    private const int DefaultScoreThreshold = 60;
+
     // ── scan_migration_candidates ─────────────────────────────────────────────
 
     [McpServerTool(Name = "ScanAsyncMigrationCandidates")]
@@ -372,7 +376,7 @@ public class SentinelAsyncifyTools
         List<FlagCandidateTarget>? flagTargets = null,
         string? projectName = null,
         AsyncMigrationPattern pattern = AsyncMigrationPattern.AsyncBridgeCandidate,
-        int minScore = 50,
+        int minScore = DefaultMinScore,
         bool dryRun = false,
         bool forceRescan = false,
         Progress<string>? progress = null,
@@ -387,6 +391,18 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (scope == "targets" && (flagTargets == null || flagTargets.Count == 0))
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = true,
+                Data = new BatchResultSummary
+                {
+                    Severity = "ok",
+                    Directive = $"scope=\"targets\" requires flagTargets to be non-empty — no methods were flagged. " +
+                                $"Pass targets from scan_migration_candidates, or use scope=\"project\" for autonomous discovery (default minScore={DefaultMinScore}).",
+                }
+            };
 
         try
         {
@@ -564,6 +580,9 @@ public class SentinelAsyncifyTools
             BridgedMethodName; SymbolId is null (enrich from ObsoleteCallerFinding.SymbolId when
             disambiguation is needed). Empty when Succeeded=0.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        IMPORTANT: targets must be non-empty. An empty list is a no-op — no methods are processed.
+        Use scan_migration_candidates to get targets, or use the asyncify macro which auto-discovers [MigrationCandidate] methods.
+        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
         """)]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
         List<BatchTarget> targets,
@@ -582,6 +601,17 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (targets == null || targets.Count == 0)
+            return new ToolResult<BridgeAsyncMethodsResult>
+            {
+                Success = true,
+                Data = new BridgeAsyncMethodsResult
+                {
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates to get targets, or use the asyncify macro which auto-discovers [MigrationCandidate] methods." },
+                    SuggestedUpliftTargets = new List<UpliftTarget>()
+                }
+            };
 
         try
         {
@@ -639,6 +669,9 @@ public class SentinelAsyncifyTools
             Each entry has FilePath (files touched during uplift); MethodNames is null (whole file).
             Empty when Succeeded=0.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        IMPORTANT: targets must be non-empty. An empty list is a no-op — no callers are uplifted.
+        Pass SuggestedUpliftTargets from bridge_async_methods as targets.
+        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
         """)]
     public async Task<ToolResult<UpliftCallersResult>> UpliftCallers(
         List<UpliftTarget> targets,
@@ -657,6 +690,17 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (targets == null || targets.Count == 0)
+            return new ToolResult<UpliftCallersResult>
+            {
+                Success = true,
+                Data = new UpliftCallersResult
+                {
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no callers uplifted. Pass SuggestedUpliftTargets from bridge_async_methods as targets, or use the asyncify macro." },
+                    SuggestedPropagateTargets = new List<BatchTarget>()
+                }
+            };
 
         try
         {
@@ -716,6 +760,9 @@ public class SentinelAsyncifyTools
         Returns BatchResultSummary. BlobName = full per-file detail on disk.
         Use get_operation_detail(changeId) for details.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        IMPORTANT: targets must be non-empty. An empty list is a no-op — no files are processed.
+        Pass SuggestedPropagateTargets from uplift_callers as targets, or specify files explicitly.
+        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
         """)]
     public async Task<ToolResult<BatchResultSummary>> PropagateCancellationToken(
         List<BatchTarget> targets,
@@ -733,6 +780,13 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (targets == null || targets.Count == 0)
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = true,
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Pass SuggestedPropagateTargets from uplift_callers as targets, or specify files explicitly. Prefer the asyncify macro." }
+            };
 
         try
         {
@@ -770,6 +824,9 @@ public class SentinelAsyncifyTools
         Returns BatchResultSummary. Succeeded = files modified. BlobName = full detail on disk.
         Use get_operation_detail(changeId) for per-file details.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        IMPORTANT: targets must be non-empty. An empty list is a no-op — no files are processed.
+        Specify the files (FilePath) where CancellationToken parameters should be added.
+        PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
         """)]
     public async Task<ToolResult<BatchResultSummary>> AddCancellationToken(
         List<BatchTarget> targets,
@@ -787,6 +844,13 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (targets == null || targets.Count == 0)
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = true,
+                Data = new BatchResultSummary { Directive = "targets was empty — no files processed. Specify the files (FilePath) where CancellationToken parameters should be added. Prefer the asyncify macro." }
+            };
 
         try
         {
@@ -839,6 +903,10 @@ public class SentinelAsyncifyTools
         or extraction failed. Failures[].Reason contains the diagnostic.
         BlobName = full per-target detail on disk.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
+        IMPORTANT: targets must be non-empty. An empty list is a no-op — no handlers are extracted.
+        Call scan_migration_candidates(pattern: "HandlerExtractCandidate") to find candidates.
+        PREFER asyncify macro (Phase 0 auto-extracts HandlerExtractCandidate methods): use this tool
+        only for custom extracted method names, partial-body extraction, or one-off targeted extraction.
         """)]
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         List<HandlerExtractTarget> targets,
@@ -855,6 +923,13 @@ public class SentinelAsyncifyTools
                               "No solution is loaded. Call load_solution first.")
             };
         }
+
+        if (targets == null || targets.Count == 0)
+            return new ToolResult<BatchResultSummary>
+            {
+                Success = true,
+                Data = new BatchResultSummary { Directive = "targets was empty — no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction." }
+            };
 
         try
         {
@@ -996,8 +1071,8 @@ public class SentinelAsyncifyTools
         bool propagateCancellationTokens = true,
         int maxMethods = 50,
         int maxCallersPerMethod = 10,
-        int minScore = 50,
-        int scoreThreshold = 60,
+        int minScore = DefaultMinScore,
+        int scoreThreshold = DefaultScoreThreshold,
         int maxRuntimeSeconds = 0,
         int maxIterations = 0,
         Progress<string>? progress = null,
@@ -1798,6 +1873,14 @@ public class SentinelAsyncifyTools
             "flag_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
         var status = _workspaceManager.GetBreakerStatus();
 
+        var flagDirective = status.Open ? status.Directive
+            : succeeded > 0 ? status.Directive
+            : skipped > 0
+                ? $"No methods were flagged — {skipped} candidate(s) were skipped (scored below minScore={input.MinScore} or already flagged). " +
+                  $"Default minScore is {DefaultMinScore}. Lower minScore or use forceRescan=true to re-evaluate existing flags."
+                : $"No async migration candidates found. Run scan_migration_candidates first to survey the codebase. " +
+                  $"Current minScore={input.MinScore} (default: {DefaultMinScore}).";
+
         return new BatchResultSummary
         {
             ChangeId = changeId,
@@ -1811,7 +1894,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = flagDirective,
             BreakerOpen = status.Open,
             MinCandidateScore = minCandidateScore,
         };
@@ -2656,7 +2739,7 @@ public class SentinelAsyncifyTools
             else
             {
                 directive = "No [MigrationCandidate] attributes found in the solution. " +
-                            "Run flag_migration_candidates(scope=\"project\", minScore=50) first to identify " +
+                            $"Run flag_migration_candidates(scope=\"project\", minScore={DefaultMinScore}) first to identify " +
                             "and tag async migration candidates, then re-run asyncify.";
             }
         }

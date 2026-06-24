@@ -302,7 +302,7 @@ public class SentinelScanTools
                 // ── dead-code ──────────────────────────────────────────────────────
 
                 case DetectorId.obsolete_callers:
-                    var result54 = await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken);
+                    var result54 = await _antiPatternEngine.FindObsoleteCallersAsync(null, filePath, projectName, cancellationToken: cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = result54 };
                 case DetectorId.uninstantiated_types:
                     var result55 = await _analysisEngine.FindUninstantiatedTypesAsync(projectName);

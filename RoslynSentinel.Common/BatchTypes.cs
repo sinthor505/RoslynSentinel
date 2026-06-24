@@ -113,10 +113,13 @@ public class UpliftTarget
     /// <summary>Name of the Asyncify-bridge sync method whose callers should be uplifted.</summary>
     public string BridgedMethodName { get; set; } = "";
     /// <summary>Restrict caller scan to one project. null = entire solution.</summary>
-    public string? ProjectName
-    {
-        get; set;
-    }
+    public string? ProjectName { get; set; }
+    /// <summary>
+    /// Optional Roslyn documentation-comment ID (e.g. <c>M:Avaal.Service.CommonSearch.search(System.String)</c>)
+    /// that uniquely identifies the bridge symbol. When set, only callers of this exact overload are uplifted —
+    /// unrelated methods with the same name on other types are ignored. Copy from <c>ObsoleteCallerFinding.SymbolId</c>.
+    /// </summary>
+    public string? SymbolId { get; set; }
 }
 
 /// <summary>Canonical input for <c>run_uplift</c>.</summary>
@@ -242,7 +245,7 @@ public class BridgeAsyncMethodsResult
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
     /// Bridged method names ready to pass as <c>targets</c> to <c>uplift_callers</c>.
-    /// Each entry has <c>BridgedMethodName</c>; <c>ProjectName</c> is null (solution-scoped).
+    /// Each entry has <c>BridgedMethodName</c> and <c>SymbolId</c>; <c>ProjectName</c> is null (solution-scoped).
     /// </summary>
     public List<UpliftTarget> SuggestedUpliftTargets { get; init; } = new();
 }

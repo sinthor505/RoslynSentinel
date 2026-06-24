@@ -402,4 +402,140 @@ public class Service
             () => _engine.ConvertToAsyncBridgeAsync("DoesNotExist.cs", "SomeMethod"),
             "Should throw when the file is not found in the loaded solution.");
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Modifier propagation
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_InstanceMethod_AsyncOverloadIsNotStatic()
+    {
+        SetSource(@"
+public class Service
+{
+    public void DoWork(string arg) { _ = arg; }
+}", "Service.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var text = result.UpdatedText!;
+
+        Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
+            "async overload must be public instance (non-static).");
+        Assert.That(text, Does.Not.Contain("static async Task DoWorkAsync"),
+            "async overload must not acquire a static modifier when original was instance.");
+    }
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_StaticMethod_AsyncOverloadIsStatic()
+    {
+        SetSource(@"
+public class Service
+{
+    public static void DoWork(string arg) { _ = arg; }
+}", "Service.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var text = result.UpdatedText!;
+
+        Assert.That(text, Does.Contain("public static async Task DoWorkAsync"),
+            "async overload of a static method must also be static.");
+    }
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_OverrideMethod_AsyncOverloadStripsOverride()
+    {
+        SetSource(@"
+using System.Threading.Tasks;
+public abstract class Base
+{
+    public abstract void DoWork(string arg);
+}
+public class Derived : Base
+{
+    public override void DoWork(string arg) { _ = arg; }
+}", "Service.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var text = result.UpdatedText!;
+
+        Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
+            "async overload must be present.");
+        Assert.That(text, Does.Not.Contain("override async Task DoWorkAsync"),
+            "async overload must not carry 'override' — there is no base counterpart to override.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ConvertEventHandlerCallerToAsyncVoidAsync — delegate async modifier
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertEventHandlerCaller_DelegateContainingBridgeCall_DelegateGetsAsyncModifier()
+    {
+        // The event handler calls a bridge wrapper inside an anonymous delegate passed to
+        // BeginInvoke. The rewriter must add 'async' to that delegate — without it the
+        // produced code has 'await' in a non-async context (CS4033 / compile error).
+        SetSource(@"
+using System;
+using System.Threading.Tasks;
+public class DispatchForm
+{
+    [Obsolete(""Asyncify-bridge: call refreshDatagridAsync instead."", false)]
+    private void refreshDatagrid() => refreshDatagridAsync().GetAwaiter().GetResult();
+    private Task refreshDatagridAsync() => Task.CompletedTask;
+
+    private void Form_Load(object sender, EventArgs e)
+    {
+        BeginInvoke((Action)delegate
+        {
+            refreshDatagrid();
+        });
+    }
+
+    private void BeginInvoke(Action a) { }
+}", "DispatchForm.cs");
+
+        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync("DispatchForm.cs", "Form_Load");
+        var text = result.UpdatedText!;
+
+        Assert.That(text, Does.Contain("async void Form_Load"),
+            "Event handler must be uplifted to async void.");
+        Assert.That(text, Does.Contain("async delegate"),
+            "Anonymous delegate containing await must be marked async.");
+        Assert.That(text, Does.Contain("await refreshDatagridAsync()"),
+            "Bridge call inside the delegate must be replaced with await.");
+    }
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertEventHandlerCaller_LambdaContainingBridgeCall_LambdaGetsAsyncModifier()
+    {
+        SetSource(@"
+using System;
+using System.Threading.Tasks;
+public class DispatchForm
+{
+    [Obsolete(""Asyncify-bridge: call refreshDatagridAsync instead."", false)]
+    private void refreshDatagrid() => refreshDatagridAsync().GetAwaiter().GetResult();
+    private Task refreshDatagridAsync() => Task.CompletedTask;
+
+    private void Form_Load(object sender, EventArgs e)
+    {
+        BeginInvoke(() =>
+        {
+            refreshDatagrid();
+        });
+    }
+
+    private void BeginInvoke(Action a) { }
+}", "DispatchForm.cs");
+
+        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync("DispatchForm.cs", "Form_Load");
+        var text = result.UpdatedText!;
+
+        Assert.That(text, Does.Contain("async void Form_Load"),
+            "Event handler must be uplifted to async void.");
+        Assert.That(text, Does.Contain("async ()"),
+            "Lambda containing await must be marked async.");
+        Assert.That(text, Does.Contain("await refreshDatagridAsync()"),
+            "Bridge call inside the lambda must be replaced with await.");
+    }
 }

@@ -44,6 +44,7 @@ public record ExceptionHandlingFinding(
 
 /// <summary>A call site that invokes a method decorated with <see cref="ObsoleteAttribute"/>.</summary>
 /// <param name="ObsoleteMethodName">Simple name of the [Obsolete]-decorated method.</param>
+/// <param name="SymbolId">Roslyn documentation-comment ID uniquely identifying the bridge method (e.g. <c>M:Avaal.Service.CommonSearch.search(System.String)</c>). Pass as <c>symbolId</c> to <see cref="AntiPatternEngine.FindObsoleteCallersAsync"/> to target this exact symbol.</param>
 /// <param name="ObsoleteMessage">The message from the [Obsolete] attribute, or empty string.</param>
 /// <param name="DeclaringType">Fully-qualified type name that declares the obsolete method.</param>
 /// <param name="CallerMethod">Name of the method containing the call site.</param>
@@ -53,6 +54,7 @@ public record ExceptionHandlingFinding(
 /// <param name="CodeSnippet">Short source snippet around the call site.</param>
 public record ObsoleteCallerFinding(
     string ObsoleteMethodName,
+    string SymbolId,
     string ObsoleteMessage,
     string DeclaringType,
     string CallerMethod,
@@ -2558,6 +2560,7 @@ public class AntiPatternEngine
         string? messagePattern = null,
         string? filePath = null,
         string? projectName = null,
+        string? symbolId = null,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
@@ -2608,6 +2611,15 @@ public class AntiPatternEngine
                     // Filter by message pattern if provided.
                     if (messagePattern != null &&
                         !obsoleteMessage.Contains(messagePattern, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    // Filter by exact symbol ID (documentation-comment ID) when provided.
+                    // This ensures only the specific overload on the specific type is targeted,
+                    // even when unrelated types have methods with the same name.
+                    if (symbolId != null &&
+                        methodSymbol.GetDocumentationCommentId() != symbolId)
                     {
                         continue;
                     }
@@ -2703,6 +2715,7 @@ public class AntiPatternEngine
 
                             results.Add(new ObsoleteCallerFinding(
                                 ObsoleteMethodName: methodSymbol.Name,
+                                SymbolId: methodSymbol.GetDocumentationCommentId() ?? "",
                                 ObsoleteMessage: obsoleteMessage,
                                 DeclaringType: methodSymbol.ContainingType?.ToDisplayString() ?? string.Empty,
                                 CallerMethod: callerMethodName,
