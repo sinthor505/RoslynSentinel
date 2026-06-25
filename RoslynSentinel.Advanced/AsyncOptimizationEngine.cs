@@ -1676,7 +1676,16 @@ internal sealed class MigrationCandidateAttribute : Attribute
             .FirstOrDefault();
 
         // ── Build the new [MigrationCandidate(...)] attribute ────────────────
-        var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+        // Preserve the existing FlaggedDate if the method was already flagged for this pattern
+        // so re-flagging doesn't produce spurious Git diffs (only the date would change).
+        var flaggedDate = methodNode.AttributeLists
+            .SelectMany(al => al.Attributes)
+            .Where(a => { var n = a.Name.ToString(); return n == MigrationCandidateShortName || n == MigrationCandidateFullName; })
+            .Where(a => (a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null)?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern)
+            .Select(a => a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals?.Name.Identifier.Text == "FlaggedDate"))
+            .Select(arg => (arg?.Expression as LiteralExpressionSyntax)?.Token.ValueText)
+            .FirstOrDefault()
+            ?? System.DateTime.UtcNow.ToString("yyyy-MM-dd");
         var arguments = new System.Collections.Generic.List<AttributeArgumentSyntax>
         {
             SyntaxFactory.AttributeArgument(
@@ -1710,7 +1719,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             null,
             SyntaxFactory.LiteralExpression(
                 SyntaxKind.StringLiteralExpression,
-                SyntaxFactory.Literal(today))));
+                SyntaxFactory.Literal(flaggedDate))));
 
         var newAttr = SyntaxFactory.Attribute(
             SyntaxFactory.IdentifierName(MigrationCandidateShortName),
@@ -1855,8 +1864,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     .Select(a => (a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null)?.Expression as LiteralExpressionSyntax)?.Token.ValueText)
                     .FirstOrDefault();
 
-                // Build new attribute.
-                var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
+                // Build new attribute. Preserve existing FlaggedDate to avoid spurious Git churn.
+                var flaggedDate = methodNode.AttributeLists
+                    .SelectMany(al => al.Attributes)
+                    .Where(a => { var n = a.Name.ToString(); return n == MigrationCandidateShortName || n == MigrationCandidateFullName; })
+                    .Where(a => (a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null)?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern)
+                    .Select(a => a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals?.Name.Identifier.Text == "FlaggedDate"))
+                    .Select(arg => (arg?.Expression as LiteralExpressionSyntax)?.Token.ValueText)
+                    .FirstOrDefault()
+                    ?? System.DateTime.UtcNow.ToString("yyyy-MM-dd");
                 var args = new List<AttributeArgumentSyntax>
                 {
                     SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
@@ -1878,7 +1894,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 args.Add(SyntaxFactory.AttributeArgument(
                     SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")), null,
-                    SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(today))));
+                    SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(flaggedDate))));
 
                 var newAttr = SyntaxFactory.Attribute(
                     SyntaxFactory.IdentifierName(MigrationCandidateShortName),
