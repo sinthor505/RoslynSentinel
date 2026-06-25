@@ -48,7 +48,7 @@ public class SentinelAsyncifyTools
 
     // Score thresholds — used as parameter defaults and referenced in zero-result Directive messages.
     private const int DefaultMinScore = 50;
-    private const int DefaultScoreThreshold = 60;
+    private const int DefaultScoreThreshold = 50;
 
     // ── scan_migration_candidates ─────────────────────────────────────────────
 

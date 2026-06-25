@@ -22,6 +22,8 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T14 – UpliftCallers, empty targets → 0 attempted, SuggestedPropagateTargets empty
 ///   T15 – EventHandlersToAsync, no solution → SolutionNotLoaded
 ///   T17 – UpliftCallers, qualified static call → qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
+///   T19 – Asyncify macro, default params, Score=49 candidate → Phase 2 skips it (below aligned threshold of 50)
+///   T20 – Asyncify macro, default params, Score=70 candidate with caller → bridges AND uplifts (Phase 2 + 3)
 /// </summary>
 [TestFixture]
 public class SentinelAsyncifyToolsTests
@@ -514,6 +516,113 @@ public static class DataHelper
             "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
         Assert.That(text, Does.Not.Contain("await GetDataAsync(cancellationToken)."),
             "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T19 – Asyncify macro, default params, Score=49 candidate → Phase 2 skips it
+    // Verifies the lower boundary: a candidate one point below DefaultScoreThreshold=50
+    // is found by Phase 2 but excluded, so Phase 3 (uplift) is never entered.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    // Score=49 — one point below the aligned DefaultScoreThreshold=50.
+    private const string LoadListLowScoreSource = """
+        public class RegionForm
+        {
+            private static object regionListBindingSource;
+
+            [MigrationCandidate("AsyncBridgeCandidate", Score = 49, Reason = "calls-CommonSearch:30 static:5 service-class:14", FlaggedDate = "2026-05-28")]
+            private void loadList()
+            {
+                regionListBindingSource = CommonSearch.search(TripRegion.listAllSQL);
+            }
+
+            private static class CommonSearch { public static object search(string sql) => sql; }
+            private static class TripRegion { public static string listAllSQL = "SELECT * FROM TripRegion"; }
+        }
+        """ + "\n" + AttrStub;
+
+    [Test, CancelAfter(15000)]
+    public async Task T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift()
+    {
+        // loadList has Score=49, one below DefaultScoreThreshold=50 — must not be bridged.
+        SetSource(LoadListLowScoreSource);
+
+        var result = await _asyncifyTools.Asyncify();
+
+        Assert.That(result.Success, Is.True, result.Error?.ToString());
+        Assert.That(result.Data, Is.Not.Null);
+
+        Assert.That(result.Data!.Succeeded, Is.EqualTo(0),
+            "loadList (Score=49) is below scoreThreshold=50 and must not be bridged.");
+
+        Assert.That(result.Data.MinCandidateScore, Is.EqualTo(49),
+            "Phase 2 saw the Score=49 candidate but excluded it — MinCandidateScore should be 49.");
+
+        Assert.That(result.Data.Directive, Does.Contain("scoreThreshold").And.Contain("49"),
+            "Directive must cite both the scoreThreshold and the candidate's score of 49.");
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T20 – Asyncify macro, default params, Score=70 candidate with a caller →
+    //        Phase 2 bridges, Phase 3 uplifts the caller
+    // Confirms the full pipeline runs when the candidate score meets the threshold.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private const string LoadListHighScoreWithCallerSource = """
+        using System;
+        using System.Threading;
+        using System.Threading.Tasks;
+
+        public class RegionForm
+        {
+            private static object regionListBindingSource;
+
+            [MigrationCandidate("AsyncBridgeCandidate", Score = 70, Reason = "calls-CommonSearch:70", FlaggedDate = "2026-06-01")]
+            public void loadList()
+            {
+                regionListBindingSource = CommonSearch.search(TripRegion.listAllSQL);
+            }
+
+            private static class CommonSearch { public static object search(string sql) => sql; }
+            private static class TripRegion { public static string listAllSQL = "SELECT * FROM TripRegion"; }
+        }
+
+        public class CallerClass
+        {
+            private RegionForm _form = new RegionForm();
+            public void DoWork() { _form.loadList(); }
+        }
+        """ + "\n" + AttrStub;
+
+    [Test, CancelAfter(60000)]
+    public async Task T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers()
+    {
+        SetSource(LoadListHighScoreWithCallerSource);
+
+        var result = await _asyncifyTools.Asyncify();
+
+        Assert.That(result.Success, Is.True, result.Error?.ToString());
+        Assert.That(result.Data, Is.Not.Null);
+
+        // Phase 2 bridges loadList (Score=70 ≥ scoreThreshold=60).
+        // Phase 3 uplifts CallerClass.DoWork — the caller of the bridge wrapper.
+        Assert.That(result.Data!.Succeeded, Is.GreaterThanOrEqualTo(2),
+            "Expected ≥ 2 successes: Phase 2 bridge (loadList) + Phase 3 uplift (DoWork). " +
+            $"Directive: {result.Data.Directive}");
+
+        // Verify the workspace reflects both the bridge and the uplift.
+        var solution = _workspaceManager.CurrentSolution;
+        var doc = solution?.Projects
+            .SelectMany(p => p.Documents)
+            .FirstOrDefault(d => string.Equals(d.FilePath, "RegionForm.cs", StringComparison.OrdinalIgnoreCase));
+
+        Assert.That(doc, Is.Not.Null, "RegionForm.cs must be present in the workspace.");
+        var updatedSource = (await doc!.GetTextAsync()).ToString();
+
+        Assert.That(updatedSource, Does.Contain("loadListAsync"),
+            "Phase 2 bridge must produce loadListAsync.");
+        Assert.That(updatedSource, Does.Contain("DoWorkAsync"),
+            "Phase 3 uplift must produce DoWorkAsync as the async version of DoWork.");
     }
 
     [Test, CancelAfter(30000)]

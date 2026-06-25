@@ -365,7 +365,7 @@ public class AsyncBatchEngine
     public async Task<BridgeBatchResult> RunBridgeBatchAsync(
         string? projectName = null,
         int maxBridges = 10,
-        int scoreThreshold = 60,
+        int scoreThreshold = 50,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
         IProgress<string>? progress = null,
