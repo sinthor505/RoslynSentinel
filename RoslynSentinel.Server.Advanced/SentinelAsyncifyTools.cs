@@ -1199,7 +1199,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -1420,7 +1420,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
 
@@ -1573,7 +1573,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -1680,7 +1680,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
 
@@ -1874,7 +1874,7 @@ public class SentinelAsyncifyTools
         var status = _workspaceManager.GetBreakerStatus();
 
         var flagDirective = status.Open ? status.Directive
-            : succeeded > 0 ? status.Directive
+            : succeeded > 0 ? WriteStatusNote(input.DryRun, succeeded) + status.Directive
             : skipped > 0
                 ? $"No methods were flagged — {skipped} candidate(s) were skipped (scored below minScore={input.MinScore} or already flagged). " +
                   $"Default minScore is {DefaultMinScore}. Lower minScore or use forceRescan=true to re-evaluate existing flags."
@@ -2762,13 +2762,14 @@ public class SentinelAsyncifyTools
             {
                 "batch_complete" => "All eligible candidates were processed in this run.",
                 "budget_exhausted" => $"Stopped after maxMethods={input.MaxMethods} limit — {bridgeRemainingCandidates} eligible candidate(s) remain; re-run to continue.",
-                "dry_run" => "Dry run complete — no files were written.",
+                "dry_run" => "Dry run complete — no files were written to disk.",
                 _ when bridgeStopReason.Length > 0 => $"Bridge phase ended: {bridgeStopReason}.",
                 _ => string.Empty,
             };
+            var writeNote = WriteStatusNote(input.DryRun, succeeded);
             directive = stopDesc.Length > 0
-                ? $"{stopDesc} {status2.Directive}".TrimEnd()
-                : status2.Directive;
+                ? $"{writeNote}{stopDesc} {status2.Directive}".TrimEnd()
+                : $"{writeNote}{status2.Directive}".TrimEnd();
         }
 
         return new BatchResultSummary
@@ -2940,7 +2941,7 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(dryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
     }
@@ -3155,10 +3156,17 @@ public class SentinelAsyncifyTools
             FailuresTruncated = failed > 10,
             FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
             Severity = status.Severity,
-            Directive = status.Directive,
+            Directive = WriteStatusNote(dryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
     }
+
+    // Returns a short prefix for BatchResultSummary.Directive that tells the model whether
+    // source files were actually written to disk or only computed (dry run).
+    private static string WriteStatusNote(bool dryRun, int succeeded) =>
+        dryRun ? "Dry run — no files written to disk. " :
+        succeeded > 0 ? $"{succeeded} change(s) written to disk. " :
+        "";
 
     // Converts an event-handler name to PascalCase by splitting on '_' and capitalising each part.
     // Example: "button1_Click" → "Button1Click", "Form_Load" → "FormLoad".

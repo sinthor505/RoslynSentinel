@@ -61,7 +61,11 @@ public partial class PersistentWorkspaceManager : IDisposable
         string ChangeId,
         List<FilePath> AffectedFiles,
         string Description
-    );
+    )
+    {
+        /// <summary>Changes are staged in memory — not yet written to disk. Call apply_staged_changes to apply.</summary>
+        public string Note => $"Staged — not yet written to disk. Call apply_staged_changes(changeId: \"{ChangeId}\") to apply.";
+    }
 
     public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
     {
