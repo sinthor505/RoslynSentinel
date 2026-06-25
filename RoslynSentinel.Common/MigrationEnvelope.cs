@@ -72,5 +72,10 @@ public record MigrationScanSummary(
     /// Minimum score across all scanned candidates.
     /// Use as the lower bound when setting <c>scoreThreshold</c> in Asyncify.
     /// </summary>
-    int? MinScore = null
+    int? MinScore = null,
+    /// <summary>
+    /// Populated when <c>autoFlag=true</c> — the result of the internal flag phase that ran
+    /// before the scan. Null when <c>autoFlag=false</c>.
+    /// </summary>
+    BatchResultSummary? FlagPhase = null
 );

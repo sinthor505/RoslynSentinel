@@ -55,27 +55,50 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "ScanAsyncMigrationCandidates")]
     [Produces(DataTag.MigrationCandidate)]
     [Description("""
-        Returns [MigrationCandidate]-attributed methods. Entry point for all async-migration workflows.
+        Step 1 of the bridge workflow — flags qualifying methods with [MigrationCandidate] attributes
+        then reports the results. With default parameters, scans the entire solution.
 
+        Set forceRescan=false when running multiple scans back-to-back to skip re-flagging and just
+        read existing attributes.
+
+        Full bridge workflow:
+          1. scan_migration_candidates(summarize: true)     ← you are here (flags + reports)
+          2. bridge_async_methods(targets: [...])
+          3. uplift_callers(targets: SuggestedUpliftTargets)
+          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
+
+        scope: solution (default), project, or file.
+          solution — scan entire solution (projectName and filePath ignored).
+          project  — restrict to one project; projectName required.
+          file     — restrict to a single file; filePath required (flag phase skipped).
+        projectName: required when scope=project.
+        filePath: optional additional filter — restrict results to a single file (scan only; does not
+          affect the flag phase).
+        forceRescan: re-evaluate already-flagged methods during the flag phase (default true). Set
+          false to skip flagging and just read existing attributes.
+        minScore: minimum score to flag and to filter scan results (default 50).
         pattern: null (default) = all patterns.
 
         summarize=true → guaranteed ≤2KB dashboard.
           MigrationScanSummary fields: ByPattern (count per pattern), ByClass (ClassName, ProjectName,
           Count — sorted desc, capped at 10; ByClassTruncated=true when truncated), ByScoreBucket
           ("<0", "0-25", "26-50", "51-75", "76plus"), TopCandidates (MethodName, ClassName, Pattern,
-          Score, Summary — only when topN or minScore set, capped at 5 entries).
+          Score, Summary — only when topN or minScore set, capped at 5 entries),
+          FlagPhase (BatchResultSummary from the internal flag run — null when forceRescan=false).
 
         summarize=false + limit/offset → full paged List<MigrationCandidateFinding>. minScore filters in
         both modes; TotalRecords reflects post-filter count. A method flagged for two patterns appears twice.
         When results exceed the inline threshold, LargeResultInfo is populated with a scanId for paging.
         """)]
     public async Task<ToolResult<object>> ScanAsyncMigrationCandidates(
-        string? filePath = null,
+        ToolScope scope = ToolScope.solution,
         string? projectName = null,
+        string? filePath = null,
         AsyncMigrationPattern? pattern = null,
         bool summarize = false,
         int? topN = null,
         int? minScore = null,
+        bool forceRescan = true,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
         Progress<string>? progress = null,
@@ -91,6 +114,24 @@ public class SentinelAsyncifyTools
             };
         }
 
+        // ── auto-flag phase (skipped for file scope or when forceRescan=false) ──
+        var scopedProjectName = scope == ToolScope.project ? projectName : null;
+        var scopedFilePath = scope == ToolScope.file ? filePath : null;
+        BatchResultSummary? flagPhaseResult = null;
+        if (forceRescan && scope != ToolScope.file)
+        {
+            var flagInput = new FlagCandidatesInput
+            {
+                Scope = "project",
+                ProjectName = scopedProjectName,
+                Pattern = pattern?.ToString() ?? "AsyncBridgeCandidate",
+                MinScore = minScore ?? DefaultMinScore,
+                ForceRescan = true,
+                DryRun = false,
+            };
+            flagPhaseResult = await FlagMigrationCandidatesCore(flagInput, progress, cancellationToken);
+        }
+
         // ── summarize=true path: always inline, never touches threshold ───
         if (summarize)
         {
@@ -98,7 +139,7 @@ public class SentinelAsyncifyTools
             try
             {
                 summaryFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(filePath, projectName, pattern?.ToString());
+                    .FindMigrationCandidatesAsync(scopedFilePath, scopedProjectName, pattern?.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -171,7 +212,8 @@ public class SentinelAsyncifyTools
                 ByScoreBucket: buckets,
                 TopCandidates: topCandidates,
                 ByClassTruncated: byClassTruncated,
-                MinScore: CandidateScoreAnalyzer.ComputeMin(aggregateFindings.Select(f => f.Score)));
+                MinScore: CandidateScoreAnalyzer.ComputeMin(aggregateFindings.Select(f => f.Score)),
+                FlagPhase: flagPhaseResult);
 
             // B1 Fix 4: 10 KB overflow safety net — should be unreachable with slim types + caps.
             const int SummaryThresholdBytes = 10 * 1024;
@@ -229,7 +271,7 @@ public class SentinelAsyncifyTools
             try
             {
                 allFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(filePath, projectName, pattern?.ToString());
+                    .FindMigrationCandidatesAsync(scopedFilePath, scopedProjectName, pattern?.ToString());
             }
             catch (ArgumentException ex)
             {
@@ -341,38 +383,11 @@ public class SentinelAsyncifyTools
 
     // ── flag_migration_candidates ─────────────────────────────────────────────
 
-    [McpServerTool(Name = "FlagAsyncMigrationCandidates")]
-    [Produces(DataTag.BatchResultSummary)]
-    [Description("""
-        Step 1 of the manual bridge path — marks methods with [MigrationCandidate] attributes so that
-        bridge_async_methods can locate them. Skip this step when using the asyncify macro (which flags
-        internally). Call scan_migration_candidates first to identify candidates.
-
-        Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)  — survey candidates
-          2. flag_migration_candidates                   ← you are here
-          3. bridge_async_methods(targets: [...])
-          4. uplift_callers(targets: SuggestedUpliftTargets from bridge result)
-          5. propagate_cancellation_token(targets: SuggestedPropagateTargets from uplift result)
-
-        scope: "targets" (default) or "project".
-          "targets" — flag an explicit list. Required: flagTargets.
-          "project" — autonomous scan; scores and flags qualifying methods.
-                      Required: leave flagTargets null. Optional: projectName, pattern, minScore, forceRescan.
-
-        flagTargets: scope="targets" — list of { FilePath, MethodName, Pattern, Score?, Reason? }.
-        projectName: scope="project" — restrict to one project; null = entire solution.
-        pattern: migration pattern to apply (default AsyncBridgeCandidate).
-        minScore: minimum score to flag (scope="project" only, default 50).
-        forceRescan: re-evaluate already-flagged methods (scope="project" only, default false).
-        dryRun: reports what would be flagged without writing files.
-
-        Returns BatchResultSummary. Succeeded = methods flagged. Skipped = below-minScore or already-flagged.
-        BlobName = full per-method detail on disk. Use get_operation_detail(changeId) for details.
-        Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
-        """)]
+    // ── FlagAsyncMigrationCandidates: internal use only (not exposed as MCP tool) ──
+    // Flagging is now integrated into ScanAsyncMigrationCandidates (autoFlag=true, default).
+    // Use scan_migration_candidates for the standard workflow.
     public async Task<ToolResult<BatchResultSummary>> FlagAsyncMigrationCandidates(
-        string scope = "targets",
+        string scope = "project",
         List<FlagCandidateTarget>? flagTargets = null,
         string? projectName = null,
         AsyncMigrationPattern pattern = AsyncMigrationPattern.AsyncBridgeCandidate,
@@ -400,7 +415,7 @@ public class SentinelAsyncifyTools
                 {
                     Severity = "ok",
                     Directive = $"scope=\"targets\" requires flagTargets to be non-empty — no methods were flagged. " +
-                                $"Pass targets from scan_migration_candidates, or use scope=\"project\" for autonomous discovery (default minScore={DefaultMinScore}).",
+                                $"Provide a flagTargets list, or omit scope to use autonomous project-wide discovery (default minScore={DefaultMinScore}).",
                 }
             };
 
@@ -554,16 +569,15 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "BridgeAsyncMethods")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Step 2 of the bridge path — converts each named method to the Asyncify-bridge pattern:
-        a sync wrapper that delegates to an async overload. Call after flag_migration_candidates,
-        or use the asyncify macro to run all steps automatically.
+        Step 2 of the bridge workflow — converts each named method to the Asyncify-bridge pattern:
+        a sync wrapper that delegates to an async overload.
+        Use the asyncify macro to run all steps automatically.
 
         Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)
-          2. flag_migration_candidates(scope: "project")
-          3. bridge_async_methods                        ← you are here
-          4. uplift_callers(targets: SuggestedUpliftTargets)  ← pass SuggestedUpliftTargets directly
-          5. propagate_cancellation_token(targets: SuggestedPropagateTargets)
+          1. scan_migration_candidates(summarize: true)   — flags + reports
+          2. bridge_async_methods                         ← you are here
+          3. uplift_callers(targets: SuggestedUpliftTargets)
+          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
 
         targets: list of { FilePath, MethodNames } — MethodNames is required (not optional here).
         dryRun: validates without writing files. SuggestedUpliftTargets is still populated.
@@ -581,7 +595,7 @@ public class SentinelAsyncifyTools
             disambiguation is needed). Empty when Succeeded=0.
         Severity="halt" → breaker open; call get_breaker_status then reset_breaker.
         IMPORTANT: targets must be non-empty. An empty list is a no-op — no methods are processed.
-        Use scan_migration_candidates to get targets, or use the asyncify macro which auto-discovers [MigrationCandidate] methods.
+        Call scan_migration_candidates(summarize: true) first to discover and flag candidates.
         PREFER asyncify macro: use individual tools only when manual step-by-step control is required.
         """)]
     public async Task<ToolResult<BridgeAsyncMethodsResult>> BridgeAsyncMethods(
@@ -608,7 +622,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = new BridgeAsyncMethodsResult
                 {
-                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates to get targets, or use the asyncify macro which auto-discovers [MigrationCandidate] methods." },
+                    Summary = new BatchResultSummary { Directive = "targets was empty — no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates." },
                     SuggestedUpliftTargets = new List<UpliftTarget>()
                 }
             };
@@ -646,15 +660,14 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "UpliftCallers")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Step 3 of the bridge path — updates sync callers of each bridge wrapper to call the async
+        Step 3 of the bridge workflow — updates sync callers of each bridge wrapper to call the async
         overload directly. Pass SuggestedUpliftTargets from bridge_async_methods as targets.
 
         Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)
-          2. flag_migration_candidates(scope: "project")
-          3. bridge_async_methods(targets: [...])
-          4. uplift_callers                              ← you are here
-          5. propagate_cancellation_token(targets: SuggestedPropagateTargets)  ← pass SuggestedPropagateTargets
+          1. scan_migration_candidates(summarize: true)   — flags + reports
+          2. bridge_async_methods(targets: [...])
+          3. uplift_callers                               ← you are here
+          4. propagate_cancellation_token(targets: SuggestedPropagateTargets)
 
         targets: list of { BridgedMethodName, ProjectName? }. Pass SuggestedUpliftTargets from
           bridge_async_methods directly — no transformation required.
@@ -740,16 +753,15 @@ public class SentinelAsyncifyTools
     [McpServerTool(Name = "PropagateCancellationToken")]
     [Produces(DataTag.BatchResultSummary)]
     [Description("""
-        Step 4 of the bridge path — threads CancellationToken through async call chains in the
+        Step 4 of the bridge workflow — threads CancellationToken through async call chains in the
         specified files. Pass SuggestedPropagateTargets from uplift_callers as targets.
         Also usable standalone to clean up CT forwarding in any set of files.
 
         Full bridge workflow:
-          1. scan_migration_candidates(summarize: true)
-          2. flag_migration_candidates(scope: "project")
-          3. bridge_async_methods(targets: [...])
-          4. uplift_callers(targets: [...])
-          5. propagate_cancellation_token               ← you are here
+          1. scan_migration_candidates(summarize: true)   — flags + reports
+          2. bridge_async_methods(targets: [...])
+          3. uplift_callers(targets: [...])
+          4. propagate_cancellation_token                  ← you are here
                targets: SuggestedPropagateTargets from uplift_callers — no transformation required.
 
         targets: list of { FilePath, MethodNames? }. null MethodNames = all eligible methods in the file.
@@ -1878,8 +1890,8 @@ public class SentinelAsyncifyTools
             : skipped > 0
                 ? $"No methods were flagged — {skipped} candidate(s) were skipped (scored below minScore={input.MinScore} or already flagged). " +
                   $"Default minScore is {DefaultMinScore}. Lower minScore or use forceRescan=true to re-evaluate existing flags."
-                : $"No async migration candidates found. Run scan_migration_candidates first to survey the codebase. " +
-                  $"Current minScore={input.MinScore} (default: {DefaultMinScore}).";
+                : $"No methods in the solution qualified for flagging at minScore={input.MinScore}. " +
+                  $"Try lowering minScore (e.g., minScore=25), or run forceRescan=true to re-evaluate already-flagged methods.";
 
         return new BatchResultSummary
         {

@@ -523,7 +523,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics. file → scopeName=filePath; project → scopeName=projectName; solution → scopeName ignored. summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20).")]
     public async Task<ToolResult<object>> GetDiagnostics(
-        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] DiagnosticScope scope,
+        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope,
         string? scopeName = null,
         bool summarize = false,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
@@ -535,7 +535,7 @@ public class SentinelWorkspaceTools
         {
             EngineResultWrapper<DiagnosticSummary> result;
             DiagnosticSummary summary;
-            if (scope == DiagnosticScope.file)
+            if (scope == ToolScope.file)
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
@@ -544,7 +544,7 @@ public class SentinelWorkspaceTools
                 result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName);
                 summary = result.Data;
             }
-            else if (scope == DiagnosticScope.project)
+            else if (scope == ToolScope.project)
             {
                 if (string.IsNullOrEmpty(scopeName))
                 {
@@ -553,7 +553,7 @@ public class SentinelWorkspaceTools
                 result = await _diagnosticEngine.GetProjectDiagnosticsAsync(scopeName);
                 summary = result.Data;
             }
-            else if (scope == DiagnosticScope.solution)
+            else if (scope == ToolScope.solution)
             {
                 result = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails);
                 summary = result.Data;

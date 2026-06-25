@@ -10,7 +10,7 @@ public enum GitOperation { status, log, diff, stage, add, commit, revert }
 // ── Workspace ─────────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum DiagnosticScope { file, project, solution }
+public enum ToolScope { file, project, solution }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum FeaturesAction { list, get, update }
