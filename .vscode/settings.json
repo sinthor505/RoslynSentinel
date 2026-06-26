@@ -1,6 +1,0 @@
-{
-    "editor.occurrencesHighlight": "off",
-    "editor.selectionHighlight": false,
-    "claudeCode.allowDangerouslySkipPermissions": true,
-    "claudeCode.initialPermissionMode": "bypassPermissions"
-}
