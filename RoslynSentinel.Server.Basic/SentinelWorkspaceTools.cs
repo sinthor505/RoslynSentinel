@@ -964,7 +964,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, succeeded, rolledback, file:<path>, or omit for all items. Unknown filter values return an error. maxItems caps the returned slice — never dumps the full document.")]
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. maxItems caps the returned slice.")]
     public async Task<ToolResult<object>> GetOperationDetail(
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
@@ -1012,25 +1012,18 @@ public class SentinelWorkspaceTools
                 }
                 else
                 {
-                    var normalised = filter.ToLowerInvariant();
-                    if (normalised is not ("failures" or "skipped" or "rolledback" or "succeeded"))
+                    var outcome = ResolveOutcomeFilter(filter);
+                    if (outcome is null)
                     {
                         return new ToolResult<object>()
                         {
                             Success = false,
                             Error = new ResultError(
                                 ToolErrorCode.InvalidArgument,
-                                $"Unknown filter \"{filter}\". Valid values: failures, skipped, succeeded, rolledback, file:<path>, or omit for all items.")
+                                $"Unknown filter \"{filter}\". Accepted prefixes: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback. Use file:<path> to filter by path, or omit for all items.")
                         };
                     }
-                    filtered = normalised switch
-                    {
-                        "failures" => allItems.Where(r => r.Outcome == OperationOutcome.Failed),
-                        "skipped" => allItems.Where(r => r.Outcome == OperationOutcome.Skipped),
-                        "succeeded" => allItems.Where(r => r.Outcome == OperationOutcome.Succeeded),
-                        "rolledback" => allItems.Where(r => r.Outcome == OperationOutcome.RolledBack),
-                        _ => allItems,
-                    };
+                    filtered = allItems.Where(r => r.Outcome == outcome.Value);
                 }
             }
 
@@ -1055,6 +1048,21 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "GetOperationDetail failed for '{ChangeId}'", changeId);
             return new ToolResult<object>() { Success = false, Error = new ResultError("GetOperationDetailFailed", $"GetOperationDetail failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
+    }
+
+    // Maps a human-readable filter string to an OperationOutcome via prefix matching.
+    // Returns null when the prefix is unrecognised so the caller can return a helpful error.
+    private static OperationOutcome? ResolveOutcomeFilter(string filter)
+    {
+        var f = filter.ToLowerInvariant();
+        if (f.StartsWith("fail") || f.StartsWith("err"))    return OperationOutcome.Failed;
+        if (f.StartsWith("skip") || f.StartsWith("warn"))   return OperationOutcome.Skipped;
+        if (f.StartsWith("ok")   || f.StartsWith("pass")
+         || f.StartsWith("info") || f.StartsWith("success")
+         || f.StartsWith("succeed"))                         return OperationOutcome.Succeeded;
+        if (f.StartsWith("roll") || f.StartsWith("revert")
+         || f.StartsWith("undo"))                            return OperationOutcome.RolledBack;
+        return null;
     }
 
     [McpServerTool(Name = "UndoLastApply")]
