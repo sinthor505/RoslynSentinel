@@ -2828,6 +2828,7 @@ public class SentinelAsyncifyTools
             Directive = directive,
             BreakerOpen = status2.Open,
             MinCandidateScore = bridgeMinScore,
+            Suggestions = AsyncMigrationDiagnostic.Analyse(succeeded, failed, changeId, items),
         };
     }
 

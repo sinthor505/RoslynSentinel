@@ -69,6 +69,12 @@ public record BatchResultSummary : EngineResultBase
     /// Null when no candidates were scored or the operation used scope="targets".
     /// </summary>
     public int? MinCandidateScore { get; init; }
+    /// <summary>
+    /// Actionable diagnostic suggestions, populated automatically when <c>succeeded==0</c> or
+    /// <c>failed&gt;0</c>. Each entry is a self-contained sentence describing a detected pattern
+    /// and the recommended next step. Null when everything succeeded or no patterns were detected.
+    /// </summary>
+    public List<string>? Suggestions { get; init; }
 }
 
 /// <summary>Per-failure detail included inline in BatchResultSummary (capped at 10 when Failed>10).</summary>
