@@ -991,8 +991,16 @@ public class AsyncBatchEngine
             return source;
         }
 
+        // Determine the cancellation-token expression to inject.
+        // Use the existing CT param name so the argument binds to a variable already in scope.
+        // Fall back to CancellationToken.None for methods that have no CT parameter (e.g. event
+        // handlers whose signature is fixed by the delegate contract, or older async helpers).
+        var ctParam = callerAsyncMethod.ParameterList.Parameters
+            .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
+        var ctExpression = ctParam?.Identifier.Text ?? "CancellationToken.None";
+
         // Apply the rewriter scoped to only this method's subtree.
-        var rewriter = new BridgeCallRewriter(bridgedMethodName);
+        var rewriter = new BridgeCallRewriter(bridgedMethodName, ctExpression);
         var newMethod = (MethodDeclarationSyntax)rewriter.Visit(callerAsyncMethod)!;
         // Any delegate/lambda that now contains await must itself be marked async.
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
@@ -1017,6 +1025,7 @@ public class AsyncBatchEngine
     {
         private readonly string _bridgedMethodName;
         private readonly string _asyncMethodName;
+        private readonly string _cancellationTokenExpression;
 
         /// <summary>
         /// Initialises the rewriter for the given bridged sync method name.
@@ -1025,10 +1034,16 @@ public class AsyncBatchEngine
         /// The name of the sync bridge method to replace (e.g. <c>"search"</c>).
         /// The async overload name is derived by appending <c>"Async"</c>.
         /// </param>
-        public BridgeCallRewriter(string bridgedMethodName)
+        /// <param name="cancellationTokenExpression">
+        /// Expression to inject as the final CT argument (e.g. <c>"cancellationToken"</c>,
+        /// <c>"ct"</c>, or <c>"CancellationToken.None"</c> for event handlers and other
+        /// methods whose signature cannot carry a CT parameter).
+        /// </param>
+        public BridgeCallRewriter(string bridgedMethodName, string cancellationTokenExpression = "cancellationToken")
         {
             _bridgedMethodName = bridgedMethodName;
             _asyncMethodName = bridgedMethodName + "Async";
+            _cancellationTokenExpression = cancellationTokenExpression;
         }
 
         /// <inheritdoc/>
@@ -1074,8 +1089,10 @@ public class AsyncBatchEngine
                 return visited.WithExpression(newExpression);
             }
 
-            // Append cancellationToken as the final positional argument.
-            var ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
+            // Append the cancellation-token expression as the final positional argument.
+            // Expression is either an identifier (e.g. "cancellationToken") or a member access
+            // (e.g. "CancellationToken.None") — ParseExpression handles both forms.
+            var ctArg = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(_cancellationTokenExpression));
             var newArgList = visited.ArgumentList.AddArguments(ctArg);
 
             var rewrittenCall = visited
