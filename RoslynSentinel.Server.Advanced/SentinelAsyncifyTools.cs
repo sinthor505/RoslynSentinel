@@ -2549,7 +2549,13 @@ public class SentinelAsyncifyTools
             }
 
             // ── Phase 3: Uplift ───────────────────────────────────────────────
-            if (bridgeResult.Applied.Count > 0)
+            // Already-bridged methods (stale AsyncBridgeCandidate flags from a prior run) were
+            // skipped by the bridge phase, but their callers may still need uplift. Include them
+            // so Asyncify makes progress on re-runs without requiring a manual flag refresh first.
+            var alreadyBridgedSkipped = bridgeResult.Skipped
+                .Where(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (bridgeResult.Applied.Count > 0 || alreadyBridgedSkipped.Count > 0)
             {
                 var upliftTargets = bridgeResult.Applied
                     .Where(a => input.Exclusions?.Contains(a.MethodName) != true)
@@ -2558,6 +2564,14 @@ public class SentinelAsyncifyTools
                         BridgedMethodName = a.MethodName,
                         ProjectName = input.ProjectName,
                     })
+                    .Concat(alreadyBridgedSkipped
+                        .Where(s => input.Exclusions?.Contains(s.MethodName) != true)
+                        .Select(s => new UpliftBatchMultiTarget
+                        {
+                            BridgedMethodName = s.MethodName,
+                            ProjectName = input.ProjectName,
+                        }))
+                    .DistinctBy(t => t.BridgedMethodName)
                     .ToList();
 
                 if (upliftTargets.Count > 0)
