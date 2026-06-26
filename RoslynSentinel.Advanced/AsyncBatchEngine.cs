@@ -749,6 +749,8 @@ public class AsyncBatchEngine
             string bridgedCallerSource;
             bool isEventHandlerInPlace = false;
             string? callerAsyncNameOverride = null;
+            bool useSemanticRewrite = false;
+            string? semanticCtExpression = null; // null = don't inject CT arg (event-handler/void-return callers)
 
             if (!File.Exists(callerFilePath))
             {
@@ -772,20 +774,37 @@ public class AsyncBatchEngine
             if (callerIsAsync)
             {
                 // Caller is itself async — rewrite its body directly without creating a new overload.
+                // Use semantic rewriting to avoid name-collision false positives: BridgeCallRewriter
+                // matches purely on method name and would wrongly rewrite calls to same-named methods
+                // on unrelated types (e.g. CommonSearch.search when the bridged method is on a
+                // different type), or inject CT into overloads that already have a pre-existing
+                // async variant with different parameter ordering.
                 _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' is already async — rewriting body in-place",
+                    "RunUpliftBatch: '{Method}' is already async — rewriting body in-place (semantic)",
                     callerMethodName);
                 bridgedCallerSource = preCheckSource;
                 callerAsyncNameOverride = callerMethodName;
+                bool callerReturnsVoid = callerMethodNode?.ReturnType.ToString() == "void";
+                var callerCtParam = callerMethodNode?.ParameterList.Parameters
+                    .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
+                // async void = event handler: don't inject CT (the async overload's default covers it).
+                semanticCtExpression = callerReturnsVoid ? null : (callerCtParam?.Identifier.Text ?? "CancellationToken.None");
+                useSemanticRewrite = true;
             }
             else if (asyncOverloadExists)
             {
                 // An async overload already exists — rewrite its body to call the bridged method.
+                // Use semantic rewriting for the same reason as the callerIsAsync path above.
                 _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' has existing async overload — rewriting body directly",
+                    "RunUpliftBatch: '{Method}' has existing async overload — rewriting body directly (semantic)",
                     callerMethodName);
                 bridgedCallerSource = preCheckSource;
                 // callerAsyncNameOverride stays null → Steps B/C use callerMethodName + "Async"
+                var asyncOverloadNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName + "Async");
+                var asyncCtParam = asyncOverloadNode?.ParameterList.Parameters
+                    .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
+                semanticCtExpression = asyncCtParam?.Identifier.Text ?? "CancellationToken.None";
+                useSemanticRewrite = true;
             }
             else
             {
@@ -846,10 +865,39 @@ public class AsyncBatchEngine
             // Step B: rewrite callerAsync body — replace bridgedMethod(args)
             //         → await bridgedMethodAsync(args, cancellationToken).
             //         Skipped for in-place event handler conversions (already fully rewritten).
+            //         Semantic path used when the method already exists in the workspace so the
+            //         semantic model can confirm exact bridge-call identity before rewriting.
             string rewrittenSource;
             if (isEventHandlerInPlace)
             {
                 rewrittenSource = bridgedCallerSource;
+            }
+            else if (useSemanticRewrite)
+            {
+                var rewriteTargetName = callerAsyncNameOverride ?? callerMethodName + "Async";
+                try
+                {
+                    var semanticResult = await SemanticBridgeCallRewriteAsync(
+                        callerFilePath, rewriteTargetName, bridgedMethodName, semanticCtExpression, cancellationToken);
+                    if (semanticResult == null)
+                    {
+                        skipped.Add(new UpliftSkippedInfo(
+                            callerFilePath, callerMethodName,
+                            "Document not found in workspace for semantic body rewrite.", new List<DiagnosticInfo>()));
+                        continue;
+                    }
+                    rewrittenSource = semanticResult;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        "Semantic body rewrite failed for {Method}: {Message}",
+                        rewriteTargetName, ex.Message);
+                    skipped.Add(new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Semantic body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
+                    continue;
+                }
             }
             else
             {
@@ -874,9 +922,11 @@ public class AsyncBatchEngine
             }
 
             // Step C (optional): propagate CT in the new callerAsync overload.
-            //                    Skipped for in-place event handlers — they have no CT to propagate.
+            //                    Skipped for in-place event handlers and async-void callers — neither
+            //                    can carry a CT parameter through their signature.
+            bool skipCtPropagation = isEventHandlerInPlace || semanticCtExpression == null;
             string sourceToValidate = rewrittenSource;
-            if (propagateCancellationTokens && !isEventHandlerInPlace)
+            if (propagateCancellationTokens && !skipCtPropagation)
             {
                 try
                 {
@@ -1003,6 +1053,122 @@ public class AsyncBatchEngine
         // Any delegate/lambda that now contains await must itself be marked async.
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
+
+        return newRoot.NormalizeWhitespace().ToFullString();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // SemanticBridgeCallRewriteAsync
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Semantically rewrites calls to the specific Asyncify-bridge sync wrapper inside
+    /// <paramref name="targetMethodName"/> to <c>await bridgedMethodAsync(args[, ct])</c>.
+    /// Uses the workspace semantic model to confirm each call resolves to the bridged method
+    /// (identified by its <c>[Obsolete("Asyncify-bridge:")]</c> attribute) so that
+    /// same-named methods on unrelated types are never rewritten.
+    /// </summary>
+    /// <param name="cancellationTokenExpression">
+    /// Expression to inject as the final CT argument. <c>null</c> omits CT entirely —
+    /// used for <c>async void</c> event handlers whose signatures cannot carry a CT parameter.
+    /// </param>
+    /// <returns>Rewritten source, or <c>null</c> when the document is not in the workspace.</returns>
+    private async Task<string?> SemanticBridgeCallRewriteAsync(
+        string filePath,
+        string targetMethodName,
+        string bridgedMethodName,
+        string? cancellationTokenExpression,
+        CancellationToken ct = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var document = solution.GetDocumentIdsWithFilePath(filePath)
+                               .Select(solution.GetDocument)
+                               .FirstOrDefault();
+        if (document == null)
+            return null;
+
+        var root = await document.GetSyntaxRootAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        if (root == null || semanticModel == null)
+            return null;
+
+        var targetMethod = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == targetMethodName);
+        if (targetMethod == null)
+            return null;
+
+        var asyncMethodName = bridgedMethodName + "Async";
+        const string BridgeCallAnnotation = "AsyncifyBridgeCallSemantic";
+
+        // Identify only the invocations that resolve to the specific [Obsolete("Asyncify-bridge:")] sync wrapper.
+        var bridgeCallNodes = new Dictionary<InvocationExpressionSyntax, bool>(ReferenceEqualityComparer.Instance);
+        foreach (var inv in targetMethod.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            var sym = semanticModel.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
+            if (sym == null || sym.Name != bridgedMethodName)
+                continue;
+            var obsoleteMsg = sym.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
+                ?.ConstructorArguments.FirstOrDefault().Value as string;
+            if (obsoleteMsg != null && obsoleteMsg.StartsWith("Asyncify-bridge:", StringComparison.Ordinal))
+                bridgeCallNodes[inv] = true;
+        }
+
+        if (bridgeCallNodes.Count == 0)
+            return root.ToFullString();
+
+        // Annotate the confirmed bridge-call nodes before any structural rewrites.
+        var annotatedRoot = root.ReplaceNodes(
+            bridgeCallNodes.Keys,
+            (original, _) => original.WithAdditionalAnnotations(new SyntaxAnnotation(BridgeCallAnnotation)));
+
+        var annotatedMethod = annotatedRoot.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == targetMethodName)!;
+
+        var rewrittenMethod = annotatedMethod.ReplaceNodes(
+            annotatedMethod.DescendantNodes()
+                           .OfType<InvocationExpressionSyntax>()
+                           .Where(inv => inv.HasAnnotations(BridgeCallAnnotation))
+                           .ToList(),
+            (original, _) =>
+            {
+                ExpressionSyntax? newExpr = original.Expression switch
+                {
+                    IdentifierNameSyntax id =>
+                        SyntaxFactory.IdentifierName(asyncMethodName).WithTriviaFrom(id),
+                    MemberAccessExpressionSyntax ma =>
+                        ma.WithName(SyntaxFactory.IdentifierName(asyncMethodName).WithTriviaFrom(ma.Name)),
+                    _ => null,
+                };
+                if (newExpr == null) return original;
+
+                var renamedCall = original.WithExpression(newExpr);
+
+                if (cancellationTokenExpression != null)
+                {
+                    var ctArg = SyntaxFactory.Argument(SyntaxFactory.ParseExpression(cancellationTokenExpression));
+                    renamedCall = renamedCall.WithArgumentList(renamedCall.ArgumentList.AddArguments(ctArg));
+                }
+
+                bool needsParens = original.Parent is MemberAccessExpressionSyntax
+                                || original.Parent is ElementAccessExpressionSyntax
+                                || original.Parent is ConditionalAccessExpressionSyntax;
+
+                var awaitedCall = renamedCall.WithoutLeadingTrivia();
+                ExpressionSyntax awaitExpr = SyntaxFactory.AwaitExpression(
+                    SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space),
+                    awaitedCall);
+
+                return (needsParens
+                    ? (ExpressionSyntax)SyntaxFactory.ParenthesizedExpression(awaitExpr)
+                    : awaitExpr)
+                    .WithLeadingTrivia(original.GetLeadingTrivia());
+            });
+
+        var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
+        newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
         return newRoot.NormalizeWhitespace().ToFullString();
     }
