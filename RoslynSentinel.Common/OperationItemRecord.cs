@@ -9,7 +9,7 @@ public class OperationItemRecord
         get; set;
     }
     /// <summary>"succeeded" | "skipped" | "failed" | "rolledback"</summary>
-    public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
+    public ItemRecordOutcome Outcome { get; set; } = ItemRecordOutcome.Unset;
     public string? Reason
     {
         get; set;

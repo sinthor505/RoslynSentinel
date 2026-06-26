@@ -19,6 +19,7 @@ public class SentinelAsyncifyTools
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
+    private readonly FailureRouter _failureRouter;
     private readonly ILogger<SentinelAsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -36,6 +37,7 @@ public class SentinelAsyncifyTools
         MsToolAugmentEngine msToolAugmentEngine,
         PersistentWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
+        FailureRouter failureRouter,
         ILogger<SentinelAsyncifyTools> logger)
     {
         _antiPatternEngine = antiPatternEngine;
@@ -44,6 +46,7 @@ public class SentinelAsyncifyTools
         _msToolAugmentEngine = msToolAugmentEngine;
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
+        _failureRouter = failureRouter;
         _logger = logger;
     }
 
@@ -521,7 +524,7 @@ public class SentinelAsyncifyTools
             {
                 FilePath = r.FilePath,
                 MethodName = r.MethodName,
-                Outcome = dryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
+                Outcome = dryRun ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Succeeded,
                 Reason = dryRun ? $"dry_run — would remove [{r.RemovedPattern}]"
                                 : $"removed [{r.RemovedPattern}]",
             }).ToList();
@@ -730,7 +733,7 @@ public class SentinelAsyncifyTools
 
         try
         {
-            var (summary, suggestedPropagateTargets) = await UpliftCallersCore(
+            (BatchResultSummary summary, List<BatchTarget> suggestedPropagateTargets, OperationSummary operationSummary) = await UpliftCallersCore(
                 new RunUpliftInput
                 {
                     Targets = targets,
@@ -747,6 +750,7 @@ public class SentinelAsyncifyTools
                 {
                     Summary = summary,
                     SuggestedPropagateTargets = suggestedPropagateTargets,
+                    OperationSummary = operationSummary,
                 }
             };
         }
@@ -839,6 +843,7 @@ public class SentinelAsyncifyTools
 
     [McpServerTool(Name = "AddCancellationToken")]
     [Produces(DataTag.BatchResultSummary)]
+    [Produces(DataTag.CancellationTokenSlot, Preference = 100)]
     [Description("""
         Utility — adds a CancellationToken parameter to async methods that lack one. Independent of
         the main bridge path; use as needed to ensure async methods accept CT. Differs from
@@ -1209,13 +1214,13 @@ public class SentinelAsyncifyTools
             items.Add(new OperationItemRecord
             {
                 FilePath = a.FilePath,
-                Outcome = a.TotalForwarded > 0 ? OperationOutcome.Succeeded : OperationOutcome.Skipped,
+                Outcome = a.TotalForwarded > 0 ? ItemRecordOutcome.Succeeded : ItemRecordOutcome.Skipped,
                 Reason = a.TotalForwarded == 0 ? "no eligible call sites" : null,
             });
         }
         foreach (var f in result.Failed)
         {
-            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = OperationOutcome.Failed, Reason = f.Reason });
+            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = f.Reason });
         }
 
         var blobName = await OperationBlobWriter.WriteAsync(
@@ -1223,7 +1228,7 @@ public class SentinelAsyncifyTools
         var status = _workspaceManager.GetBreakerStatus();
         var failures = result.Failed
             .Take(15)
-            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = OperationOutcome.Failed })
+            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = ItemRecordOutcome.Failed })
             .ToList();
 
         return new BatchResultSummary
@@ -1270,9 +1275,9 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     Reason = "MethodNames must be specified for bridge_async_methods",
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                 };
-                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = fd.Reason });
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = fd.Reason });
                 if (failures.Count < 10) { failures.Add(fd); }
                 failed++;
                 continue;
@@ -1293,7 +1298,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = "dry_run",
                     });
                     succeeded++;
@@ -1329,10 +1334,10 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = target.FilePath,
                             MethodName = methodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = reason782,
                         });
-                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason782, Outcome = OperationOutcome.Failed });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason782, Outcome = ItemRecordOutcome.Failed });
                         failed++;
                         continue;
                     }
@@ -1347,7 +1352,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = target.FilePath,
                         MethodName = methodName,
-                        Outcome = OperationOutcome.Succeeded,
+                        Outcome = ItemRecordOutcome.Succeeded,
                         BeforeSource = beforeSource782,
                     });
                     succeeded++;
@@ -1377,7 +1382,7 @@ public class SentinelAsyncifyTools
                                     {
                                         FilePath = target.FilePath,
                                         MethodName = methodName,
-                                        Outcome = OperationOutcome.Succeeded,
+                                        Outcome = ItemRecordOutcome.Succeeded,
                                         Reason = $"CT added to existing async overload '{asyncMethodName}'",
                                         BeforeSource = beforeSrc,
                                     });
@@ -1396,7 +1401,7 @@ public class SentinelAsyncifyTools
                                 {
                                     FilePath = target.FilePath,
                                     MethodName = methodName,
-                                    Outcome = OperationOutcome.Skipped,
+                                    Outcome = ItemRecordOutcome.Skipped,
                                     Reason = $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
                                 });
                                 handled = true;
@@ -1418,7 +1423,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = target.FilePath,
                             MethodName = methodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = reason,
                         });
                         if (failures.Count < 10)
@@ -1428,7 +1433,7 @@ public class SentinelAsyncifyTools
                                 FilePath = target.FilePath,
                                 MethodName = methodName,
                                 Reason = reason,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                             });
                         }
                         failed++;
@@ -1465,8 +1470,8 @@ public class SentinelAsyncifyTools
         };
 
         var suggestedUpliftTargets = items
-            .Where(i => (i.Outcome == OperationOutcome.Succeeded ||
-                         (i.Outcome == OperationOutcome.Skipped && i.Reason == "dry_run"))
+            .Where(i => (i.Outcome == ItemRecordOutcome.Succeeded ||
+                         (i.Outcome == ItemRecordOutcome.Skipped && i.Reason == "dry_run"))
                         && i.MethodName != null)
             .Select(i => new UpliftTarget { BridgedMethodName = i.MethodName! })
             .DistinctBy(t => t.BridgedMethodName)
@@ -1513,10 +1518,10 @@ public class SentinelAsyncifyTools
                 if (updatedSource.StartsWith("// Error:"))
                 {
                     var reason = updatedSource;
-                    items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
+                    items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = reason });
                     if (failures.Count < 10)
                     {
-                        failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = ItemRecordOutcome.Failed });
                     }
                     failed++;
                 }
@@ -1525,7 +1530,7 @@ public class SentinelAsyncifyTools
                     items.Add(new OperationItemRecord
                     {
                         FilePath = target.FilePath,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = "no eligible async methods",
                     });
                     skipped++;
@@ -1541,9 +1546,9 @@ public class SentinelAsyncifyTools
                         {
                             var diagMsg = string.Join("; ", ctFileValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                             var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) — {diagMsg}";
-                            items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = valReason });
+                            items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = valReason });
                             if (failures.Count < 10)
-                                failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = OperationOutcome.Failed });
+                                failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = ItemRecordOutcome.Failed });
                             failed++;
                             continue;
                         }
@@ -1556,7 +1561,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = target.FilePath,
                             MethodName = m,
-                            Outcome = input.DryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
+                            Outcome = input.DryRun ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Succeeded,
                             Reason = input.DryRun ? "dry_run" : null,
                         });
                     }
@@ -1567,10 +1572,10 @@ public class SentinelAsyncifyTools
             catch (Exception ex)
             {
                 var reason = ex.Message;
-                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = OperationOutcome.Failed, Reason = reason });
+                items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = reason });
                 if (failures.Count < 10)
                 {
-                    failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = OperationOutcome.Failed });
+                    failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = reason, Outcome = ItemRecordOutcome.Failed });
                 }
                 failed++;
                 _logger.LogWarning("AddCancellationToken: {File} failed: {Reason}", target.FilePath, reason);
@@ -1584,7 +1589,7 @@ public class SentinelAsyncifyTools
             {
                 foreach (var item in items)
                 {
-                    if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
+                    if (item.Outcome == ItemRecordOutcome.Succeeded && item.BeforeSource == null)
                     {
                         applyResult941.PreImages.TryGetValue(item.FilePath, out var pre);
                         item.BeforeSource = pre;
@@ -1618,18 +1623,31 @@ public class SentinelAsyncifyTools
         };
     }
 
-    private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets)> UpliftCallersCore(
+    private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets, OperationSummary OperationSummary)> UpliftCallersCore(
         RunUpliftInput input,
         IProgress<string>? progress,
         CancellationToken cancellationToken = default)
     {
-        var halt = _workspaceManager.CheckBreaker();
+        BatchResultSummary? halt = _workspaceManager.CheckBreaker();
         if (halt != null)
         {
-            return (halt, new List<BatchTarget>());
+            OperationSummary haltSummary = OperationSummary.FromCounts(
+                blobName: "",
+                changeId: "",
+                succeeded: 0,
+                alreadySatisfied: 0,
+                skipped: 0,
+                failed: 0,
+                blocked: 0,
+                attempted: 0,
+                actionable: Array.Empty<ItemFailure>(),
+                actionableTruncated: false,
+                directive: halt.Directive,
+                breakerOpen: true);
+            return (halt, new List<BatchTarget>(), haltSummary);
         }
 
-        var multiInput = new UpliftBatchMultiInput
+        UpliftBatchMultiInput multiInput = new UpliftBatchMultiInput
         {
             Targets = input.Targets.Select(t => new UpliftBatchMultiTarget
             {
@@ -1654,83 +1672,254 @@ public class SentinelAsyncifyTools
                 $"UpliftCallers failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
         }
 
-        int succeeded = result.TotalUplifted;
-        int failed = result.TotalSkipped;
+        // ── Classify each item into ItemOutcome ────────────────────────────────
 
-        _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: 0);
+        string changeId = Guid.NewGuid().ToString("N")[..8];
+        List<OperationItemRecord> items = new List<OperationItemRecord>();
 
-        var changeId = Guid.NewGuid().ToString("N")[..8];
-        var items = new List<OperationItemRecord>();
-        foreach (var pm in result.PerMethod)
+        int succeeded = 0;
+        int alreadySatisfied = 0;
+        int failed = 0;
+        int blocked = 0;
+        List<ItemFailure> actionable = new List<ItemFailure>();
+
+        foreach (UpliftBatchMultiMethodResult pm in result.PerMethod)
         {
-            foreach (var u in pm.Result.Uplifted)
+            string projectName = pm.ProjectName ?? "";
+
+            foreach (UpliftCallerInfo u in pm.Result.Uplifted)
             {
                 items.Add(new OperationItemRecord
                 {
                     FilePath = u.FilePath,
                     MethodName = u.CallerMethod,
-                    Outcome = OperationOutcome.Succeeded,
+                    Outcome = ItemRecordOutcome.Succeeded,
                 });
+                succeeded++;
             }
-            foreach (var s in pm.Result.Skipped)
+
+            foreach (UpliftSkippedInfo s in pm.Result.Skipped)
             {
+                (ItemOutcome itemOutcome, FailureReason failureReason) = ClassifyUpliftSkipReason(s.Reason);
+
+                ItemRecordOutcome blobOutcome = itemOutcome == ItemOutcome.AlreadySatisfied
+                    ? ItemRecordOutcome.Skipped
+                    : ItemRecordOutcome.Failed;
+
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
                     MethodName = s.CallerMethod,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = blobOutcome,
                     Reason = s.Reason,
                 });
+
+                if (itemOutcome == ItemOutcome.AlreadySatisfied)
+                {
+                    alreadySatisfied++;
+                }
+                else
+                {
+                    ItemContext ctx = new ItemContext
+                    {
+                        FilePath = s.FilePath,
+                        MethodName = s.CallerMethod,
+                        ProjectName = projectName,
+                        ChangeId = changeId,
+                    };
+                    ToolHint? hint = _failureRouter.Route(failureReason, ctx);
+
+                    if (actionable.Count < 15)
+                    {
+                        actionable.Add(new ItemFailure
+                        {
+                            FilePath = s.FilePath,
+                            MethodName = s.CallerMethod,
+                            Outcome = itemOutcome,
+                            Reason = failureReason,
+                            Detail = s.Reason,
+                            SuggestedTool = hint,
+                        });
+                    }
+
+                    if (itemOutcome == ItemOutcome.Blocked)
+                    {
+                        blocked++;
+                    }
+                    else
+                    {
+                        failed++;
+                    }
+                }
             }
+
             if (pm.Error != null)
             {
                 items.Add(new OperationItemRecord
                 {
                     FilePath = pm.BridgedMethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = pm.Error,
                 });
+                if (actionable.Count < 15)
+                {
+                    ItemContext ctx = new ItemContext
+                    {
+                        FilePath = pm.BridgedMethodName,
+                        MethodName = "",
+                        ProjectName = pm.ProjectName ?? "",
+                        ChangeId = changeId,
+                    };
+                    actionable.Add(new ItemFailure
+                    {
+                        FilePath = pm.BridgedMethodName,
+                        MethodName = "",
+                        Outcome = ItemOutcome.Failed,
+                        Reason = FailureReason.SymbolNotResolved,
+                        Detail = pm.Error,
+                        SuggestedTool = _failureRouter.Route(FailureReason.SymbolNotResolved, ctx),
+                    });
+                }
+                failed++;
             }
         }
 
-        var blobName = await OperationBlobWriter.WriteAsync(
+        int attempted = succeeded + alreadySatisfied + failed + blocked;
+        bool actionableTruncated = (failed + blocked) > actionable.Count;
+
+        // AlreadySatisfied and Skipped are excluded from the failure rate that drives severity/breaker.
+        _workspaceManager.RecordBatchOutcome(succeeded, failed + blocked, rolledBack: 0, skipped: alreadySatisfied);
+
+        string blobName = await OperationBlobWriter.WriteAsync(
             "uplift_callers", changeId, items, _workspaceManager.GetSolutionRoot());
-        var status = _workspaceManager.GetBreakerStatus();
-        var failures = result.PerMethod
-            .SelectMany(pm => pm.Result.Skipped.Select(s => new FailureDetail
+
+        BreakerStatusReport status = _workspaceManager.GetBreakerStatus();
+
+        // ── Legacy BatchResultSummary (wire shape unchanged) ───────────────────
+
+        List<FailureDetail> legacyFailures = actionable
+            .Select(f => new FailureDetail
             {
-                FilePath = s.FilePath,
-                MethodName = s.CallerMethod,
-                Reason = s.Reason,
-                Outcome = OperationOutcome.Failed,
-            }))
+                FilePath = f.FilePath,
+                MethodName = f.MethodName,
+                Reason = f.Detail,
+                Outcome = ItemRecordOutcome.Failed,
+            })
             .Take(15)
             .ToList();
 
-        var summary = new BatchResultSummary
+        BatchResultSummary summary = new BatchResultSummary
         {
             ChangeId = changeId,
             BlobName = blobName,
             Succeeded = succeeded,
-            Failed = failed,
-            Skipped = 0,
+            Failed = failed + blocked,
+            Skipped = alreadySatisfied,
             RolledBack = 0,
-            Attempted = succeeded + failed,
-            Failures = failures,
-            FailuresTruncated = failed > 10,
-            FailuresByReason = failed > 10 ? failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count()) : null,
+            Attempted = attempted,
+            Failures = legacyFailures,
+            FailuresTruncated = (failed + blocked) > 10,
+            FailuresByReason = (failed + blocked) > 10
+                ? legacyFailures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count())
+                : null,
             Severity = status.Severity,
             Directive = WriteStatusNote(input.DryRun, succeeded) + status.Directive,
             BreakerOpen = status.Open,
         };
 
-        var suggestedPropagateTargets = result.PerMethod
+        // ── OperationSummary (structured routing) ──────────────────────────────
+
+        OperationOutcome outcome = OperationSummary.DeriveOutcome(succeeded, alreadySatisfied, 0, failed, blocked, attempted);
+        string directive = BuildUpliftDirective(outcome, succeeded, alreadySatisfied, failed, blocked, status);
+
+        OperationSummary operationSummary = OperationSummary.FromCounts(
+            blobName: blobName,
+            changeId: changeId,
+            succeeded: succeeded,
+            alreadySatisfied: alreadySatisfied,
+            skipped: 0,
+            failed: failed,
+            blocked: blocked,
+            attempted: attempted,
+            actionable: actionable,
+            actionableTruncated: actionableTruncated,
+            directive: directive,
+            breakerOpen: status.Open);
+
+        List<BatchTarget> suggestedPropagateTargets = result.PerMethod
             .SelectMany(pm => pm.Result.Uplifted.Select(u => u.FilePath))
             .Distinct()
             .Select(fp => new BatchTarget { FilePath = fp })
             .ToList();
 
-        return (summary, suggestedPropagateTargets);
+        return (summary, suggestedPropagateTargets, operationSummary);
+    }
+
+    private static (ItemOutcome Outcome, FailureReason Reason) ClassifyUpliftSkipReason(string reason)
+    {
+        // Already in target state — not actionable, excluded from failure rate
+        if (reason.Contains("already async", StringComparison.OrdinalIgnoreCase)
+         || reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ItemOutcome.AlreadySatisfied, FailureReason.AlreadyAsync);
+        }
+
+        // Async overload exists but lacks CT — blocked, routable via AddCancellationToken
+        if (reason.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ItemOutcome.Blocked, FailureReason.OverloadAlreadyExists);
+        }
+
+        // File or symbol not found
+        if (reason.Contains("file not found", StringComparison.OrdinalIgnoreCase)
+         || reason.Contains("not found on disk", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ItemOutcome.Failed, FailureReason.SymbolNotResolved);
+        }
+
+        // Transform produced compiler errors
+        if (reason.Contains("Validation produced", StringComparison.OrdinalIgnoreCase)
+         || reason.Contains("compiler error", StringComparison.OrdinalIgnoreCase))
+        {
+            return (ItemOutcome.Failed, FailureReason.CompilerErrorAfterTransform);
+        }
+
+        return (ItemOutcome.Failed, FailureReason.Unknown);
+    }
+
+    private static string BuildUpliftDirective(
+        OperationOutcome outcome,
+        int succeeded,
+        int alreadySatisfied,
+        int failed,
+        int blocked,
+        BreakerStatusReport status)
+    {
+        if (status.Open)
+        {
+            return status.Directive;
+        }
+
+        string base_ = outcome switch
+        {
+            OperationOutcome.CompletedFully =>
+                $"{succeeded} caller(s) uplifted successfully.",
+            OperationOutcome.CompletedWithNoOps =>
+                succeeded > 0
+                    ? $"{succeeded} caller(s) uplifted; {alreadySatisfied} were already in the target state."
+                    : $"All {alreadySatisfied} caller(s) were already in the target state — nothing to do.",
+            OperationOutcome.PartialProgress =>
+                $"{succeeded} caller(s) uplifted; {failed + blocked} could not be completed. Review Actionable for next steps.",
+            OperationOutcome.NoProgress =>
+                $"No callers were uplifted; {failed + blocked} failure(s) require attention. Review Actionable for next steps.",
+            OperationOutcome.NothingToDo =>
+                "No callers found to uplift.",
+            _ =>
+                ""
+        };
+
+        string breakerSuffix = string.IsNullOrEmpty(status.Directive) ? "" : " " + status.Directive;
+        return base_ + breakerSuffix;
     }
 
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
@@ -1775,7 +1964,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = null,
                             BeforeSource = beforeSource1135,
                         });
@@ -1790,7 +1979,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = input.DryRun ? OperationOutcome.Skipped : OperationOutcome.Succeeded,
+                            Outcome = input.DryRun ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Succeeded,
                             Reason = input.DryRun ? "dry_run" : null,
                         });
                         succeeded++;
@@ -1802,7 +1991,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = $"score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
@@ -1813,7 +2002,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = "already flagged",
                     });
                     skipped++;
@@ -1851,7 +2040,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome = OperationOutcome.Succeeded,
+                        Outcome = ItemRecordOutcome.Succeeded,
                     });
                     succeeded++;
                 }
@@ -1863,7 +2052,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = tgt.FilePath,
                         MethodName = tgt.MethodName,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                         Reason = err,
                     });
                     if (failures.Count < 10)
@@ -1873,7 +2062,7 @@ public class SentinelAsyncifyTools
                             FilePath = tgt.FilePath,
                             MethodName = tgt.MethodName,
                             Reason = err,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                         });
                     }
                     failed++;
@@ -1890,7 +2079,7 @@ public class SentinelAsyncifyTools
                     {
                         foreach (var item in items)
                         {
-                            if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
+                            if (item.Outcome == ItemRecordOutcome.Succeeded && item.BeforeSource == null)
                             {
                                 applyResult1223.PreImages.TryGetValue(item.FilePath, out var pre);
                                 item.BeforeSource = pre;
@@ -2026,7 +2215,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Skipped,
+                            Outcome = ItemRecordOutcome.Skipped,
                             Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
                         });
                         succeeded++;
@@ -2051,7 +2240,7 @@ public class SentinelAsyncifyTools
                             {
                                 FilePath = candidate.FilePath,
                                 MethodName = candidate.MethodName,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                                 Reason = reason,
                             });
                             if (failures.Count < 10)
@@ -2061,7 +2250,7 @@ public class SentinelAsyncifyTools
                                     FilePath = candidate.FilePath,
                                     MethodName = candidate.MethodName,
                                     Reason = reason,
-                                    Outcome = OperationOutcome.Failed,
+                                    Outcome = ItemRecordOutcome.Failed,
                                 });
                             }
                             failed++;
@@ -2075,8 +2264,8 @@ public class SentinelAsyncifyTools
                         {
                             var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                             var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
-                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = OperationOutcome.Failed, Reason = valReason });
-                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = OperationOutcome.Failed });
+                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason });
+                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed });
                             failed++;
                             continue;
                         }
@@ -2089,7 +2278,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = $"phase:handler_extract → '{newMethodName}'",
                         });
                         succeeded++;
@@ -2102,7 +2291,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = ex.Message,
                         });
                         if (failures.Count < 10)
@@ -2112,7 +2301,7 @@ public class SentinelAsyncifyTools
                                 FilePath = candidate.FilePath,
                                 MethodName = candidate.MethodName,
                                 Reason = ex.Message,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                             });
                         }
                         failed++;
@@ -2146,7 +2335,7 @@ public class SentinelAsyncifyTools
                             {
                                 FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome = OperationOutcome.Skipped,
+                                Outcome = ItemRecordOutcome.Skipped,
                                 Reason = "excluded",
                             });
                             skipped++;
@@ -2159,7 +2348,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:flag",
                             BeforeSource = beforeSource1339,
                         });
@@ -2176,7 +2365,7 @@ public class SentinelAsyncifyTools
                             {
                                 FilePath = f.FilePath,
                                 MethodName = f.MethodName,
-                                Outcome = OperationOutcome.Skipped,
+                                Outcome = ItemRecordOutcome.Skipped,
                                 Reason = "excluded",
                             });
                             skipped++;
@@ -2187,7 +2376,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = f.FilePath,
                             MethodName = f.MethodName,
-                            Outcome = OperationOutcome.Skipped,
+                            Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run:flag",
                         });
                         skipped++;
@@ -2199,7 +2388,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = s.FilePath,
                         MethodName = s.MethodName,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
                     });
                     skipped++;
@@ -2210,7 +2399,7 @@ public class SentinelAsyncifyTools
                     {
                         FilePath = a.FilePath,
                         MethodName = a.MethodName,
-                        Outcome = OperationOutcome.Skipped,
+                        Outcome = ItemRecordOutcome.Skipped,
                         Reason = "phase:flag — already flagged",
                     });
                     skipped++;
@@ -2240,7 +2429,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = tuples[i].FilePath,
                             MethodName = tuples[i].MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:flag",
                         });
                         succeeded++;
@@ -2251,7 +2440,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = tuples[idx].FilePath,
                             MethodName = tuples[idx].MethodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = $"phase:flag — {err}",
                         });
                         if (failures.Count < 10)
@@ -2261,7 +2450,7 @@ public class SentinelAsyncifyTools
                                 FilePath = tuples[idx].FilePath,
                                 MethodName = tuples[idx].MethodName,
                                 Reason = err,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                             });
                         }
                         failed++;
@@ -2277,7 +2466,7 @@ public class SentinelAsyncifyTools
                         {
                             foreach (var item in items)
                             {
-                                if (item.Outcome == OperationOutcome.Succeeded && item.BeforeSource == null)
+                                if (item.Outcome == ItemRecordOutcome.Succeeded && item.BeforeSource == null)
                                 {
                                     applyResult1421.PreImages.TryGetValue(item.FilePath, out var pre);
                                     item.BeforeSource = pre;
@@ -2310,7 +2499,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = a.FilePath,
                     MethodName = a.MethodName,
-                    Outcome = OperationOutcome.Succeeded,
+                    Outcome = ItemRecordOutcome.Succeeded,
                     Reason = "phase:bridge",
                 });
                 succeeded++;
@@ -2324,7 +2513,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome = requiresManualReview ? OperationOutcome.Skipped : OperationOutcome.Failed,
+                    Outcome = requiresManualReview ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                 });
                 if (requiresManualReview)
@@ -2340,7 +2529,7 @@ public class SentinelAsyncifyTools
                             FilePath = s.FilePath,
                             MethodName = s.MethodName,
                             Reason = s.Reason,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                         });
                     }
                     failed++;
@@ -2391,7 +2580,7 @@ public class SentinelAsyncifyTools
                             {
                                 FilePath = u.FilePath,
                                 MethodName = u.CallerMethod,
-                                Outcome = OperationOutcome.Succeeded,
+                                Outcome = ItemRecordOutcome.Succeeded,
                                 Reason = "phase:uplift",
                             });
                             succeeded++;
@@ -2402,7 +2591,7 @@ public class SentinelAsyncifyTools
                             {
                                 FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                                 Reason = $"phase:uplift — {s.Reason}",
                             });
                             if (failures.Count < 10)
@@ -2412,7 +2601,7 @@ public class SentinelAsyncifyTools
                                     FilePath = s.FilePath,
                                     MethodName = s.CallerMethod,
                                     Reason = s.Reason,
-                                    Outcome = OperationOutcome.Failed,
+                                    Outcome = ItemRecordOutcome.Failed,
                                 });
                             }
                             failed++;
@@ -2468,7 +2657,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Skipped,
+                            Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run phase:handler_to_async",
                         });
                         succeeded++;
@@ -2505,7 +2694,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:handler_to_async",
                         });
                         succeeded++;
@@ -2518,7 +2707,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = candidate.FilePath,
                             MethodName = candidate.MethodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = ex.Message,
                         });
                         if (failures.Count < 10)
@@ -2528,7 +2717,7 @@ public class SentinelAsyncifyTools
                                 FilePath = candidate.FilePath,
                                 MethodName = candidate.MethodName,
                                 Reason = ex.Message,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                             });
                         }
                         failed++;
@@ -2574,7 +2763,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
-                            Outcome = OperationOutcome.Skipped,
+                            Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run phase:handler",
                         });
                         succeeded++;
@@ -2604,7 +2793,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:handler",
                         });
                         succeeded++;
@@ -2636,7 +2825,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
-                            Outcome = OperationOutcome.Skipped,
+                            Outcome = ItemRecordOutcome.Skipped,
                             Reason = "stale-flag: stripped",
                         });
                         skipped++;
@@ -2673,7 +2862,7 @@ public class SentinelAsyncifyTools
                         {
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = ex.Message,
                         });
                         if (failures.Count < 10)
@@ -2683,7 +2872,7 @@ public class SentinelAsyncifyTools
                                 FilePath = handler.FilePath.Absolute,
                                 MethodName = handler.MethodName,
                                 Reason = ex.Message,
-                                Outcome = OperationOutcome.Failed,
+                                Outcome = ItemRecordOutcome.Failed,
                             });
                         }
                         failed++;
@@ -2722,7 +2911,7 @@ public class SentinelAsyncifyTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = a.FilePath,
-                            Outcome = OperationOutcome.Succeeded,
+                            Outcome = ItemRecordOutcome.Succeeded,
                             Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
                         });
                     }
@@ -2731,7 +2920,7 @@ public class SentinelAsyncifyTools
                         items.Add(new OperationItemRecord
                         {
                             FilePath = f.FilePath,
-                            Outcome = OperationOutcome.Failed,
+                            Outcome = ItemRecordOutcome.Failed,
                             Reason = $"phase:propagate_ct — {f.Reason}",
                         });
                     }
@@ -2886,7 +3075,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = filePath,
                     MethodName = methodName,
-                    Outcome = OperationOutcome.Skipped,
+                    Outcome = ItemRecordOutcome.Skipped,
                     Reason = "dry_run",
                 });
                 succeeded++;
@@ -2930,7 +3119,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = filePath,
                     MethodName = methodName,
-                    Outcome = OperationOutcome.Succeeded,
+                    Outcome = ItemRecordOutcome.Succeeded,
                     BeforeSource = beforeSource,
                 });
                 succeeded++;
@@ -2942,7 +3131,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = filePath,
                     MethodName = methodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -2952,7 +3141,7 @@ public class SentinelAsyncifyTools
                         FilePath = filePath,
                         MethodName = methodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;
@@ -3012,7 +3201,7 @@ public class SentinelAsyncifyTools
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -3022,7 +3211,7 @@ public class SentinelAsyncifyTools
                         FilePath = target.FilePath,
                         MethodName = target.NewMethodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;
@@ -3036,7 +3225,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -3046,7 +3235,7 @@ public class SentinelAsyncifyTools
                         FilePath = target.FilePath,
                         MethodName = target.NewMethodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;
@@ -3072,7 +3261,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -3082,7 +3271,7 @@ public class SentinelAsyncifyTools
                         FilePath = target.FilePath,
                         MethodName = target.NewMethodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;
@@ -3099,7 +3288,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -3109,7 +3298,7 @@ public class SentinelAsyncifyTools
                         FilePath = target.FilePath,
                         MethodName = target.NewMethodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;
@@ -3125,7 +3314,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Skipped,
+                    Outcome = ItemRecordOutcome.Skipped,
                     Reason = "dry_run",
                 });
                 succeeded++;
@@ -3145,7 +3334,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Succeeded,
+                    Outcome = ItemRecordOutcome.Succeeded,
                     BeforeSource = beforeSource,
                 });
                 succeeded++;
@@ -3157,7 +3346,7 @@ public class SentinelAsyncifyTools
                 {
                     FilePath = target.FilePath,
                     MethodName = target.NewMethodName,
-                    Outcome = OperationOutcome.Failed,
+                    Outcome = ItemRecordOutcome.Failed,
                     Reason = reason,
                 });
                 if (failures.Count < 10)
@@ -3167,7 +3356,7 @@ public class SentinelAsyncifyTools
                         FilePath = target.FilePath,
                         MethodName = target.NewMethodName,
                         Reason = reason,
-                        Outcome = OperationOutcome.Failed,
+                        Outcome = ItemRecordOutcome.Failed,
                     });
                 }
                 failed++;

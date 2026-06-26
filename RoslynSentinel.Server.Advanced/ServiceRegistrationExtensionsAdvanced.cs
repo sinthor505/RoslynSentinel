@@ -1,7 +1,10 @@
 using System.Diagnostics;
+using System.Reflection;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+
+using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -79,7 +82,72 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<StackOverflowEngine>();
         services.AddSingleton<AsyncBatchEngine>();
+
+        // ToolGraph + FailureRouter — pilot: scans SentinelAsyncifyTools for [Produces] attributes.
+        ToolGraph toolGraph = BuildToolGraph(new[] { typeof(SentinelAsyncifyTools) });
+        services.AddSingleton(toolGraph);
+        services.AddSingleton<FailureRouter>();
+
         return services;
+    }
+
+    // ── ToolGraph builder ──────────────────────────────────────────────────────
+
+    private static ToolGraph BuildToolGraph(IEnumerable<Type> toolTypes)
+    {
+        List<(DataTag Tag, ToolDescriptor Descriptor)> registrations = new List<(DataTag, ToolDescriptor)>();
+
+        foreach (Type toolType in toolTypes)
+        {
+            foreach (MethodInfo method in toolType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+            {
+                McpServerToolAttribute? toolAttr = method.GetCustomAttribute<McpServerToolAttribute>();
+                if (toolAttr == null)
+                {
+                    continue;
+                }
+
+                string toolName = toolAttr.Name ?? method.Name;
+
+                List<string> allParams = new List<string>();
+                List<string> requiredParams = new List<string>();
+
+                foreach (ParameterInfo p in method.GetParameters())
+                {
+                    Type pt = p.ParameterType;
+                    if (pt == typeof(CancellationToken))
+                    {
+                        continue;
+                    }
+                    if (pt.IsGenericType && (pt.GetGenericTypeDefinition().Name.StartsWith("RequestContext", StringComparison.Ordinal)
+                                          || pt.GetGenericTypeDefinition().FullName?.Contains("RequestContext", StringComparison.Ordinal) == true))
+                    {
+                        continue;
+                    }
+
+                    string paramName = p.Name ?? "";
+                    allParams.Add(paramName);
+                    if (!p.HasDefaultValue)
+                    {
+                        requiredParams.Add(paramName);
+                    }
+                }
+
+                foreach (ProducesAttribute produces in method.GetCustomAttributes<ProducesAttribute>())
+                {
+                    ToolDescriptor descriptor = new ToolDescriptor
+                    {
+                        Name = toolName,
+                        AllParameterNames = allParams,
+                        RequiredParameterNames = requiredParams,
+                        PreferenceWeight = produces.Preference,
+                    };
+                    registrations.Add((produces.Tag, descriptor));
+                }
+            }
+        }
+
+        return ToolGraph.Build(registrations);
     }
 
     /// <summary>

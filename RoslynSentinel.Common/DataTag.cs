@@ -66,4 +66,5 @@ public enum DataTag
     Wrapper,
     ChangeseFormat,
     ProjectType,
+    CancellationTokenSlot,
 }

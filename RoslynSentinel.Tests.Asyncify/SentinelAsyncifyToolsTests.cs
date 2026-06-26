@@ -95,6 +95,9 @@ public class SentinelAsyncifyToolsTests
             antiPatternEngine,
             NullLogger<AsyncBatchEngine>.Instance);
 
+        ToolGraph toolGraph = ToolGraph.Empty;
+        FailureRouter failureRouter = new FailureRouter(toolGraph);
+
         _asyncifyTools = new SentinelAsyncifyTools(
             antiPatternEngine,
             asyncOptEngine,
@@ -102,6 +105,7 @@ public class SentinelAsyncifyToolsTests
             new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
             validationEngine,
+            failureRouter,
             NullLogger<SentinelAsyncifyTools>.Instance);
     }
 

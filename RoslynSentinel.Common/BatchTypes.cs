@@ -87,7 +87,7 @@ public class FailureDetail
     }
     public string Reason { get; set; } = "";
     /// <summary>"failed" | "rolledback" | "skipped"</summary>
-    public OperationOutcome Outcome { get; set; } = OperationOutcome.Unset;
+    public ItemRecordOutcome Outcome { get; set; } = ItemRecordOutcome.Unset;
 }
 
 // ── Phase 4 — Batch-first input types ─────────────────────────────────────────
@@ -270,6 +270,11 @@ public class UpliftCallersResult
     /// <c>MethodNames</c> is null (process whole file).
     /// </summary>
     public List<BatchTarget> SuggestedPropagateTargets { get; init; } = new();
+    /// <summary>
+    /// Structured outcome classification with routed failure hints (spec §3.6).
+    /// Substrate-derived — never infer outcome from Summary.Severity or prose scanning.
+    /// </summary>
+    public OperationSummary? OperationSummary { get; init; }
 }
 
 // ── Phase 7 — async_migrate combined input ────────────────────────────────────

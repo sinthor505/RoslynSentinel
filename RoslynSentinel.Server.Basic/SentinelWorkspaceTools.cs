@@ -499,7 +499,7 @@ public class SentinelWorkspaceTools
             return new OperationItemRecord
             {
                 FilePath = f,
-                Outcome = OperationOutcome.Succeeded,
+                Outcome = ItemRecordOutcome.Succeeded,
                 BeforeSource = before,
             };
         }).ToList();
@@ -1057,18 +1057,18 @@ public class SentinelWorkspaceTools
         }
     }
 
-    // Maps a human-readable filter string to an OperationOutcome via prefix matching.
+    // Maps a human-readable filter string to an ItemRecordOutcome via prefix matching.
     // Returns null when the prefix is unrecognised so the caller can return a helpful error.
-    private static OperationOutcome? ResolveOutcomeFilter(string filter)
+    private static ItemRecordOutcome? ResolveOutcomeFilter(string filter)
     {
-        var f = filter.ToLowerInvariant();
-        if (f.StartsWith("fail") || f.StartsWith("err"))    return OperationOutcome.Failed;
-        if (f.StartsWith("skip") || f.StartsWith("warn"))   return OperationOutcome.Skipped;
+        string f = filter.ToLowerInvariant();
+        if (f.StartsWith("fail") || f.StartsWith("err"))    return ItemRecordOutcome.Failed;
+        if (f.StartsWith("skip") || f.StartsWith("warn"))   return ItemRecordOutcome.Skipped;
         if (f.StartsWith("ok")   || f.StartsWith("pass")
          || f.StartsWith("info") || f.StartsWith("success")
-         || f.StartsWith("succeed"))                         return OperationOutcome.Succeeded;
+         || f.StartsWith("succeed"))                         return ItemRecordOutcome.Succeeded;
         if (f.StartsWith("roll") || f.StartsWith("revert")
-         || f.StartsWith("undo"))                            return OperationOutcome.RolledBack;
+         || f.StartsWith("undo"))                            return ItemRecordOutcome.RolledBack;
         return null;
     }
 
@@ -1125,7 +1125,7 @@ public class SentinelWorkspaceTools
             var revertable = doc.GetProperty("items")
                                .EnumerateArray()
                                .Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!)
-                               .Where(r => r.Outcome == OperationOutcome.Succeeded && r.BeforeSource != null)
+                               .Where(r => r.Outcome == ItemRecordOutcome.Succeeded && r.BeforeSource != null)
                                .ToList();
 
             if (revertable.Count == 0)

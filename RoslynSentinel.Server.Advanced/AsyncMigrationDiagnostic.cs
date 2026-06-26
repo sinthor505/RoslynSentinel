@@ -99,14 +99,14 @@ internal static class AsyncMigrationDiagnostic
 
         // Methods flagged NeedsManualReview by a prior Asyncify run.
         var priorManualReview = bridgeItems
-            .Where(i => i.Outcome == OperationOutcome.Skipped
+            .Where(i => i.Outcome == ItemRecordOutcome.Skipped
                      && i.Reason!.Contains("NeedsManualReview", StringComparison.OrdinalIgnoreCase)
                      && !i.Reason!.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         // Methods newly flagged NeedsManualReview this run — bridge produced compiler errors.
         var newCompilerErrors = bridgeItems
-            .Where(i => i.Outcome == OperationOutcome.Skipped
+            .Where(i => i.Outcome == ItemRecordOutcome.Skipped
                      && i.Reason!.Contains("Validation produced", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
@@ -117,7 +117,7 @@ internal static class AsyncMigrationDiagnostic
 
         // Unexpected bridge failures (pre-condition exceptions, etc.).
         var unexpectedFailures = bridgeItems
-            .Where(i => i.Outcome == OperationOutcome.Failed)
+            .Where(i => i.Outcome == ItemRecordOutcome.Failed)
             .ToList();
 
         if (alreadyBridged.Count > 0)
@@ -181,7 +181,7 @@ internal static class AsyncMigrationDiagnostic
         if (upliftItems.Count == 0) return;
 
         var upliftErrors = upliftItems
-            .Where(i => i.Outcome is OperationOutcome.Skipped or OperationOutcome.Failed
+            .Where(i => i.Outcome is ItemRecordOutcome.Skipped or ItemRecordOutcome.Failed
                      && i.Reason!.Contains("NeedsManualReview", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
@@ -218,7 +218,7 @@ internal static class AsyncMigrationDiagnostic
         if (ctItems.Count == 0) return;
 
         var ctFailures = ctItems
-            .Where(i => i.Outcome is OperationOutcome.Failed)
+            .Where(i => i.Outcome is ItemRecordOutcome.Failed)
             .ToList();
 
         if (ctFailures.Count > 0)
