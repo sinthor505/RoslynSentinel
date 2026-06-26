@@ -2317,17 +2317,17 @@ public class SentinelAsyncifyTools
             }
             foreach (var s in bridgeResult.Skipped)
             {
-                bool isValidationFailure = s.Reason.Contains("NeedsManualReview")
+                bool requiresManualReview = s.Reason.Contains("NeedsManualReview")
                     || s.Reason.Contains("already has CancellationToken")
                     || s.Reason.Contains("event handler");
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome = isValidationFailure ? OperationOutcome.Skipped : OperationOutcome.Failed,
+                    Outcome = requiresManualReview ? OperationOutcome.Skipped : OperationOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                 });
-                if (isValidationFailure)
+                if (requiresManualReview)
                 {
                     skipped++;
                 }
@@ -2794,7 +2794,7 @@ public class SentinelAsyncifyTools
         {
             directive = $"{bridgeSkippedCount} candidate(s) were attempted but all required manual review — " +
                         $"the async transform produced compiler errors (likely no async API equivalent exists for the called sync methods). " +
-                        $"Call get_operation_detail(changeId=\"{changeId}\") to see per-method skip reasons and compiler diagnostics.";
+                        $"Call get_operation_detail(changeId=\"{changeId}\", filter=\"skipped\") to see per-method skip reasons and compiler diagnostics.";
         }
         else
         {
