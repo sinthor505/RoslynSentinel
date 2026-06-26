@@ -1220,7 +1220,7 @@ public class SentinelAsyncifyTools
         }
         foreach (var f in result.Failed)
         {
-            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = f.Reason });
+            items.Add(new OperationItemRecord { FilePath = f.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = f.Reason, CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null });
         }
 
         var blobName = await OperationBlobWriter.WriteAsync(
@@ -1228,7 +1228,7 @@ public class SentinelAsyncifyTools
         var status = _workspaceManager.GetBreakerStatus();
         var failures = result.Failed
             .Take(15)
-            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = ItemRecordOutcome.Failed })
+            .Select(f => new FailureDetail { FilePath = f.FilePath, Reason = f.Reason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null })
             .ToList();
 
         return new BatchResultSummary
@@ -2948,6 +2948,7 @@ public class SentinelAsyncifyTools
                             FilePath = f.FilePath,
                             Outcome = ItemRecordOutcome.Failed,
                             Reason = $"phase:propagate_ct — {f.Reason}",
+                            CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null,
                         });
                     }
                 }
