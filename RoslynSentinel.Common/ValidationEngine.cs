@@ -53,13 +53,24 @@ public class ValidationEngine
     /// Validates proposed file changes using the current workspace snapshot.
     /// Returns only NEWLY INTRODUCED errors — errors present after the change that were
     /// not already present before it (delta approach).
+    /// When errors are found, writes a blob to .roslynsentinel/validation/ for manual review.
     /// </summary>
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
         IProgress<string>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        return await ValidateChangesAsync(solution, fileChanges, cancellationToken);
+        var report = await ValidateChangesAsync(solution, fileChanges, cancellationToken);
+
+        if (!report.Success && report.Diagnostics.Count > 0)
+        {
+            _ = OperationBlobWriter.WriteValidationFailureAsync(
+                fileChanges.Keys.Select(p => p.ToString()),
+                report.Diagnostics,
+                _workspaceManager.GetSolutionRoot());
+        }
+
+        return report;
     }
 
     /// <summary>

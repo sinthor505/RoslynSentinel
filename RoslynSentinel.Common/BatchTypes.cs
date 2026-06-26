@@ -88,6 +88,8 @@ public class FailureDetail
     public string Reason { get; set; } = "";
     /// <summary>"failed" | "rolledback" | "skipped"</summary>
     public ItemRecordOutcome Outcome { get; set; } = ItemRecordOutcome.Unset;
+    /// <summary>Structured Roslyn diagnostics that caused the failure. Null when failure is not compiler-error-related.</summary>
+    public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
 }
 
 // ── Phase 4 — Batch-first input types ─────────────────────────────────────────

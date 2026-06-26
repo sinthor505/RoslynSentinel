@@ -44,7 +44,7 @@ public record UpliftSkippedInfo(
     FilePath FilePath,
     string CallerMethod,
     string Reason,
-    List<string> Diagnostics
+    List<DiagnosticInfo> Diagnostics
 );
 
 /// <summary>
@@ -463,12 +463,10 @@ public class AsyncBatchEngine
                         }
                         else
                         {
-                            var diagMessages = ctValidation.Diagnostics
-                                .Select(d => $"[{d.Id}] {d.Message}").ToList();
                             skipped.Add(new BridgeSkippedInfo(
                                 candidate.FilePath, candidate.MethodName,
                                 $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s); flagged NeedsManualReview",
-                                diagMessages));
+                                ctValidation.Diagnostics));
                             fallbackHandled = true;
                         }
                     }
@@ -477,7 +475,7 @@ public class AsyncBatchEngine
                         skipped.Add(new BridgeSkippedInfo(
                             candidate.FilePath, candidate.MethodName,
                             $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
-                            new List<string>()));
+                            new List<DiagnosticInfo>()));
                         fallbackHandled = true;
                     }
                 }
@@ -489,7 +487,7 @@ public class AsyncBatchEngine
                 {
                     skipped.Add(new BridgeSkippedInfo(
                         candidate.FilePath, candidate.MethodName,
-                        $"Pre-condition: {ex.Message}", new List<string>()));
+                        $"Pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
                 }
                 continue;
             }
@@ -518,7 +516,7 @@ public class AsyncBatchEngine
                 }
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
-                    $"Pre-condition: {ex.Message}", new List<string>()));
+                    $"Pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
                 continue;
             }
             catch (Exception ex)
@@ -544,7 +542,7 @@ public class AsyncBatchEngine
                 }
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
-                    $"Unexpected error: {ex.Message}", new List<string>()));
+                    $"Unexpected error: {ex.Message}", new List<DiagnosticInfo>()));
                 continue;
             }
 
@@ -581,14 +579,10 @@ public class AsyncBatchEngine
 
             if (!validation.Success)
             {
-                var diagMessages = validation.Diagnostics
-                    .Select(d => $"[{d.Id}] {d.Message}")
-                    .ToList();
-
                 _logger.LogWarning(
                     "In-memory validation failed for {Method} ({DiagCount} errors): {FirstDiag}",
                     candidate.MethodName, validation.Diagnostics.Count,
-                    diagMessages.FirstOrDefault() ?? "");
+                    validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : "");
 
                 // Flag the method for manual review — best effort, do not abort batch on failure.
                 try
@@ -611,7 +605,7 @@ public class AsyncBatchEngine
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
                     $"Validation produced {validation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
-                    diagMessages));
+                    validation.Diagnostics));
                 continue;
             }
 
@@ -759,7 +753,7 @@ public class AsyncBatchEngine
             if (!File.Exists(callerFilePath))
             {
                 skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                    "Caller file not found on disk.", new List<string>()));
+                    "Caller file not found on disk.", new List<DiagnosticInfo>()));
                 continue;
             }
 
@@ -824,7 +818,7 @@ public class AsyncBatchEngine
                             callerMethodName, inPlaceEx.Message);
                         skipped.Add(new UpliftSkippedInfo(
                             callerFilePath, callerMethodName,
-                            $"Event handler in-place: {inPlaceEx.Message}", new List<string>()));
+                            $"Event handler in-place: {inPlaceEx.Message}", new List<DiagnosticInfo>()));
                         continue;
                     }
                 }
@@ -835,7 +829,7 @@ public class AsyncBatchEngine
                         callerMethodName, ex.Message);
                     skipped.Add(new UpliftSkippedInfo(
                         callerFilePath, callerMethodName,
-                        $"Bridge pre-condition: {ex.Message}", new List<string>()));
+                        $"Bridge pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
                     continue;
                 }
                 catch (Exception ex)
@@ -844,7 +838,7 @@ public class AsyncBatchEngine
                         "Unexpected error bridging caller {Method}", callerMethodName);
                     skipped.Add(new UpliftSkippedInfo(
                         callerFilePath, callerMethodName,
-                        $"Unexpected bridge error: {ex.Message}", new List<string>()));
+                        $"Unexpected bridge error: {ex.Message}", new List<DiagnosticInfo>()));
                     continue;
                 }
             }
@@ -874,7 +868,7 @@ public class AsyncBatchEngine
                         rewriteTargetName, ex.Message);
                     skipped.Add(new UpliftSkippedInfo(
                         callerFilePath, callerMethodName,
-                        $"Body rewrite failed: {ex.Message}", new List<string>()));
+                        $"Body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
                     continue;
                 }
             }
@@ -907,14 +901,10 @@ public class AsyncBatchEngine
 
             if (!validation.Success)
             {
-                var diagMessages = validation.Diagnostics
-                    .Select(d => $"[{d.Id}] {d.Message}")
-                    .ToList();
-
                 _logger.LogWarning(
                     "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
                     callerMethodName, validation.Diagnostics.Count,
-                    diagMessages.FirstOrDefault() ?? "");
+                    validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : "");
 
                 // Flag the original caller for manual review — best effort.
                 try
@@ -937,7 +927,7 @@ public class AsyncBatchEngine
                 skipped.Add(new UpliftSkippedInfo(
                     callerFilePath, callerMethodName,
                     $"Validation produced {validation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
-                    diagMessages));
+                    validation.Diagnostics));
                 continue;
             }
 

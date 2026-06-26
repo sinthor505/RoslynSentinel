@@ -1336,8 +1336,9 @@ public class SentinelAsyncifyTools
                             MethodName = methodName,
                             Outcome = ItemRecordOutcome.Failed,
                             Reason = reason782,
+                            CompilerDiagnostics = bridgeValidation.Diagnostics,
                         });
-                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason782, Outcome = ItemRecordOutcome.Failed });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason782, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = bridgeValidation.Diagnostics });
                         failed++;
                         continue;
                     }
@@ -1361,6 +1362,7 @@ public class SentinelAsyncifyTools
                 {
                     string reason = ex.Message;
                     bool handled = false;
+                    List<DiagnosticInfo>? compilerDiagnostics = null;
 
                     if (ex is InvalidOperationException && ex.Message.Contains("already exists"))
                     {
@@ -1393,6 +1395,7 @@ public class SentinelAsyncifyTools
                                 {
                                     var diagMsg = string.Join("; ", ctApplyResult.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                                     reason = $"Validation: {ctApplyResult.ValidationResult.Diagnostics.Count} error(s) — {diagMsg}";
+                                    compilerDiagnostics = ctApplyResult.ValidationResult.Diagnostics;
                                 }
                             }
                             else if (ctResult.Outcome == EditOutcome.NoChange)
@@ -1425,6 +1428,7 @@ public class SentinelAsyncifyTools
                             MethodName = methodName,
                             Outcome = ItemRecordOutcome.Failed,
                             Reason = reason,
+                            CompilerDiagnostics = compilerDiagnostics,
                         });
                         if (failures.Count < 10)
                         {
@@ -1434,6 +1438,7 @@ public class SentinelAsyncifyTools
                                 MethodName = methodName,
                                 Reason = reason,
                                 Outcome = ItemRecordOutcome.Failed,
+                                CompilerDiagnostics = compilerDiagnostics,
                             });
                         }
                         failed++;
@@ -1546,9 +1551,9 @@ public class SentinelAsyncifyTools
                         {
                             var diagMsg = string.Join("; ", ctFileValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                             var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) — {diagMsg}";
-                            items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = valReason });
+                            items.Add(new OperationItemRecord { FilePath = target.FilePath, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = ctFileValidation.Diagnostics });
                             if (failures.Count < 10)
-                                failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = ItemRecordOutcome.Failed });
+                                failures.Add(new FailureDetail { FilePath = target.FilePath, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = ctFileValidation.Diagnostics });
                             failed++;
                             continue;
                         }
@@ -1712,6 +1717,7 @@ public class SentinelAsyncifyTools
                     MethodName = s.CallerMethod,
                     Outcome = blobOutcome,
                     Reason = s.Reason,
+                    CompilerDiagnostics = s.Diagnostics.Count > 0 ? s.Diagnostics : null,
                 });
 
                 if (itemOutcome == ItemOutcome.AlreadySatisfied)
@@ -2264,8 +2270,8 @@ public class SentinelAsyncifyTools
                         {
                             var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                             var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
-                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason });
-                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed });
+                            items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = extractValidation.Diagnostics });
+                            if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = extractValidation.Diagnostics });
                             failed++;
                             continue;
                         }
@@ -2509,12 +2515,14 @@ public class SentinelAsyncifyTools
                 bool requiresManualReview = s.Reason.Contains("NeedsManualReview")
                     || s.Reason.Contains("already has CancellationToken")
                     || s.Reason.Contains("event handler");
+                var bridgeDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
                     Outcome = requiresManualReview ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
+                    CompilerDiagnostics = bridgeDiags,
                 });
                 if (requiresManualReview)
                 {
@@ -2530,6 +2538,7 @@ public class SentinelAsyncifyTools
                             MethodName = s.MethodName,
                             Reason = s.Reason,
                             Outcome = ItemRecordOutcome.Failed,
+                            CompilerDiagnostics = bridgeDiags,
                         });
                     }
                     failed++;

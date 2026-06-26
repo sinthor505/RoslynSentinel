@@ -24,4 +24,6 @@ public class OperationItemRecord
     {
         get; set;
     }
+    /// <summary>Structured Roslyn diagnostics that caused a validation failure. Null when outcome is not a compiler error.</summary>
+    public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
 }

@@ -64,6 +64,52 @@ public static class OperationBlobWriter
     }
 
     /// <summary>
+    /// Writes a compact validation-failure blob under .roslynsentinel/validation/.
+    /// Called automatically by ValidationEngine when newly-introduced compiler errors are found.
+    /// Returns the blob filename on success, or a diagnostic string on failure (never throws).
+    /// </summary>
+    public static async Task<string> WriteValidationFailureAsync(
+        IEnumerable<string> changedFilePaths,
+        List<DiagnosticInfo> diagnostics,
+        string? solutionRoot)
+    {
+        if (string.IsNullOrEmpty(solutionRoot))
+        {
+            return "(no solution root — validation blob not written)";
+        }
+
+        try
+        {
+            var dir = Path.Combine(solutionRoot, ".roslynsentinel", "validation");
+            Directory.CreateDirectory(dir);
+
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+            var changeId = Guid.NewGuid().ToString("N")[..8];
+            var fileName = $"validation_{timestamp}_{changeId}.json";
+            var filePath = Path.Combine(dir, fileName);
+
+            var payload = new
+            {
+                generatedUtc = DateTime.UtcNow.ToString("O"),
+                changedFiles = changedFilePaths.ToList(),
+                errorCount = diagnostics.Count,
+                diagnostics,
+            };
+
+            await File.WriteAllTextAsync(
+                filePath,
+                JsonSerializer.Serialize(payload, PrettyJson),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            return fileName;
+        }
+        catch (Exception ex)
+        {
+            return $"(validation blob write failed: {ex.Message})";
+        }
+    }
+
+    /// <summary>
     /// Locates the on-disk blob path for the given changeId, or null if not found.
     /// Blob filename pattern: {toolName}_{timestamp}_{changeId}.json
     /// </summary>
