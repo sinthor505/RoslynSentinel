@@ -2610,12 +2610,14 @@ public class SentinelAsyncifyTools
                         }
                         foreach (var s in pm.Result.Skipped)
                         {
+                            var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
                             items.Add(new OperationItemRecord
                             {
                                 FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
                                 Outcome = ItemRecordOutcome.Failed,
                                 Reason = $"phase:uplift — {s.Reason}",
+                                CompilerDiagnostics = upliftDiags,
                             });
                             if (failures.Count < 10)
                             {
@@ -2625,6 +2627,7 @@ public class SentinelAsyncifyTools
                                     MethodName = s.CallerMethod,
                                     Reason = s.Reason,
                                     Outcome = ItemRecordOutcome.Failed,
+                                    CompilerDiagnostics = upliftDiags,
                                 });
                             }
                             failed++;
