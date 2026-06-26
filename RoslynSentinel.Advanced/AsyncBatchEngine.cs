@@ -750,95 +750,103 @@ public class AsyncBatchEngine
                 i + 1, callerPairs.Count, callerMethodName, callerFilePath);
 
             // Step A: bridge the caller — creates callerAsync(CT) with original body.
-            // For event handlers, falls back to in-place async void conversion instead.
-            // callerAsyncNameOverride: set when the caller is already async or already has an async
-            // overload — Step A is skipped and Steps B/C operate on the existing async method.
+            // Pre-check the caller's state from disk so we never send already-async methods through
+            // ConvertToAsyncBridgeAsync (which would throw and rely on message-string matching).
             string bridgedCallerSource;
             bool isEventHandlerInPlace = false;
             string? callerAsyncNameOverride = null;
-            try
+
+            if (!File.Exists(callerFilePath))
             {
-                var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                    callerFilePath, callerMethodName, progress, cancellationToken);
-                bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
+                skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                    "Caller file not found on disk.", new List<string>()));
+                continue;
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
+
+            var preCheckSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+            var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource);
+            var preCheckRoot = preCheckTree.GetRoot();
+            var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+
+            var callerMethodNode = preCheckMethods
+                .FirstOrDefault(m => m.Identifier.Text == callerMethodName);
+
+            bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
+            bool asyncOverloadExists = preCheckMethods
+                .Any(m => m.Identifier.Text == callerMethodName + "Async");
+
+            if (callerIsAsync)
             {
-                // Event handler delegates have fixed signatures — cannot gain a CancellationToken
-                // parameter. Convert in-place: make async void and replace bridge calls with await.
-                _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' is an event handler — attempting in-place async void conversion",
-                    callerMethodName);
-                try
-                {
-                    var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
-                        callerFilePath, callerMethodName, cancellationToken: cancellationToken);
-                    bridgedCallerSource = inPlace.UpdatedText
-                        ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
-                    isEventHandlerInPlace = true;
-                }
-                catch (Exception inPlaceEx)
-                {
-                    _logger.LogWarning(
-                        "In-place async void conversion failed for '{Method}': {Message}",
-                        callerMethodName, inPlaceEx.Message);
-                    skipped.Add(new UpliftSkippedInfo(
-                        callerFilePath, callerMethodName,
-                        $"Event handler in-place: {inPlaceEx.Message}", new List<string>()));
-                    continue;
-                }
-            }
-            catch (InvalidOperationException ex) when (
-                ex.Message.Contains("is already async") ||
-                ex.Message.Contains("already ends with 'Async'"))
-            {
-                // Caller is itself an async method — rewrite its body directly, no new overload needed.
+                // Caller is itself async — rewrite its body directly without creating a new overload.
                 _logger.LogInformation(
                     "RunUpliftBatch: '{Method}' is already async — rewriting body in-place",
                     callerMethodName);
-                if (!File.Exists(callerFilePath))
-                {
-                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        "Already-async in-place rewrite: file not found on disk.", new List<string>()));
-                    continue;
-                }
-                bridgedCallerSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
-                callerAsyncNameOverride = callerMethodName; // rewrite the method itself, not callerMethodName + "Async"
+                bridgedCallerSource = preCheckSource;
+                callerAsyncNameOverride = callerMethodName;
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists in the class"))
+            else if (asyncOverloadExists)
             {
-                // An async overload (callerMethodName + "Async") already exists — rewrite its body
-                // to call the newly bridged method asynchronously, without creating another overload.
+                // An async overload already exists — rewrite its body to call the bridged method.
                 _logger.LogInformation(
                     "RunUpliftBatch: '{Method}' has existing async overload — rewriting body directly",
                     callerMethodName);
-                if (!File.Exists(callerFilePath))
-                {
-                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        "Existing-overload rewrite: file not found on disk.", new List<string>()));
-                    continue;
-                }
-                bridgedCallerSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+                bridgedCallerSource = preCheckSource;
                 // callerAsyncNameOverride stays null → Steps B/C use callerMethodName + "Async"
             }
-            catch (InvalidOperationException ex)
+            else
             {
-                _logger.LogWarning(
-                    "Bridge pre-condition failed for caller {Method}: {Message}",
-                    callerMethodName, ex.Message);
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    $"Bridge pre-condition: {ex.Message}", new List<string>()));
-                continue;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex,
-                    "Unexpected error bridging caller {Method}", callerMethodName);
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    $"Unexpected bridge error: {ex.Message}", new List<string>()));
-                continue;
+                // Normal path (sync caller, no existing async overload): let ConvertToAsyncBridgeAsync
+                // create the async bridge. It handles event handlers, abstract methods, ref/out params,
+                // and other edge cases via its own exception throw paths.
+                try
+                {
+                    var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                        callerFilePath, callerMethodName, progress, cancellationToken);
+                    bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
+                {
+                    _logger.LogInformation(
+                        "RunUpliftBatch: '{Method}' is an event handler — attempting in-place async void conversion",
+                        callerMethodName);
+                    try
+                    {
+                        var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
+                            callerFilePath, callerMethodName, cancellationToken: cancellationToken);
+                        bridgedCallerSource = inPlace.UpdatedText
+                            ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
+                        isEventHandlerInPlace = true;
+                    }
+                    catch (Exception inPlaceEx)
+                    {
+                        _logger.LogWarning(
+                            "In-place async void conversion failed for '{Method}': {Message}",
+                            callerMethodName, inPlaceEx.Message);
+                        skipped.Add(new UpliftSkippedInfo(
+                            callerFilePath, callerMethodName,
+                            $"Event handler in-place: {inPlaceEx.Message}", new List<string>()));
+                        continue;
+                    }
+                }
+                catch (InvalidOperationException ex)
+                {
+                    _logger.LogWarning(
+                        "Bridge pre-condition failed for caller {Method}: {Message}",
+                        callerMethodName, ex.Message);
+                    skipped.Add(new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Bridge pre-condition: {ex.Message}", new List<string>()));
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Unexpected error bridging caller {Method}", callerMethodName);
+                    skipped.Add(new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Unexpected bridge error: {ex.Message}", new List<string>()));
+                    continue;
+                }
             }
 
             // Step B: rewrite callerAsync body — replace bridgedMethod(args)
