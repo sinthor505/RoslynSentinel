@@ -17,3 +17,6 @@ RoslynSentinel.Server/engine_methods_workspace.json
 /RoslynSentinel.HttpHost/tools.csv
 /RoslynSentinel.HttpHost/tools.json
 ClaudeFiles/
+*.csv
+*.json
+
