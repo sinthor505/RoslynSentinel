@@ -723,35 +723,21 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError("MethodNotFound", $"Method '{methodName}' not found in '{filePath}'.") };
             }
 
-            var methodBytes = System.Text.Encoding.UTF8.GetByteCount(method.ToFullString());
-            var methodCharLength = method.ToFullString().Length;
+            var methodSource = method.ToFullString();
+            var methodBytes = System.Text.Encoding.UTF8.GetByteCount(methodSource);
 
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Method body size: {SizeBytes} bytes", methodBytes);
-                _logger.LogInformation("Method character length: {Length} characters", methodCharLength);
-            }
+            _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
 
-            var thresholdBytes = 8 * 1024; // 8 KB threshold for logging warnings
-            if (methodBytes > thresholdBytes)
-            {
-                _logger.LogWarning("Method body size {SizeBytes} bytes exceeds expected limits. " +
-                                   "This may indicate an issue with the summarization logic or unusually large data. " +
-                                   "Consider reviewing the summary generation and applying stricter caps if necessary.",
-                                   methodBytes);
-            }
-
-            var scanId = Guid.NewGuid().ToString("N");
+            const int thresholdBytes = 8 * 1024;
             var solutionRoot = _workspaceManager.GetSolutionRoot();
-            if (!string.IsNullOrEmpty(solutionRoot))
+            if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
+                var scanId = Guid.NewGuid().ToString("N");
                 var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
                 Directory.CreateDirectory(dir);
                 var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
                 var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
-                await File.WriteAllTextAsync(fp,
-                    method.ToFullString(),
-                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                await File.WriteAllTextAsync(fp, methodSource, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -762,12 +748,12 @@ public class SentinelWorkspaceTools
                         scanId: scanId,
                         sizeBytes: methodBytes,
                         totalRecords: 1,
-                        message: $"Summary exceeded {thresholdBytes} bytes ({methodBytes} bytes). " +
-                                       $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
+                        message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " +
+                                 $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
                 };
             }
 
-            return new ToolResult<object>() { Success = true, Data = method.ToFullString() };
+            return new ToolResult<object>() { Success = true, Data = methodSource };
 
         }
         catch (Exception ex)
