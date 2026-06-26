@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Using Include="ModelContextProtocol.Protocol" />
     <Using Include="RoslynSentinel.Advanced" />
     <Using Include="RoslynSentinel.Basic" />
     <Using Include="RoslynSentinel.Common" />

@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
@@ -751,6 +752,30 @@ public partial class PersistentWorkspaceManager : IDisposable
                     Debug.WriteLine($"[Warning] Skipping no-op write for {filePath}: proposed content is identical to existing content.");
                     succeeded.Add(filePath);
                     continue;
+                }
+
+                // For C# files, suppress writes where the only difference is whitespace
+                // normalization — e.g. NormalizeWhitespace() adding blank lines between methods
+                // that were already present in the original. Parsing both sides and comparing
+                // their normalized forms catches any engine that forgot to preserve formatting.
+                if (preImage != null &&
+                    string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var normalizedNew = CSharpSyntaxTree.ParseText(newContent).GetRoot().NormalizeWhitespace().ToFullString();
+                        var normalizedExisting = CSharpSyntaxTree.ParseText(preImage).GetRoot().NormalizeWhitespace().ToFullString();
+                        if (normalizedNew == normalizedExisting)
+                        {
+                            _logger.LogInformation("Skipping whitespace-only write for {FilePath}: content is semantically identical after normalization.", filePath);
+                            succeeded.Add(filePath);
+                            continue;
+                        }
+                    }
+                    catch
+                    {
+                        // Parse failure (e.g. malformed generated code) — fall through to normal write.
+                    }
                 }
 
                 // Mark as internal change before writing to avoid FileSystemWatcher loop

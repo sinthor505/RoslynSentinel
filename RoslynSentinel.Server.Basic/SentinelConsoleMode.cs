@@ -516,8 +516,10 @@ public static partial class SentinelConsoleMode
     /// <summary>
     /// Writes tool_list.json (full MCP payload) and tool_list_simple.json (names only)
     /// to <paramref name="outputDir"/> on every server startup.
-    /// Reads <see cref="McpServerTool.ProtocolTool"/> from registered DI instances —
-    /// the exact schema the MCP layer emits, not a hand-rolled reflection summary.
+    /// Primary: reads <see cref="McpServerTool.ProtocolTool"/> from registered DI instances.
+    /// Fallback: creates tools directly via <see cref="McpServerTool.Create"/> over all
+    /// loaded RoslynSentinel.Server.* assemblies — used when DI registration returns zero
+    /// (e.g. singleton factory delay or scope mismatch at startup time).
     /// NOT an [McpServerTool] — internal diagnostic output only.
     /// </summary>
     public static void WriteStartupDump(IServiceProvider services, string outputDir, string modeArg)
@@ -533,6 +535,42 @@ public static partial class SentinelConsoleMode
                 .Select(t => t.ProtocolTool)
                 .OrderBy(t => t.Name)
                 .ToList();
+
+            // Fallback: DI returned nothing — build directly from assembly metadata.
+            // Mirrors what WithTools<T>() does: Create(method, instance, options) for each
+            // [McpServerTool]-attributed method on every [McpServerToolType]-marked class.
+            if (tools.Count == 0)
+            {
+                tools = AppDomain.CurrentDomain.GetAssemblies()
+                    .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Server", StringComparison.Ordinal) == true)
+                    .SelectMany(a => { try { return a.GetTypes(); } catch { return []; } })
+                    .Where(t => t.IsClass && !t.IsAbstract && t.GetCustomAttribute<McpServerToolTypeAttribute>() != null)
+                    .SelectMany(type =>
+                    {
+                        var instance = services.GetService(type);
+                        var opts = new McpServerToolCreateOptions { Services = services };
+                        return type
+                            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                            .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() != null
+                                     && (m.IsStatic || instance != null))
+                            .SelectMany(m =>
+                            {
+                                try
+                                {
+                                    return (IEnumerable<ModelContextProtocol.Protocol.Tool>)
+                                        [McpServerTool.Create(m, m.IsStatic ? null : instance, opts).ProtocolTool];
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.Error.WriteLine(
+                                        $"[StartupDump] Skipping {type.Name}.{m.Name}: {ex.Message}");
+                                    return [];
+                                }
+                            });
+                    })
+                    .OrderBy(t => t.Name)
+                    .ToList();
+            }
 
             string generatedUtc = DateTime.UtcNow.ToString("O");
             int totalChars = tools.Sum(t => t.Name.Length + (t.Description?.Length ?? 0));
@@ -600,15 +638,17 @@ public static partial class SentinelConsoleMode
                                          .Replace(" ", "_");
 
             var solutionRoot = FindSolutionRoot(outputDir) ?? outputDir;
-            var serverSrcDir = Path.Combine(solutionRoot, "RoslynSentinel.Server");
-            var inventoryDir = Directory.Exists(serverSrcDir) ? serverSrcDir : solutionRoot;
+            var inventoryDir = solutionRoot;
 
-            var types = typeof(SentinelConsoleMode).Assembly
-                .GetTypes()
+            // Scan all loaded RoslynSentinel.Server.* assemblies so both Basic and Advanced
+            // types are captured regardless of which server entry point is running.
+            var types = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Server", StringComparison.Ordinal) == true)
+                .SelectMany(a => { try { return a.GetTypes(); } catch { return []; } })
                 .Where(t => t.IsClass
                          && !t.IsAbstract
                          && !t.IsGenericTypeDefinition
-                         && t.Namespace == "RoslynSentinel.Server"
+                         && t.Namespace?.StartsWith("RoslynSentinel.Server.", StringComparison.Ordinal) == true
                          && !t.Name.Contains('<'))
                 .OrderBy(t => t.Name)
                 .ToList();

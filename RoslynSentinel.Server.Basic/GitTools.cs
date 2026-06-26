@@ -17,20 +17,47 @@ public class GitStatusEntry
 
 public class GitStatusResult
 {
-    public bool Success { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
     public string Branch { get; set; } = "";
-    public bool IsClean { get; set; }
+    public bool IsClean
+    {
+        get; set;
+    }
     public List<GitStatusEntry> Staged { get; set; } = [];
     public List<GitStatusEntry> Unstaged { get; set; } = [];
     public List<string> Untracked { get; set; } = [];
-    public string? Error { get; set; }
+    public string? Error
+    {
+        get; set;
+    }
     // Populated when IsTruncated=true; lists above are capped to first 10 entries each as a sample.
-    public bool IsTruncated { get; set; }
-    public int? TotalStagedCount { get; set; }
-    public int? TotalUnstagedCount { get; set; }
-    public int? TotalUntrackedCount { get; set; }
-    public Dictionary<string, int>? StagedByStatus { get; set; }
-    public Dictionary<string, int>? UnstagedByStatus { get; set; }
+    public bool IsTruncated
+    {
+        get; set;
+    }
+    public int? TotalStagedCount
+    {
+        get; set;
+    }
+    public int? TotalUnstagedCount
+    {
+        get; set;
+    }
+    public int? TotalUntrackedCount
+    {
+        get; set;
+    }
+    public Dictionary<string, int>? StagedByStatus
+    {
+        get; set;
+    }
+    public Dictionary<string, int>? UnstagedByStatus
+    {
+        get; set;
+    }
 }
 
 public class GitCommitEntry
@@ -44,34 +71,64 @@ public class GitCommitEntry
 
 public class GitLogResult
 {
-    public bool Success { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
     public List<GitCommitEntry> Commits { get; set; } = [];
-    public string? Error { get; set; }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 public class GitDiffResult
 {
-    public bool Success { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
     public string Diff { get; set; } = "";
-    public int FilesChanged { get; set; }
-    public string? Error { get; set; }
+    public int FilesChanged
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 public class GitCommitResult
 {
-    public bool Success { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
     public string CommitHash { get; set; } = "";
     public string Message { get; set; } = "";
-    public string? Error { get; set; }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 public class GitRevertResult
 {
-    public bool Success { get; set; }
+    public bool Success
+    {
+        get; set;
+    }
     public string CommitHash { get; set; } = "";
     public string Message { get; set; } = "";
-    public bool PendingCommit { get; set; }
-    public string? Error { get; set; }
+    public bool PendingCommit
+    {
+        get; set;
+    }
+    public string? Error
+    {
+        get; set;
+    }
 }
 
 // ─── Tool class ──────────────────────────────────────────────────────────────
@@ -200,10 +257,10 @@ public class GitTools
         // revert
         string? commitHash = null,
         bool noCommit = false,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
-        var ct = cancellationToken ?? CancellationToken.None;
+        var ct = cancellationToken;
         var gitRoot = TryGetGitRoot(out var rootError);
         if (gitRoot is null)
             return new { Success = false, Error = rootError };
@@ -211,8 +268,8 @@ public class GitTools
         return operation switch
         {
             GitOperation.status => await StatusAsync(gitRoot, ct),
-            GitOperation.log    => await LogAsync(gitRoot, count, ct),
-            GitOperation.diff   => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
+            GitOperation.log => await LogAsync(gitRoot, count, ct),
+            GitOperation.diff => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
             GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, stageAll, files, ct),
             GitOperation.commit => await CommitAsync(gitRoot, message, stageAll, files, ct),
             GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, ct),

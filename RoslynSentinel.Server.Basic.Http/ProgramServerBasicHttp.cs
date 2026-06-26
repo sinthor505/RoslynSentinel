@@ -55,6 +55,8 @@ public static class ProgramHttpHostBasic
                         .CreateLogger("RoslynSentinel.HttpHost.Basic");
 
         app.Services.WarmupAndAutoLoadBasic(solutionPath, logger);
+        SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
         if (logger.IsEnabled(LogLevel.Information))
         {

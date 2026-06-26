@@ -2385,6 +2385,43 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         continue;
                     }
 
+                    // Find the existing [MigrationCandidate] for this pattern (if any).
+                    var existingCandidateAttr = methodNode.AttributeLists
+                        .SelectMany(al => al.Attributes)
+                        .FirstOrDefault(a =>
+                        {
+                            var n = a.Name.ToString();
+                            return (n == MigrationCandidateShortName || n == MigrationCandidateFullName) &&
+                                   (a.ArgumentList?.Arguments
+                                        .FirstOrDefault(arg => arg.NameEquals == null)
+                                        ?.Expression as LiteralExpressionSyntax)?.Token.ValueText == item.Pattern;
+                        });
+
+                    // Preserve existing FlaggedDate to avoid spurious Git churn.
+                    var flaggedDate = (existingCandidateAttr?.ArgumentList?.Arguments
+                        .FirstOrDefault(arg => arg.NameEquals?.Name.Identifier.Text == "FlaggedDate")
+                        ?.Expression as LiteralExpressionSyntax)?.Token.ValueText
+                        ?? today;
+
+                    // Skip rewrite when score and reason are unchanged — prevents NormalizeWhitespace
+                    // from adding blank lines to files that don't actually need modification.
+                    if (existingCandidateAttr != null)
+                    {
+                        int? existingScore = null;
+                        var scoreLit = existingCandidateAttr.ArgumentList?.Arguments
+                            .FirstOrDefault(a => a.NameEquals?.Name.Identifier.Text == "Score")
+                            ?.Expression as LiteralExpressionSyntax;
+                        if (scoreLit != null && scoreLit.Token.Value is int sv)
+                            existingScore = sv;
+
+                        var existingReason = (existingCandidateAttr.ArgumentList?.Arguments
+                            .FirstOrDefault(a => a.NameEquals?.Name.Identifier.Text == "Reason")
+                            ?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
+
+                        if (existingScore == item.Score && existingReason == item.Reason)
+                            continue;
+                    }
+
                     var args = new List<AttributeArgumentSyntax>
                     {
                         SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
@@ -2397,7 +2434,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(item.Reason))),
                         SyntaxFactory.AttributeArgument(
                             SyntaxFactory.NameEquals(SyntaxFactory.IdentifierName("FlaggedDate")), null,
-                            SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(today)))
+                            SyntaxFactory.LiteralExpression(SyntaxKind.StringLiteralExpression, SyntaxFactory.Literal(flaggedDate)))
                     };
 
                     var newAttr = SyntaxFactory.Attribute(

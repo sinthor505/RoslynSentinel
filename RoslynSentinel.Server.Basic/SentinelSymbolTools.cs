@@ -82,8 +82,8 @@ public class SentinelSymbolTools
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         [ExternalInputRequired(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
@@ -128,8 +128,8 @@ public class SentinelSymbolTools
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -184,8 +184,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -269,8 +269,8 @@ public class SentinelSymbolTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ContainerName)] string containerName,
         [ExternalInputRequired(DataTag.MemberKind)] string memberKind,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -303,8 +303,8 @@ public class SentinelSymbolTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -338,8 +338,8 @@ public class SentinelSymbolTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -388,8 +388,8 @@ public class SentinelSymbolTools
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [ToolOptionAttribute(ToolOptionTag.Filter)] bool includeInherited = true,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {

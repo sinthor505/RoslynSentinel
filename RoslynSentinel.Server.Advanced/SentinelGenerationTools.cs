@@ -39,8 +39,8 @@ public class SentinelGenerationTools
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
         [ExternalInputRequired(DataTag.Namespace)] string @namespace,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -59,8 +59,8 @@ public class SentinelGenerationTools
     public async Task<string> GenerateHttpClient(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -92,8 +92,8 @@ public class SentinelGenerationTools
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         var projectExists = _workspaceManager.CurrentSolution?.Projects
             .Any(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? false;
@@ -138,8 +138,8 @@ public class SentinelGenerationTools
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 

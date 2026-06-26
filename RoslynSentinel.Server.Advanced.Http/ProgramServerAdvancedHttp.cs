@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Server.Basic;
+
 namespace RoslynSentinel.Server.Advanced.Http;
 
 public class ProgramHttpHostAdvanced
@@ -55,6 +57,8 @@ public class ProgramHttpHostAdvanced
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
         app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger);
+        SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
         if (logger.IsEnabled(LogLevel.Information))
         {

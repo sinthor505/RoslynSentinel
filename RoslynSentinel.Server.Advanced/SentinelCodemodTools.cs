@@ -119,8 +119,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.DataType)] string transform,
         [ExternalInputRequired(DataTag.LibraryMode)] bool libraryMode = true,
         [ToolOption(ToolOptionTag.Preview)] bool preview = false,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -402,8 +402,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
         [ExternalInputRequired(DataTag.SymbolName)] string lockFieldName = "_lock",
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -430,10 +430,14 @@ public class SentinelCodemodTools
                         var r = await _refactoringEngine.ConvertExpressionBodyAsync(filePath, methodName, direction, contextSnippet, lineBefore, lineAfter);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                            return new ToolResult<object>()
+                            {
+                                Success = false,
+                                Error = new ResultError(ToolErrorCode.Exception,
                                 $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{filePath}'. " +
                                 "Possible causes: member not found (verify name and file are correct), member already has the target body style, " +
-                                "or contextSnippet did not uniquely match. Use get_file_outline to confirm the member exists.") };
+                                "or contextSnippet did not uniquely match. Use get_file_outline to confirm the member exists.")
+                            };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -453,9 +457,13 @@ public class SentinelCodemodTools
                         var r = await _granularRefactoringEngine.ConvertMethodToIndexerAsync(filePath, methodName);
                         if (string.IsNullOrEmpty(r.UpdatedText))
                         {
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                            return new ToolResult<object>()
+                            {
+                                Success = false,
+                                Error = new ResultError(ToolErrorCode.Exception,
                                 $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                "The method must have exactly one parameter and return a value. Use get_file_outline to verify the method exists.") };
+                                "The method must have exactly one parameter and return a value. Use get_file_outline to verify the method exists.")
+                            };
                         }
 
                         return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -477,9 +485,13 @@ public class SentinelCodemodTools
                             var r = await _advancedLogicEngine.ConvertStaticToExtensionAsync(filePath, methodName);
                             if (string.IsNullOrEmpty(r.UpdatedText))
                             {
-                                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception,
+                                return new ToolResult<object>()
+                                {
+                                    Success = false,
+                                    Error = new ResultError(ToolErrorCode.Exception,
                                     $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{filePath}'. " +
-                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use get_file_outline to verify.") };
+                                    "The method must be static and have at least one parameter to become the 'this' parameter. Use get_file_outline to verify.")
+                                };
                             }
 
                             return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
@@ -765,8 +777,8 @@ public class SentinelCodemodTools
         [Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1117,8 +1129,8 @@ public class SentinelCodemodTools
         [ExternalInputRequired(DataTag.ProjectName)] string? projectName = null,
         [ExternalInputRequired(DataTag.Framework)] string framework = "NUnit",
         [ExternalInputRequired(DataTag.StartLine)] int? disambiguateLine = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {

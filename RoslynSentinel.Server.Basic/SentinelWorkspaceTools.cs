@@ -67,8 +67,8 @@ public class SentinelWorkspaceTools
         {
             return action switch
             {
-                FeaturesAction.list   => (object)_config.GetFeatureStatuses(),
-                FeaturesAction.get    => _config.GetFeatureStatuses(names),
+                FeaturesAction.list => (object)_config.GetFeatureStatuses(),
+                FeaturesAction.get => _config.GetFeatureStatuses(names),
                 FeaturesAction.update => (object)UpdateFeaturesInternal(enabled ?? []),
                 _ => (object)$"Unknown action '{action}'."
             };
@@ -81,8 +81,8 @@ public class SentinelWorkspaceTools
     }
 
     private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         _config.BatchUpdateFeatureStatus(updates);
         return $"Updated {updates.Count} features.";
@@ -96,8 +96,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> ListSolutionItems(
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -152,8 +152,8 @@ public class SentinelWorkspaceTools
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath.")]
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
         string workspacePath,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(workspacePath))
         {
@@ -187,8 +187,8 @@ public class SentinelWorkspaceTools
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\".")]
     public async Task<ToolResult<object>> LoadSolution(
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -215,8 +215,8 @@ public class SentinelWorkspaceTools
     [Description("Checks server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Known bug: may report healthy workspaces as unhealthy — prefer GetWorkspaceHealth.")]
     public async Task<HealthReport> Diagnose(
         [Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -276,8 +276,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
     public List<string> ListExternalDiskChanges(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         return _workspaceManager.GetExternalDrift();
     }
@@ -286,8 +286,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         _workspaceManager.ClearDrift();
     }
@@ -316,9 +316,9 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
         [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        [ToolOption(ToolOptionTag.ValidateOnApply)] [Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -407,8 +407,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> RetryFailedChanges(
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -428,9 +428,9 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.Action, required: true)] StagedChangeAction action,
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        [ToolOption(ToolOptionTag.ValidateOnApply)] [Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -482,8 +482,8 @@ public class SentinelWorkspaceTools
         string toolName,
         PersistentWorkspaceManager.ApplyChangesResult result,
         string? blobChangeId = null,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         if (result.SucceededFiles.Count == 0)
         {
@@ -528,8 +528,8 @@ public class SentinelWorkspaceTools
         bool summarize = false,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -615,8 +615,8 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine, required: true)] int line,
         [Consumes(DataTag.Offset, required: true)] int column,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -638,8 +638,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> CreateProject(
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -660,8 +660,8 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
         [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -683,8 +683,8 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> GetMethodSource(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -782,8 +782,8 @@ public class SentinelWorkspaceTools
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
@@ -886,8 +886,8 @@ public class SentinelWorkspaceTools
         [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -983,8 +983,8 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1064,8 +1064,8 @@ public class SentinelWorkspaceTools
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply(
         [Consumes(DataTag.OperationId, required: true)] string changeId,
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -1138,8 +1138,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
     public ToolResult<object> ResetBreaker(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         _workspaceManager.ResetBreaker();
         return new ToolResult<object>() { Success = true, Data = "Circuit breaker reset. Failure counters cleared. Mutating tools re-enabled." };
@@ -1149,8 +1149,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
     public ToolResult<object> GetBreakerStatus(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetBreakerStatus() };
     }
@@ -1167,7 +1167,7 @@ public class SentinelWorkspaceTools
     /// Fixes the false-negative in the standard <c>diagnose</c> tool, which reports
     /// <c>healthy: false</c> even when all projects load successfully.
     /// </summary>
-    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken? ct = default)
+    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken ct = default)
     {
         // Use CurrentSolution (sync, no throw) rather than GetBranchedSolutionAsync
         // to distinguish "no solution loaded" from "workspace error"
@@ -1227,8 +1227,8 @@ public class SentinelWorkspaceTools
     [Description("Targeted workspace health check. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error.")]
     // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
     public async Task<ToolResult<object>> GetWorkspaceHealth(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
@@ -1258,8 +1258,8 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets(
-        Progress<string>? progress = null,
-        CancellationToken? cancellationToken = default)
+        RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
