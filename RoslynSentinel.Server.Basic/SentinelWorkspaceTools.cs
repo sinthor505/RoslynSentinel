@@ -964,7 +964,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, rolledback, file:<path>, or null for all items. maxItems caps the returned slice — never dumps the full document.")]
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter: failures, skipped, succeeded, rolledback, file:<path>, or omit for all items. Unknown filter values return an error. maxItems caps the returned slice — never dumps the full document.")]
     public async Task<ToolResult<object>> GetOperationDetail(
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
@@ -1012,10 +1012,22 @@ public class SentinelWorkspaceTools
                 }
                 else
                 {
-                    filtered = filter.ToLowerInvariant() switch
+                    var normalised = filter.ToLowerInvariant();
+                    if (normalised is not ("failures" or "skipped" or "rolledback" or "succeeded"))
+                    {
+                        return new ToolResult<object>()
+                        {
+                            Success = false,
+                            Error = new ResultError(
+                                ToolErrorCode.InvalidArgument,
+                                $"Unknown filter \"{filter}\". Valid values: failures, skipped, succeeded, rolledback, file:<path>, or omit for all items.")
+                        };
+                    }
+                    filtered = normalised switch
                     {
                         "failures" => allItems.Where(r => r.Outcome == OperationOutcome.Failed),
                         "skipped" => allItems.Where(r => r.Outcome == OperationOutcome.Skipped),
+                        "succeeded" => allItems.Where(r => r.Outcome == OperationOutcome.Succeeded),
                         "rolledback" => allItems.Where(r => r.Outcome == OperationOutcome.RolledBack),
                         _ => allItems,
                     };
