@@ -679,7 +679,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
-    [Description("Returns the full source text of a named method. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
+    [Description("Returns the full source text of a named method plus a structured list of its attributes. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
@@ -725,6 +725,8 @@ public class SentinelWorkspaceTools
 
             var methodSource = method.ToFullString();
             var methodBytes = System.Text.Encoding.UTF8.GetByteCount(methodSource);
+            var attributes = ExtractAttributes(method);
+            var signature = BuildSignature(method);
 
             _logger.LogInformation("GetMethodSource: {SizeBytes} bytes for '{MethodName}'", methodBytes, methodName);
 
@@ -749,11 +751,16 @@ public class SentinelWorkspaceTools
                         sizeBytes: methodBytes,
                         totalRecords: 1,
                         message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " +
-                                 $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
+                                 $"Use get_scan_result(scanId: \"{scanId}\") to page through results."),
+                    Data = new { signature, attributes },
                 };
             }
 
-            return new ToolResult<object>() { Success = true, Data = methodSource };
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = new MethodSourceResult { Signature = signature, Source = methodSource, Attributes = attributes },
+            };
 
         }
         catch (Exception ex)
@@ -1065,6 +1072,28 @@ public class SentinelWorkspaceTools
         return null;
     }
 
+    private static string BuildSignature(MethodDeclarationSyntax method)
+    {
+        var modifiers = method.Modifiers.ToString();
+        var returnType = method.ReturnType.ToString();
+        var name = method.Identifier.Text;
+        var typeParams = method.TypeParameterList?.ToString() ?? "";
+        var parameters = method.ParameterList.ToString();
+        return string.IsNullOrEmpty(modifiers)
+            ? $"{returnType} {name}{typeParams}{parameters}"
+            : $"{modifiers} {returnType} {name}{typeParams}{parameters}";
+    }
+
+    private static List<MethodAttributeInfo> ExtractAttributes(MethodDeclarationSyntax method) =>
+        method.AttributeLists
+              .SelectMany(al => al.Attributes)
+              .Select(a => new MethodAttributeInfo
+              {
+                  Name      = a.Name.ToString(),
+                  Arguments = a.ArgumentList?.Arguments.ToString() ?? "",
+              })
+              .ToList();
+
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
@@ -1286,4 +1315,24 @@ public class SentinelWorkspaceTools
             };
         }
     }
+}
+
+/// <summary>Return payload for <c>GetMethodSource</c>.</summary>
+public record MethodSourceResult
+{
+    /// <summary>Condensed method declaration: modifiers, return type, name, and parameter list — no body.</summary>
+    public string Signature { get; init; } = "";
+    /// <summary>Attributes declared on the method, in declaration order.</summary>
+    public List<MethodAttributeInfo> Attributes { get; init; } = new();
+    /// <summary>Complete source text of the method including attributes and body.</summary>
+    public string Source { get; init; } = "";
+}
+
+/// <summary>One attribute applied to a method.</summary>
+public record MethodAttributeInfo
+{
+    /// <summary>Attribute name as written in source, e.g. "MigrationCandidate" or "Obsolete".</summary>
+    public string Name { get; init; } = "";
+    /// <summary>Argument list contents (no outer parentheses), e.g. "\"AsyncBridgeCandidate\", Score = 80". Empty string when no arguments.</summary>
+    public string Arguments { get; init; } = "";
 }
