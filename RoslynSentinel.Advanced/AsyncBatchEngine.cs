@@ -751,8 +751,11 @@ public class AsyncBatchEngine
 
             // Step A: bridge the caller — creates callerAsync(CT) with original body.
             // For event handlers, falls back to in-place async void conversion instead.
+            // callerAsyncNameOverride: set when the caller is already async or already has an async
+            // overload — Step A is skipped and Steps B/C operate on the existing async method.
             string bridgedCallerSource;
             bool isEventHandlerInPlace = false;
+            string? callerAsyncNameOverride = null;
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
@@ -785,6 +788,39 @@ public class AsyncBatchEngine
                     continue;
                 }
             }
+            catch (InvalidOperationException ex) when (
+                ex.Message.Contains("is already async") ||
+                ex.Message.Contains("already ends with 'Async'"))
+            {
+                // Caller is itself an async method — rewrite its body directly, no new overload needed.
+                _logger.LogInformation(
+                    "RunUpliftBatch: '{Method}' is already async — rewriting body in-place",
+                    callerMethodName);
+                if (!File.Exists(callerFilePath))
+                {
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        "Already-async in-place rewrite: file not found on disk.", new List<string>()));
+                    continue;
+                }
+                bridgedCallerSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+                callerAsyncNameOverride = callerMethodName; // rewrite the method itself, not callerMethodName + "Async"
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists in the class"))
+            {
+                // An async overload (callerMethodName + "Async") already exists — rewrite its body
+                // to call the newly bridged method asynchronously, without creating another overload.
+                _logger.LogInformation(
+                    "RunUpliftBatch: '{Method}' has existing async overload — rewriting body directly",
+                    callerMethodName);
+                if (!File.Exists(callerFilePath))
+                {
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        "Existing-overload rewrite: file not found on disk.", new List<string>()));
+                    continue;
+                }
+                bridgedCallerSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+                // callerAsyncNameOverride stays null → Steps B/C use callerMethodName + "Async"
+            }
             catch (InvalidOperationException ex)
             {
                 _logger.LogWarning(
@@ -815,18 +851,19 @@ public class AsyncBatchEngine
             }
             else
             {
+                var rewriteTargetName = callerAsyncNameOverride ?? callerMethodName + "Async";
                 try
                 {
                     rewrittenSource = RewriteCallerAsyncBody(
                         bridgedCallerSource,
-                        callerMethodName + "Async",
+                        rewriteTargetName,
                         bridgedMethodName);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(
                         "Body rewrite failed for {Method}: {Message}",
-                        callerMethodName + "Async", ex.Message);
+                        rewriteTargetName, ex.Message);
                     skipped.Add(new UpliftSkippedInfo(
                         callerFilePath, callerMethodName,
                         $"Body rewrite failed: {ex.Message}", new List<string>()));
@@ -841,7 +878,7 @@ public class AsyncBatchEngine
             {
                 try
                 {
-                    var callerAsyncName = callerMethodName + "Async";
+                    var callerAsyncName = callerAsyncNameOverride ?? callerMethodName + "Async";
                     var (propagatedSource, _) = await _asyncOptimizationEngine
                         .PropagateCancellationTokenInSourceAsync(
                             rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
@@ -851,7 +888,7 @@ public class AsyncBatchEngine
                 {
                     _logger.LogWarning(propEx,
                         "CT propagation failed for uplifted '{Method}' — using unrewritten source",
-                        callerMethodName + "Async");
+                        callerAsyncNameOverride ?? callerMethodName + "Async");
                 }
             }
 
@@ -906,7 +943,7 @@ public class AsyncBatchEngine
 
             uplifted.Add(new UpliftCallerInfo(
                 callerFilePath, callerMethodName,
-                isEventHandlerInPlace ? callerMethodName : callerMethodName + "Async")
+                isEventHandlerInPlace ? callerMethodName : (callerAsyncNameOverride ?? callerMethodName + "Async"))
             {
                 BeforeSource = upliftBeforeSource,
             });
