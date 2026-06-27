@@ -23,6 +23,37 @@ public class BatchTarget
     }
 }
 
+/// <summary>Operation counts for a single Asyncify phase.</summary>
+public record AsyncifyPhaseCount
+{
+    public int Succeeded { get; init; }
+    public int Failed { get; init; }
+    public int Skipped { get; init; }
+}
+
+/// <summary>
+/// Per-phase breakdown of an Asyncify run. All phases are present; counts are zero when
+/// a phase did not run (e.g. Phase 0 only runs when HandlerExtractCandidate flags exist).
+/// Use this to distinguish bridge conversions from uplift call-site updates in the totals.
+/// </summary>
+public record AsyncifyPhaseBreakdown
+{
+    /// <summary>Phase 0 — HandlerExtract: event-handler bodies extracted into new methods.</summary>
+    public AsyncifyPhaseCount HandlerExtract { get; init; } = new();
+    /// <summary>Phase 1 — Flag: methods newly annotated [MigrationCandidate("AsyncBridgeCandidate")].</summary>
+    public AsyncifyPhaseCount Flag { get; init; } = new();
+    /// <summary>Phase 2 — Bridge: sync methods converted to bridge pattern (sync stub + async overload).</summary>
+    public AsyncifyPhaseCount Bridge { get; init; } = new();
+    /// <summary>Phase 3 — Uplift: caller methods updated to use async overloads directly.</summary>
+    public AsyncifyPhaseCount Uplift { get; init; } = new();
+    /// <summary>Phase 3a — HandlerToAsync: extracted event-handler bodies bridged.</summary>
+    public AsyncifyPhaseCount HandlerToAsync { get; init; } = new();
+    /// <summary>Phase 3b — Handler: AsyncHandlerCandidate event handlers converted in-place to async void.</summary>
+    public AsyncifyPhaseCount Handler { get; init; } = new();
+    /// <summary>Phase 4 — PropagateCt: CancellationToken forwarded through bridged-file call sites.</summary>
+    public AsyncifyPhaseCount PropagateCt { get; init; } = new();
+}
+
 /// <summary>Agent-facing return from every batch-first mutation tool.</summary>
 public record BatchResultSummary : EngineResultBase
 {
@@ -75,6 +106,12 @@ public record BatchResultSummary : EngineResultBase
     /// and the recommended next step. Null when everything succeeded or no patterns were detected.
     /// </summary>
     public List<string>? Suggestions { get; init; }
+    /// <summary>
+    /// Per-phase operation counts. Only populated by Asyncify; null for all other tools.
+    /// Breaks down the aggregate <see cref="Succeeded"/> total by phase so callers can distinguish
+    /// bridge conversions (Phase 2) from uplift call-site updates (Phase 3).
+    /// </summary>
+    public AsyncifyPhaseBreakdown? PhaseBreakdown { get; init; }
 }
 
 /// <summary>Per-failure detail included inline in BatchResultSummary (capped at 10 when Failed>10).</summary>

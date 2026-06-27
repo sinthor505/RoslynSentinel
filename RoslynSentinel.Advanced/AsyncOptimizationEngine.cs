@@ -2281,6 +2281,21 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     ? "AsyncHandlerCandidate"
                     : pattern;
 
+                // ── Skip methods marked NeedsManualReview — they cannot be auto-migrated ──
+                // Checking outside the forceRescan gate intentionally: NeedsManualReview is a
+                // terminal state set when automatic conversion failed (e.g. no bridge wrappers to
+                // replace). Re-scanning would just re-flag and create an oscillation cycle.
+                bool isNeedsManualReview = method.AttributeLists
+                    .SelectMany(al => al.Attributes)
+                    .Any(a =>
+                    {
+                        var n = a.Name.ToString();
+                        if (n != MigrationCandidateShortName && n != MigrationCandidateFullName) return false;
+                        var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
+                        return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == "NeedsManualReview";
+                    });
+                if (isNeedsManualReview) continue;
+
                 // ── Check if already flagged for this exact pattern ──────────
                 if (!forceRescan)
                 {

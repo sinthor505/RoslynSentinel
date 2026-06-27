@@ -305,7 +305,7 @@ public class SentinelAsyncifyTools
 
             int totalCount = allFindings.Count;
             var page = allFindings.Skip(offset).Take(limit).ToList();
-            bool hasMore = (offset + limit) < totalCount;
+            bool hasMorePages = (offset + limit) < totalCount;
 
             var (offloaded, storedPath, scanId, allBytes) = await SentinelScanTools.StoreScanResultAsync(
                 allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList);
@@ -316,7 +316,7 @@ public class SentinelAsyncifyTools
                 {
                     Success = true,
                     TotalRecords = totalCount,
-                    HasMore = hasMore,
+                    HasMorePages = hasMorePages,
                     LargeResult = new LargeResultInfo(
                         resultType: typeof(MigrationCandidateFinding).Name,
                         writtenToFile: true,
@@ -336,7 +336,7 @@ public class SentinelAsyncifyTools
                 Success = true,
                 Data = page,
                 TotalRecords = totalCount,
-                HasMore = hasMore,
+                HasMorePages = hasMorePages,
             };
         }
     }
@@ -2149,6 +2149,14 @@ public class SentinelAsyncifyTools
         var items = new List<OperationItemRecord>();
         var failures = new List<FailureDetail>();
         int succeeded = 0, failed = 0, skipped = 0;
+        // Per-phase shadow counters — assembled into PhaseBreakdown at return.
+        int p0s = 0, p0f = 0;              // Phase 0: handler_extract
+        int p1s = 0, p1f = 0, p1k = 0;    // Phase 1: flag
+        int p2s = 0, p2f = 0, p2k = 0;    // Phase 2: bridge
+        int p3s = 0, p3f = 0;             // Phase 3: uplift
+        int p3as = 0, p3af = 0;           // Phase 3a: handler_to_async
+        int p3bs = 0, p3bf = 0, p3bk = 0; // Phase 3b: handler
+        int p4s = 0, p4f = 0;             // Phase 4: propagate_ct
         var changeId = Guid.NewGuid().ToString("N")[..8];
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -2224,7 +2232,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Skipped,
                             Reason = $"dry_run phase:handler_extract → would extract to '{newMethodName}'",
                         });
-                        succeeded++;
+                        p0s++; succeeded++;
                         continue;
                     }
 
@@ -2259,7 +2267,7 @@ public class SentinelAsyncifyTools
                                     Outcome = ItemRecordOutcome.Failed,
                                 });
                             }
-                            failed++;
+                            p0f++; failed++;
                             continue;
                         }
 
@@ -2272,7 +2280,7 @@ public class SentinelAsyncifyTools
                             var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) — {diagMsg}";
                             items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = valReason, CompilerDiagnostics = extractValidation.Diagnostics });
                             if (failures.Count < 10) failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = valReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = extractValidation.Diagnostics });
-                            failed++;
+                            p0f++; failed++;
                             continue;
                         }
 
@@ -2287,7 +2295,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = $"phase:handler_extract → '{newMethodName}'",
                         });
-                        succeeded++;
+                        p0s++; succeeded++;
                     }
                     catch (Exception ex)
                     {
@@ -2310,7 +2318,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Failed,
                             });
                         }
-                        failed++;
+                        p0f++; failed++;
                     }
                 }
             }
@@ -2344,7 +2352,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Skipped,
                                 Reason = "excluded",
                             });
-                            skipped++;
+                            p1k++; skipped++;
                             continue;
                         }
 
@@ -2358,7 +2366,7 @@ public class SentinelAsyncifyTools
                             Reason = "phase:flag",
                             BeforeSource = beforeSource1339,
                         });
-                        succeeded++;
+                        p1s++; succeeded++;
                     }
                 }
                 else
@@ -2374,7 +2382,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Skipped,
                                 Reason = "excluded",
                             });
-                            skipped++;
+                            p1k++; skipped++;
                             continue;
                         }
 
@@ -2385,7 +2393,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run:flag",
                         });
-                        skipped++;
+                        p1k++; skipped++;
                     }
                 }
                 foreach (var s in flagResult.Skipped)
@@ -2397,7 +2405,7 @@ public class SentinelAsyncifyTools
                         Outcome = ItemRecordOutcome.Skipped,
                         Reason = $"phase:flag — score {s.Score} below minScore {input.MinScore}",
                     });
-                    skipped++;
+                    p1k++; skipped++;
                 }
                 foreach (var a in flagResult.AlreadyFlagged)
                 {
@@ -2408,7 +2416,7 @@ public class SentinelAsyncifyTools
                         Outcome = ItemRecordOutcome.Skipped,
                         Reason = "phase:flag — already flagged",
                     });
-                    skipped++;
+                    p1k++; skipped++;
                 }
             }
             else
@@ -2438,7 +2446,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:flag",
                         });
-                        succeeded++;
+                        p1s++; succeeded++;
                     }
                     foreach (var (idx, err) in flagErrors)
                     {
@@ -2459,7 +2467,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Failed,
                             });
                         }
-                        failed++;
+                        p1f++; failed++;
                     }
                     if (!input.DryRun && allChanges.Count > 0)
                     {
@@ -2508,7 +2516,7 @@ public class SentinelAsyncifyTools
                     Outcome = ItemRecordOutcome.Succeeded,
                     Reason = "phase:bridge",
                 });
-                succeeded++;
+                p2s++; succeeded++;
             }
             foreach (var s in bridgeResult.Skipped)
             {
@@ -2526,7 +2534,7 @@ public class SentinelAsyncifyTools
                 });
                 if (requiresManualReview)
                 {
-                    skipped++;
+                    p2k++; skipped++;
                 }
                 else
                 {
@@ -2541,11 +2549,12 @@ public class SentinelAsyncifyTools
                             CompilerDiagnostics = bridgeDiags,
                         });
                     }
-                    failed++;
+                    p2f++; failed++;
                 }
             }
             if (bridgeResult.RemainingCandidates > 0)
             {
+                p2k += bridgeResult.RemainingCandidates;
                 skipped += bridgeResult.RemainingCandidates;
             }
 
@@ -2606,7 +2615,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Succeeded,
                                 Reason = "phase:uplift",
                             });
-                            succeeded++;
+                            p3s++; succeeded++;
                         }
                         foreach (var s in pm.Result.Skipped)
                         {
@@ -2630,7 +2639,7 @@ public class SentinelAsyncifyTools
                                     CompilerDiagnostics = upliftDiags,
                                 });
                             }
-                            failed++;
+                            p3f++; failed++;
                         }
                     }
 
@@ -2686,7 +2695,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run phase:handler_to_async",
                         });
-                        succeeded++;
+                        p3as++; succeeded++;
                         continue;
                     }
 
@@ -2723,7 +2732,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:handler_to_async",
                         });
-                        succeeded++;
+                        p3as++; succeeded++;
                     }
                     catch (Exception ex)
                     {
@@ -2746,7 +2755,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Failed,
                             });
                         }
-                        failed++;
+                        p3af++; failed++;
                     }
                 }
             }
@@ -2792,7 +2801,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Skipped,
                             Reason = "dry_run phase:handler",
                         });
-                        succeeded++;
+                        p3bs++; succeeded++;
                         continue;
                     }
 
@@ -2822,17 +2831,13 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:handler",
                         });
-                        succeeded++;
+                        p3bs++; succeeded++;
                     }
-                    catch (Exception ex) when (
-                        ex.Message.Contains("is already async") ||
-                        ex.Message.Contains("does not call any Asyncify-bridge"))
+                    catch (Exception ex) when (ex.Message.Contains("is already async"))
                     {
-                        // Stale AsyncHandlerCandidate flag: either already converted in a prior run
-                        // or flagged under the old broad approach for non-bridge obsolete calls.
-                        // Just strip the attribute — no NeedsManualReview needed.
+                        // Already converted in a prior run — flag is genuinely stale. Strip only.
                         _logger.LogInformation(
-                            "AsyncifyCore Phase 3b: '{Method}' stale flag — stripping", handler.MethodName);
+                            "AsyncifyCore Phase 3b: '{Method}' already async — stripping stale flag", handler.MethodName);
                         try
                         {
                             var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
@@ -2852,9 +2857,46 @@ public class SentinelAsyncifyTools
                             FilePath = handler.FilePath,
                             MethodName = handler.MethodName,
                             Outcome = ItemRecordOutcome.Skipped,
-                            Reason = "stale-flag: stripped",
+                            Reason = "stale-flag: already async — stripped",
                         });
-                        skipped++;
+                        p3bk++; skipped++;
+                    }
+                    catch (Exception ex) when (ex.Message.Contains("does not call any Asyncify-bridge"))
+                    {
+                        // Scored by heuristic (blocking-calls) but has no bridge wrappers to replace.
+                        // Strip AsyncHandlerCandidate and add NeedsManualReview so Phase 1 does not
+                        // re-flag on subsequent runs — this method requires manual async conversion.
+                        _logger.LogInformation(
+                            "AsyncifyCore Phase 3b: '{Method}' has no bridge calls — flagging NeedsManualReview", handler.MethodName);
+                        try
+                        {
+                            var removeResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                                filePath: handler.FilePath.Absolute,
+                                pattern: "AsyncHandlerCandidate",
+                                cancellationToken: innerToken);
+                            if (removeResult.Changes.Count > 0)
+                                await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+
+                            var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                                handler.FilePath, handler.MethodName, "NeedsManualReview",
+                                score: 0,
+                                reason: "Handler has blocking calls but no Asyncify-bridge wrappers — manual async conversion required",
+                                cancellationToken: innerToken);
+                            await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
+                        }
+                        catch (Exception removeEx)
+                        {
+                            _logger.LogWarning(removeEx,
+                                "Could not update flags for '{Method}'", handler.MethodName);
+                        }
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = handler.FilePath,
+                            MethodName = handler.MethodName,
+                            Outcome = ItemRecordOutcome.Skipped,
+                            Reason = "stale-flag: no bridge calls — flagged NeedsManualReview",
+                        });
+                        p3bk++; skipped++;
                     }
                     catch (Exception ex)
                     {
@@ -2901,7 +2943,7 @@ public class SentinelAsyncifyTools
                                 Outcome = ItemRecordOutcome.Failed,
                             });
                         }
-                        failed++;
+                        p3bf++; failed++;
                     }
                 }
             }
@@ -2940,6 +2982,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = $"phase:propagate_ct — {a.TotalForwarded} call sites forwarded",
                         });
+                        p4s++; succeeded++;
                     }
                     foreach (var f in ctResult.Failed)
                     {
@@ -2950,6 +2993,7 @@ public class SentinelAsyncifyTools
                             Reason = $"phase:propagate_ct — {f.Reason}",
                             CompilerDiagnostics = f.Diagnostics.Count > 0 ? f.Diagnostics : null,
                         });
+                        p4f++; failed++;
                     }
                 }
             }
@@ -3045,6 +3089,16 @@ public class SentinelAsyncifyTools
             BreakerOpen = status2.Open,
             MinCandidateScore = bridgeMinScore,
             Suggestions = AsyncMigrationDiagnostic.Analyse(succeeded, failed, changeId, items),
+            PhaseBreakdown = new AsyncifyPhaseBreakdown
+            {
+                HandlerExtract = new AsyncifyPhaseCount { Succeeded = p0s, Failed = p0f },
+                Flag           = new AsyncifyPhaseCount { Succeeded = p1s, Failed = p1f, Skipped = p1k },
+                Bridge         = new AsyncifyPhaseCount { Succeeded = p2s, Failed = p2f, Skipped = p2k },
+                Uplift         = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f },
+                HandlerToAsync = new AsyncifyPhaseCount { Succeeded = p3as, Failed = p3af },
+                Handler        = new AsyncifyPhaseCount { Succeeded = p3bs, Failed = p3bf, Skipped = p3bk },
+                PropagateCt    = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
+            },
         };
     }
 
