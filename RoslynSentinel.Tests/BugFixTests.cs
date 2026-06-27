@@ -3713,7 +3713,7 @@ public class AddGuardClausesNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
-        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance),
+        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance),
     _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 
@@ -3799,7 +3799,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
         new CodeStyleAnalysisEngine(_workspaceManager),
         new PathDrivenTestEngine(_workspaceManager),
         new StackOverflowEngine(_workspaceManager),
-        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance),
+        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance),
         _workspaceManager,
         NullLogger<SentinelQualityTools>.Instance);
 

@@ -93,6 +93,7 @@ public class SentinelAsyncifyToolsTests
             asyncOptEngine,
             validationEngine,
             antiPatternEngine,
+            new MigrationLedger(),
             NullLogger<AsyncBatchEngine>.Instance);
 
         ToolGraph toolGraph = ToolGraph.Empty;
@@ -106,6 +107,7 @@ public class SentinelAsyncifyToolsTests
             _workspaceManager,
             validationEngine,
             failureRouter,
+            new MigrationLedger(),
             NullLogger<SentinelAsyncifyTools>.Instance);
     }
 

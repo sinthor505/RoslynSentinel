@@ -130,7 +130,7 @@ public class QualityClass
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
-        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), NullLogger<AsyncBatchEngine>.Instance);
+        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _tools = new SentinelQualityTools(
             _performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine,
             _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine,

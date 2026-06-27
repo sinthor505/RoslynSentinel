@@ -68,6 +68,7 @@ public class MigrationScanResultTests
                 _asyncOptimizationEngine,
                 new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
                 new AntiPatternEngine(_workspaceManager),
+                new MigrationLedger(),
                 NullLogger<AsyncBatchEngine>.Instance),
             _workspaceManager,
             NullLogger<SentinelQualityTools>.Instance);
