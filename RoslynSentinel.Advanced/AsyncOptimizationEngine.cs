@@ -3421,13 +3421,15 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
     /// <summary>
     /// Strips <c>[MigrationCandidate]</c> attributes from all methods in the solution,
-    /// optionally filtered by project, file, or pattern.
+    /// optionally filtered by project, file, method name, or pattern.
     /// </summary>
     /// <param name="pattern">Pattern string to match (e.g. "AsyncBridgeCandidate"). Null removes all patterns.</param>
+    /// <param name="methodName">When provided, restricts removal to a single method of this name.</param>
     public async Task<RemoveMigrationCandidatesEngineResult> RemoveMigrationCandidatesAsync(
         string? projectName = null,
         string? filePath = null,
         string? pattern = null,
+        string? methodName = null,
         bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
@@ -3466,21 +3468,22 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 foreach (var attr in attrList.Attributes)
                 {
                     if (!IsMatchingMigrationAttr(attr, pattern)) continue;
-                    var methodName = attrList.Parent switch
+                    var ownerMethodName = attrList.Parent switch
                     {
                         MethodDeclarationSyntax m => m.Identifier.Text,
                         _ => attrList.Parent?.Ancestors().OfType<MethodDeclarationSyntax>()
                                  .FirstOrDefault()?.Identifier.Text ?? "Unknown"
                     };
+                    if (methodName != null && ownerMethodName != methodName) continue;
                     var removedPattern = (attr.ArgumentList?.Arguments
                         .FirstOrDefault(arg => arg.NameEquals == null)?.Expression
                         as LiteralExpressionSyntax)?.Token.ValueText ?? "";
                     var line = attr.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    removed.Add(new RemovedCandidateInfo(doc.FilePath, methodName, removedPattern, line));
+                    removed.Add(new RemovedCandidateInfo(doc.FilePath, ownerMethodName, removedPattern, line));
                 }
             }
 
-            var rewriter = new MigrationCandidateRemover(pattern);
+            var rewriter = new MigrationCandidateRemover(pattern, methodName);
             var newRoot = rewriter.Visit(root)!;
 
             if (newRoot != root && !dryRun)
@@ -3504,10 +3507,18 @@ internal sealed class MigrationCandidateAttribute : Attribute
         return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == pattern;
     }
 
-    private sealed class MigrationCandidateRemover(string? pattern) : CSharpSyntaxRewriter
+    private sealed class MigrationCandidateRemover(string? pattern, string? methodName = null) : CSharpSyntaxRewriter
     {
         public override SyntaxNode? VisitAttributeList(AttributeListSyntax node)
         {
+            if (methodName != null)
+            {
+                var ownerMethod = node.Parent as MethodDeclarationSyntax
+                    ?? node.Parent?.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
+                if (ownerMethod?.Identifier.Text != methodName)
+                    return node;
+            }
+
             var keep = node.Attributes
                 .Where(a => !IsMatchingMigrationAttr(a, pattern))
                 .ToList();

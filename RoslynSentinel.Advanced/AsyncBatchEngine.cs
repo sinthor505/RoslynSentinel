@@ -472,6 +472,24 @@ public class AsyncBatchEngine
                     }
                     else if (ctResult.Outcome == EditOutcome.NoChange)
                     {
+                        // The method's async overload is fully migrated — strip its bridge flag
+                        // so it does not re-enter the candidate pool on subsequent runs.
+                        try
+                        {
+                            var stripResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                                filePath: candidate.FilePath,
+                                pattern: "AsyncBridgeCandidate",
+                                methodName: candidate.MethodName,
+                                cancellationToken: cancellationToken);
+                            if (stripResult.Changes.Count > 0)
+                                await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                        }
+                        catch (Exception stripEx)
+                        {
+                            _logger.LogWarning(stripEx,
+                                "Could not strip stale AsyncBridgeCandidate from '{Method}' — continuing",
+                                candidate.MethodName);
+                        }
                         skipped.Add(new BridgeSkippedInfo(
                             candidate.FilePath, candidate.MethodName,
                             $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
@@ -985,6 +1003,18 @@ public class AsyncBatchEngine
             string? upliftBeforeSource = File.Exists(callerFilePath)
                 ? await File.ReadAllTextAsync(callerFilePath, cancellationToken)
                 : null;
+
+            // Idempotency guard: if the transformation produced no net change the caller was
+            // already uplifted in a prior run. Skip rather than writing identical bytes and
+            // falsely counting this as a success.
+            if (upliftBeforeSource != null && sourceToValidate == upliftBeforeSource)
+            {
+                skipped.Add(new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    "already uplifted — no change produced",
+                    new List<DiagnosticInfo>()));
+                continue;
+            }
 
             await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } }, progress: progress, cancellationToken: cancellationToken);
