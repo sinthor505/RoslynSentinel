@@ -162,7 +162,7 @@ public class GetScanResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
-        Assert.That(result.HasMore, Is.True, "limit=3 of 5 total → HasMore should be true.");
+        Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
 
         var inner = result.Data as ToolResult<object>;
         Assert.That(inner, Is.Not.Null, "Data should be an inner ToolResult<object>.");
@@ -188,7 +188,7 @@ public class GetScanResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
-        Assert.That(result.HasMore, Is.False, "limit=10 of 4 total → HasMore should be false.");
+        Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total → HasMorePages should be false.");
 
         var inner = result.Data as ToolResult<object>;
         Assert.That(inner, Is.Not.Null);

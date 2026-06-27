@@ -61,7 +61,7 @@ public class HealthOrchestrationEngine
         }
 
         var pagedProjects = allProjects.Skip(offset).Take(limit).ToList();
-        bool hasMore = allProjects.Count > (offset + limit);
+        bool hasMorePages = allProjects.Count > (offset + limit);
 
         _ = Task.WhenAll(pagedProjects.Select(p => p.GetCompilationAsync(cancellationToken)));
 
@@ -188,8 +188,8 @@ public class HealthOrchestrationEngine
             grandTotalIssues,
             totalCategoryCounts.Select(kvp => new IssueCategoryCount(kvp.Key, kvp.Value)).OrderByDescending(c => c.Count).ToList(),
             projectSummaries.OrderByDescending(p => p.TotalIssues).ToList(),
-            hasMore,
-            hasMore ? offset + limit : null,
+            hasMorePages,
+            hasMorePages ? offset + limit : null,
             status
         );
     }

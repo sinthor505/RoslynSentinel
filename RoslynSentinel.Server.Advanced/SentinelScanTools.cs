@@ -674,14 +674,14 @@ public class SentinelScanTools
                 ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
                 ?? [];
             int totalRecords = dataArray.Count;
-            bool hasMore = (offset + limit) < totalRecords;
+            bool hasMorePages = (offset + limit) < totalRecords;
 
             return new ToolResult<object>
             {
                 Success = true,
                 Data = result,
                 TotalRecords = totalRecords,
-                HasMore = hasMore,
+                HasMorePages = hasMorePages,
             };
         }
         catch (Exception ex)
@@ -975,7 +975,7 @@ public class SentinelScanTools
                     {
                         Success = true,
                         TotalRecords = apiResult.Count,
-                        HasMore = false,
+                        HasMorePages = false,
                         LargeResult = new LargeResultInfo(
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
@@ -1020,7 +1020,7 @@ public class SentinelScanTools
                     {
                         Success = true,
                         TotalRecords = apiResult.Count,
-                        HasMore = false,
+                        HasMorePages = false,
                         LargeResult = new LargeResultInfo(
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,

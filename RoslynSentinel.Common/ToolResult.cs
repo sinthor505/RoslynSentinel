@@ -74,7 +74,7 @@ public record ToolResult<T>
     }
 
     /// <summary>True when there are additional pages beyond the current offset+limit window.</summary>
-    public bool HasMore
+    public bool HasMorePages
     {
         get; init;
     }

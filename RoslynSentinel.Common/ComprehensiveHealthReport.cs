@@ -1,9 +1,9 @@
 namespace RoslynSentinel.Common;
 
 public record ComprehensiveHealthReport(
-    int TotalIssues, 
-    List<IssueCategoryCount> TotalIssuesByCategory, 
+    int TotalIssues,
+    List<IssueCategoryCount> TotalIssuesByCategory,
     List<ProjectHealthSummary> ProjectSummaries,
-    bool HasMore,
+    bool HasMorePages,
     int? NextProjectOffset,
     string StatusMessage);
