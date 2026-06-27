@@ -114,6 +114,21 @@ public record BatchResultSummary : EngineResultBase
     public AsyncifyPhaseBreakdown? PhaseBreakdown { get; init; }
 }
 
+/// <summary>Return type for <c>AsyncifyLoop</c> — aggregates per-iteration Asyncify results.</summary>
+public record AsyncifyLoopResult
+{
+    /// <summary>Number of complete iterations executed.</summary>
+    public int LoopsCompleted { get; init; }
+    /// <summary>True when the last iteration produced Succeeded=0 and Failed=0 — nothing left to migrate.</summary>
+    public bool Converged { get; init; }
+    /// <summary>Total Succeeded across all iterations.</summary>
+    public int TotalSucceeded { get; init; }
+    /// <summary>Total Failed across all iterations.</summary>
+    public int TotalFailed { get; init; }
+    /// <summary>One entry per completed iteration, in order.</summary>
+    public List<BatchResultSummary> Iterations { get; init; } = new();
+}
+
 /// <summary>Per-failure detail included inline in BatchResultSummary (capped at 10 when Failed>10).</summary>
 public class FailureDetail
 {

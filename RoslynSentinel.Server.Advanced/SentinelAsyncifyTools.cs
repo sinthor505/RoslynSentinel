@@ -20,6 +20,7 @@ public class SentinelAsyncifyTools
     private readonly PersistentWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly FailureRouter _failureRouter;
+    private readonly MigrationLedger _ledger;
     private readonly ILogger<SentinelAsyncifyTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -30,6 +31,8 @@ public class SentinelAsyncifyTools
             }
     };
 
+    private static readonly JsonSerializerOptions _debugDumpOptions = new() { WriteIndented = true };
+
     public SentinelAsyncifyTools(
         AntiPatternEngine antiPatternEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
@@ -38,6 +41,7 @@ public class SentinelAsyncifyTools
         PersistentWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         FailureRouter failureRouter,
+        MigrationLedger ledger,
         ILogger<SentinelAsyncifyTools> logger)
     {
         _antiPatternEngine = antiPatternEngine;
@@ -47,6 +51,7 @@ public class SentinelAsyncifyTools
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
         _failureRouter = failureRouter;
+        _ledger = ledger;
         _logger = logger;
     }
 
@@ -1164,6 +1169,221 @@ public class SentinelAsyncifyTools
         }
     }
 
+    // ── AsyncifyLoop (debug/test harness) ─────────────────────────────────────
+
+    [McpServerTool(Name = "AsyncifyLoop")]
+    [Description("""
+        Debug and test harness — runs Asyncify in a loop until the workflow converges
+        (Succeeded=0 and Failed=0), the circuit breaker opens, or maxLoops is reached.
+
+        Identical parameters to Asyncify. Attach a debugger to the server process and set
+        breakpoints anywhere in AsyncBatchEngine before calling this tool; every iteration
+        will hit those breakpoints without any inter-call overhead.
+
+        maxLoops: maximum number of Asyncify iterations to run (default 5).
+
+        Returns AsyncifyLoopResult with per-iteration BatchResultSummary entries and aggregate totals.
+        """)]
+    public async Task<ToolResult<AsyncifyLoopResult>> AsyncifyLoop(
+        string? projectName = null,
+        List<FlagCandidateTarget>? methodTargets = null,
+        List<string>? exclusions = null,
+        bool dryRun = false,
+        bool propagateCancellationTokens = true,
+        int maxMethods = 50,
+        int maxCallersPerMethod = 10,
+        int minScore = DefaultMinScore,
+        int scoreThreshold = DefaultScoreThreshold,
+        int maxRuntimeSeconds = 0,
+        int maxIterations = 0,
+        int maxLoops = 5,
+        CancellationToken cancellationToken = default)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ToolResult<AsyncifyLoopResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.SolutionNotLoaded,
+                              "No solution is loaded. Call load_solution first.")
+            };
+        }
+
+        var input = new AsyncifyInput
+        {
+            ProjectName = projectName,
+            MethodTargets = methodTargets,
+            Exclusions = exclusions,
+            DryRun = dryRun,
+            PropagateCancellationTokens = propagateCancellationTokens,
+            MaxMethods = maxMethods,
+            MaxCallersPerMethod = maxCallersPerMethod,
+            MinScore = minScore,
+            ScoreThreshold = scoreThreshold,
+            MaxRuntimeSeconds = maxRuntimeSeconds,
+            MaxIterations = maxIterations,
+        };
+
+        var iterations = new List<BatchResultSummary>();
+        int totalSucceeded = 0, totalFailed = 0;
+        bool converged = false;
+
+        var loopRunId = Guid.NewGuid().ToString("N")[..8];
+        string? debugDir = null;
+        try
+        {
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            if (!string.IsNullOrEmpty(solutionRoot))
+            {
+                debugDir = Path.Combine(solutionRoot, ".roslynsentinel", "debug", $"asyncify_loop_{loopRunId}");
+                Directory.CreateDirectory(debugDir);
+            }
+        }
+        catch { /* non-fatal */ }
+
+        try
+        {
+            for (int i = 0; i < maxLoops; i++)
+            {
+                var result = await AsyncifyCore(input, progress: null, cancellationToken);
+                iterations.Add(result);
+                totalSucceeded += result.Succeeded;
+                totalFailed += result.Failed;
+
+                if (debugDir != null)
+                {
+                    try
+                    {
+                        var dumpPath = Path.Combine(debugDir, $"iteration_{i + 1:D2}.json");
+                        var payload = new
+                        {
+                            loopRunId,
+                            iteration = i + 1,
+                            succeeded = result.Succeeded,
+                            failed = result.Failed,
+                            skipped = result.Skipped,
+                            attempted = result.Attempted,
+                            convergedThisIteration = result.Succeeded == 0 && result.Failed == 0,
+                            breakerOpen = result.BreakerOpen,
+                            severity = result.Severity,
+                            directive = result.Directive,
+                            minCandidateScore = result.MinCandidateScore,
+                            phaseBreakdown = result.PhaseBreakdown,
+                            failures = result.Failures,
+                            blobName = result.BlobName,
+                        };
+                        await File.WriteAllTextAsync(dumpPath, JsonSerializer.Serialize(payload, _debugDumpOptions), cancellationToken);
+                    }
+                    catch { /* non-fatal */ }
+                }
+
+                if (result.BreakerOpen)
+                    break;
+
+                if (result.Succeeded == 0 && result.Failed == 0)
+                {
+                    converged = true;
+                    break;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            return new ToolResult<AsyncifyLoopResult>
+            {
+                Success = false,
+                Error = new ResultError(MigrationErrorCode.Exception,
+                              $"AsyncifyLoop failed on iteration {iterations.Count + 1}.", ex.Message)
+            };
+        }
+
+        if (debugDir != null)
+        {
+            try
+            {
+                var summaryPath = Path.Combine(debugDir, "summary.json");
+                var summary = new
+                {
+                    loopRunId,
+                    loopsCompleted = iterations.Count,
+                    converged,
+                    totalSucceeded,
+                    totalFailed,
+                    perIteration = iterations.Select((r, idx) => new
+                    {
+                        iteration = idx + 1,
+                        succeeded = r.Succeeded,
+                        failed = r.Failed,
+                        skipped = r.Skipped,
+                        phaseBreakdown = r.PhaseBreakdown,
+                    }).ToList(),
+                };
+                await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(summary, _debugDumpOptions));
+            }
+            catch { /* non-fatal */ }
+        }
+
+        return new ToolResult<AsyncifyLoopResult>
+        {
+            Success = true,
+            Data = new AsyncifyLoopResult
+            {
+                LoopsCompleted = iterations.Count,
+                Converged = converged,
+                TotalSucceeded = totalSucceeded,
+                TotalFailed = totalFailed,
+                Iterations = iterations,
+            }
+        };
+    }
+
+    // ── Migration ledger query tools ──────────────────────────────────────────
+
+    [McpServerTool(Name = "GetMigrationLedger")]
+    [Description("""
+        Returns the persisted migration ledger — a cross-run record of every method touched by
+        a migration phase (Bridge, Uplift, CtPropagated) and every idempotency/stale-flag skip.
+
+        The ledger survives server restarts and accumulates across sessions. Use it to:
+          - Identify methods being re-processed on each run (HitCount > 1 with repeated phases).
+          - Confirm that Bridge/Uplift/CtPropagated phases are making forward progress.
+          - Detect UpliftIdempotentSkip or BridgeStaleSkip patterns that indicate lingering flags.
+
+        phase: filter to entries that have at least one operation for this phase.
+          Valid values: Bridge, BridgeStaleSkip, Uplift, UpliftIdempotentSkip, CtPropagated.
+          Omit to return all entries.
+        repeatedOnly: when true, return only methods touched more than once across all runs.
+
+        Returns LedgerSnapshot with RunCount, TotalEntries, RepeatedMethods, and per-entry history.
+        """)]
+    public ToolResult<LedgerSnapshot> GetMigrationLedger(
+        string? phase = null,
+        bool repeatedOnly = false)
+    {
+        return new ToolResult<LedgerSnapshot>
+        {
+            Success = true,
+            Data = _ledger.GetSnapshot(phase, repeatedOnly),
+        };
+    }
+
+    [McpServerTool(Name = "ResetMigrationLedger")]
+    [Description("""
+        Clears all entries from the migration ledger and writes the empty state to disk.
+        Use before starting a fresh migration session when prior run history is no longer relevant.
+        The run counter is also reset to zero.
+        """)]
+    public async Task<ToolResult<LedgerSnapshot>> ResetMigrationLedger(
+        CancellationToken cancellationToken = default)
+    {
+        await _ledger.ResetAsync();
+        return new ToolResult<LedgerSnapshot>
+        {
+            Success = true,
+            Data = _ledger.GetSnapshot(),
+        };
+    }
+
     // ── internal core implementations ─────────────────────────────────────────
 
     private async Task<BatchResultSummary> PropagateCancellationTokenCore(
@@ -2146,6 +2366,9 @@ public class SentinelAsyncifyTools
             return halt;
         }
 
+        await _ledger.EnsureLoadedAsync(_workspaceManager.GetSolutionRoot());
+        _ledger.BeginRun();
+
         var items = new List<OperationItemRecord>();
         var failures = new List<FailureDetail>();
         int succeeded = 0, failed = 0, skipped = 0;
@@ -3072,7 +3295,7 @@ public class SentinelAsyncifyTools
                 : $"{writeNote}{status2.Directive}".TrimEnd();
         }
 
-        return new BatchResultSummary
+        var summary = new BatchResultSummary
         {
             ChangeId = changeId,
             BlobName = blobName2,
@@ -3100,6 +3323,9 @@ public class SentinelAsyncifyTools
                 PropagateCt    = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
             },
         };
+
+        await _ledger.SaveAsync();
+        return summary;
     }
 
     private async Task<BatchResultSummary> HandlerToAsyncCore(

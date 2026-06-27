@@ -82,6 +82,7 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<StackOverflowEngine>();
         services.AddSingleton<AsyncBatchEngine>();
+        services.AddSingleton<MigrationLedger>();
 
         // ToolGraph + FailureRouter — pilot: scans SentinelAsyncifyTools for [Produces] attributes.
         ToolGraph toolGraph = BuildToolGraph(new[] { typeof(SentinelAsyncifyTools) });

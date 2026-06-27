@@ -307,6 +307,7 @@ public class AsyncBatchEngine
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ValidationEngine _validationEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
+    private readonly MigrationLedger _ledger;
     private readonly ILogger<AsyncBatchEngine> _logger;
 
     /// <summary>
@@ -317,12 +318,14 @@ public class AsyncBatchEngine
         AsyncOptimizationEngine asyncOptimizationEngine,
         ValidationEngine validationEngine,
         AntiPatternEngine antiPatternEngine,
+        MigrationLedger ledger,
         ILogger<AsyncBatchEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _asyncOptimizationEngine = asyncOptimizationEngine;
         _validationEngine = validationEngine;
         _antiPatternEngine = antiPatternEngine;
+        _ledger = ledger;
         _logger = logger;
     }
 
@@ -383,6 +386,10 @@ public class AsyncBatchEngine
             .OrderByDescending(c => c.Score)  // highest score (highest impact) first
             .DistinctBy(c => (c.FilePath, c.MethodName))
             .ToList();
+
+        _logger.LogDebug(
+            "RunBridgeBatch: {Total} candidate(s) found, {Eligible} eligible (scoreThreshold≥{Threshold})",
+            candidates.Count, eligible.Count, scoreThreshold);
 
         var applied = new List<BridgeAppliedInfo>();
         var skipped = new List<BridgeSkippedInfo>();
@@ -472,6 +479,11 @@ public class AsyncBatchEngine
                     }
                     else if (ctResult.Outcome == EditOutcome.NoChange)
                     {
+                        _logger.LogDebug(
+                            "RunBridgeBatch: stale-flag skip — '{Method}': '{AsyncMethod}' already has CancellationToken (stripping flag)",
+                            candidate.MethodName, asyncMethodName);
+                        _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeStaleSkip");
+
                         // The method's async overload is fully migrated — strip its bridge flag
                         // so it does not re-enter the candidate pool on subsequent runs.
                         try
@@ -641,6 +653,7 @@ public class AsyncBatchEngine
                 BeforeSource = bridgeBeforeSource,
             });
 
+            _ledger.Record(candidate.FilePath, candidate.MethodName, "Bridge");
             progress?.Report($"{applied.Count} of {eligible.Count}. Bridged {candidate.MethodName} in {candidate.FilePath}");
         }
 
@@ -730,6 +743,9 @@ public class AsyncBatchEngine
 
         if (totalFound == 0)
         {
+            _logger.LogDebug(
+                "RunUpliftBatch '{BridgedMethod}': no callers found",
+                bridgedMethodName);
             return new UpliftBatchResult(uplifted, skipped, 0, "no_callers");
         }
 
@@ -739,6 +755,10 @@ public class AsyncBatchEngine
             .Distinct()
             .Take(maxCallers)
             .ToList();
+
+        _logger.LogDebug(
+            "RunUpliftBatch '{BridgedMethod}': {TotalFound} caller(s) found, processing {ToProcess}",
+            bridgedMethodName, totalFound, callerPairs.Count);
 
         if (dryRun)
         {
@@ -1009,6 +1029,10 @@ public class AsyncBatchEngine
             // falsely counting this as a success.
             if (upliftBeforeSource != null && sourceToValidate == upliftBeforeSource)
             {
+                _logger.LogDebug(
+                    "RunUpliftBatch: idempotency skip — '{Method}' in {File}: transform produced no byte change",
+                    callerMethodName, callerFilePath);
+                _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
                 skipped.Add(new UpliftSkippedInfo(
                     callerFilePath, callerMethodName,
                     "already uplifted — no change produced",
@@ -1026,6 +1050,7 @@ public class AsyncBatchEngine
                 BeforeSource = upliftBeforeSource,
             });
 
+            _ledger.Record(callerFilePath, callerMethodName, "Uplift");
             progress?.Report($"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}");
         }
 
@@ -1479,6 +1504,7 @@ public class AsyncBatchEngine
             fileResult.BeforeSource = ctBeforeSource;
             batchResult.Applied.Add(fileResult);
             batchResult.TotalForwarded += fileResult.TotalForwarded;
+            _ledger.Record(target.FilePath, "(ct-propagate)", "CtPropagated");
             batchResult.TotalSkipped += fileResult.TotalSkipped;
             filesProcessed++;
 
