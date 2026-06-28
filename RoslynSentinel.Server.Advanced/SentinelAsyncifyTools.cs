@@ -2592,7 +2592,7 @@ public class SentinelAsyncifyTools
                             Reason = "phase:flag",
                             BeforeSource = beforeSource1339,
                         });
-                        p1s++; succeeded++;
+                        p1s++;
                     }
                 }
                 else
@@ -2672,7 +2672,7 @@ public class SentinelAsyncifyTools
                             Outcome = ItemRecordOutcome.Succeeded,
                             Reason = "phase:flag",
                         });
-                        p1s++; succeeded++;
+                        p1s++;
                     }
                     foreach (var (idx, err) in flagErrors)
                     {
