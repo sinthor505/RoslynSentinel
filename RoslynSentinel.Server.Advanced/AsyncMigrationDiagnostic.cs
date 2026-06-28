@@ -146,7 +146,7 @@ internal static class AsyncMigrationDiagnostic
                 $"{newCompilerErrors.Count} method(s) flagged NeedsManualReview this run — " +
                 "the bridge produced compiler errors (likely no async API equivalent for the sync " +
                 $"calls they make). Sample: {sample}. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"skipped\") for the full " +
+                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for the full " +
                 "per-method compiler diagnostic list.");
         }
 

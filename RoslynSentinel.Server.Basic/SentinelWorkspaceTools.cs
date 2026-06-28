@@ -971,7 +971,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. maxItems caps the returned slice.")]
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. maxItems caps the returned slice. TotalItems reflects the filtered count; HasMorePages is true when more items remain.")]
     public async Task<ToolResult<object>> GetOperationDetail(
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
@@ -1034,16 +1034,18 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            var slice = filtered.Take(maxItems).ToList();
+            var filteredList = filtered.ToList();
+            var slice = filteredList.Take(maxItems).ToList();
 
             return new ToolResult<object>()
             {
                 Success = true,
+                HasMorePages = filteredList.Count > maxItems,
                 Data = new OperationDetailResult
                 {
                     ChangeId = changeId,
                     BlobName = Path.GetFileName(blobPath),
-                    TotalItems = allItems.Count,
+                    TotalItems = filteredList.Count,
                     ReturnedItems = slice.Count,
                     Filter = filter,
                     Items = slice,
@@ -1069,6 +1071,8 @@ public class SentinelWorkspaceTools
          || f.StartsWith("succeed"))                         return ItemRecordOutcome.Succeeded;
         if (f.StartsWith("roll") || f.StartsWith("revert")
          || f.StartsWith("undo"))                            return ItemRecordOutcome.RolledBack;
+        if (f.StartsWith("manual") || f.StartsWith("needs_manual"))
+                                                             return ItemRecordOutcome.NeedsManualReview;
         return null;
     }
 

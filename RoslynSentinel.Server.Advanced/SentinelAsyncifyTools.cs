@@ -2746,19 +2746,21 @@ public class SentinelAsyncifyTools
             }
             foreach (var s in bridgeResult.Skipped)
             {
+                bool alreadyDone = s.Reason.Contains("already has CancellationToken");
                 bool requiresManualReview = s.Reason.Contains("NeedsManualReview")
-                    || s.Reason.Contains("already has CancellationToken")
                     || s.Reason.Contains("event handler");
                 var bridgeDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
                 items.Add(new OperationItemRecord
                 {
                     FilePath = s.FilePath,
                     MethodName = s.MethodName,
-                    Outcome = requiresManualReview ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed,
+                    Outcome = alreadyDone ? ItemRecordOutcome.Skipped
+                            : requiresManualReview ? ItemRecordOutcome.NeedsManualReview
+                            : ItemRecordOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                     CompilerDiagnostics = bridgeDiags,
                 });
-                if (requiresManualReview)
+                if (alreadyDone || requiresManualReview)
                 {
                     p2k++; skipped++;
                 }

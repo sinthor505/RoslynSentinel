@@ -9,7 +9,8 @@ public enum ItemRecordOutcome
     Succeeded,
     Skipped,
     Failed,
-    RolledBack
+    RolledBack,
+    NeedsManualReview
 }
 
 /// <summary>Item-level outcome for the structured routing system (spec §3.1).</summary>
