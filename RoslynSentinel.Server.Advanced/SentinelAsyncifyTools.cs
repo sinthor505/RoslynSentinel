@@ -1283,7 +1283,7 @@ public class SentinelAsyncifyTools
                     break;
 
                 var pb = result.PhaseBreakdown;
-                if (pb.Bridge.Succeeded == 0 && pb.Uplift.Succeeded == 0 && pb.PropagateCt.Succeeded == 0)
+                if (pb.Flag.Succeeded == 0 && pb.Bridge.Succeeded == 0 && pb.Uplift.Succeeded == 0 && pb.PropagateCt.Succeeded == 0)
                 {
                     converged = true;
                     break;
