@@ -1263,7 +1263,9 @@ public class SentinelAsyncifyTools
                             failed = result.Failed,
                             skipped = result.Skipped,
                             attempted = result.Attempted,
-                            convergedThisIteration = result.Succeeded == 0 && result.Failed == 0,
+                            convergedThisIteration = result.PhaseBreakdown.Bridge.Succeeded == 0
+                                && result.PhaseBreakdown.Uplift.Succeeded == 0
+                                && result.PhaseBreakdown.PropagateCt.Succeeded == 0,
                             breakerOpen = result.BreakerOpen,
                             severity = result.Severity,
                             directive = result.Directive,
@@ -1280,7 +1282,8 @@ public class SentinelAsyncifyTools
                 if (result.BreakerOpen)
                     break;
 
-                if (result.Succeeded == 0 && result.Failed == 0)
+                var pb = result.PhaseBreakdown;
+                if (pb.Bridge.Succeeded == 0 && pb.Uplift.Succeeded == 0 && pb.PropagateCt.Succeeded == 0)
                 {
                     converged = true;
                     break;
@@ -2376,7 +2379,7 @@ public class SentinelAsyncifyTools
         int p0s = 0, p0f = 0;              // Phase 0: handler_extract
         int p1s = 0, p1f = 0, p1k = 0;    // Phase 1: flag
         int p2s = 0, p2f = 0, p2k = 0;    // Phase 2: bridge
-        int p3s = 0, p3f = 0;             // Phase 3: uplift
+        int p3s = 0, p3f = 0, p3k = 0;   // Phase 3: uplift
         int p3as = 0, p3af = 0;           // Phase 3a: handler_to_async
         int p3bs = 0, p3bf = 0, p3bk = 0; // Phase 3b: handler
         int p4s = 0, p4f = 0;             // Phase 4: propagate_ct
@@ -2843,26 +2846,36 @@ public class SentinelAsyncifyTools
                         foreach (var s in pm.Result.Skipped)
                         {
                             var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
+                            // Idempotent skips (no diagnostics) are true skips — already transformed
+                            // in a prior run. Compiler-error skips (have diagnostics) are failures.
+                            bool isIdempotentSkip = upliftDiags == null;
                             items.Add(new OperationItemRecord
                             {
                                 FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
-                                Outcome = ItemRecordOutcome.Failed,
+                                Outcome = isIdempotentSkip ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed,
                                 Reason = $"phase:uplift — {s.Reason}",
                                 CompilerDiagnostics = upliftDiags,
                             });
-                            if (failures.Count < 10)
+                            if (isIdempotentSkip)
                             {
-                                failures.Add(new FailureDetail
-                                {
-                                    FilePath = s.FilePath,
-                                    MethodName = s.CallerMethod,
-                                    Reason = s.Reason,
-                                    Outcome = ItemRecordOutcome.Failed,
-                                    CompilerDiagnostics = upliftDiags,
-                                });
+                                p3k++; skipped++;
                             }
-                            p3f++; failed++;
+                            else
+                            {
+                                if (failures.Count < 10)
+                                {
+                                    failures.Add(new FailureDetail
+                                    {
+                                        FilePath = s.FilePath,
+                                        MethodName = s.CallerMethod,
+                                        Reason = s.Reason,
+                                        Outcome = ItemRecordOutcome.Failed,
+                                        CompilerDiagnostics = upliftDiags,
+                                    });
+                                }
+                                p3f++; failed++;
+                            }
                         }
                     }
 
@@ -3317,7 +3330,7 @@ public class SentinelAsyncifyTools
                 HandlerExtract = new AsyncifyPhaseCount { Succeeded = p0s, Failed = p0f },
                 Flag           = new AsyncifyPhaseCount { Succeeded = p1s, Failed = p1f, Skipped = p1k },
                 Bridge         = new AsyncifyPhaseCount { Succeeded = p2s, Failed = p2f, Skipped = p2k },
-                Uplift         = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f },
+                Uplift         = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f, Skipped = p3k },
                 HandlerToAsync = new AsyncifyPhaseCount { Succeeded = p3as, Failed = p3af },
                 Handler        = new AsyncifyPhaseCount { Succeeded = p3bs, Failed = p3bf, Skipped = p3bk },
                 PropagateCt    = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
