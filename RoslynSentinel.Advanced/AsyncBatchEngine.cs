@@ -44,7 +44,8 @@ public record UpliftSkippedInfo(
     FilePath FilePath,
     string CallerMethod,
     string Reason,
-    List<DiagnosticInfo> Diagnostics
+    List<DiagnosticInfo> Diagnostics,
+    bool NeedsManualReview = false
 );
 
 /// <summary>
@@ -932,6 +933,21 @@ public class AsyncBatchEngine
 
             var callerMethodNode = preCheckMethods
                 .FirstOrDefault(m => m.Identifier.Text == callerMethodName);
+
+            // Non-method contexts (constructor, accessor, lambda) produce names like
+            // "Foo (constructor)", "Prop (get)", or "<lambda>" — they contain '(' or start with '<'.
+            // These cannot be automatically uplifted; surface them for manual review.
+            if (callerMethodNode == null && (callerMethodName.Contains('(') || callerMethodName.StartsWith('<')))
+            {
+                _logger.LogInformation(
+                    "RunUpliftBatch: '{Method}' in {File} is not a regular method — flagging for manual review",
+                    callerMethodName, callerFilePath);
+                skipped.Add(new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    $"Not a regular method — manual uplift required: replace the sync bridge call in '{callerMethodName}'.",
+                    new List<DiagnosticInfo>(), NeedsManualReview: true));
+                continue;
+            }
 
             bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
             bool asyncOverloadExists = preCheckMethods

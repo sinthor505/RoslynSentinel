@@ -2867,22 +2867,20 @@ public class SentinelAsyncifyTools
                         foreach (var s in pm.Result.Skipped)
                         {
                             var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
-                            // Idempotent skips (no diagnostics) are true skips — already transformed
-                            // in a prior run. Compiler-error skips (have diagnostics) are failures.
-                            bool isIdempotentSkip = upliftDiags == null;
+                            // NeedsManualReview = non-method caller (constructor, accessor, lambda).
+                            // Idempotent skips (no diagnostics, not NMR) = already transformed in a prior run.
+                            // Compiler-error skips (have diagnostics) = failures.
+                            var upliftOutcome = s.NeedsManualReview ? ItemRecordOutcome.NeedsManualReview
+                                : (upliftDiags == null ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed);
                             items.Add(new OperationItemRecord
                             {
                                 FilePath = s.FilePath,
                                 MethodName = s.CallerMethod,
-                                Outcome = isIdempotentSkip ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed,
+                                Outcome = upliftOutcome,
                                 Reason = $"phase:uplift — {s.Reason}",
                                 CompilerDiagnostics = upliftDiags,
                             });
-                            if (isIdempotentSkip)
-                            {
-                                p3k++; skipped++;
-                            }
-                            else
+                            if (upliftOutcome == ItemRecordOutcome.Failed)
                             {
                                 if (failures.Count < 10)
                                 {
@@ -2896,6 +2894,10 @@ public class SentinelAsyncifyTools
                                     });
                                 }
                                 p3f++; failed++;
+                            }
+                            else
+                            {
+                                p3k++; skipped++;
                             }
                         }
                     }

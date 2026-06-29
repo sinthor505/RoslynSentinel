@@ -2672,11 +2672,50 @@ public class AntiPatternEngine
                             var refLine = location.Location.GetLineSpan().StartLinePosition.Line + 1;
                             var snippet = Truncate(refNode.Parent?.ToString() ?? refNode.ToString());
 
-                            // Find the enclosing method to report the caller.
-                            var callerMethod = refNode.Ancestors()
-                                .OfType<MethodDeclarationSyntax>()
-                                .FirstOrDefault();
-                            var callerMethodName = callerMethod?.Identifier.Text ?? "<top-level>";
+                            // Find the nearest enclosing named declaration. Non-method containers
+                            // (constructor, accessor, local function, lambda) get descriptive sentinel
+                            // names so the uplift phase can surface them for manual review rather than
+                            // crashing with "Method not found."
+                            MethodDeclarationSyntax? callerMethod = null;
+                            SyntaxNode? callerContainer = null;
+                            string callerMethodName = "<top-level>";
+                            foreach (var ancestor in refNode.Ancestors())
+                            {
+                                if (ancestor is MethodDeclarationSyntax m)
+                                {
+                                    callerMethod = m;
+                                    callerContainer = m;
+                                    callerMethodName = m.Identifier.Text;
+                                    break;
+                                }
+                                if (ancestor is ConstructorDeclarationSyntax ctor)
+                                {
+                                    callerContainer = ctor;
+                                    callerMethodName = ctor.Identifier.Text + " (constructor)";
+                                    break;
+                                }
+                                if (ancestor is LocalFunctionStatementSyntax lf)
+                                {
+                                    callerContainer = lf;
+                                    callerMethodName = lf.Identifier.Text + " (local function)";
+                                    break;
+                                }
+                                if (ancestor is AccessorDeclarationSyntax acc)
+                                {
+                                    callerContainer = acc;
+                                    var propName = acc.Parent is PropertyDeclarationSyntax prop
+                                        ? prop.Identifier.Text
+                                        : "<property>";
+                                    callerMethodName = $"{propName} ({acc.Keyword.Text})";
+                                    break;
+                                }
+                                if (ancestor is AnonymousFunctionExpressionSyntax)
+                                {
+                                    callerContainer = ancestor;
+                                    callerMethodName = "<lambda>";
+                                    break;
+                                }
+                            }
 
                             // Resolve the semantic model for the caller's document.
                             // The reference may be in a different project's compilation (cross-project
@@ -2707,9 +2746,9 @@ public class AntiPatternEngine
                             }
 
                             string callerTypeName = "<unknown>";
-                            if (callerMethod != null && refSemanticModel != null)
+                            if (callerContainer != null && refSemanticModel != null)
                             {
-                                var callerSymbol = refSemanticModel.GetDeclaredSymbol(callerMethod, cancellationToken);
+                                var callerSymbol = refSemanticModel.GetDeclaredSymbol(callerContainer, cancellationToken);
                                 callerTypeName = callerSymbol?.ContainingType?.ToDisplayString() ?? "<unknown>";
                             }
 
