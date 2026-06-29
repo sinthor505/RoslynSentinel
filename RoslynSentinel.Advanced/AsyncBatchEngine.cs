@@ -479,34 +479,82 @@ public class AsyncBatchEngine
                     }
                     else if (ctResult.Outcome == EditOutcome.NoChange)
                     {
-                        _logger.LogDebug(
-                            "RunBridgeBatch: stale-flag skip — '{Method}': '{AsyncMethod}' already has CancellationToken (stripping flag)",
-                            candidate.MethodName, asyncMethodName);
-                        _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeStaleSkip");
+                        // Async overload already has CT. Before giving up, check whether its body
+                        // still calls [Obsolete("Asyncify-bridge: ...")] sync wrappers that need
+                        // rewriting to await calls — e.g. GetExpensesAsync body still calling
+                        // CommonSearch.search(sql) instead of await CommonSearch.searchAsync(sql, ct).
+                        var bodyRewrite = await _asyncOptimizationEngine.RewriteObsoleteCallsInAsyncMethodAsync(
+                            candidate.FilePath, asyncMethodName,
+                            sourceText: null,  // read from workspace (already on disk)
+                            progress: progress,
+                            cancellationToken: cancellationToken);
 
-                        // The method's async overload is fully migrated — strip its bridge flag
-                        // so it does not re-enter the candidate pool on subsequent runs.
-                        try
+                        if (bodyRewrite.Outcome == EditOutcome.Modified && bodyRewrite.UpdatedText != null)
                         {
-                            var stripResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
-                                filePath: candidate.FilePath,
-                                pattern: "AsyncBridgeCandidate",
-                                methodName: candidate.MethodName,
-                                cancellationToken: cancellationToken);
-                            if (stripResult.Changes.Count > 0)
-                                await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                            _logger.LogInformation(
+                                "RunBridgeBatch: rewriting bridge-call body of '{AsyncMethod}' in {File}",
+                                asyncMethodName, candidate.FilePath);
+                            var bodyValidation = await _validationEngine.ValidateChangesAsync(
+                                new Dictionary<FilePath, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
+                                progress, cancellationToken);
+                            if (bodyValidation.Success)
+                            {
+                                string? beforeSource = File.Exists(candidate.FilePath)
+                                    ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
+                                await _workspaceManager.ApplyProposedChangesAsync(
+                                    new Dictionary<FilePath, string> { { candidate.FilePath, bodyRewrite.UpdatedText } });
+                                applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
+                                {
+                                    BeforeSource = beforeSource,
+                                });
+                                progress?.Report($"Rewrote bridge calls in '{asyncMethodName}' body in {candidate.FilePath}");
+                                fallbackHandled = true;
+                            }
+                            else
+                            {
+                                _logger.LogWarning(
+                                    "Body-rewrite validation failed for '{AsyncMethod}' ({Count} error(s)): {First}",
+                                    asyncMethodName, bodyValidation.Diagnostics.Count,
+                                    bodyValidation.Diagnostics.Count > 0
+                                        ? $"[{bodyValidation.Diagnostics[0].Id}] {bodyValidation.Diagnostics[0].Message}" : "");
+                                skipped.Add(new BridgeSkippedInfo(
+                                    candidate.FilePath, candidate.MethodName,
+                                    $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s); flagged NeedsManualReview",
+                                    bodyValidation.Diagnostics));
+                                fallbackHandled = true;
+                            }
                         }
-                        catch (Exception stripEx)
+                        else
                         {
-                            _logger.LogWarning(stripEx,
-                                "Could not strip stale AsyncBridgeCandidate from '{Method}' — continuing",
-                                candidate.MethodName);
+                            // Body is already correct (no sync bridge calls), or method not found.
+                            // Strip the stale AsyncBridgeCandidate flag.
+                            _logger.LogDebug(
+                                "RunBridgeBatch: stale-flag skip — '{Method}': '{AsyncMethod}' already has CancellationToken and body is correct (stripping flag)",
+                                candidate.MethodName, asyncMethodName);
+                            _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeStaleSkip");
+
+                            try
+                            {
+                                var stripResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(
+                                    filePath: candidate.FilePath,
+                                    pattern: "AsyncBridgeCandidate",
+                                    methodName: candidate.MethodName,
+                                    cancellationToken: cancellationToken);
+                                if (stripResult.Changes.Count > 0)
+                                    await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                            }
+                            catch (Exception stripEx)
+                            {
+                                _logger.LogWarning(stripEx,
+                                    "Could not strip stale AsyncBridgeCandidate from '{Method}' — continuing",
+                                    candidate.MethodName);
+                            }
+                            skipped.Add(new BridgeSkippedInfo(
+                                candidate.FilePath, candidate.MethodName,
+                                $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
+                                new List<DiagnosticInfo>()));
+                            fallbackHandled = true;
                         }
-                        skipped.Add(new BridgeSkippedInfo(
-                            candidate.FilePath, candidate.MethodName,
-                            $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
-                            new List<DiagnosticInfo>()));
-                        fallbackHandled = true;
                     }
                 }
                 catch (Exception ctEx)
@@ -578,25 +626,45 @@ public class AsyncBatchEngine
 
             // Step B (optional): propagate CT in the new async overload.
             string sourceToValidate = newSource;
-            if (propagateCancellationTokens)
             {
+                var asyncMethodNameForProp = candidate.MethodName + "Async";
+                if (propagateCancellationTokens)
+                {
+                    try
+                    {
+                        // Propagate CT in the new async overload only (methodName + "Async").
+                        // We must parse the updated source in-memory since it hasn't been written yet.
+                        var (propagatedSource, _) = await _asyncOptimizationEngine
+                            .PropagateCancellationTokenInSourceAsync(
+                                newSource, candidate.FilePath, asyncMethodNameForProp, progress, cancellationToken);
+                        sourceToValidate = propagatedSource;
+                    }
+                    catch (Exception propEx)
+                    {
+                        _logger.LogWarning(propEx,
+                            "CT propagation failed for '{Method}' — continuing with unpropagated source",
+                            asyncMethodNameForProp);
+                        // Fall through with original bridge source
+                    }
+                }
+
+                // Step B2: rewrite any [Obsolete("Asyncify-bridge: ...")] sync calls in the new
+                // async method body to await calls, using the in-memory source for the semantic model.
                 try
                 {
-                    // Propagate CT in the new async overload only (methodName + "Async").
-                    // We must parse the updated source in-memory since it hasn't been written yet.
-                    // Use a temporary in-memory approach via the engine helper.
-                    var asyncMethodName = candidate.MethodName + "Async";
-                    var (propagatedSource, _) = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInSourceAsync(
-                            newSource, candidate.FilePath, asyncMethodName, progress, cancellationToken);
-                    sourceToValidate = propagatedSource;
+                    var bodyRewrite = await _asyncOptimizationEngine.RewriteObsoleteCallsInAsyncMethodAsync(
+                        candidate.FilePath, asyncMethodNameForProp,
+                        sourceText: sourceToValidate,
+                        progress: progress,
+                        cancellationToken: cancellationToken);
+                    if (bodyRewrite.Outcome == EditOutcome.Modified && bodyRewrite.UpdatedText != null)
+                        sourceToValidate = bodyRewrite.UpdatedText;
                 }
-                catch (Exception propEx)
+                catch (Exception rewriteEx)
                 {
-                    _logger.LogWarning(propEx,
-                        "CT propagation failed for '{Method}' — continuing with unpropagated source",
-                        candidate.MethodName + "Async");
-                    // Fall through with original bridge source
+                    _logger.LogWarning(rewriteEx,
+                        "Bridge body rewrite failed for '{Method}' — continuing with unrewritten source",
+                        asyncMethodNameForProp);
                 }
             }
 

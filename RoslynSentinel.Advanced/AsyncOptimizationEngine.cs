@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Advanced;
 
@@ -736,6 +737,156 @@ public class AsyncOptimizationEngine
         {
             Outcome = EditOutcome.Modified,
             UpdatedText = newRoot2.NormalizeWhitespace().ToFullString(),
+            FilePath = filePath,
+        };
+    }
+
+    /// <summary>
+    /// Rewrites calls to Asyncify-bridge sync wrappers (methods marked
+    /// <c>[Obsolete("Asyncify-bridge: call XAsync instead.")]</c>) inside an already-async method,
+    /// replacing each with an awaited call that forwards the method's CancellationToken parameter.
+    /// <para>
+    /// Intended for async overloads created by <see cref="ConvertToAsyncBridgeAsync"/> whose bodies
+    /// were not rewritten at bridge time — e.g. <c>GetExpensesAsync</c> still calling
+    /// <c>CommonSearch.search(sql)</c> instead of <c>await CommonSearch.searchAsync(sql, cancellationToken)</c>.
+    /// </para>
+    /// </summary>
+    /// <param name="filePath">Source file containing the async method.</param>
+    /// <param name="asyncMethodName">Name of the async method whose body to rewrite (e.g. "GetExpensesAsync").</param>
+    /// <param name="sourceText">
+    /// Optional in-memory source text.  When non-null the method operates on this text rather than
+    /// the on-disk content in the workspace — use this for first-time bridge flows where the new
+    /// overload exists only in memory.  When null the current workspace document is used.
+    /// </param>
+    /// <returns>
+    /// <see cref="EditOutcome.Modified"/> with updated text when bridge calls were rewritten;
+    /// <see cref="EditOutcome.NoChange"/> when no Asyncify-bridge sync calls were found in the body;
+    /// <see cref="EditOutcome.TargetNotFound"/> when the method could not be located.
+    /// </returns>
+    public async Task<DocumentEditResult> RewriteObsoleteCallsInAsyncMethodAsync(
+        FilePath filePath,
+        string asyncMethodName,
+        string? sourceText = null,
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+        if (documentId == null)
+            return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath);
+
+        // When caller supplies in-memory text (e.g. first-time bridge flow), overlay it on
+        // the workspace document so Roslyn compiles the right content for the semantic model.
+        if (sourceText != null)
+            solution = solution.WithDocumentText(documentId, SourceText.From(sourceText));
+
+        var document = solution.GetDocument(documentId);
+        if (document == null)
+            return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+            return new DocumentEditResult(EditOutcome.Error, filePath);
+
+        var methodNode = root.DescendantNodes()
+            .OfType<MethodDeclarationSyntax>()
+            .FirstOrDefault(m => m.Identifier.Text == asyncMethodName);
+
+        if (methodNode == null)
+            return new DocumentEditResult(EditOutcome.TargetNotFound, filePath);
+
+        var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
+        if (body == null)
+            return new DocumentEditResult(EditOutcome.NoChange, filePath);
+
+        // Find the CancellationToken parameter to forward.
+        var ctParam = methodNode.ParameterList.Parameters.FirstOrDefault(p =>
+        {
+            var t = p.Type?.ToString() ?? "";
+            return t == "CancellationToken" || t.EndsWith(".CancellationToken", StringComparison.Ordinal);
+        });
+        var ctParamName = ctParam?.Identifier.Text ?? "cancellationToken";
+
+        // Semantically identify bridge-call invocations — annotate before any tree mutations.
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
+        var bridgeTargets = new Dictionary<InvocationExpressionSyntax, string>(ReferenceEqualityComparer.Instance);
+        if (semanticModel != null)
+        {
+            foreach (var inv in methodNode.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var sym = semanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
+                var obsoleteMsg = sym?.GetAttributes()
+                    .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
+                    ?.ConstructorArguments.FirstOrDefault().Value as string;
+                if (obsoleteMsg != null && obsoleteMsg.StartsWith("Asyncify-bridge:", StringComparison.Ordinal))
+                    bridgeTargets[inv] = sym!.Name + "Async";
+            }
+        }
+
+        if (bridgeTargets.Count == 0)
+            return new DocumentEditResult(EditOutcome.NoChange, filePath);
+
+        const string BridgeCallAnnotation = "AsyncifyBridgeCallWithCT";
+        var annotatedMethodNode = methodNode.ReplaceNodes(
+            bridgeTargets.Keys,
+            (original, _) => original.WithAdditionalAnnotations(
+                new SyntaxAnnotation(BridgeCallAnnotation, bridgeTargets[original])));
+
+        var rewrittenMethod = annotatedMethodNode.ReplaceNodes(
+            annotatedMethodNode.DescendantNodes()
+                               .OfType<InvocationExpressionSyntax>()
+                               .Where(inv => inv.HasAnnotations(BridgeCallAnnotation))
+                               .ToList(),
+            (original, _) =>
+            {
+                var asyncName = original.GetAnnotations(BridgeCallAnnotation).First().Data!;
+                ExpressionSyntax? newExpr = original.Expression switch
+                {
+                    IdentifierNameSyntax id =>
+                        SyntaxFactory.IdentifierName(asyncName).WithTriviaFrom(id),
+                    MemberAccessExpressionSyntax ma =>
+                        ma.WithName(SyntaxFactory.IdentifierName(asyncName).WithTriviaFrom(ma.Name)),
+                    _ => null,
+                };
+                if (newExpr == null) return (ExpressionSyntax)original;
+
+                // Skip if CT is already forwarded (idempotency guard).
+                bool alreadyHasCt = original.ArgumentList.Arguments.Any(a =>
+                    a.Expression.ToString() == ctParamName ||
+                    (a.NameColon?.Name.Identifier.Text == "cancellationToken" &&
+                     a.Expression.ToString() == ctParamName));
+                var newArgList = alreadyHasCt
+                    ? original.ArgumentList
+                    : original.ArgumentList.AddArguments(
+                        SyntaxFactory.Argument(SyntaxFactory.IdentifierName(ctParamName)));
+
+                var renamedInv = original.WithExpression(newExpr).WithArgumentList(newArgList).WithoutLeadingTrivia();
+
+                bool needsParens = original.Parent is MemberAccessExpressionSyntax
+                                || original.Parent is ElementAccessExpressionSyntax
+                                || original.Parent is ConditionalAccessExpressionSyntax;
+
+                var awaitExpr = SyntaxFactory.AwaitExpression(
+                    SyntaxFactory.Token(SyntaxKind.AwaitKeyword)
+                                 .WithTrailingTrivia(SyntaxFactory.Space),
+                    renamedInv);
+
+                return (needsParens
+                    ? (ExpressionSyntax)SyntaxFactory.ParenthesizedExpression(awaitExpr)
+                    : awaitExpr)
+                    .WithLeadingTrivia(original.GetLeadingTrivia());
+            });
+
+        // Mark any lambdas/anonymous functions that now contain await as async.
+        rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
+
+        var newRoot = root.ReplaceNode(methodNode, rewrittenMethod);
+        var updatedText = newRoot.NormalizeWhitespace().ToFullString();
+        progress?.Report($"Rewrote {bridgeTargets.Count} bridge call(s) in '{asyncMethodName}' body in {filePath}");
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = updatedText,
             FilePath = filePath,
         };
     }
@@ -2236,14 +2387,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
         int totalExamined = 0;
         bool attrClassInjected = false;
 
-        foreach (var document in documents)
+        await Parallel.ForEachAsync(documents, async (document, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
-                continue;
+                return;
             }
 
             var methods = root.DescendantNodes()
@@ -2251,7 +2402,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                               .ToList();
             if (methods.Count == 0)
             {
-                continue;
+                return;
             }
 
             bool fileModified = false;
@@ -2260,13 +2411,13 @@ internal sealed class MigrationCandidateAttribute : Attribute
             SemanticModel? docSemanticModel = null;
             bool docSemanticModelFetched = false;
 
-            foreach (var method in methods)
+            await Parallel.ForEachAsync(methods, async (method, cancellationToken) =>
             {
                 totalExamined++;
 
                 // Skip compiler-generated method names (e.g. <top-level>, state-machine methods).
                 if (method.Identifier.Text.StartsWith('<'))
-                    continue;
+                    return;
 
                 var containingClass = method.Ancestors()
                     .OfType<ClassDeclarationSyntax>()
@@ -2294,7 +2445,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         var firstArg = a.ArgumentList?.Arguments.FirstOrDefault(arg => arg.NameEquals == null);
                         return (firstArg?.Expression as LiteralExpressionSyntax)?.Token.ValueText == "NeedsManualReview";
                     });
-                if (isNeedsManualReview) continue;
+                if (isNeedsManualReview)
+                {
+                    return;
+                }
 
                 // ── Check if already flagged for this exact pattern ──────────
                 if (!forceRescan)
@@ -2316,7 +2470,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     {
                         alreadyFlagged.Add(new CandidateScoredItem(
                             document.FilePath!, method.Identifier.Text, className, lineNo, 0, "already-flagged", effectivePattern));
-                        continue;
+                        return;
                     }
                 }
 
@@ -2324,7 +2478,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var (score, reason) = ScoreMethodForPattern(method, className, pattern);
                 if (score < 0)
                 {
-                    continue; // hard disqualifier — don't even record
+                    return; // hard disqualifier — don't even record
                 }
 
                 // ── Semantic bonus: method calls an [Obsolete]-decorated bridge wrapper ──
@@ -2368,12 +2522,12 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 {
                     skipped.Add(new CandidateScoredItem(
                         document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
-                    continue;
+                    return;
                 }
 
                 flagged.Add(new CandidateScoredItem(
                     document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
-            }
+            }).ConfigureAwait(false);
 
             if (!dryRun && flagged.Any(f => f.FilePath == document.FilePath!))
             {
@@ -2382,7 +2536,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var rewrittenRoot = root;
                 var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
 
-                foreach (var item in flaggedInThisFile)
+                await Parallel.ForEachAsync(flaggedInThisFile, async (item, cancellationToken) =>
                 {
                     var methodNode = rewrittenRoot.DescendantNodes()
                         .OfType<MethodDeclarationSyntax>()
@@ -2397,7 +2551,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     }
                     if (methodNode == null)
                     {
-                        continue;
+                        return;
                     }
 
                     // Find the existing [MigrationCandidate] for this pattern (if any).
@@ -2434,7 +2588,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                             ?.Expression as LiteralExpressionSyntax)?.Token.ValueText;
 
                         if (existingScore == item.Score && existingReason == item.Reason)
-                            continue;
+                            return;
                     }
 
                     var args = new List<AttributeArgumentSyntax>
@@ -2460,14 +2614,14 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         methodNode, MigrationCandidateShortName, MigrationCandidateFullName, item.Pattern, newAttr);
                     rewrittenRoot = rewrittenRoot.ReplaceNode(methodNode, updatedMethodNode);
                     fileModified = true;
-                }
+                }).ConfigureAwait(false);
 
                 if (fileModified)
                 {
                     fileChanges[document.FilePath!] = rewrittenRoot.NormalizeWhitespace().ToFullString();
                 }
             }
-        }
+        }).ConfigureAwait(false);
 
         // ── Inject MigrationCandidateAttribute.cs per project that needs it ─
         // Each compiled assembly (project) needs exactly ONE copy at the project root.
@@ -2477,7 +2631,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         {
             // Build a set of project roots that already have the attribute class defined.
             var projectRootsWithAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var proj in solution.Projects)
+            await Parallel.ForEachAsync(solution.Projects, async (proj, cancellationToken) =>
             {
                 bool hasAttr = proj.Documents.Any(d =>
                     d.FilePath != null &&
@@ -2491,40 +2645,40 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         projectRootsWithAttr.Add(dir);
                     }
                 }
-            }
+            }).ConfigureAwait(false);
 
             // Inject the attribute class into every project root that has flagged files
             // but does not yet have MigrationCandidateAttribute.cs.
             var processedProjectRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var changedFilePath in fileChanges.Keys.ToList())
+            await Parallel.ForEachAsync(fileChanges.Keys.ToList(), async (changedFilePath, cancellationToken) =>
             {
                 var doc = documents.FirstOrDefault(d =>
                     string.Equals(d.FilePath, changedFilePath, StringComparison.OrdinalIgnoreCase));
                 if (doc?.Project.FilePath == null)
                 {
-                    continue;
+                    return;
                 }
 
                 var projRoot = System.IO.Path.GetDirectoryName(doc.Project.FilePath);
                 if (projRoot == null)
                 {
-                    continue;
+                    return;
                 }
 
                 if (projectRootsWithAttr.Contains(projRoot))
                 {
-                    continue;
+                    return;
                 }
 
                 if (!processedProjectRoots.Add(projRoot))
                 {
-                    continue; // already queued for this run
+                    return; // already queued for this run
                 }
 
                 var attrPath = System.IO.Path.Combine(projRoot, $"{MigrationCandidateFullName}.cs");
                 fileChanges[attrPath] = BuildMigrationCandidateAttributeSource("");
                 attrClassInjected = true;
-            }
+            }).ConfigureAwait(false);
         }
 
         return new FlagCandidatesInProjectEngineResult(
