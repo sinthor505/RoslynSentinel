@@ -919,14 +919,27 @@ public class AsyncBatchEngine
             bool useSemanticRewrite = false;
             string? semanticCtExpression = null; // null = don't inject CT arg (event-handler/void-return callers)
 
-            if (!File.Exists(callerFilePath))
+            string preCheckSource;
+            if (File.Exists(callerFilePath))
             {
-                skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                    "Caller file not found on disk.", new List<DiagnosticInfo>()));
-                continue;
+                preCheckSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
             }
-
-            var preCheckSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+            else
+            {
+                // Not on disk — fall back to the in-memory workspace (common in tests and
+                // unsaved-document workflows). If absent from both, skip the caller.
+                var workspaceDoc = _workspaceManager.CurrentSolution?
+                    .GetDocumentIdsWithFilePath(callerFilePath)
+                    .Select(id => _workspaceManager.CurrentSolution?.GetDocument(id))
+                    .FirstOrDefault();
+                if (workspaceDoc == null)
+                {
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                    continue;
+                }
+                preCheckSource = (await workspaceDoc.GetTextAsync(cancellationToken)).ToString();
+            }
             var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource);
             var preCheckRoot = preCheckTree.GetRoot();
             var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();

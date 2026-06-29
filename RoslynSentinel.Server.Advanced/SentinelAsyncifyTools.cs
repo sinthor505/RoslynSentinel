@@ -113,8 +113,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -409,8 +409,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -621,8 +621,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -712,8 +712,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -805,8 +805,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -873,8 +873,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -955,8 +955,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1022,8 +1022,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1125,8 +1125,8 @@ public class SentinelAsyncifyTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
