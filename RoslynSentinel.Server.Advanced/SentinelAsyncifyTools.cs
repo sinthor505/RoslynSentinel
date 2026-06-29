@@ -114,7 +114,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -410,7 +410,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -622,7 +622,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -713,7 +713,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -806,7 +806,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -874,7 +874,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -956,7 +956,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1023,7 +1023,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1126,7 +1126,7 @@ public class SentinelAsyncifyTools
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<string> progress = new Progress<string>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         if (_workspaceManager.CurrentSolution == null)
         {
@@ -1391,7 +1391,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> PropagateCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1475,7 +1475,7 @@ public class SentinelAsyncifyTools
     private async Task<(BatchResultSummary Summary, List<UpliftTarget> SuggestedUpliftTargets)> BridgeAsyncMethodsCore(
         BatchTargetInput input,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1710,7 +1710,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AddCancellationTokenCore(
         BatchTargetInput input,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -1853,7 +1853,7 @@ public class SentinelAsyncifyTools
 
     private async Task<(BatchResultSummary Summary, List<BatchTarget> SuggestedPropagateTargets, OperationSummary OperationSummary)> UpliftCallersCore(
         RunUpliftInput input,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         BatchResultSummary? halt = _workspaceManager.CheckBreaker();
@@ -2153,7 +2153,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> FlagMigrationCandidatesCore(
         FlagCandidatesInput input,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -2360,7 +2360,7 @@ public class SentinelAsyncifyTools
 
     private async Task<BatchResultSummary> AsyncifyCore(
         AsyncifyInput input,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -2851,56 +2851,56 @@ public class SentinelAsyncifyTools
                         },
                         progress: progress, cancellationToken: innerToken);
 
-                    foreach (var pm in upliftResult.PerMethod)
+                foreach (var pm in upliftResult.PerMethod)
+                {
+                    foreach (var u in pm.Result.Uplifted)
                     {
-                        foreach (var u in pm.Result.Uplifted)
+                        items.Add(new OperationItemRecord
                         {
-                            items.Add(new OperationItemRecord
-                            {
-                                FilePath = u.FilePath,
-                                MethodName = u.CallerMethod,
-                                Outcome = ItemRecordOutcome.Succeeded,
-                                Reason = "phase:uplift",
-                            });
-                            p3s++; succeeded++;
-                        }
-                        foreach (var s in pm.Result.Skipped)
+                            FilePath = u.FilePath,
+                            MethodName = u.CallerMethod,
+                            Outcome = ItemRecordOutcome.Succeeded,
+                            Reason = "phase:uplift",
+                        });
+                        p3s++; succeeded++;
+                    }
+                    foreach (var s in pm.Result.Skipped)
+                    {
+                        var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
+                        // NeedsManualReview = non-method caller (constructor, accessor, lambda).
+                        // Idempotent skips (no diagnostics, not NMR) = already transformed in a prior run.
+                        // Compiler-error skips (have diagnostics) = failures.
+                        var upliftOutcome = s.NeedsManualReview ? ItemRecordOutcome.NeedsManualReview
+                            : (upliftDiags == null ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed);
+                        items.Add(new OperationItemRecord
                         {
-                            var upliftDiags = s.Diagnostics.Count > 0 ? s.Diagnostics : null;
-                            // NeedsManualReview = non-method caller (constructor, accessor, lambda).
-                            // Idempotent skips (no diagnostics, not NMR) = already transformed in a prior run.
-                            // Compiler-error skips (have diagnostics) = failures.
-                            var upliftOutcome = s.NeedsManualReview ? ItemRecordOutcome.NeedsManualReview
-                                : (upliftDiags == null ? ItemRecordOutcome.Skipped : ItemRecordOutcome.Failed);
-                            items.Add(new OperationItemRecord
+                            FilePath = s.FilePath,
+                            MethodName = s.CallerMethod,
+                            Outcome = upliftOutcome,
+                            Reason = $"phase:uplift — {s.Reason}",
+                            CompilerDiagnostics = upliftDiags,
+                        });
+                        if (upliftOutcome == ItemRecordOutcome.Failed)
+                        {
+                            if (failures.Count < 10)
                             {
-                                FilePath = s.FilePath,
-                                MethodName = s.CallerMethod,
-                                Outcome = upliftOutcome,
-                                Reason = $"phase:uplift — {s.Reason}",
-                                CompilerDiagnostics = upliftDiags,
-                            });
-                            if (upliftOutcome == ItemRecordOutcome.Failed)
-                            {
-                                if (failures.Count < 10)
+                                failures.Add(new FailureDetail
                                 {
-                                    failures.Add(new FailureDetail
-                                    {
-                                        FilePath = s.FilePath,
-                                        MethodName = s.CallerMethod,
-                                        Reason = s.Reason,
-                                        Outcome = ItemRecordOutcome.Failed,
-                                        CompilerDiagnostics = upliftDiags,
-                                    });
-                                }
-                                p3f++; failed++;
+                                    FilePath = s.FilePath,
+                                    MethodName = s.CallerMethod,
+                                    Reason = s.Reason,
+                                    Outcome = ItemRecordOutcome.Failed,
+                                    CompilerDiagnostics = upliftDiags,
+                                });
                             }
-                            else
-                            {
-                                p3k++; skipped++;
-                            }
+                            p3f++; failed++;
+                        }
+                        else
+                        {
+                            p3k++; skipped++;
                         }
                     }
+                }
 
                 CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped);
                 if (innerToken.IsCancellationRequested)
@@ -3360,12 +3360,12 @@ public class SentinelAsyncifyTools
             PhaseBreakdown = new AsyncifyPhaseBreakdown
             {
                 HandlerExtract = new AsyncifyPhaseCount { Succeeded = p0s, Failed = p0f },
-                Flag           = new AsyncifyPhaseCount { Succeeded = p1s, Failed = p1f, Skipped = p1k },
-                Bridge         = new AsyncifyPhaseCount { Succeeded = p2s, Failed = p2f, Skipped = p2k },
-                Uplift         = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f, Skipped = p3k },
+                Flag = new AsyncifyPhaseCount { Succeeded = p1s, Failed = p1f, Skipped = p1k },
+                Bridge = new AsyncifyPhaseCount { Succeeded = p2s, Failed = p2f, Skipped = p2k },
+                Uplift = new AsyncifyPhaseCount { Succeeded = p3s, Failed = p3f, Skipped = p3k },
                 HandlerToAsync = new AsyncifyPhaseCount { Succeeded = p3as, Failed = p3af },
-                Handler        = new AsyncifyPhaseCount { Succeeded = p3bs, Failed = p3bf, Skipped = p3bk },
-                PropagateCt    = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
+                Handler = new AsyncifyPhaseCount { Succeeded = p3bs, Failed = p3bf, Skipped = p3bk },
+                PropagateCt = new AsyncifyPhaseCount { Succeeded = p4s, Failed = p4f },
             },
         };
 
@@ -3378,7 +3378,7 @@ public class SentinelAsyncifyTools
         bool dryRun,
         int maxItems,
         bool propagateCancellationTokens,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();
@@ -3531,7 +3531,7 @@ public class SentinelAsyncifyTools
     private async Task<BatchResultSummary> HandlerExtractCore(
         List<HandlerExtractTarget> targets,
         bool dryRun,
-        IProgress<string>? progress,
+        IProgress<ProgressNotificationValue>? progress,
         CancellationToken cancellationToken = default)
     {
         var halt = _workspaceManager.CheckBreaker();

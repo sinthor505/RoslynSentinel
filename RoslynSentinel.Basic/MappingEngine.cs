@@ -2,6 +2,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
+using ModelContextProtocol;
+
 namespace RoslynSentinel.Basic;
 
 public class MappingEngine
@@ -20,7 +22,7 @@ public class MappingEngine
         FilePath filePath,
         string fromType,
         string toType,
-        IProgress<string> progress,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync();

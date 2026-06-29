@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 
+using ModelContextProtocol;
+
 namespace RoslynSentinel.Advanced;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -85,9 +87,15 @@ public class UpliftBatchMultiTarget
     /// <summary>Name of the Asyncify-bridge sync method whose callers should be uplifted.</summary>
     public string BridgedMethodName { get; set; } = "";
     /// <summary>Optional project name to restrict the caller scan. <c>null</c> = entire solution.</summary>
-    public string? ProjectName { get; set; }
+    public string? ProjectName
+    {
+        get; set;
+    }
     /// <summary>Optional Roslyn documentation-comment ID. When set, only callers of this exact overload are uplifted.</summary>
-    public string? SymbolId { get; set; }
+    public string? SymbolId
+    {
+        get; set;
+    }
 }
 
 /// <summary>Input for <c>run_uplift_batch_multi</c>.</summary>
@@ -372,7 +380,7 @@ public class AsyncBatchEngine
         int scoreThreshold = 50,
         bool dryRun = false,
         bool propagateCancellationTokens = true,
-        IProgress<string>? progress = null,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         // 1. Discover eligible candidates.
@@ -466,7 +474,7 @@ public class AsyncBatchEngine
                             {
                                 BeforeSource = beforeSource,
                             });
-                            progress?.Report($"Added CT to existing async overload '{asyncMethodName}' in {candidate.FilePath}");
+                            progress?.Report(new ProgressNotificationValue() { Message = $"Added CT to existing async overload '{asyncMethodName}' in {candidate.FilePath}", Progress = i / budget });
                             fallbackHandled = true;
                         }
                         else
@@ -508,7 +516,7 @@ public class AsyncBatchEngine
                                 {
                                     BeforeSource = beforeSource,
                                 });
-                                progress?.Report($"Rewrote bridge calls in '{asyncMethodName}' body in {candidate.FilePath}");
+                                progress?.Report(new ProgressNotificationValue() { Message = $"Rewrote bridge calls in '{asyncMethodName}' body in {candidate.FilePath}", Progress = i / budget });
                                 fallbackHandled = true;
                             }
                             else
@@ -723,7 +731,7 @@ public class AsyncBatchEngine
             });
 
             _ledger.Record(candidate.FilePath, candidate.MethodName, "Bridge");
-            progress?.Report($"{applied.Count} of {eligible.Count}. Bridged {candidate.MethodName} in {candidate.FilePath}");
+            progress?.Report(new ProgressNotificationValue() { Message = $"{applied.Count} of {eligible.Count}. Bridged {candidate.MethodName} in {candidate.FilePath}", Progress = (float)applied.Count / eligible.Count });
         }
 
         // Determine why the batch stopped.
@@ -800,7 +808,7 @@ public class AsyncBatchEngine
                             }
                         }
                     }
-                    NextMethod:;
+                NextMethod:;
                 }
             }
         }
@@ -849,7 +857,7 @@ public class AsyncBatchEngine
         bool dryRun = false,
         bool propagateCancellationTokens = true,
         string? symbolId = null,
-        IProgress<string> progress = default,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         // 1. Find all call sites that invoke the Asyncify-bridge sync wrapper.
@@ -1208,7 +1216,7 @@ public class AsyncBatchEngine
             });
 
             _ledger.Record(callerFilePath, callerMethodName, "Uplift");
-            progress?.Report($"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}");
+            progress?.Report(new ProgressNotificationValue() { Message = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}", Progress = (float)uplifted.Count / callerPairs.Count });
         }
 
         // Determine stop reason.
@@ -1515,7 +1523,7 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<PropagateCtBatchResult> PropagateCancellationTokenBatchAsync(
         PropagateCtBatchInput input,
-        IProgress<string>? progress = null,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var batchResult = new PropagateCtBatchResult();
@@ -1665,7 +1673,11 @@ public class AsyncBatchEngine
             batchResult.TotalSkipped += fileResult.TotalSkipped;
             filesProcessed++;
 
-            progress?.Report($"{filesProcessed} of {input.Targets.Count}. Processed {target.FilePath} with {fileResult.TotalForwarded} forwarded and {fileResult.TotalSkipped} skipped methods.");
+            progress?.Report(new ProgressNotificationValue()
+            {
+                Message = $"{filesProcessed} of {input.Targets.Count}. Processed {target.FilePath} with {fileResult.TotalForwarded} forwarded and {fileResult.TotalSkipped} skipped methods.",
+                Progress = (float)filesProcessed / input.Targets.Count
+            });
         }
 
         if (string.IsNullOrEmpty(batchResult.StopReason))
@@ -1687,7 +1699,7 @@ public class AsyncBatchEngine
     /// </summary>
     public async Task<UpliftBatchMultiResult> RunUpliftBatchMultiAsync(
         UpliftBatchMultiInput input,
-        IProgress<string>? progress = null,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var result = new UpliftBatchMultiResult();
@@ -1731,7 +1743,11 @@ public class AsyncBatchEngine
 
             result.PerMethod.Add(methodResult);
 
-            progress?.Report($"Completed processing '{target.BridgedMethodName}'. Total uplifted so far: {result.TotalUplifted}, skipped: {result.TotalSkipped}, remaining callers: {result.TotalRemainingCallers}.");
+            progress?.Report(new ProgressNotificationValue()
+            {
+                Message = $"Completed processing '{target.BridgedMethodName}'. Total uplifted so far: {result.TotalUplifted}, skipped: {result.TotalSkipped}, remaining callers: {result.TotalRemainingCallers}.",
+                Progress = (float)(result.TotalUplifted + result.TotalSkipped) / (result.TotalUplifted + result.TotalSkipped + result.TotalRemainingCallers)
+            });
         }
 
         result.StopReason = input.DryRun ? "dry_run" : "batch_complete";

@@ -10,6 +10,8 @@ using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
+using ModelContextProtocol;
+
 namespace RoslynSentinel.Common;
 
 public partial class PersistentWorkspaceManager : IDisposable
@@ -677,7 +679,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         Dictionary<FilePath, string> changes,
         int retryCount = 3,
         bool validateChanges = false,
-        IProgress<string>? progress = default,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,
