@@ -447,6 +447,33 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     /// <summary>
+    /// Updates documents in the in-memory solution without writing to disk.
+    /// Used by batch uplift to keep the semantic model current across transforms within
+    /// the same file before the combined source is validated and committed.
+    /// </summary>
+    public async Task UpdateDocumentsInMemoryAsync(
+        Dictionary<FilePath, string> changes,
+        CancellationToken cancellationToken = default)
+    {
+        await _solutionLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (CurrentSolution == null) return;
+            var updated = CurrentSolution;
+            foreach (var (path, text) in changes)
+            {
+                foreach (var docId in updated.GetDocumentIdsWithFilePath(path))
+                    updated = updated.WithDocumentText(docId, SourceText.From(text));
+            }
+            CurrentSolution = updated;
+        }
+        finally
+        {
+            _solutionLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Stores proposed changes in memory and returns a unique ID for later application or inspection.
     /// </summary>
     public string StageChanges(Dictionary<FilePath, string> changes, string description)

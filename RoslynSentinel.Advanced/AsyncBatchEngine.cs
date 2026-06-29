@@ -907,316 +907,237 @@ public class AsyncBatchEngine
             return new UpliftBatchResult(uplifted, skipped, dryRemaining, "dry_run");
         }
 
-        // 3. Process each caller.
-        for (int i = 0; i < callerPairs.Count; i++)
+        // 3. Process callers grouped by file.
+        //    Batch path: accumulate all transforms in-memory with a single validate+apply per file.
+        //    If batch validation fails: reset workspace and fall back to one caller at a time.
+        var fileGroups = callerPairs
+            .GroupBy(pair => pair.FilePath)
+            .ToList();
+
+        int callerIndex = 0;
+        foreach (var fileGroup in fileGroups)
         {
             if (cancellationToken.IsCancellationRequested) break;
 
-            var (callerFilePath, callerMethodName) = callerPairs[i];
+            var callerFilePath = fileGroup.Key;
+            var callersInFile = fileGroup.ToList();
 
-            _logger.LogInformation(
-                "RunUpliftBatch [{Index}/{Total}]: uplifting {Caller} in {File}",
-                i + 1, callerPairs.Count, callerMethodName, callerFilePath);
-
-            // Step A: bridge the caller — creates callerAsync(CT) with original body.
-            // Pre-check the caller's state from disk so we never send already-async methods through
-            // ConvertToAsyncBridgeAsync (which would throw and rely on message-string matching).
-            string bridgedCallerSource;
-            bool isEventHandlerInPlace = false;
-            string? callerAsyncNameOverride = null;
-            bool useSemanticRewrite = false;
-            string? semanticCtExpression = null; // null = don't inject CT arg (event-handler/void-return callers)
-
-            string preCheckSource;
-            if (File.Exists(callerFilePath))
+            // Load initial source — prefer workspace (sees previous file group's apply) then disk.
+            string? originalSource;
             {
-                preCheckSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
-            }
-            else
-            {
-                // Not on disk — fall back to the in-memory workspace (common in tests and
-                // unsaved-document workflows). If absent from both, skip the caller.
-                var workspaceDoc = _workspaceManager.CurrentSolution?
-                    .GetDocumentIdsWithFilePath(callerFilePath)
-                    .Select(id => _workspaceManager.CurrentSolution?.GetDocument(id))
-                    .FirstOrDefault();
-                if (workspaceDoc == null)
+                var sol = _workspaceManager.CurrentSolution;
+                var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
+                    .Select(id => sol.GetDocument(id)).FirstOrDefault();
+                if (wsDoc != null)
+                    originalSource = (await wsDoc.GetTextAsync(cancellationToken)).ToString();
+                else if (File.Exists(callerFilePath))
+                    originalSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+                else
                 {
-                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                    foreach (var (_, cm) in callersInFile)
+                        skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
+                            "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                    callerIndex += callersInFile.Count;
                     continue;
                 }
-                preCheckSource = (await workspaceDoc.GetTextAsync(cancellationToken)).ToString();
             }
-            var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource);
-            var preCheckRoot = preCheckTree.GetRoot();
-            var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
 
-            var callerMethodNode = preCheckMethods
-                .FirstOrDefault(m => m.Identifier.Text == callerMethodName);
+            _logger.LogDebug(
+                "RunUpliftBatch: file '{File}' — {Count} caller(s), trying batch",
+                callerFilePath, callersInFile.Count);
 
-            // Non-method contexts (constructor, accessor, lambda) produce names like
-            // "Foo (constructor)", "Prop (get)", or "<lambda>" — they contain '(' or start with '<'.
-            // These cannot be automatically uplifted; surface them for manual review.
-            if (callerMethodNode == null && (callerMethodName.Contains('(') || callerMethodName.StartsWith('<')))
+            // ── Batch try ────────────────────────────────────────────────────────────
+            // Thread source forward across callers. Between each caller update workspace
+            // in-memory so ConvertToAsyncBridgeAsync / SemanticBridgeCallRewriteAsync
+            // always see the accumulated state rather than the original disk source.
+            string currentSource = originalSource;
+            var batchTransforms = new List<(string callerMethod, string asyncName)>();
+            var batchSkips     = new List<UpliftSkippedInfo>();
+            bool batchCancelled = false;
+
+            for (int bi = 0; bi < callersInFile.Count; bi++)
             {
+                if (cancellationToken.IsCancellationRequested) { batchCancelled = true; break; }
+
+                var callerMethodName = callersInFile[bi].CallerMethod;
                 _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' in {File} is not a regular method — flagging for manual review",
+                    "RunUpliftBatch [batch {BI}/{BN}] [{GI}/{GT}]: {Caller} in {File}",
+                    bi + 1, callersInFile.Count,
+                    callerIndex + bi + 1, callerPairs.Count,
                     callerMethodName, callerFilePath);
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    $"Not a regular method — manual uplift required: replace the sync bridge call in '{callerMethodName}'.",
-                    new List<DiagnosticInfo>(), NeedsManualReview: true));
+
+                // Sync workspace to the latest accumulated source so engine semantic calls see it.
+                if (bi > 0)
+                    await _workspaceManager.UpdateDocumentsInMemoryAsync(
+                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
+                        cancellationToken);
+
+                var (transformed, asyncName, skip) = await TryTransformCallerAsync(
+                    callerFilePath, callerMethodName, bridgedMethodName,
+                    currentSource, propagateCancellationTokens, progress, cancellationToken);
+
+                if (skip != null) { batchSkips.Add(skip); continue; }
+                currentSource = transformed!;
+                batchTransforms.Add((callerMethodName, asyncName!));
+            }
+
+            // Skipped callers are always recorded (regardless of batch success or fallback).
+            skipped.AddRange(batchSkips);
+            callerIndex += callersInFile.Count;
+
+            if (batchCancelled || batchTransforms.Count == 0 || currentSource == originalSource)
                 continue;
-            }
 
-            bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
-            bool asyncOverloadExists = preCheckMethods
-                .Any(m => m.Identifier.Text == callerMethodName + "Async");
-
-            if (callerIsAsync)
-            {
-                // Caller is itself async — rewrite its body directly without creating a new overload.
-                // Use semantic rewriting to avoid name-collision false positives: BridgeCallRewriter
-                // matches purely on method name and would wrongly rewrite calls to same-named methods
-                // on unrelated types (e.g. CommonSearch.search when the bridged method is on a
-                // different type), or inject CT into overloads that already have a pre-existing
-                // async variant with different parameter ordering.
-                _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' is already async — rewriting body in-place (semantic)",
-                    callerMethodName);
-                bridgedCallerSource = preCheckSource;
-                callerAsyncNameOverride = callerMethodName;
-                bool callerReturnsVoid = callerMethodNode?.ReturnType.ToString() == "void";
-                var callerCtParam = callerMethodNode?.ParameterList.Parameters
-                    .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
-                // async void = event handler: don't inject CT (the async overload's default covers it).
-                semanticCtExpression = callerReturnsVoid ? null : (callerCtParam?.Identifier.Text ?? "CancellationToken.None");
-                useSemanticRewrite = true;
-            }
-            else if (asyncOverloadExists)
-            {
-                // An async overload already exists — rewrite its body to call the bridged method.
-                // Use semantic rewriting for the same reason as the callerIsAsync path above.
-                _logger.LogInformation(
-                    "RunUpliftBatch: '{Method}' has existing async overload — rewriting body directly (semantic)",
-                    callerMethodName);
-                bridgedCallerSource = preCheckSource;
-                // callerAsyncNameOverride stays null → Steps B/C use callerMethodName + "Async"
-                var asyncOverloadNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName + "Async");
-                var asyncCtParam = asyncOverloadNode?.ParameterList.Parameters
-                    .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
-                semanticCtExpression = asyncCtParam?.Identifier.Text ?? "CancellationToken.None";
-                useSemanticRewrite = true;
-            }
-            else
-            {
-                // Normal path (sync caller, no existing async overload): let ConvertToAsyncBridgeAsync
-                // create the async bridge. It handles event handlers, abstract methods, ref/out params,
-                // and other edge cases via its own exception throw paths.
-                try
-                {
-                    var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
-                        callerFilePath, callerMethodName, progress, cancellationToken);
-                    bridgedCallerSource = result.UpdatedText ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
-                }
-                catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
-                {
-                    _logger.LogInformation(
-                        "RunUpliftBatch: '{Method}' is an event handler — attempting in-place async void conversion",
-                        callerMethodName);
-                    try
-                    {
-                        var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
-                            callerFilePath, callerMethodName, cancellationToken: cancellationToken);
-                        bridgedCallerSource = inPlace.UpdatedText
-                            ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
-                        isEventHandlerInPlace = true;
-                    }
-                    catch (Exception inPlaceEx)
-                    {
-                        _logger.LogWarning(
-                            "In-place async void conversion failed for '{Method}': {Message}",
-                            callerMethodName, inPlaceEx.Message);
-                        skipped.Add(new UpliftSkippedInfo(
-                            callerFilePath, callerMethodName,
-                            $"Event handler in-place: {inPlaceEx.Message}", new List<DiagnosticInfo>()));
-                        continue;
-                    }
-                }
-                catch (InvalidOperationException ex)
-                {
-                    _logger.LogWarning(
-                        "Bridge pre-condition failed for caller {Method}: {Message}",
-                        callerMethodName, ex.Message);
-                    skipped.Add(new UpliftSkippedInfo(
-                        callerFilePath, callerMethodName,
-                        $"Bridge pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
-                    continue;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex,
-                        "Unexpected error bridging caller {Method}", callerMethodName);
-                    skipped.Add(new UpliftSkippedInfo(
-                        callerFilePath, callerMethodName,
-                        $"Unexpected bridge error: {ex.Message}", new List<DiagnosticInfo>()));
-                    continue;
-                }
-            }
-
-            // Step B: rewrite callerAsync body — replace bridgedMethod(args)
-            //         → await bridgedMethodAsync(args, cancellationToken).
-            //         Skipped for in-place event handler conversions (already fully rewritten).
-            //         Semantic path used when the method already exists in the workspace so the
-            //         semantic model can confirm exact bridge-call identity before rewriting.
-            string rewrittenSource;
-            if (isEventHandlerInPlace)
-            {
-                rewrittenSource = bridgedCallerSource;
-            }
-            else if (useSemanticRewrite)
-            {
-                var rewriteTargetName = callerAsyncNameOverride ?? callerMethodName + "Async";
-                try
-                {
-                    var semanticResult = await SemanticBridgeCallRewriteAsync(
-                        callerFilePath, rewriteTargetName, bridgedMethodName, semanticCtExpression, cancellationToken);
-                    if (semanticResult == null)
-                    {
-                        skipped.Add(new UpliftSkippedInfo(
-                            callerFilePath, callerMethodName,
-                            "Document not found in workspace for semantic body rewrite.", new List<DiagnosticInfo>()));
-                        continue;
-                    }
-                    rewrittenSource = semanticResult;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        "Semantic body rewrite failed for {Method}: {Message}",
-                        rewriteTargetName, ex.Message);
-                    skipped.Add(new UpliftSkippedInfo(
-                        callerFilePath, callerMethodName,
-                        $"Semantic body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
-                    continue;
-                }
-            }
-            else
-            {
-                var rewriteTargetName = callerAsyncNameOverride ?? callerMethodName + "Async";
-                try
-                {
-                    rewrittenSource = RewriteCallerAsyncBody(
-                        bridgedCallerSource,
-                        rewriteTargetName,
-                        bridgedMethodName);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(
-                        "Body rewrite failed for {Method}: {Message}",
-                        rewriteTargetName, ex.Message);
-                    skipped.Add(new UpliftSkippedInfo(
-                        callerFilePath, callerMethodName,
-                        $"Body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
-                    continue;
-                }
-            }
-
-            // Step C (optional): propagate CT in the new callerAsync overload.
-            //                    Skipped for in-place event handlers and async-void callers — neither
-            //                    can carry a CT parameter through their signature.
-            bool skipCtPropagation = isEventHandlerInPlace || semanticCtExpression == null;
-            string sourceToValidate = rewrittenSource;
-            if (propagateCancellationTokens && !skipCtPropagation)
-            {
-                try
-                {
-                    var callerAsyncName = callerAsyncNameOverride ?? callerMethodName + "Async";
-                    var (propagatedSource, _) = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInSourceAsync(
-                            rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
-                    sourceToValidate = propagatedSource;
-                }
-                catch (Exception propEx)
-                {
-                    _logger.LogWarning(propEx,
-                        "CT propagation failed for uplifted '{Method}' — using unrewritten source",
-                        callerAsyncNameOverride ?? callerMethodName + "Async");
-                }
-            }
-
-            // Step D: validate in-memory.
-            var validation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } },
+            // Single validate for all transforms in this file.
+            var batchValidation = await _validationEngine.ValidateChangesAsync(
+                new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
                 progress, cancellationToken);
 
-            if (!validation.Success)
+            if (batchValidation.Success)
             {
-                _logger.LogWarning(
-                    "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
-                    callerMethodName, validation.Diagnostics.Count,
-                    validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : "");
+                // Idempotency: final source unchanged on disk?
+                string? diskSource = File.Exists(callerFilePath)
+                    ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
 
-                // Flag the original caller for manual review — best effort.
-                try
+                if (diskSource != null && currentSource == diskSource)
                 {
-                    var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                        callerFilePath, callerMethodName, "NeedsManualReview",
-                        score: 0,
-                        reason: $"Uplift produced {validation.Diagnostics.Count} compiler error(s)",
-                        progress: progress,
-                        cancellationToken: cancellationToken);
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
+                    // Disk already has the final source (e.g. from a prior run). Skip the disk
+                    // write but still update the workspace so it reflects the final state — the
+                    // workspace may have been loaded with older content (e.g. test SetTestSolution).
+                    await _workspaceManager.UpdateDocumentsInMemoryAsync(
+                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
+                        cancellationToken);
+                    foreach (var (cm, an) in batchTransforms)
+                    {
+                        uplifted.Add(new UpliftCallerInfo(callerFilePath, cm, an) { BeforeSource = diskSource });
+                        _ledger.Record(callerFilePath, cm, "Uplift");
+                    }
                 }
-                catch (Exception flagEx)
+                else
                 {
-                    _logger.LogWarning(flagEx,
-                        "Could not flag caller {Method} as NeedsManualReview — continuing",
-                        callerMethodName);
+                    // Single apply — the main performance win over per-caller processing.
+                    await _workspaceManager.ApplyProposedChangesAsync(
+                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
+                        progress: progress, cancellationToken: cancellationToken);
+
+                    foreach (var (cm, an) in batchTransforms)
+                    {
+                        uplifted.Add(new UpliftCallerInfo(callerFilePath, cm, an) { BeforeSource = diskSource });
+                        _ledger.Record(callerFilePath, cm, "Uplift");
+                    }
+
+                    progress?.Report(new ProgressNotificationValue
+                    {
+                        Progress = (float)uplifted.Count / callerPairs.Count,
+                        Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {batchTransforms.Count} caller(s) in {callerFilePath}",
+                    });
                 }
-
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    $"Validation produced {validation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
-                    validation.Diagnostics));
-                continue;
             }
-
-            // Step E: write to disk and refresh workspace.
-            string? upliftBeforeSource = File.Exists(callerFilePath)
-                ? await File.ReadAllTextAsync(callerFilePath, cancellationToken)
-                : null;
-
-            // Idempotency guard: if the transformation produced no net change the caller was
-            // already uplifted in a prior run. Skip rather than writing identical bytes and
-            // falsely counting this as a success.
-            if (upliftBeforeSource != null && sourceToValidate == upliftBeforeSource)
+            else
             {
-                _logger.LogDebug(
-                    "RunUpliftBatch: idempotency skip — '{Method}' in {File}: transform produced no byte change",
-                    callerMethodName, callerFilePath);
-                _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
-                skipped.Add(new UpliftSkippedInfo(
-                    callerFilePath, callerMethodName,
-                    "already uplifted — no change produced",
-                    new List<DiagnosticInfo>()));
-                continue;
+                // ── Fallback: one caller at a time ───────────────────────────────────
+                // Reset workspace to the original source so each individual caller starts clean.
+                // batchSkips are already in `skipped`; only retry the callers that transformed.
+                _logger.LogInformation(
+                    "RunUpliftBatch: batch validation failed for {File} ({N} error(s)) — falling back to per-caller",
+                    callerFilePath, batchValidation.Diagnostics.Count);
+
+                await _workspaceManager.UpdateDocumentsInMemoryAsync(
+                    new Dictionary<FilePath, string> { { callerFilePath, originalSource } },
+                    cancellationToken);
+
+                var batchSkipMethods = batchSkips.Select(s => s.CallerMethod)
+                    .ToHashSet(StringComparer.Ordinal);
+
+                foreach (var (_, callerMethodName) in callersInFile
+                    .Where(p => !batchSkipMethods.Contains(p.CallerMethod)))
+                {
+                    if (cancellationToken.IsCancellationRequested) break;
+
+                    _logger.LogInformation(
+                        "RunUpliftBatch [fallback]: {Caller} in {File}",
+                        callerMethodName, callerFilePath);
+
+                    // Read current state — picks up each preceding individual apply.
+                    string indivSource;
+                    {
+                        var sol = _workspaceManager.CurrentSolution;
+                        var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
+                            .Select(id => sol.GetDocument(id)).FirstOrDefault();
+                        indivSource = wsDoc != null
+                            ? (await wsDoc.GetTextAsync(cancellationToken)).ToString()
+                            : File.Exists(callerFilePath)
+                                ? await File.ReadAllTextAsync(callerFilePath, cancellationToken)
+                                : originalSource;
+                    }
+
+                    var (transformed, asyncName, skip) = await TryTransformCallerAsync(
+                        callerFilePath, callerMethodName, bridgedMethodName,
+                        indivSource, propagateCancellationTokens, progress, cancellationToken);
+
+                    if (skip != null) { skipped.Add(skip); continue; }
+
+                    // Idempotency.
+                    if (transformed == indivSource)
+                    {
+                        _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
+                        skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                            "already uplifted — no change produced", new List<DiagnosticInfo>()));
+                        continue;
+                    }
+
+                    var indivValidation = await _validationEngine.ValidateChangesAsync(
+                        new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                        progress, cancellationToken);
+
+                    if (!indivValidation.Success)
+                    {
+                        _logger.LogWarning(
+                            "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
+                            callerMethodName, indivValidation.Diagnostics.Count,
+                            indivValidation.Diagnostics.Count > 0
+                                ? $"[{indivValidation.Diagnostics[0].Id}] {indivValidation.Diagnostics[0].Message}"
+                                : "");
+
+                        try
+                        {
+                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                                callerFilePath, callerMethodName, "NeedsManualReview",
+                                score: 0,
+                                reason: $"Uplift produced {indivValidation.Diagnostics.Count} compiler error(s)",
+                                progress: progress, cancellationToken: cancellationToken);
+                            await _workspaceManager.ApplyProposedChangesAsync(
+                                flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
+                        }
+                        catch (Exception flagEx)
+                        {
+                            _logger.LogWarning(flagEx,
+                                "Could not flag {Method} as NeedsManualReview", callerMethodName);
+                        }
+
+                        skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                            $"Validation produced {indivValidation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
+                            indivValidation.Diagnostics));
+                        continue;
+                    }
+
+                    string? beforeSource = File.Exists(callerFilePath)
+                        ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
+
+                    await _workspaceManager.ApplyProposedChangesAsync(
+                        new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                        progress: progress, cancellationToken: cancellationToken);
+
+                    uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
+                        { BeforeSource = beforeSource });
+                    _ledger.Record(callerFilePath, callerMethodName, "Uplift");
+                    progress?.Report(new ProgressNotificationValue
+                    {
+                        Progress = (float)uplifted.Count / callerPairs.Count,
+                        Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}",
+                    });
+                }
             }
-
-            await _workspaceManager.ApplyProposedChangesAsync(
-                new Dictionary<FilePath, string> { { callerFilePath, sourceToValidate } }, progress: progress, cancellationToken: cancellationToken);
-
-            uplifted.Add(new UpliftCallerInfo(
-                callerFilePath, callerMethodName,
-                isEventHandlerInPlace ? callerMethodName : (callerAsyncNameOverride ?? callerMethodName + "Async"))
-            {
-                BeforeSource = upliftBeforeSource,
-            });
-
-            _ledger.Record(callerFilePath, callerMethodName, "Uplift");
-            progress?.Report(new ProgressNotificationValue() { Message = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}", Progress = (float)uplifted.Count / callerPairs.Count });
         }
 
         // Determine stop reason.
@@ -1278,6 +1199,208 @@ public class AsyncBatchEngine
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // TryTransformCallerAsync
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs uplift steps A-C (bridge, body-rewrite, CT-propagate) for one caller against
+    /// <paramref name="preCheckSource"/>. Does NOT validate or write to disk.
+    /// </summary>
+    /// <returns>
+    /// <c>(transformedSource, asyncName, null)</c> on success;
+    /// <c>(null, null, skipInfo)</c> when the caller must be skipped.
+    /// </returns>
+    private async Task<(string? transformed, string? asyncName, UpliftSkippedInfo? skip)>
+        TryTransformCallerAsync(
+            string callerFilePath,
+            string callerMethodName,
+            string bridgedMethodName,
+            string preCheckSource,
+            bool propagateCancellationTokens,
+            IProgress<ProgressNotificationValue>? progress,
+            CancellationToken cancellationToken)
+    {
+        // Pre-check: analyse the current in-memory source to determine the caller's async state.
+        var preCheckTree    = CSharpSyntaxTree.ParseText(preCheckSource);
+        var preCheckRoot    = preCheckTree.GetRoot();
+        var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+        var callerMethodNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName);
+
+        // Non-method contexts (constructor, accessor, lambda) cannot be automatically uplifted.
+        if (callerMethodNode == null && (callerMethodName.Contains('(') || callerMethodName.StartsWith('<')))
+        {
+            _logger.LogInformation(
+                "TryTransformCaller: '{Method}' in {File} is not a regular method — flagging for manual review",
+                callerMethodName, callerFilePath);
+            return (null, null, new UpliftSkippedInfo(
+                callerFilePath, callerMethodName,
+                $"Not a regular method — manual uplift required: replace the sync bridge call in '{callerMethodName}'.",
+                new List<DiagnosticInfo>(), NeedsManualReview: true));
+        }
+
+        bool callerIsAsync      = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
+        bool asyncOverloadExists = preCheckMethods.Any(m => m.Identifier.Text == callerMethodName + "Async");
+
+        // ── Step A: bridge ──────────────────────────────────────────────────────
+        string bridgedCallerSource;
+        bool   isEventHandlerInPlace = false;
+        string? callerAsyncNameOverride = null;
+        bool    useSemanticRewrite = false;
+        string? semanticCtExpression = null;
+
+        if (callerIsAsync)
+        {
+            _logger.LogInformation(
+                "TryTransformCaller: '{Method}' is already async — rewriting body in-place (semantic)",
+                callerMethodName);
+            bridgedCallerSource     = preCheckSource;
+            callerAsyncNameOverride = callerMethodName;
+            bool callerReturnsVoid  = callerMethodNode?.ReturnType.ToString() == "void";
+            var  callerCtParam      = callerMethodNode?.ParameterList.Parameters
+                .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
+            semanticCtExpression = callerReturnsVoid ? null
+                : (callerCtParam?.Identifier.Text ?? "CancellationToken.None");
+            useSemanticRewrite = true;
+        }
+        else if (asyncOverloadExists)
+        {
+            _logger.LogInformation(
+                "TryTransformCaller: '{Method}' has existing async overload — rewriting body directly (semantic)",
+                callerMethodName);
+            bridgedCallerSource = preCheckSource;
+            var asyncOverloadNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName + "Async");
+            var asyncCtParam = asyncOverloadNode?.ParameterList.Parameters
+                .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
+            semanticCtExpression = asyncCtParam?.Identifier.Text ?? "CancellationToken.None";
+            useSemanticRewrite = true;
+        }
+        else
+        {
+            // Normal path: ConvertToAsyncBridgeAsync reads from the workspace (which the batch
+            // orchestrator keeps in sync via UpdateDocumentsInMemoryAsync between callers).
+            try
+            {
+                var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
+                    callerFilePath, callerMethodName, progress, cancellationToken);
+                bridgedCallerSource = result.UpdatedText
+                    ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
+            {
+                _logger.LogInformation(
+                    "TryTransformCaller: '{Method}' is an event handler — attempting in-place async void conversion",
+                    callerMethodName);
+                try
+                {
+                    var inPlace = await _asyncOptimizationEngine.ConvertEventHandlerCallerToAsyncVoidAsync(
+                        callerFilePath, callerMethodName, cancellationToken: cancellationToken);
+                    bridgedCallerSource = inPlace.UpdatedText
+                        ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
+                    isEventHandlerInPlace = true;
+                }
+                catch (Exception inPlaceEx)
+                {
+                    _logger.LogWarning(
+                        "In-place async void conversion failed for '{Method}': {Message}",
+                        callerMethodName, inPlaceEx.Message);
+                    return (null, null, new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        $"Event handler in-place: {inPlaceEx.Message}", new List<DiagnosticInfo>()));
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(
+                    "Bridge pre-condition failed for caller {Method}: {Message}",
+                    callerMethodName, ex.Message);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    $"Bridge pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error bridging caller {Method}", callerMethodName);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    $"Unexpected bridge error: {ex.Message}", new List<DiagnosticInfo>()));
+            }
+        }
+
+        // ── Step B: body rewrite ────────────────────────────────────────────────
+        // SemanticBridgeCallRewriteAsync reads from the workspace, which the batch
+        // orchestrator keeps in sync, so it always sees the accumulated state.
+        string rewrittenSource;
+        if (isEventHandlerInPlace)
+        {
+            rewrittenSource = bridgedCallerSource;
+        }
+        else if (useSemanticRewrite)
+        {
+            var rewriteTarget = callerAsyncNameOverride ?? callerMethodName + "Async";
+            try
+            {
+                var semanticResult = await SemanticBridgeCallRewriteAsync(
+                    callerFilePath, rewriteTarget, bridgedMethodName, semanticCtExpression, cancellationToken);
+                if (semanticResult == null)
+                    return (null, null, new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        "Document not found in workspace for semantic body rewrite.", new List<DiagnosticInfo>()));
+                rewrittenSource = semanticResult;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "Semantic body rewrite failed for {Method}: {Message}", rewriteTarget, ex.Message);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    $"Semantic body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
+            }
+        }
+        else
+        {
+            var rewriteTarget = callerAsyncNameOverride ?? callerMethodName + "Async";
+            try
+            {
+                rewrittenSource = RewriteCallerAsyncBody(bridgedCallerSource, rewriteTarget, bridgedMethodName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    "Body rewrite failed for {Method}: {Message}", rewriteTarget, ex.Message);
+                return (null, null, new UpliftSkippedInfo(
+                    callerFilePath, callerMethodName,
+                    $"Body rewrite failed: {ex.Message}", new List<DiagnosticInfo>()));
+            }
+        }
+
+        // ── Step C: CT propagation ──────────────────────────────────────────────
+        // PropagateCancellationTokenInSourceAsync is pure source-in/source-out — no workspace read.
+        bool skipCtPropagation = isEventHandlerInPlace || semanticCtExpression == null;
+        string sourceResult = rewrittenSource;
+        if (propagateCancellationTokens && !skipCtPropagation)
+        {
+            try
+            {
+                var callerAsyncName = callerAsyncNameOverride ?? callerMethodName + "Async";
+                var (propagated, _) = await _asyncOptimizationEngine
+                    .PropagateCancellationTokenInSourceAsync(
+                        rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
+                sourceResult = propagated;
+            }
+            catch (Exception propEx)
+            {
+                _logger.LogWarning(propEx,
+                    "CT propagation failed for '{Method}' — using unrewritten source",
+                    callerAsyncNameOverride ?? callerMethodName + "Async");
+            }
+        }
+
+        string resolvedAsyncName = isEventHandlerInPlace
+            ? callerMethodName
+            : (callerAsyncNameOverride ?? callerMethodName + "Async");
+        return (sourceResult, resolvedAsyncName, null);
+    }
+
     // SemanticBridgeCallRewriteAsync
     // ──────────────────────────────────────────────────────────────────────────
 
