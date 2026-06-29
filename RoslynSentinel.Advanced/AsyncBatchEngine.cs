@@ -748,6 +748,66 @@ public class AsyncBatchEngine
     }
 
     // ──────────────────────────────────────────────────────────────────────────
+    // FindAllBridgeWrapperMethodsAsync
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Scans the solution (or a specific project) for sync bridge-wrapper methods — those marked
+    /// <c>[Obsolete("Asyncify-bridge: call XAsync instead.", …)]</c> — and returns their names.
+    /// <para>
+    /// Used to build a global uplift target list that covers methods bridged in prior runs whose
+    /// <c>[AsyncBridgeCandidate]</c> flags were already stripped, making them invisible to the
+    /// current bridge batch's uplift scope.
+    /// </para>
+    /// </summary>
+    /// <param name="projectName">
+    /// Optional project name (partial match). <c>null</c> = entire solution.
+    /// </param>
+    public async Task<IReadOnlyList<string>> FindAllBridgeWrapperMethodsAsync(
+        string? projectName = null,
+        CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var results = new List<string>();
+
+        foreach (var project in solution.Projects)
+        {
+            if (projectName != null &&
+                !project.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            foreach (var document in project.Documents)
+            {
+                if (cancellationToken.IsCancellationRequested) break;
+
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
+                if (root == null) continue;
+
+                foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                {
+                    foreach (var attrList in method.AttributeLists)
+                    {
+                        foreach (var attr in attrList.Attributes)
+                        {
+                            if (!attr.Name.ToString().EndsWith("Obsolete", StringComparison.Ordinal))
+                                continue;
+                            var firstArg = attr.ArgumentList?.Arguments.FirstOrDefault()?.ToString() ?? "";
+                            if (firstArg.Contains("Asyncify-bridge:", StringComparison.Ordinal))
+                            {
+                                results.Add(method.Identifier.Text);
+                                goto NextMethod;
+                            }
+                        }
+                    }
+                    NextMethod:;
+                }
+            }
+        }
+
+        return results.Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
     // RunUpliftBatchAsync
     // ──────────────────────────────────────────────────────────────────────────
 

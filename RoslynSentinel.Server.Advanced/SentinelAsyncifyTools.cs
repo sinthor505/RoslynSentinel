@@ -2801,34 +2801,47 @@ public class SentinelAsyncifyTools
             }
 
             // ── Phase 3: Uplift ───────────────────────────────────────────────
-            // Already-bridged methods (stale AsyncBridgeCandidate flags from a prior run) were
-            // skipped by the bridge phase, but their callers may still need uplift. Include them
-            // so Asyncify makes progress on re-runs without requiring a manual flag refresh first.
+            // Uplift targets come from three sources:
+            //   1. Methods applied (body-rewritten) this bridge run.
+            //   2. Methods with stale AsyncBridgeCandidate flags (already had CT, body correct).
+            //   3. ALL [Obsolete("Asyncify-bridge: ...")] wrappers in the project — covers methods
+            //      bridged in prior runs whose flags were stripped and are invisible to the current
+            //      batch's scope. The idempotency guard in RunUpliftBatch makes this a no-op for
+            //      callers already converted.
             var alreadyBridgedSkipped = bridgeResult.Skipped
                 .Where(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
                 .ToList();
-            if (bridgeResult.Applied.Count > 0 || alreadyBridgedSkipped.Count > 0)
-            {
-                var upliftTargets = bridgeResult.Applied
-                    .Where(a => input.Exclusions?.Contains(a.MethodName) != true)
-                    .Select(a => new UpliftBatchMultiTarget
-                    {
-                        BridgedMethodName = a.MethodName,
-                        ProjectName = input.ProjectName,
-                    })
-                    .Concat(alreadyBridgedSkipped
-                        .Where(s => input.Exclusions?.Contains(s.MethodName) != true)
-                        .Select(s => new UpliftBatchMultiTarget
-                        {
-                            BridgedMethodName = s.MethodName,
-                            ProjectName = input.ProjectName,
-                        }))
-                    .DistinctBy(t => t.BridgedMethodName)
-                    .ToList();
 
-                if (upliftTargets.Count > 0)
+            var allBridgeWrappers = await _asyncBatchEngine.FindAllBridgeWrapperMethodsAsync(
+                input.ProjectName, innerToken);
+
+            var upliftTargets = bridgeResult.Applied
+                .Where(a => input.Exclusions?.Contains(a.MethodName) != true)
+                .Select(a => new UpliftBatchMultiTarget
                 {
-                    var upliftResult = await _asyncBatchEngine.RunUpliftBatchMultiAsync(
+                    BridgedMethodName = a.MethodName,
+                    ProjectName = input.ProjectName,
+                })
+                .Concat(alreadyBridgedSkipped
+                    .Where(s => input.Exclusions?.Contains(s.MethodName) != true)
+                    .Select(s => new UpliftBatchMultiTarget
+                    {
+                        BridgedMethodName = s.MethodName,
+                        ProjectName = input.ProjectName,
+                    }))
+                .Concat(allBridgeWrappers
+                    .Where(m => input.Exclusions?.Contains(m) != true)
+                    .Select(m => new UpliftBatchMultiTarget
+                    {
+                        BridgedMethodName = m,
+                        ProjectName = input.ProjectName,
+                    }))
+                .DistinctBy(t => t.BridgedMethodName)
+                .ToList();
+
+            if (upliftTargets.Count > 0)
+            {
+                var upliftResult = await _asyncBatchEngine.RunUpliftBatchMultiAsync(
                         new UpliftBatchMultiInput
                         {
                             Targets = upliftTargets,
@@ -2887,13 +2900,12 @@ public class SentinelAsyncifyTools
                         }
                     }
 
-                    CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped);
-                    if (innerToken.IsCancellationRequested)
-                    {
-                        stoppedEarly = true;
-                        if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after uplift phase";
-                        goto WriteSummary;
-                    }
+                CheckIterations(upliftResult.TotalUplifted + upliftResult.TotalSkipped);
+                if (innerToken.IsCancellationRequested)
+                {
+                    stoppedEarly = true;
+                    if (stopReason.Length == 0) stopReason = "maxRuntimeSeconds exceeded after uplift phase";
+                    goto WriteSummary;
                 }
             }
 
