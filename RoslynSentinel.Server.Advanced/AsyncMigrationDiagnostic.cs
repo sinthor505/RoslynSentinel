@@ -104,10 +104,11 @@ internal static class AsyncMigrationDiagnostic
                      && !i.Reason!.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        // Methods newly flagged NeedsManualReview this run — bridge produced compiler errors.
+        // Methods newly flagged NeedsManualReview this run — bridge or body-rewrite produced compiler errors.
         var newCompilerErrors = bridgeItems
-            .Where(i => i.Outcome == ItemRecordOutcome.Skipped
-                     && i.Reason!.Contains("Validation produced", StringComparison.OrdinalIgnoreCase))
+            .Where(i => (i.Outcome == ItemRecordOutcome.Skipped || i.Outcome == ItemRecordOutcome.NeedsManualReview)
+                     && (i.Reason!.Contains("Validation produced", StringComparison.OrdinalIgnoreCase)
+                      || i.Reason!.Contains("Body-rewrite validation failed", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         // Event handlers — structurally cannot be auto-converted.
@@ -195,7 +196,7 @@ internal static class AsyncMigrationDiagnostic
             suggestions.Add(
                 $"{upliftErrors.Count} caller(s) could not be uplifted — compiler errors during " +
                 $"caller async conversion. Sample: {sample}. " +
-                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"skipped\") for compiler diagnostics.");
+                $"Use GetOperationDetail(changeId=\"{changeId}\", filter=\"manual_review\") for compiler diagnostics.");
         }
 
         if (noCallSites.Count > 0)

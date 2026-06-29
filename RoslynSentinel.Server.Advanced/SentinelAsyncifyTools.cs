@@ -2397,6 +2397,8 @@ public class SentinelAsyncifyTools
         string bridgeStopReason = "";
         int bridgeSkippedCount = 0;
         int bridgeRemainingCandidates = 0;
+        int bridgeBodyRewriteFailures = 0;
+        int bridgeStaleFlagSkips = 0;
         int flagPhaseScanned = 0;
         int flagPhaseNewFlags = 0;
         var handlerConvertedFiles = new List<FilePath>();
@@ -2731,6 +2733,10 @@ public class SentinelAsyncifyTools
             bridgeStopReason = bridgeResult.StopReason;
             bridgeSkippedCount = bridgeResult.Skipped.Count;
             bridgeRemainingCandidates = bridgeResult.RemainingCandidates;
+            bridgeBodyRewriteFailures = bridgeResult.Skipped
+                .Count(s => s.Reason.Contains("Body-rewrite validation failed", StringComparison.OrdinalIgnoreCase));
+            bridgeStaleFlagSkips = bridgeResult.Skipped
+                .Count(s => s.Reason.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase));
 
             foreach (var a in bridgeResult.Applied)
             {
@@ -3290,9 +3296,19 @@ public class SentinelAsyncifyTools
         else if (succeeded == 0 && !status2.Open && !stoppedEarly
                  && bridgeStopReason == "batch_complete" && bridgeSkippedCount > 0)
         {
-            directive = $"{bridgeSkippedCount} candidate(s) were attempted but all required manual review — " +
-                        $"the async transform produced compiler errors (likely no async API equivalent exists for the called sync methods). " +
-                        $"Call get_operation_detail(changeId=\"{changeId}\", filter=\"skipped\") to see per-method skip reasons and compiler diagnostics.";
+            if (bridgeBodyRewriteFailures > 0)
+            {
+                directive = $"{bridgeBodyRewriteFailures} candidate(s) required manual review — " +
+                            $"the async body rewrite produced compiler errors after replacing sync bridge calls with async equivalents. " +
+                            $"Call get_operation_detail(changeId=\"{changeId}\", filter=\"manual_review\") to see per-method compiler diagnostics.";
+            }
+            else
+            {
+                directive = $"{bridgeStaleFlagSkips} candidate(s) skipped — async overloads already exist with CancellationToken " +
+                            $"(stale [AsyncBridgeCandidate] flags from a prior Asyncify run). " +
+                            $"Run ScanAsyncMigrationCandidates to refresh the candidate list, or " +
+                            $"call get_operation_detail(changeId=\"{changeId}\", filter=\"skipped\") to inspect skip reasons.";
+            }
         }
         else
         {
