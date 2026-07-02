@@ -7,6 +7,8 @@ namespace RoslynSentinel.Common;
 public class LedgerOperation
 {
     public string Phase { get; set; } = "";
+    /// <summary>First compiler diagnostic or exception message when the phase is a failure (e.g. BridgeValidationFail). Null for success phases.</summary>
+    public string? Reason { get; set; }
     public DateTime Timestamp { get; set; }
     public int Run { get; set; }
 }
@@ -104,7 +106,11 @@ public class MigrationLedger
     /// Records a phase touch for the given method. Uses the run number set by the most recent
     /// <see cref="BeginRun"/> call. Thread-safe.
     /// </summary>
-    public void Record(string filePath, string methodName, string phase)
+    /// <param name="reason">
+    /// Optional failure detail — typically the first compiler diagnostic message when the phase is
+    /// a failure phase (e.g. BridgeValidationFail, UpliftValidationFail). Null for success phases.
+    /// </param>
+    public void Record(string filePath, string methodName, string phase, string? reason = null)
     {
         var key = $"{filePath}::{methodName}";
         var now = DateTime.UtcNow;
@@ -123,7 +129,7 @@ public class MigrationLedger
             }
             entry.LastSeen = now;
             entry.HitCount++;
-            entry.Operations.Add(new LedgerOperation { Phase = phase, Timestamp = now, Run = _currentRun });
+            entry.Operations.Add(new LedgerOperation { Phase = phase, Reason = reason, Timestamp = now, Run = _currentRun });
         }
     }
 

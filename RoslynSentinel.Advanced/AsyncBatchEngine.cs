@@ -47,7 +47,8 @@ public record UpliftSkippedInfo(
     string CallerMethod,
     string Reason,
     List<DiagnosticInfo> Diagnostics,
-    bool NeedsManualReview = false
+    bool NeedsManualReview = false,
+    string? AttemptedSource = null
 );
 
 /// <summary>
@@ -481,7 +482,7 @@ public class AsyncBatchEngine
                         {
                             skipped.Add(new BridgeSkippedInfo(
                                 candidate.FilePath, candidate.MethodName,
-                                $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s); flagged NeedsManualReview",
+                                $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s){DiagSummary(ctValidation.Diagnostics)}; flagged NeedsManualReview",
                                 ctValidation.Diagnostics));
                             fallbackHandled = true;
                         }
@@ -528,7 +529,7 @@ public class AsyncBatchEngine
                                         ? $"[{bodyValidation.Diagnostics[0].Id}] {bodyValidation.Diagnostics[0].Message}" : "");
                                 skipped.Add(new BridgeSkippedInfo(
                                     candidate.FilePath, candidate.MethodName,
-                                    $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s); flagged NeedsManualReview",
+                                    $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s){DiagSummary(bodyValidation.Diagnostics)}; flagged NeedsManualReview",
                                     bodyValidation.Diagnostics));
                                 fallbackHandled = true;
                             }
@@ -697,7 +698,7 @@ public class AsyncBatchEngine
                     var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                         candidate.FilePath, candidate.MethodName, "NeedsManualReview",
                         score: 0,
-                        reason: $"Bridge produced {validation.Diagnostics.Count} compiler error(s)",
+                        reason: $"Bridge produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}",
                         progress: progress,
                         cancellationToken: cancellationToken);
                     await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
@@ -709,10 +710,13 @@ public class AsyncBatchEngine
                         candidate.MethodName);
                 }
 
+                _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeValidationFail",
+                    validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : null);
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
-                    $"Validation produced {validation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
-                    validation.Diagnostics));
+                    $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; flagged NeedsManualReview",
+                    validation.Diagnostics,
+                    AttemptedSource: sourceToValidate));
                 continue;
             }
 
@@ -1104,7 +1108,7 @@ public class AsyncBatchEngine
                             var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                                 callerFilePath, callerMethodName, "NeedsManualReview",
                                 score: 0,
-                                reason: $"Uplift produced {indivValidation.Diagnostics.Count} compiler error(s)",
+                                reason: $"Uplift produced {indivValidation.Diagnostics.Count} compiler error(s){DiagSummary(indivValidation.Diagnostics)}",
                                 progress: progress, cancellationToken: cancellationToken);
                             await _workspaceManager.ApplyProposedChangesAsync(
                                 flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
@@ -1115,9 +1119,12 @@ public class AsyncBatchEngine
                                 "Could not flag {Method} as NeedsManualReview", callerMethodName);
                         }
 
+                        _ledger.Record(callerFilePath, callerMethodName, "UpliftValidationFail",
+                            indivValidation.Diagnostics.Count > 0 ? $"[{indivValidation.Diagnostics[0].Id}] {indivValidation.Diagnostics[0].Message}" : null);
                         skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                            $"Validation produced {indivValidation.Diagnostics.Count} compiler error(s); flagged NeedsManualReview",
-                            indivValidation.Diagnostics));
+                            $"Validation produced {indivValidation.Diagnostics.Count} compiler error(s){DiagSummary(indivValidation.Diagnostics)}; flagged NeedsManualReview",
+                            indivValidation.Diagnostics,
+                            AttemptedSource: transformed));
                         continue;
                     }
 
@@ -1875,6 +1882,18 @@ public class AsyncBatchEngine
 
         result.StopReason = input.DryRun ? "dry_run" : "batch_complete";
         return result;
+    }
+
+    /// <summary>
+    /// Formats the first <paramref name="n"/> diagnostics into a compact inline summary for
+    /// inclusion in Reason strings — e.g. " — [CS7036] No arg for 'cancellationToken' (+1 more)".
+    /// Returns an empty string when <paramref name="diags"/> is empty.
+    /// </summary>
+    private static string DiagSummary(List<DiagnosticInfo> diags, int n = 2)
+    {
+        if (diags.Count == 0) return "";
+        var top = string.Join("; ", diags.Take(n).Select(d => $"[{d.Id}] {d.Message}"));
+        return diags.Count > n ? $" — {top} (+{diags.Count - n} more)" : $" — {top}";
     }
 }
 

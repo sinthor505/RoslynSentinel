@@ -12,6 +12,7 @@ public record BridgeSkippedInfo(
     FilePath FilePath,
     string MethodName,
     string Reason,
-    List<DiagnosticInfo> Diagnostics
+    List<DiagnosticInfo> Diagnostics,
+    string? AttemptedSource = null
 );
 

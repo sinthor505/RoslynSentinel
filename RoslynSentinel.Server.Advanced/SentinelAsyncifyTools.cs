@@ -1941,6 +1941,7 @@ public class SentinelAsyncifyTools
                     Outcome = blobOutcome,
                     Reason = s.Reason,
                     CompilerDiagnostics = s.Diagnostics.Count > 0 ? s.Diagnostics : null,
+                    AfterSource = s.AttemptedSource,
                 });
 
                 if (itemOutcome == ItemOutcome.AlreadySatisfied)
@@ -2765,6 +2766,7 @@ public class SentinelAsyncifyTools
                             : ItemRecordOutcome.Failed,
                     Reason = $"phase:bridge — {s.Reason}",
                     CompilerDiagnostics = bridgeDiags,
+                    AfterSource = s.AttemptedSource,
                 });
                 if (alreadyDone || requiresManualReview)
                 {
@@ -2879,6 +2881,7 @@ public class SentinelAsyncifyTools
                             Outcome = upliftOutcome,
                             Reason = $"phase:uplift — {s.Reason}",
                             CompilerDiagnostics = upliftDiags,
+                            AfterSource = s.AttemptedSource,
                         });
                         if (upliftOutcome == ItemRecordOutcome.Failed)
                         {
