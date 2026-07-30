@@ -523,7 +523,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Gets compiler diagnostics. file → scopeName=filePath; project → scopeName=projectName; solution → scopeName ignored. summarize=true groups by diagnostic ID and returns counts. maxDetails caps raw list (default 50). topN caps groups (default 20).")]
     public async Task<ToolResult<object>> GetDiagnostics(
-        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope,
+        [Consumes(DataTag.ProjectName, required: true)][Consumes(DataTag.SourceFilepath, required: false)] ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         bool summarize = false,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
@@ -1064,15 +1064,15 @@ public class SentinelWorkspaceTools
     private static ItemRecordOutcome? ResolveOutcomeFilter(string filter)
     {
         string f = filter.ToLowerInvariant();
-        if (f.StartsWith("fail") || f.StartsWith("err"))    return ItemRecordOutcome.Failed;
-        if (f.StartsWith("skip") || f.StartsWith("warn"))   return ItemRecordOutcome.Skipped;
-        if (f.StartsWith("ok")   || f.StartsWith("pass")
+        if (f.StartsWith("fail") || f.StartsWith("err")) return ItemRecordOutcome.Failed;
+        if (f.StartsWith("skip") || f.StartsWith("warn")) return ItemRecordOutcome.Skipped;
+        if (f.StartsWith("ok") || f.StartsWith("pass")
          || f.StartsWith("info") || f.StartsWith("success")
-         || f.StartsWith("succeed"))                         return ItemRecordOutcome.Succeeded;
+         || f.StartsWith("succeed")) return ItemRecordOutcome.Succeeded;
         if (f.StartsWith("roll") || f.StartsWith("revert")
-         || f.StartsWith("undo"))                            return ItemRecordOutcome.RolledBack;
+         || f.StartsWith("undo")) return ItemRecordOutcome.RolledBack;
         if (f.StartsWith("manual") || f.StartsWith("needs_manual"))
-                                                             return ItemRecordOutcome.NeedsManualReview;
+            return ItemRecordOutcome.NeedsManualReview;
         return null;
     }
 
@@ -1093,7 +1093,7 @@ public class SentinelWorkspaceTools
               .SelectMany(al => al.Attributes)
               .Select(a => new MethodAttributeInfo
               {
-                  Name      = a.Name.ToString(),
+                  Name = a.Name.ToString(),
                   Arguments = a.ArgumentList?.Arguments.ToString() ?? "",
               })
               .ToList();
