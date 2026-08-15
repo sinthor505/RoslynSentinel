@@ -19,13 +19,32 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     }
 
     // construct from whatever the wire sent, against the known root
-    public static FilePath FromWire(string pathArg, string solutionRoot)
+    public static FilePath FromWire(string pathArg, string? solutionRoot)
     {
         var clean = NormalizeWirePath(pathArg);
-        string abs = Path.IsPathRooted(clean)
-            ? Path.GetFullPath(clean)
-            : Path.GetFullPath(Path.Combine(solutionRoot, clean));
-        return new FilePath(abs, solutionRoot, validated: true);
+
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            return new FilePath(string.Empty, solutionRoot);
+        }
+
+        if (Path.IsPathRooted(clean))
+        {
+            return new FilePath(Path.GetFullPath(clean), solutionRoot, validated: true);
+        }
+
+        // PersistentWorkspaceManager.GetSolutionRoot() returns null whenever no solution is
+        // loaded, or the loaded solution is in-memory and has no file path. Tools call FromWire
+        // before their own try/catch, so combining against a null root threw a raw
+        // ArgumentNullException straight out of the MCP boundary. Keep the caller's relative
+        // path instead — resolving it against the process working directory would silently
+        // produce a path that points nowhere near the solution.
+        if (string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            return new FilePath(clean, solutionRoot);
+        }
+
+        return new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, clean)), solutionRoot, validated: true);
     }
 
     // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo → c:\foo).
