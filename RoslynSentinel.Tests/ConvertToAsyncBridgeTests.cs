@@ -55,13 +55,13 @@ public class TripService
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
 
         // Async overload should exist with the right signature.
-        Assert.That(result, Does.Contain("GetTripsAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"),
             "Async overload should be named GetTripsAsync.");
-        Assert.That(result, Does.Contain("Task<DataTable>"),
+        Assert.That(result.UpdatedText, Does.Contain("Task<DataTable>"),
             "Async overload should return Task<DataTable>.");
-        Assert.That(result, Does.Contain("CancellationToken cancellationToken"),
+        Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"),
             "Async overload should have a CancellationToken parameter.");
-        Assert.That(result, Does.Contain("async"),
+        Assert.That(result.UpdatedText, Does.Contain("async"),
             "Async overload should carry the async modifier.");
     }
 
@@ -81,14 +81,14 @@ public class TripService
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
 
         // Bridge body: return GetTripsAsync(companyId).GetAwaiter().GetResult();
-        Assert.That(result, Does.Contain("GetTripsAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"),
             "Bridge body should call GetTripsAsync.");
-        Assert.That(result, Does.Contain("GetAwaiter"),
+        Assert.That(result.UpdatedText, Does.Contain("GetAwaiter"),
             "Bridge body should use GetAwaiter().");
-        Assert.That(result, Does.Contain("GetResult"),
+        Assert.That(result.UpdatedText, Does.Contain("GetResult"),
             "Bridge body should use GetResult().");
         // Original sync body (DataHelper.Search) should be in the ASYNC overload, not deleted entirely.
-        Assert.That(result, Does.Contain("DataHelper.Search"),
+        Assert.That(result.UpdatedText, Does.Contain("DataHelper.Search"),
             "Original body expression should appear in the async overload.");
     }
 
@@ -107,11 +107,11 @@ public class TripService
 
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
 
-        Assert.That(result, Does.Contain("Obsolete"),
+        Assert.That(result.UpdatedText, Does.Contain("Obsolete"),
             "[Obsolete] attribute must be added to the bridge wrapper.");
-        Assert.That(result, Does.Contain("Asyncify-bridge"),
+        Assert.That(result.UpdatedText, Does.Contain("Asyncify-bridge"),
             "Obsolete message must contain 'Asyncify-bridge' to match CS0618 tracking convention.");
-        Assert.That(result, Does.Contain("call GetTripsAsync instead"),
+        Assert.That(result.UpdatedText, Does.Contain("call GetTripsAsync instead"),
             "Obsolete message should name the replacement async method.");
     }
 
@@ -130,7 +130,7 @@ public class TripService
 
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
 
-        Assert.That(result, Does.Contain("// Asyncify-bridge: synchronous wrapper over GetTripsAsync."),
+        Assert.That(result.UpdatedText, Does.Contain("// Asyncify-bridge: synchronous wrapper over GetTripsAsync."),
             "Bridge body should have the standard inline comment for readability.");
     }
 
@@ -149,13 +149,13 @@ public class NotificationService
         var result = await _engine.ConvertToAsyncBridgeAsync("NotificationService.cs", "Notify");
 
         // void bridge: NotifyAsync(message).GetAwaiter().GetResult() — no 'return' keyword.
-        Assert.That(result, Does.Contain("NotifyAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("NotifyAsync"),
             "Async overload should be named NotifyAsync.");
-        Assert.That(result, Does.Contain("Task NotifyAsync") | Does.Contain("Task\r\nNotifyAsync") | Does.Contain("async Task"),
+        Assert.That(result.UpdatedText, Does.Contain("Task NotifyAsync") | Does.Contain("Task\r\nNotifyAsync") | Does.Contain("async Task"),
             "Async overload should return Task (not Task<void>).");
         // No return keyword in the bridge call (void bridge = expression statement).
         // The async method may have return, but the bridge itself must not have 'return GetAwaiter'.
-        Assert.That(result, Does.Contain("GetAwaiter"),
+        Assert.That(result.UpdatedText, Does.Contain("GetAwaiter"),
             "Bridge body should use GetAwaiter() even for void methods.");
     }
 
@@ -175,7 +175,7 @@ public class DriverService
         var result = await _engine.ConvertToAsyncBridgeAsync("DriverService.cs", "GetDrivers");
 
         // Bridge call should forward all three parameter names.
-        Assert.That(result, Does.Contain("GetDriversAsync(companyId, status, limit)"),
+        Assert.That(result.UpdatedText, Does.Contain("GetDriversAsync(companyId, status, limit)"),
             "All original parameter names should be forwarded in the bridge call.");
     }
 
@@ -193,9 +193,9 @@ public class TripService
 
         // The async overload should have a block body (with braces) for CT-propagation tool compatibility.
         // Verify the original body expression is preserved inside the async method.
-        Assert.That(result, Does.Contain("GetTripsAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"),
             "Async overload should exist.");
-        Assert.That(result, Does.Contain("DataHelper.Search"),
+        Assert.That(result.UpdatedText, Does.Contain("DataHelper.Search"),
             "Original body expression should be carried into the async overload.");
     }
 
@@ -214,9 +214,9 @@ public class TripService
 
         var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetAllTrips");
 
-        Assert.That(result, Does.Contain("GetAllTripsAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("GetAllTripsAsync"),
             "Static methods should also be convertible to bridge pattern.");
-        Assert.That(result, Does.Contain("GetAwaiter"),
+        Assert.That(result.UpdatedText, Does.Contain("GetAwaiter"),
             "Bridge body should use GetAwaiter().");
     }
 

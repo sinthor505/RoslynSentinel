@@ -46,8 +46,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??"), "Should contain null coalescing operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "Should contain null coalescing operator");
     }
 
     [Test]
@@ -64,8 +64,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??"), "Should contain null coalescing operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "Should contain null coalescing operator");
     }
 
     [Test]
@@ -85,8 +85,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??="), "Should contain coalesce assignment operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??="), "Should contain coalesce assignment operator");
     }
 
     [Test]
@@ -103,8 +103,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??="), "Should contain coalesce assignment operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??="), "Should contain coalesce assignment operator");
     }
 
     [Test]
@@ -123,8 +123,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??"), "Should contain null coalescing operators");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "Should contain null coalescing operators");
     }
 
     [Test]
@@ -141,8 +141,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??"), "Should contain null coalescing operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "Should contain null coalescing operator");
     }
 
     [Test]
@@ -161,8 +161,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??"), "Should contain null coalescing operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??"), "Should contain null coalescing operator");
     }
 
     [Test]
@@ -179,8 +179,8 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("??="), "Should contain coalesce assignment operator");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("??="), "Should contain coalesce assignment operator");
     }
 
     [Test]
@@ -197,7 +197,7 @@ public class ConvertToNullCoalescingTests
         
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
-        Assert.That(result, Does.Not.Contain("??"), "Should not modify non-null check patterns");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
+        Assert.That(result.UpdatedText, Does.Not.Contain("??"), "Should not modify non-null check patterns");
     }
 }

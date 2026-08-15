@@ -462,9 +462,9 @@ public class Math
 
         var tree = await _analysisEngine.GenerateCallTreeAsync("Math.cs", "Double");
 
-        Assert.That(tree, Is.Not.Null.And.Not.Empty);
-        Assert.That(tree, Does.Contain("Double"), "Root method must appear in call tree.");
-        Assert.That(tree, Does.Contain("Add"), "Direct callee Add must appear in call tree.");
+        Assert.That(tree.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(tree.UpdatedText, Does.Contain("Double"), "Root method must appear in call tree.");
+        Assert.That(tree.UpdatedText, Does.Contain("Add"), "Direct callee Add must appear in call tree.");
     }
 
     [Test]
@@ -474,7 +474,7 @@ public class Math
 
         var tree = await _analysisEngine.GenerateCallTreeAsync("Missing.cs", "Foo");
 
-        Assert.That(tree, Does.Contain("not found").Or.Contain("File"),
+        Assert.That(tree.UpdatedText, Does.Contain("not found").Or.Contain("File"),
             "Missing file should produce an error message, not an exception.");
     }
 
@@ -493,8 +493,8 @@ public class Chain
         // depth 2 should not include D (A -> B -> C is depth 2, D would be depth 3)
         var tree = await _analysisEngine.GenerateCallTreeAsync("Chain.cs", "A", depth: 2);
 
-        Assert.That(tree, Does.Contain("A"));
-        Assert.That(tree, Does.Contain("B"));
+        Assert.That(tree.UpdatedText, Does.Contain("A"));
+        Assert.That(tree.UpdatedText, Does.Contain("B"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -513,10 +513,10 @@ public class Point
 
         var result = await _analysisEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
 
-        Assert.That(result, Does.Contain("Equals"), "Equals override must be generated.");
-        Assert.That(result, Does.Contain("GetHashCode"), "GetHashCode override must be generated.");
-        Assert.That(result, Does.Contain("obj is Point other"), "Equals must use pattern matching.");
-        Assert.That(result, Does.Contain("HashCode.Combine"), "GetHashCode should use HashCode.Combine.");
+        Assert.That(result.UpdatedText, Does.Contain("Equals"), "Equals override must be generated.");
+        Assert.That(result.UpdatedText, Does.Contain("GetHashCode"), "GetHashCode override must be generated.");
+        Assert.That(result.UpdatedText, Does.Contain("obj is Point other"), "Equals must use pattern matching.");
+        Assert.That(result.UpdatedText, Does.Contain("HashCode.Combine"), "GetHashCode should use HashCode.Combine.");
     }
 
     [Test]
@@ -531,9 +531,9 @@ public class Person
 
         var result = await _analysisEngine.GenerateEqualityOverridesAsync("Person.cs", "Person");
 
-        Assert.That(result, Does.Contain("Equals"));
-        Assert.That(result, Does.Contain("Name"), "Name property must appear in equality logic.");
-        Assert.That(result, Does.Contain("Age"), "Age property must appear in equality logic.");
+        Assert.That(result.UpdatedText, Does.Contain("Equals"));
+        Assert.That(result.UpdatedText, Does.Contain("Name"), "Name property must appear in equality logic.");
+        Assert.That(result.UpdatedText, Does.Contain("Age"), "Age property must appear in equality logic.");
     }
 
     [Test]
@@ -549,8 +549,8 @@ public class Big
         var result = await _analysisEngine.GenerateEqualityOverridesAsync("Big.cs", "Big");
 
         // With 9 fields (a..i) the builder pattern should be used
-        Assert.That(result, Does.Contain("GetHashCode"), "GetHashCode must still be generated.");
-        Assert.That(result, Does.Contain("HashCode").Or.Contain("hc"), "Should use HashCode builder for >8 fields.");
+        Assert.That(result.UpdatedText, Does.Contain("GetHashCode"), "GetHashCode must still be generated.");
+        Assert.That(result.UpdatedText, Does.Contain("HashCode").Or.Contain("hc"), "Should use HashCode builder for >8 fields.");
     }
 
     [Test]
@@ -958,9 +958,9 @@ public class Greeter
 
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
 
-        Assert.That(result, Does.Contain("$\""), "Output must contain an interpolated string.");
-        Assert.That(result, Does.Contain("{name}"), "Variable 'name' must be in an interpolation hole.");
-        Assert.That(result, Does.Not.Contain("\" + name + \""), "Original concat must be replaced.");
+        Assert.That(result.UpdatedText, Does.Contain("$\""), "Output must contain an interpolated string.");
+        Assert.That(result.UpdatedText, Does.Contain("{name}"), "Variable 'name' must be in an interpolation hole.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("\" + name + \""), "Original concat must be replaced.");
     }
 
     [Test]
@@ -973,7 +973,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
 
         // Still returns content without throwing; may or may not convert (implementation-defined for pure literals)
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -983,7 +983,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
 
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
 
-        Assert.That(result, Does.Not.Contain("$\""), "No concat means no interpolation should be introduced.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("$\""), "No concat means no interpolation should be introduced.");
     }
 
     [Test]
@@ -1022,9 +1022,9 @@ public class C
 
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
 
-        Assert.That(result, Does.Contain("await"), ".Result must be replaced by await.");
-        Assert.That(result, Does.Contain("async"), "Containing method must be made async.");
-        Assert.That(result, Does.Not.Contain(".Result"), ".Result must not remain in output.");
+        Assert.That(result.UpdatedText, Does.Contain("await"), ".Result must be replaced by await.");
+        Assert.That(result.UpdatedText, Does.Contain("async"), "Containing method must be made async.");
+        Assert.That(result.UpdatedText, Does.Not.Contain(".Result"), ".Result must not remain in output.");
     }
 
     [Test]
@@ -1042,8 +1042,8 @@ public class C
 
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
 
-        Assert.That(result, Does.Contain("await"));
-        Assert.That(result, Does.Not.Contain(".Wait()"), ".Wait() must be replaced.");
+        Assert.That(result.UpdatedText, Does.Contain("await"));
+        Assert.That(result.UpdatedText, Does.Not.Contain(".Wait()"), ".Wait() must be replaced.");
     }
 
     [Test]
@@ -1061,8 +1061,8 @@ public class C
 
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
 
-        Assert.That(result, Does.Contain("await"), "GetAwaiter().GetResult() must be replaced by await.");
-        Assert.That(result, Does.Not.Contain("GetAwaiter"), "GetAwaiter chain must be gone.");
+        Assert.That(result.UpdatedText, Does.Contain("await"), "GetAwaiter().GetResult() must be replaced by await.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("GetAwaiter"), "GetAwaiter chain must be gone.");
     }
 
     [Test]
@@ -1080,7 +1080,7 @@ public class C
 
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
 
-        Assert.That(result, Does.Contain("async"), "Already-async method should remain async.");
+        Assert.That(result.UpdatedText, Does.Contain("async"), "Already-async method should remain async.");
         Assert.That(result, Does.Contain("await"), "Existing await must be preserved.");
         Assert.That(result, Does.Not.Contain(".Result"), "No blocking calls to introduce.");
     }
@@ -1107,9 +1107,9 @@ public class C
 
         var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
 
-        Assert.That(result, Does.Contain("_answer"), "New field name must appear in output.");
-        Assert.That(result, Does.Contain("private"), "Extracted field must be private.");
-        Assert.That(result, Does.Contain("readonly").Or.Contain("_answer"), "Field should be readonly.");
+        Assert.That(result.UpdatedText, Does.Contain("_answer"), "New field name must appear in output.");
+        Assert.That(result.UpdatedText, Does.Contain("private"), "Extracted field must be private.");
+        Assert.That(result.UpdatedText, Does.Contain("readonly").Or.Contain("_answer"), "Field should be readonly.");
     }
 
     [Test]
@@ -1122,7 +1122,7 @@ public class C
         var result = await _granularRefactoringEngine.IntroduceFieldAsync("C.cs", "public class C", "_f");
 
         // Should return the original source unchanged (graceful fallback)
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1146,8 +1146,8 @@ public class C
 
         var result = await _granularRefactoringEngine.IntroduceParameterAsync("C.cs", "int timeout = 30", "timeoutMs");
 
-        Assert.That(result, Does.Contain("timeoutMs"), "New parameter name must appear.");
-        Assert.That(result, Does.Contain("M("), "Method M signature must be present.");
+        Assert.That(result.UpdatedText, Does.Contain("timeoutMs"), "New parameter name must appear.");
+        Assert.That(result.UpdatedText, Does.Contain("M("), "Method M signature must be present.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1171,8 +1171,8 @@ public class C
 
         var result = await _granularRefactoringEngine.IntroduceVariableAsync("C.cs", "6 * 7", "product");
 
-        Assert.That(result, Does.Contain("product"), "Extracted variable name must appear.");
-        Assert.That(result, Does.Contain("var"), "Local variable should be declared with var.");
+        Assert.That(result.UpdatedText, Does.Contain("product"), "Extracted variable name must appear.");
+        Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }
 
     // ══════════════════════════════════════════════════════════════

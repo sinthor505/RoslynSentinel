@@ -36,7 +36,7 @@ public class ImmutabilityEngineTests
 
         var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
 
-        Assert.That(result, Does.Contain("readonly"), "Mutable field should get readonly modifier");
+        Assert.That(result.UpdatedText, Does.Contain("readonly"), "Mutable field should get readonly modifier");
     }
 
     [Test]
@@ -48,8 +48,8 @@ public class ImmutabilityEngineTests
 
         var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
 
-        Assert.That(result, Does.Contain("init"), "set accessor should be replaced with init");
-        Assert.That(result, Does.Not.Contain(" set;"), "No plain setter should remain");
+        Assert.That(result.UpdatedText, Does.Contain("init"), "set accessor should be replaced with init");
+        Assert.That(result.UpdatedText, Does.Not.Contain(" set;"), "No plain setter should remain");
     }
 
     [Test]
@@ -61,7 +61,7 @@ public class ImmutabilityEngineTests
 
         var result = await _engine.MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
 
-        Assert.That(result, Is.Empty, "Unknown file should return empty string, not throw");
+        Assert.That(result.UpdatedText, Is.Empty, "Unknown file should return empty string, not throw");
     }
 }
 
@@ -93,8 +93,8 @@ public class ThreadSafetyEngineTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "Increment");
 
-        Assert.That(result, Does.Contain("lock"), "Method body should be wrapped in a lock statement");
-        Assert.That(result, Does.Contain("_lock"), "A lock object field should be added");
+        Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body should be wrapped in a lock statement");
+        Assert.That(result.UpdatedText, Does.Contain("_lock"), "A lock object field should be added");
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// Error:"), "Should not return an error comment");
     }
 

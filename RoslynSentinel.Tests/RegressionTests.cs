@@ -193,8 +193,8 @@ public class RegressionTests
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToFullProperty");
 
-        Assert.That(result, Does.Contain("virtual"), "virtual modifier must survive ToFullProperty conversion");
-        Assert.That(result, Does.Contain("10"), "Initializer value must survive conversion");
+        Assert.That(result.UpdatedText, Does.Contain("virtual"), "virtual modifier must survive ToFullProperty conversion");
+        Assert.That(result.UpdatedText, Does.Contain("10"), "Initializer value must survive conversion");
     }
 
     [Test]
@@ -210,8 +210,8 @@ public class RegressionTests
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Size", "ToFullProperty");
 
-        Assert.That(result, Does.Contain("override"), "override modifier must survive ToFullProperty conversion");
-        Assert.That(result, Does.Contain("99"), "Initializer 99 must survive conversion");
+        Assert.That(result.UpdatedText, Does.Contain("override"), "override modifier must survive ToFullProperty conversion");
+        Assert.That(result.UpdatedText, Does.Contain("99"), "Initializer 99 must survive conversion");
     }
 
     [Test]
@@ -236,7 +236,7 @@ public class RegressionTests
 
         // The result must expand Company.Name (initializer "Acme" should move to backing field)
         // Person.Name should remain an auto-property
-        Assert.That(result, Does.Contain("\"Acme\""),
+        Assert.That(result.UpdatedText, Does.Contain("\"Acme\""),
             "Company's initializer Acme must appear in the backing field");
         // Person.Name should still be an auto-property (no _name backing for Alice)
         var personSection = result.UpdatedText!.Substring(0, result.UpdatedText!.IndexOf("Company", StringComparison.Ordinal));
@@ -467,7 +467,7 @@ public class RegressionTests
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Worker.cs", "Worker", "IWorker");
 
         // Stop() must be generated
-        Assert.That(result, Does.Contain("public void Stop"),
+        Assert.That(result.UpdatedText, Does.Contain("public void Stop"),
             "Missing Stop() method must be generated");
         // Start() must NOT be duplicated — check 'public void Start' (not 'void Start' which also matches interface)
         var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"public void Start").Count;
@@ -496,13 +496,13 @@ public class RegressionTests
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Config.cs", "AppConfig", "IConfig");
 
-        Assert.That(result, Does.Contain("public string Host"),
+        Assert.That(result.UpdatedText, Does.Contain("public string Host"),
             "Host property stub must be generated");
-        Assert.That(result, Does.Contain("public int Port"),
+        Assert.That(result.UpdatedText, Does.Contain("public int Port"),
             "Port property stub must be generated");
-        Assert.That(result, Does.Contain("NotImplementedException"),
+        Assert.That(result.UpdatedText, Does.Contain("NotImplementedException"),
             "Property stubs must throw NotImplementedException");
-        Assert.That(result, Does.Not.Contain("override"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("override"),
             "REGRESSION: interface property stubs must NOT have 'override' keyword");
     }
 
@@ -529,9 +529,9 @@ public class RegressionTests
         var result = await _codeGenerationEngine.ImplementInterfaceAsync(
             "JsonSerializer.cs", "JsonSerializer", "ISerializer");
 
-        Assert.That(result, Does.Not.Contain("override"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("override"),
             "REGRESSION: interface method stubs must NEVER have 'override' keyword");
-        Assert.That(result, Does.Contain("public string Serialize"),
+        Assert.That(result.UpdatedText, Does.Contain("public string Serialize"),
             "Serialize stub must be generated");
     }
 
@@ -548,7 +548,7 @@ public class RegressionTests
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Impl.cs", "Impl", "IReadOnly");
 
-        Assert.That(result, Does.Contain("public string Id"),
+        Assert.That(result.UpdatedText, Does.Contain("public string Id"),
             "Id property must be generated");
         // A read-only stub should NOT have a setter accessor
         var idPropStart = result.UpdatedText!.IndexOf("public string Id", StringComparison.Ordinal);

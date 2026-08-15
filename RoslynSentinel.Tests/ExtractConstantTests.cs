@@ -69,9 +69,9 @@ public class Config
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "\"MySecret\"", "DefaultApiKey", "private", "IsNullOrEmpty(");
 
-        Assert.That(result, Does.Contain("private const string DefaultApiKey = \"MySecret\""),
+        Assert.That(result.UpdatedText, Does.Contain("private const string DefaultApiKey = \"MySecret\""),
             "Should declare private const string at class level");
-        Assert.That(result, Does.Contain("DefaultApiKey"),
+        Assert.That(result.UpdatedText, Does.Contain("DefaultApiKey"),
             "Should reference constant by name in the code");
     }
 
@@ -94,11 +94,11 @@ public class Validator
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "42", "MaxValue");
 
-        Assert.That(result, Does.Contain("private const int MaxValue = 42"),
+        Assert.That(result.UpdatedText, Does.Contain("private const int MaxValue = 42"),
             "Should declare private const int at class level");
-        Assert.That(result, Does.Contain("MaxValue"),
+        Assert.That(result.UpdatedText, Does.Contain("MaxValue"),
             "Should reference constant by name");
-        Assert.That(result, Does.Contain("value > MaxValue"),
+        Assert.That(result.UpdatedText, Does.Contain("value > MaxValue"),
             "Should replace the literal");
     }
 
@@ -121,9 +121,9 @@ public class Calculator
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "1.8", "ConversionFactor");
 
-        Assert.That(result, Does.Contain("private const double ConversionFactor = 1.8"),
+        Assert.That(result.UpdatedText, Does.Contain("private const double ConversionFactor = 1.8"),
             "Should infer double type for decimal literal");
-        Assert.That(result, Does.Contain("ConversionFactor"),
+        Assert.That(result.UpdatedText, Does.Contain("ConversionFactor"),
             "Should reference constant by name");
     }
 
@@ -146,10 +146,10 @@ public class Settings
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "true", "IsDebugMode", "private", "return");
 
-        Assert.That(result, Does.Contain("private const bool IsDebugMode = true") |
+        Assert.That(result.UpdatedText, Does.Contain("private const bool IsDebugMode = true") |
                              Does.Contain("private const bool IsDebugMode = True"),
             "Should declare private const bool");
-        Assert.That(result, Does.Contain("IsDebugMode"),
+        Assert.That(result.UpdatedText, Does.Contain("IsDebugMode"),
             "Should reference constant by name");
     }
 
@@ -172,9 +172,9 @@ public class Range
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "1000", "MaxRange", "private", "value >");
 
-        Assert.That(result, Does.Contain("private const int MaxRange = 1000"),
+        Assert.That(result.UpdatedText, Does.Contain("private const int MaxRange = 1000"),
             "Should extract large integer literal");
-        Assert.That(result, Does.Contain("MaxRange"),
+        Assert.That(result.UpdatedText, Does.Contain("MaxRange"),
             "Should reference constant by name");
     }
 
@@ -197,9 +197,9 @@ public class Counter
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "0", "Zero", "private", "return");
 
-        Assert.That(result, Does.Contain("private const int Zero = 0"),
+        Assert.That(result.UpdatedText, Does.Contain("private const int Zero = 0"),
             "Should extract zero literal");
-        Assert.That(result, Does.Contain("Zero"),
+        Assert.That(result.UpdatedText, Does.Contain("Zero"),
             "Should reference constant");
     }
 
@@ -222,9 +222,9 @@ public class StringHelper
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "\"\"", "EmptyString", "private", "value ==");
 
-        Assert.That(result, Does.Contain("private const string EmptyString = \"\""),
+        Assert.That(result.UpdatedText, Does.Contain("private const string EmptyString = \"\""),
             "Should extract empty string literal");
-        Assert.That(result, Does.Contain("EmptyString"),
+        Assert.That(result.UpdatedText, Does.Contain("EmptyString"),
             "Should reference constant");
     }
 
@@ -244,9 +244,9 @@ public class PageSize
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "10", "DefaultSize", "private", "size ==");
 
-        Assert.That(result, Does.Contain("private const int DefaultSize = 10"),
+        Assert.That(result.UpdatedText, Does.Contain("private const int DefaultSize = 10"),
             "Should declare constant once");
-        Assert.That(result, Does.Contain("DefaultSize"),
+        Assert.That(result.UpdatedText, Does.Contain("DefaultSize"),
             "Should reference constant in code");
     }
 
@@ -269,9 +269,9 @@ public class Util
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "100", "MaxValue", "private", "value >");
 
-        Assert.That(result, Does.Contain("private const int MaxValue = 100"),
+        Assert.That(result.UpdatedText, Does.Contain("private const int MaxValue = 100"),
             "Should use provided name for constant");
-        Assert.That(result, Does.Contain("MaxValue"),
+        Assert.That(result.UpdatedText, Does.Contain("MaxValue"),
             "Should reference constant in code");
     }
 
@@ -294,10 +294,10 @@ public class Money
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "0.08m", "TaxRate");
 
-        Assert.That(result, Does.Contain("private const decimal TaxRate = 0.08m") |
+        Assert.That(result.UpdatedText, Does.Contain("private const decimal TaxRate = 0.08m") |
                              Does.Contain("private const decimal TaxRate = 0.08M"),
             "Should infer decimal type for m-suffixed literal");
-        Assert.That(result, Does.Contain("TaxRate"),
+        Assert.That(result.UpdatedText, Does.Contain("TaxRate"),
             "Should reference constant");
     }
 
@@ -320,7 +320,7 @@ public class Logger
         var result = await _refactoringEngine.ExtractConstantAsync(
             "Test.cs", "\"INFO\"", "LogLevel", "public", "Console.WriteLine");
 
-        Assert.That(result, Does.Contain("public const string LogLevel = \"INFO\""),
+        Assert.That(result.UpdatedText, Does.Contain("public const string LogLevel = \"INFO\""),
             "Should apply public visibility modifier");
     }
 

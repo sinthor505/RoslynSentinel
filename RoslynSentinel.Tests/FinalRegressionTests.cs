@@ -63,9 +63,9 @@ public class FinalRegressionTests
         var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
 
         // Should use staging (CHANGE_ prefix) instead of direct File.Move
-        Assert.That(result, Does.Contain("CHANGE_"),
+        Assert.That(result.UpdatedText, Does.Contain("CHANGE_"),
             "Should use staging mechanism with CHANGE_ prefix");
-        Assert.That(result, Does.Contain("DataService.cs"),
+        Assert.That(result.UpdatedText, Does.Contain("DataService.cs"),
             "Should identify primary type DataService");
     }
 
@@ -95,7 +95,7 @@ public class FinalRegressionTests
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "GetName");
 
         // Should error because GetName is used in UseHelper
-        Assert.That(result, Does.Contain("ERROR") | Does.Contain("usages"),
+        Assert.That(result.UpdatedText, Does.Contain("ERROR") | Does.Contain("usages"),
             "Should error when trying to remove a used member");
     }
 
@@ -118,7 +118,7 @@ public class FinalRegressionTests
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "UnusedMethod");
 
         // Should succeed and remove the unused method
-        Assert.That(result, Does.Not.Contain("UnusedMethod"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("UnusedMethod"),
             "Should remove unused member without errors");
     }
 
@@ -150,7 +150,7 @@ public class FinalRegressionTests
 
         Assert.That(result, Is.Not.Null);
         // Should create parameter object and possibly warn about interface
-        Assert.That(result, Does.Contain("ProcessParameters") | Does.Contain("WARNING"),
+        Assert.That(result.UpdatedText, Does.Contain("ProcessParameters") | Does.Contain("WARNING"),
             "Should introduce parameter object or warn about interface");
     }
 
@@ -182,9 +182,9 @@ public class FinalRegressionTests
 
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, "GetDataAsync");
 
-        Assert.That(result, Does.Contain("ValueTask<string>"),
+        Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"),
             "Should convert Task<T> to ValueTask<T>");
-        Assert.That(result, Does.Contain("WARNING") | Does.Contain("interface"),
+        Assert.That(result.UpdatedText, Does.Contain("WARNING") | Does.Contain("interface"),
             "Should warn about interface when it implements one");
     }
 

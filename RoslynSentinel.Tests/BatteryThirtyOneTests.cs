@@ -390,7 +390,7 @@ public class MyList {
         SetSource("public class X {}", "Known.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
 
-        Assert.That(result, Is.Empty, "File not found should return empty string");
+        Assert.That(result.UpdatedText, Is.Empty, "File not found should return empty string");
     }
 
     [Test]
@@ -404,8 +404,8 @@ public class Lookup {
         SetSource(src, "Lookup.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("Lookup.cs", "Item");
 
-        Assert.That(result, Does.Contain("string"), "Indexer should preserve string return type");
-        Assert.That(result, Does.Contain("this[int n]"), "Indexer should use original parameter name");
+        Assert.That(result.UpdatedText, Does.Contain("string"), "Indexer should preserve string return type");
+        Assert.That(result.UpdatedText, Does.Contain("this[int n]"), "Indexer should use original parameter name");
     }
 
     [Test]
@@ -416,7 +416,7 @@ public class Lookup {
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod");
 
-        Assert.That(result, Does.Contain("class C"), "Original source should be included after error comment");
+        Assert.That(result.UpdatedText, Does.Contain("class C"), "Original source should be included after error comment");
         Assert.That(result, Does.Contain("Compute"), "Original method should still be present");
     }
 }

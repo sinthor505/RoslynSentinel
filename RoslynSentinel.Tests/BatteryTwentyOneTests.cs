@@ -177,7 +177,7 @@ public class Worker
     {
         SetSource(AsyncSource, "Worker.cs");
         var result = await _codeHealingEngine.FixThreadSleepAsync("Worker.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -195,7 +195,7 @@ public class Worker
         const string src = "public class C { void M() { if (true) Console.WriteLine(\"x\"); } }";
         SetSource(src, "C.cs");
         var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -213,7 +213,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -230,7 +230,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _codeStyleEngine.UseIndexFromEndAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -247,7 +247,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -265,7 +265,7 @@ public class Worker
         const string src = "namespace TestProj; public class Point { public int X { get; init; } public int Y { get; init; } }";
         SetSource(src, "Point.cs");
         var result = await _modernizationEngine.ClassToRecordAsync("Point.cs", "Point");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -283,7 +283,7 @@ public class Worker
         const string src = "namespace TestProj; public record Point(int X, int Y);";
         SetSource(src, "Point.cs");
         var result = await _modernizationEngine.RecordToClassAsync("Point.cs", "Point");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -300,7 +300,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _codeStyleEngine.SimplifyVerbosityAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -317,7 +317,7 @@ public class Worker
     {
         SetSource(AsyncSource, "Worker.cs");
         var result = await _codeStyleEngine.FixDangerousLockAsync("Worker.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -334,7 +334,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -351,7 +351,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -368,7 +368,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("Test.cs", "UpdateStatus");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -385,7 +385,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -402,7 +402,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("Test.cs", "OrderService");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -419,7 +419,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -436,7 +436,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _ideStyleEngine.SimplifyMemberAccessAsync("Test.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -454,7 +454,7 @@ public class Worker
         const string src = "namespace TestProj; public class Config { public string Host { get; set; } public int Port { get; set; } }";
         SetSource(src, "Config.cs");
         var result = await _immutabilityEngine.MakeClassImmutableAsync("Config.cs", "Config");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -500,7 +500,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("Test.cs", "ProcessAsync");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -517,7 +517,7 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync("Test.cs", "ProcessAsync");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -542,7 +542,7 @@ public class Service
 }";
         SetSource(src, "Service.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("Service.cs", "Service");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -578,7 +578,7 @@ public class Validator
 }";
         SetSource(src, "Validator.cs");
         var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("Validator.cs", "Check");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

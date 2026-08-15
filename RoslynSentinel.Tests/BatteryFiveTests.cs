@@ -106,8 +106,8 @@ public class C
         var result = await _engine.UseSwitchExpressionAsync("Test.cs");
 
         // Stub returns root.ToFullString() — non-empty and contains source identifiers
-        Assert.That(result, Is.Not.Empty);
-        Assert.That(result, Does.Contain("GetLabel"), "Returned source should contain method name");
+        Assert.That(result.UpdatedText, Is.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Contain("GetLabel"), "Returned source should contain method name");
     }
 }
 
@@ -520,10 +520,10 @@ public class OrderService
 }");
         var result = await _engine.AddTryCatchToMethodAsync("Test.cs", "SubmitOrder");
 
-        Assert.That(result, Does.Contain("try"), "Output should contain try block");
-        Assert.That(result, Does.Contain("catch"), "Output should contain catch block");
-        Assert.That(result, Does.Contain("Exception"), "Catch should use Exception type by default");
-        Assert.That(result, Does.Contain("SubmitOrder"), "Method name should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("try"), "Output should contain try block");
+        Assert.That(result.UpdatedText, Does.Contain("catch"), "Output should contain catch block");
+        Assert.That(result.UpdatedText, Does.Contain("Exception"), "Catch should use Exception type by default");
+        Assert.That(result.UpdatedText, Does.Contain("SubmitOrder"), "Method name should be preserved");
     }
 
     [Test]
@@ -540,8 +540,8 @@ public class FileProcessor
         var result = await _engine.AddTryCatchToMethodAsync("Test.cs", "ProcessFile",
             exceptionType: "IOException", addFinally: true);
 
-        Assert.That(result, Does.Contain("IOException"), "Should use custom exception type");
-        Assert.That(result, Does.Contain("finally"), "Should include finally block when requested");
+        Assert.That(result.UpdatedText, Does.Contain("IOException"), "Should use custom exception type");
+        Assert.That(result.UpdatedText, Does.Contain("finally"), "Should include finally block when requested");
     }
 
     [Test]
@@ -560,7 +560,7 @@ public class UserService
         // Count 'try' occurrences — should be 2 (CreateUser + DeleteUser), not 3
         var tryCount = CountOccurrences(result.UpdatedText!, "try");
         Assert.That(tryCount, Is.EqualTo(2), "Should wrap exactly 2 public methods");
-        Assert.That(result, Does.Contain("AuditLog"), "Private method should still appear but without wrapping");
+        Assert.That(result.UpdatedText, Does.Contain("AuditLog"), "Private method should still appear but without wrapping");
     }
 
     [Test]
@@ -576,11 +576,11 @@ public class MetricsService
 }");
         var result = await _engine.AddStopwatchDiagnosticsAsync("Test.cs", "RunQuery");
 
-        Assert.That(result, Does.Contain("Stopwatch"), "Should inject Stopwatch");
-        Assert.That(result, Does.Contain("StartNew"), "Should start a new stopwatch");
-        Assert.That(result, Does.Contain("finally"), "Should use finally block for guaranteed logging");
-        Assert.That(result, Does.Contain("ElapsedMilliseconds"), "Should log elapsed time");
-        Assert.That(result, Does.Contain("System.Diagnostics"), "Should add using directive for Diagnostics");
+        Assert.That(result.UpdatedText, Does.Contain("Stopwatch"), "Should inject Stopwatch");
+        Assert.That(result.UpdatedText, Does.Contain("StartNew"), "Should start a new stopwatch");
+        Assert.That(result.UpdatedText, Does.Contain("finally"), "Should use finally block for guaranteed logging");
+        Assert.That(result.UpdatedText, Does.Contain("ElapsedMilliseconds"), "Should log elapsed time");
+        Assert.That(result.UpdatedText, Does.Contain("System.Diagnostics"), "Should add using directive for Diagnostics");
     }
 
     [Test]

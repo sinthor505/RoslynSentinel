@@ -206,7 +206,7 @@ public class C {
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }", "C.cs");
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("C.cs", libraryMode: true);
-        Assert.That(result, Does.Contain("ConfigureAwait(false)"));
+        Assert.That(result.UpdatedText, Does.Contain("ConfigureAwait(false)"));
     }
 
     [Test]
@@ -215,7 +215,7 @@ public class C {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100).ConfigureAwait(false); } }", "C.cs");
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("C.cs", libraryMode: true);
         // Should still only have one ConfigureAwait, not double-wrapped
-        Assert.That(result, Does.Contain("ConfigureAwait(false)"));
+        Assert.That(result.UpdatedText, Does.Contain("ConfigureAwait(false)"));
         Assert.That(result.UpdatedText!.IndexOf("ConfigureAwait", StringComparison.Ordinal),
             Is.EqualTo(result.UpdatedText!.LastIndexOf("ConfigureAwait", StringComparison.Ordinal)));
     }
@@ -225,7 +225,7 @@ public class C {
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }", "C.cs");
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("C.cs", libraryMode: false);
-        Assert.That(result, Does.Contain("ConfigureAwait(true)"));
+        Assert.That(result.UpdatedText, Does.Contain("ConfigureAwait(true)"));
     }
 
     // --- RemoveConfigureAwaitFalse ---
@@ -235,8 +235,8 @@ public class C {
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100).ConfigureAwait(false); } }", "C.cs");
         var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("C.cs");
-        Assert.That(result, Does.Not.Contain("ConfigureAwait"));
-        Assert.That(result, Does.Contain("Task.Delay(100)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("ConfigureAwait"));
+        Assert.That(result.UpdatedText, Does.Contain("Task.Delay(100)"));
     }
 
     [Test]
@@ -245,8 +245,8 @@ public class C {
         const string source = "public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }";
         SetSource(source, "C.cs");
         var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("C.cs");
-        Assert.That(result, Does.Not.Contain("ConfigureAwait"));
-        Assert.That(result, Does.Contain("Task.Delay(100)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("ConfigureAwait"));
+        Assert.That(result.UpdatedText, Does.Contain("Task.Delay(100)"));
     }
 
     // --- ConvertLockToSemaphoreSlim ---
@@ -261,10 +261,10 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("C.cs", "DoWork");
-        Assert.That(result, Does.Contain("SemaphoreSlim"));
-        Assert.That(result, Does.Contain("WaitAsync"));
-        Assert.That(result, Does.Contain("finally"));
-        Assert.That(result, Does.Contain("Release"));
+        Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"));
+        Assert.That(result.UpdatedText, Does.Contain("WaitAsync"));
+        Assert.That(result.UpdatedText, Does.Contain("finally"));
+        Assert.That(result.UpdatedText, Does.Contain("Release"));
     }
 
     [Test]
@@ -277,8 +277,8 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("C.cs", "DoWork");
-        Assert.That(result, Does.Contain("async"));
-        Assert.That(result, Does.Contain("Task"));
+        Assert.That(result.UpdatedText, Does.Contain("async"));
+        Assert.That(result.UpdatedText, Does.Contain("Task"));
     }
 
     // --- ConvertToAsyncEnumerable ---
@@ -299,8 +299,8 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("C.cs", "GetNames");
-        Assert.That(result, Does.Contain("IAsyncEnumerable"));
-        Assert.That(result, Does.Contain("yield return"));
+        Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"));
+        Assert.That(result.UpdatedText, Does.Contain("yield return"));
     }
 
     [Test]
@@ -313,7 +313,7 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("C.cs", "GetNames");
-        Assert.That(result, Does.Contain("IAsyncEnumerable"));
-        Assert.That(result, Does.Not.Contain("Task<"));
+        Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Task<"));
     }
 }

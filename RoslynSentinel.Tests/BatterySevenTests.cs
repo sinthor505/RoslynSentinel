@@ -50,9 +50,9 @@ public class Counter
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "GetCount");
 
         // Method becomes an expression-bodied property — no parameter list
-        Assert.That(result, Does.Contain("GetCount"), "Property name should be preserved");
-        Assert.That(result, Does.Contain("=>"), "Should produce expression-bodied property");
-        Assert.That(result, Does.Not.Contain("GetCount()"), "Should not have method parameter parens");
+        Assert.That(result.UpdatedText, Does.Contain("GetCount"), "Property name should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("=>"), "Should produce expression-bodied property");
+        Assert.That(result.UpdatedText, Does.Not.Contain("GetCount()"), "Should not have method parameter parens");
     }
 
     [Test]
@@ -68,7 +68,7 @@ public class Calculator
         var result = await _engine.ConvertMethodToPropertyAsync("Test.cs", "Add");
 
         // Methods with parameters cannot be converted — source returned unchanged
-        Assert.That(result, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
+        Assert.That(result.UpdatedText, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
         Assert.That(result, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
     }
 
@@ -82,8 +82,8 @@ public class MathHelper
 }");
         var result = await _engine.MakeMethodStaticAsync("Test.cs", "Multiply");
 
-        Assert.That(result, Does.Contain("static"), "Method with no instance access should receive static keyword");
-        Assert.That(result, Does.Contain("Multiply"), "Method name should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("static"), "Method with no instance access should receive static keyword");
+        Assert.That(result.UpdatedText, Does.Contain("Multiply"), "Method name should be preserved");
     }
 
     [Test]
@@ -94,7 +94,7 @@ public class MathHelper
 
         var result = await _engine.InvertBooleanAsync("Test.cs", "IsEnabled");
 
-        Assert.That(result, Is.Empty, "InvertBoolean stub should return empty string");
+        Assert.That(result.UpdatedText, Is.Empty, "InvertBoolean stub should return empty string");
     }
 }
 

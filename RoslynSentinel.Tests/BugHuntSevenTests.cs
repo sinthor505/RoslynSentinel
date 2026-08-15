@@ -529,10 +529,10 @@ namespace RoslynSentinel.Tests
             var result = await _engine.ConvertLockToSemaphoreSlimAsync("Worker.cs", "Process");
 
             // The overload Process(string label) should NOT become async.
-            Assert.That(result, Does.Not.Contain("async Task Process(string label)"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("async Task Process(string label)"),
                 "The overload that has no lock should NOT be made async.");
             // The original Process() SHOULD be async.
-            Assert.That(result, Does.Contain("async Task Process()"),
+            Assert.That(result.UpdatedText, Does.Contain("async Task Process()"),
                 "The method that has the lock SHOULD be made async.");
         }
 
@@ -557,11 +557,11 @@ namespace RoslynSentinel.Tests
 
             var result = await _engine.ConvertLockToSemaphoreSlimAsync("Counter.cs", "Increment");
 
-            Assert.That(result, Does.Contain("SemaphoreSlim"),
+            Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"),
                 "Conversion must introduce a SemaphoreSlim field.");
-            Assert.That(result, Does.Contain("WaitAsync"),
+            Assert.That(result.UpdatedText, Does.Contain("WaitAsync"),
                 "Conversion must replace lock with WaitAsync.");
-            Assert.That(result, Does.Not.Contain("lock ("),
+            Assert.That(result.UpdatedText, Does.Not.Contain("lock ("),
                 "The original lock statement must be removed.");
         }
 
@@ -581,9 +581,9 @@ namespace RoslynSentinel.Tests
 
             var result = await _engine.ConvertLockToSemaphoreSlimAsync("Service.cs", "Process");
 
-            Assert.That(result, Does.Not.Contain("SemaphoreSlim"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("SemaphoreSlim"),
                 "Method with no lock should not have SemaphoreSlim added.");
-            Assert.That(result, Does.Not.Contain("WaitAsync"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("WaitAsync"),
                 "Method with no lock should not have WaitAsync added.");
         }
     }

@@ -35,9 +35,9 @@ public class CodeStyleEngineTests
 
         var result = await _engine.ConvertPropertyToMethodsAsync("Entity.cs", "Name");
 
-        Assert.That(result, Does.Contain("GetName"), "Should generate GetName() method");
-        Assert.That(result, Does.Contain("SetName"), "Should generate SetName(value) method");
-        Assert.That(result, Does.Contain("_name"), "Should generate a backing field");
+        Assert.That(result.UpdatedText, Does.Contain("GetName"), "Should generate GetName() method");
+        Assert.That(result.UpdatedText, Does.Contain("SetName"), "Should generate SetName(value) method");
+        Assert.That(result.UpdatedText, Does.Contain("_name"), "Should generate a backing field");
     }
 
     [Test]
@@ -49,7 +49,7 @@ public class CodeStyleEngineTests
 
         var result = await _engine.ConvertPropertyToMethodsAsync("DoesNotExist.cs", "Name");
 
-        Assert.That(result, Is.Empty, "Unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Empty, "Unknown file should return empty string");
     }
 
     [Test]
@@ -62,7 +62,7 @@ public class CodeStyleEngineTests
         var result = await _engine.ConvertPropertyToMethodsAsync("IService.cs", "Name");
 
         // The engine returns an error comment when property is not in a class (e.g. interface)
-        Assert.That(result, Does.Contain("// ERROR:"), "Property in interface should return error comment");
+        Assert.That(result.UpdatedText, Does.Contain("// ERROR:"), "Property in interface should return error comment");
     }
 }
 
@@ -94,8 +94,8 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.AddBracesAsync("Code.cs");
 
-        Assert.That(result, Does.Contain("{"), "Braces should be added around if body");
-        Assert.That(result, Does.Contain("System.Console.WriteLine"), "Original statement should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("{"), "Braces should be added around if body");
+        Assert.That(result.UpdatedText, Does.Contain("System.Console.WriteLine"), "Original statement should be preserved");
     }
 
     [Test]
@@ -107,7 +107,7 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.AddBracesAsync("DoesNotExist.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -152,8 +152,8 @@ public class ModernizationEngineTests
 
         var result = await _engine.ClassToRecordAsync("Dto.cs", "Point");
 
-        Assert.That(result, Does.Contain("record"), "class should be converted to record");
-        Assert.That(result, Does.Not.Contain("class Point"), "original class declaration should be gone");
+        Assert.That(result.UpdatedText, Does.Contain("record"), "class should be converted to record");
+        Assert.That(result.UpdatedText, Does.Not.Contain("class Point"), "original class declaration should be gone");
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class ModernizationEngineTests
 
         var result = await _engine.ClassToRecordAsync("Dto.cs", "NoSuchClass");
 
-        Assert.That(result, Does.Contain("class Point"), "Original source should be returned unchanged");
+        Assert.That(result.UpdatedText, Does.Contain("class Point"), "Original source should be returned unchanged");
     }
 }
 
@@ -210,7 +210,7 @@ public class RefactoringEngineTests
 
         var result = await _engine.FormatDocumentAsync("DoesNotExist.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -222,7 +222,7 @@ public class RefactoringEngineTests
 
         var result = await _engine.FormatDocumentAsync("Code.cs");
 
-        Assert.That(result, Is.Not.Empty, "Formatted text should not be empty");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Formatted text should not be empty");
         Assert.That(result, Does.Contain("class C"), "Class declaration should remain");
     }
 

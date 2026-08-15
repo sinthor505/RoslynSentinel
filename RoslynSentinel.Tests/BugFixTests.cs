@@ -217,11 +217,11 @@ public class Greeter : IGreeter
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Greeter.cs", "Greeter", "IGreeter");
 
-        Assert.That(result, Does.Not.Contain("override"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("override"),
             "Interface implementations must NOT use 'override' keyword");
-        Assert.That(result, Does.Contain("public string Greet"),
+        Assert.That(result.UpdatedText, Does.Contain("public string Greet"),
             "Should generate Greet method stub");
-        Assert.That(result, Does.Contain("NotImplementedException"),
+        Assert.That(result.UpdatedText, Does.Contain("NotImplementedException"),
             "Stub body should throw NotImplementedException");
     }
 
@@ -238,7 +238,7 @@ public class Foo : IFoo
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Foo.cs", "Foo", "IFoo");
 
-        Assert.That(result, Does.Contain("already implemented"),
+        Assert.That(result.UpdatedText, Does.Contain("already implemented"),
             "Should report that all members are already implemented");
     }
 
@@ -265,10 +265,10 @@ public class Destination
         var result = await _mappingEngine.GenerateMappingAsync("Models.cs", "Source", "Destination");
 
         Assert.That(result, Is.Not.Null, "Should successfully generate mapping");
-        Assert.That(result, Does.Contain("Destination") & (Does.Contain("Map") | Does.Contain("map")),
+        Assert.That(result.UpdatedText, Does.Contain("Destination") & (Does.Contain("Map") | Does.Contain("map")),
             "Should contain mapping method");
-        Assert.That(result, Does.Contain("Name"), "Should map Name property");
-        Assert.That(result, Does.Contain("Age"), "Should map Age property");
+        Assert.That(result.UpdatedText, Does.Contain("Name"), "Should map Name property");
+        Assert.That(result.UpdatedText, Does.Contain("Age"), "Should map Age property");
     }
 
     // ── Bug 47: OptimizeIndependentAwaits — Overload Disambiguation ──────────────
@@ -298,7 +298,7 @@ public class Processor
         // With var assignments, should use task hoisting pattern: var resultTask = ..., then await
         // The optimization occurs but isn't Task.WhenAll - it's task variable hoisting
         // Both patterns parallelize the execution
-        Assert.That(result, Does.Contain("Task") | Does.Contain("result"),
+        Assert.That(result.UpdatedText, Does.Contain("Task") | Does.Contain("result"),
             "Should optimize by creating task variables or using Task.WhenAll");
     }
 
@@ -373,9 +373,9 @@ public class Processor : IProcessor
 
         Assert.That(result, Is.Not.Null, "Should generate call tree");
         // Should show Processor.Helper(), not IProcessor
-        Assert.That(result, Does.Contain("Processor") | Does.Contain("Helper"),
+        Assert.That(result.UpdatedText, Does.Contain("Processor") | Does.Contain("Helper"),
             "Should show concrete implementation type");
-        Assert.That(result, Does.Not.Contain("IProcessor.Helper"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("IProcessor.Helper"),
             "Should not show interface in call chain");
     }
 
@@ -401,7 +401,7 @@ public class Logger
 
         Assert.That(result, Is.Not.Null, "Should return updated content");
         // Constructor should be updated with TimeProvider
-        Assert.That(result, Does.Contain("TimeProvider") | Does.Contain("_timeProvider"),
+        Assert.That(result.UpdatedText, Does.Contain("TimeProvider") | Does.Contain("_timeProvider"),
             "Should add TimeProvider to constructor or use _timeProvider");
     }
 
@@ -427,11 +427,11 @@ public class User { }";
 
         Assert.That(result, Is.Not.Null, "Should return updated content");
         // Should have guard for string
-        Assert.That(result, Does.Contain("ThrowIfNullOrEmpty(email)") |
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNullOrEmpty(email)") |
                    Does.Contain("ThrowIfNull(email)"),
             "Should add guard clause for string parameter");
         // And for object
-        Assert.That(result, Does.Contain("ThrowIfNull(user)"),
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull(user)"),
             "Should add guard clause for object parameter");
     }
 
@@ -455,11 +455,11 @@ public class Calculator
 
         Assert.That(result, Is.Not.Null, "Should return updated content");
         // Should generate documentation
-        Assert.That(result, Does.Contain("/// <summary>") | Does.Contain("<summary>"),
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>") | Does.Contain("<summary>"),
             "Should generate summary documentation");
-        Assert.That(result, Does.Contain("/// <param name=\"a\"") | Does.Contain("<param name=\"a\""),
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"a\"") | Does.Contain("<param name=\"a\""),
             "Should generate param documentation for parameter a");
-        Assert.That(result, Does.Contain("/// <param name=\"b\"") | Does.Contain("<param name=\"b\""),
+        Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"b\"") | Does.Contain("<param name=\"b\""),
             "Should generate param documentation for parameter b");
     }
 
@@ -511,7 +511,7 @@ public class Logger
             "string value, int count",
             lineBefore: "private const string Format");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return interpolated string result");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return interpolated string result");
         // Either should contain interpolated result or return the code as-is
         Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return a result");
     }
@@ -571,10 +571,10 @@ public class Data : IData
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Data.cs", "Data", "IData");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return implementation");
-        Assert.That(result, Does.Contain("Name"),
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
+        Assert.That(result.UpdatedText, Does.Contain("Name"),
             "Should generate Name property stub");
-        Assert.That(result, Does.Contain("Count"),
+        Assert.That(result.UpdatedText, Does.Contain("Count"),
             "Should generate Count property stub");
     }
 
@@ -598,10 +598,10 @@ public class Service : IService
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Service.cs", "Service", "IService");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return implementation");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
         // Should contain at least Method2 and Method3
-        Assert.That(result, Does.Contain("Method2"), "Should generate missing Method2");
-        Assert.That(result, Does.Contain("Method3"), "Should generate missing Method3");
+        Assert.That(result.UpdatedText, Does.Contain("Method2"), "Should generate missing Method2");
+        Assert.That(result.UpdatedText, Does.Contain("Method3"), "Should generate missing Method3");
     }
 
     [Test]
@@ -698,8 +698,8 @@ public class Base
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Base.cs", "Name", "ToFullProperty");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return converted property");
-        Assert.That(result, Does.Contain("virtual"),
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return converted property");
+        Assert.That(result.UpdatedText, Does.Contain("virtual"),
             "Virtual modifier should be preserved in property conversion");
     }
 
@@ -723,8 +723,8 @@ public class Derived : Base
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Properties.cs", "Value", "ToFullProperty");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should convert property");
-        Assert.That(result, Does.Contain("Value"),
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should convert property");
+        Assert.That(result.UpdatedText, Does.Contain("Value"),
             "Should handle property with same name in multiple classes");
     }
 
@@ -748,7 +748,7 @@ public class Calculator
 
         var result = await _analysisEngine.GenerateCallTreeAsync("Calculator.cs", "Test", depth: 2);
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return call tree");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return call tree");
     }
 
     [Test]
@@ -1053,9 +1053,9 @@ public class Product
 }";
             SetSource(src, "Product.cs");
             var result = await _analysisEngine.GenerateEqualityOverridesAsync("Product.cs", "Product");
-            Assert.That(result, Does.Contain("SequenceEqual"),
+            Assert.That(result.UpdatedText, Does.Contain("SequenceEqual"),
                 "List<T> property should use Enumerable.SequenceEqual for value-based comparison");
-            Assert.That(result, Does.Not.Contain("Tags == other.Tags"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("Tags == other.Tags"),
                 "List<T> should NOT use reference equality (==)");
         }
 
@@ -1066,7 +1066,7 @@ public class Product
             SetSource(src, "Point.cs");
             var result = await _analysisEngine.GenerateEqualityOverridesAsync("Point.cs", "Point");
             // Scalar int properties use == which is fine
-            Assert.That(result, Does.Contain("X == other.X"),
+            Assert.That(result.UpdatedText, Does.Contain("X == other.X"),
                 "Scalar int property should use == equality");
         }
     }
@@ -1459,9 +1459,9 @@ public class Startup
             SetSource(src, "Service.cs");
             var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Service.cs");
             // Should NOT return the full file when nothing changed
-            Assert.That(result, Does.Not.Contain("public class Service"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("public class Service"),
                 "Should not return full file when no guard patterns are found");
-            Assert.That(result, Does.Contain("No"),
+            Assert.That(result.UpdatedText, Does.Contain("No"),
                 "Should return a no-op indicator message instead of full file content");
         }
 
@@ -1479,9 +1479,9 @@ public class Startup
             SetSource(src, "Service.cs");
             var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Service.cs");
             // Should return modified content with ThrowIfNull
-            Assert.That(result, Does.Contain("ThrowIfNull"),
+            Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"),
                 "Should upgrade null check to ArgumentNullException.ThrowIfNull");
-            Assert.That(result, Does.Contain("public class Service"),
+            Assert.That(result.UpdatedText, Does.Contain("public class Service"),
                 "Should return the full modified file when changes are made");
         }
 
@@ -1572,10 +1572,10 @@ public class Startup
                 newVariableName: "orderId");
 
             // Should NOT produce duplicate var orderId = orderId;
-            Assert.That(result, Does.Not.Contain("var orderId = orderId"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("var orderId = orderId"),
                 "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
-            Assert.That(result, Does.Contain("already"),
+            Assert.That(result.UpdatedText, Does.Contain("already"),
                 "Should indicate the variable is already introduced");
         }
 
@@ -1595,9 +1595,9 @@ public class Startup
                 contextSnippet: "a + b",
                 newVariableName: "sum");
 
-            Assert.That(result, Does.Contain("var sum = a + b"),
+            Assert.That(result.UpdatedText, Does.Contain("var sum = a + b"),
                 "Should extract sub-expression to new var");
-            Assert.That(result, Does.Contain("sum * c"),
+            Assert.That(result.UpdatedText, Does.Contain("sum * c"),
                 "Original expression should be replaced with the new variable reference");
         }
 
@@ -1621,11 +1621,11 @@ public class TargetDto
             SetSource(src, "Dtos.cs");
             var result = await _mappingEngine.GenerateMappingAsync("Dtos.cs", "SourceDto", "TargetDto");
 
-            Assert.That(result, Does.Contain("MapSourceDtoToTargetDto"),
+            Assert.That(result.UpdatedText, Does.Contain("MapSourceDtoToTargetDto"),
                 "Should generate mapping method with correct name");
-            Assert.That(result, Does.Contain("dest.Name = source.Name"),
+            Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"),
                 "Should map Name property");
-            Assert.That(result, Does.Contain("dest.Age = source.Age"),
+            Assert.That(result.UpdatedText, Does.Contain("dest.Age = source.Age"),
                 "Should map Age property");
         }
 
@@ -1636,7 +1636,7 @@ public class TargetDto
             SetSource(src, "Foo.cs");
             var result = await _mappingEngine.GenerateMappingAsync("Foo.cs", "Foo", "NonExistentType");
 
-            Assert.That(result, Does.Contain("//").Or.Contain("Error").Or.Contain("Could not"),
+            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("Could not"),
                 "Should return helpful message when type not found, not throw exception");
             Assert.That(result, Does.Not.Contain("System.Exception"),
                 "Must not surface a raw exception to the caller");
@@ -1657,7 +1657,7 @@ public class TargetDto
             SetSource(src, "MyService.cs");
             var result = await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
 
-            Assert.That(result, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
+            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
                 "Should return a message when method not found, not throw an exception");
         }
 
@@ -1677,7 +1677,7 @@ public class TargetDto
             SetSource(src, "ReportService.cs");
             var result = await _asyncEngine.OptimizeIndependentAwaitsAsync("ReportService.cs", "GenerateAsync");
 
-            Assert.That(result, Does.Contain("Task.WhenAll"),
+            Assert.That(result.UpdatedText, Does.Contain("Task.WhenAll"),
                 "Should batch 3 independent sequential awaits into Task.WhenAll");
         }
 
@@ -1693,7 +1693,7 @@ public class TargetDto
             SetSource(src, "Loader.cs");
             var result = await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
 
-            Assert.That(result, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
+            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
                 "Should return a message when method not found, not throw an exception");
         }
 
@@ -1712,9 +1712,9 @@ public class TargetDto
             var result = await _asyncEngine.AddCancellationTokenToMethodAsync("DataService.cs", "FetchAsync");
 
             // Should contain "CancellationToken cancellationToken" but not "CancellationToken " (trailing space)
-            Assert.That(result, Does.Contain("CancellationToken cancellationToken"),
+            Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"),
                 "Should add CancellationToken parameter");
-            Assert.That(result, Does.Not.Contain("CancellationToken  "),
+            Assert.That(result.UpdatedText, Does.Not.Contain("CancellationToken  "),
                 "Should not have double space (trailing space in type name)");
         }
 
@@ -1734,18 +1734,18 @@ public class TargetDto
             var engine = new ApiIntegrationEngine(_workspaceManager);
             var result = await engine.AddValidationToPocoAsync("User.cs", "User");
 
-            Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return non-empty result");
+            Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty result");
             // Should have using
-            Assert.That(result, Does.Contain("using System.ComponentModel.DataAnnotations"),
+            Assert.That(result.UpdatedText, Does.Contain("using System.ComponentModel.DataAnnotations"),
                 "Should add using directive");
             // Should have actual [Required] attributes
-            Assert.That(result, Does.Contain("[Required]"),
+            Assert.That(result.UpdatedText, Does.Contain("[Required]"),
                 "Should add [Required] attributes");
             // Should have [StringLength] for string properties
-            Assert.That(result, Does.Contain("[StringLength"),
+            Assert.That(result.UpdatedText, Does.Contain("[StringLength"),
                 "Should add [StringLength] attributes for string properties");
             // Should have [Range] for numeric properties
-            Assert.That(result, Does.Contain("[Range"),
+            Assert.That(result.UpdatedText, Does.Contain("[Range"),
                 "Should add [Range] attributes for numeric properties");
         }
 
@@ -1762,9 +1762,9 @@ public class TargetDto
             var result = await engine.AddValidationToPocoAsync("Product.cs", "Product");
 
             // String property should get [Required] and [StringLength]
-            Assert.That(result, Does.Contain("[Required]"),
+            Assert.That(result.UpdatedText, Does.Contain("[Required]"),
                 "String property should have [Required]");
-            Assert.That(result, Does.Contain("[StringLength(256)"),
+            Assert.That(result.UpdatedText, Does.Contain("[StringLength(256)"),
                 "String property should have [StringLength(256)]");
         }
 
@@ -1781,7 +1781,7 @@ public class TargetDto
             var result = await engine.AddValidationToPocoAsync("Widget.cs", "Widget");
 
             // Int property should get [Range]
-            Assert.That(result, Does.Contain("[Range(0, 2147483647)"),
+            Assert.That(result.UpdatedText, Does.Contain("[Range(0, 2147483647)"),
                 "Int property should have [Range(0, int.MaxValue)]");
         }
 
@@ -1805,7 +1805,7 @@ public class TargetDto
             var result = await engine.InlineFieldAsync("Service.cs", "_config");
 
             // Should error or explain why inlining failed
-            Assert.That(result, Does.Contain("ERROR"),
+            Assert.That(result.UpdatedText, Does.Contain("ERROR"),
                 "Should return error message when field has no initializer");
             Assert.That(result, Does.Contain("Cannot inline"),
                 "Should explain the inlining cannot proceed");
@@ -1829,11 +1829,11 @@ public class TargetDto
             var result = await engine.InlineFieldAsync("Service.cs", "_config");
 
             // Should successfully inline (replace field reference with its value)
-            Assert.That(result, Does.Not.Contain("ERROR"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("ERROR"),
                 "Should not error when field has initializer");
-            Assert.That(result, Does.Not.Contain("private string _config"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("private string _config"),
                 "Should remove field declaration after inlining");
-            Assert.That(result, Does.Contain("\"default\""),
+            Assert.That(result.UpdatedText, Does.Contain("\"default\""),
                 "Should inline the field value");
         }
 
@@ -1846,7 +1846,7 @@ public class TargetDto
             var engine = new GranularRefactoringEngine(_workspaceManager);
             var result = await engine.InlineFieldAsync("Service.cs", "NonExistentField");
 
-            Assert.That(result, Does.Contain("ERROR"),
+            Assert.That(result.UpdatedText, Does.Contain("ERROR"),
                 "Should return error when field not found");
             Assert.That(result, Does.Contain("not found"),
                 "Should explain that field was not found");
@@ -2163,7 +2163,7 @@ public class Item { public int Id { get; set; } }";
             // 1. Not include initializer (since parameter is out of scope)
             // 2. Return error
             // NOT: "private SomeType _field = item;" (uncompilable)
-            Assert.That(result, Does.Not.Contain("_itemId = item.Id;"),
+            Assert.That(result.UpdatedText, Does.Not.Contain("_itemId = item.Id;"),
                 "Should not create initializer with parameter reference");
         }
 
@@ -2296,8 +2296,8 @@ public class Processor
                 var result = await _codeFlowEngine.ReduceBlockDepthAsync(document.FilePath!, "Process");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result, Does.Not.Contain("// Error"), "Should not return error");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                Assert.That(result.UpdatedText, Does.Not.Contain("// Error"), "Should not return error");
             }
         }
 
@@ -2351,9 +2351,9 @@ public class Counter
                 var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document.FilePath!, "Increment");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result, Does.Contain("lock"), "Should contain lock statement");
-                Assert.That(result, Does.Contain("_lock"), "Should contain lock field");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                Assert.That(result.UpdatedText, Does.Contain("lock"), "Should contain lock statement");
+                Assert.That(result.UpdatedText, Does.Contain("_lock"), "Should contain lock field");
             }
         }
 
@@ -2412,8 +2412,8 @@ public class ItemProvider
                 var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document.FilePath!, "GetItemsAsync");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
-                Assert.That(result, Does.Contain("IAsyncEnumerable"), "Should contain IAsyncEnumerable");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
+                Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"), "Should contain IAsyncEnumerable");
             }
         }
 
@@ -2628,7 +2628,7 @@ public class Calculator
                 var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                 // Should either succeed or return unchanged code, but not crash
             }
 
@@ -2654,7 +2654,7 @@ public class Processor
                 var result = await _granularEngine.IntroduceParameterAsync(document.FilePath!, "input", "text");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
                 // Should either succeed or return unchanged code, but not crash
             }
         }
@@ -2923,7 +2923,7 @@ public class DataService : IDataService
             // Both interface and implementation should be updated or error gracefully
             Assert.That(result, Is.Not.Null, "Should return a result");
             // Verify it contains ValueTask (not Task) in the implementation
-            Assert.That(result, Does.Contain("ValueTask<string>"),
+            Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"),
                 "Result should contain ValueTask<string>");
         }
 
@@ -2981,7 +2981,7 @@ public class Processor2 : IProcessor
             // All implementations should be updated
             var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
             // Verify that the code includes the interface and implementations
-            Assert.That(result, Does.Contain("IProcessor"), "Should contain interface");
+            Assert.That(result.UpdatedText, Does.Contain("IProcessor"), "Should contain interface");
         }
 
         // ── Bug 60: RemoveMember — Doesn't Check for Usages ───────────────────────
@@ -3009,7 +3009,7 @@ public class Helper
             if (!result!.UpdatedText!.Contains("error") && !result.UpdatedText!.Contains("Error"))
             {
                 // If not an error, GetName should still be in the output
-                Assert.That(result, Does.Contain("GetName"),
+                Assert.That(result.UpdatedText, Does.Contain("GetName"),
                     "If removal succeeds, should indicate that member is used");
             }
         }
@@ -3085,9 +3085,9 @@ public class ThreadSafeCounter
             var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("ThreadSafeCounter.cs", "Increment");
 
             Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result, Does.Contain("SemaphoreSlim"),
+            Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"),
                 "Result should contain SemaphoreSlim field");
-            Assert.That(result, Does.Contain("WaitAsync"),
+            Assert.That(result.UpdatedText, Does.Contain("WaitAsync"),
                 "Result should use WaitAsync instead of lock");
         }
 
@@ -3141,12 +3141,12 @@ public class Processor
             var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Processor.cs", "Process");
 
             Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result, Does.Contain("ProcessAsync"),
+            Assert.That(result.UpdatedText, Does.Contain("ProcessAsync"),
                 "Should generate async overload with Async suffix");
-            Assert.That(result, Does.Contain("Task<string>"),
+            Assert.That(result.UpdatedText, Does.Contain("Task<string>"),
                 "Signature must convert return type to Task<T>");
             // Verify it compiles by checking basic syntax
-            Assert.That(result, Does.Contain("public async"),
+            Assert.That(result.UpdatedText, Does.Contain("public async"),
                 "Should be declared as async");
         }
     }
@@ -3214,11 +3214,11 @@ public class MyClass
                 contextSnippet: "this.Value",
                 newFieldName: "_storedValue");
 
-            Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return updated code");
+            Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return updated code");
             // Field should be initialized with the value, not a parameter
-            Assert.That(result, Does.Contain("private readonly"),
+            Assert.That(result.UpdatedText, Does.Contain("private readonly"),
                 "Should create a field with appropriate scope");
-            Assert.That(result, Does.Contain("_storedValue"),
+            Assert.That(result.UpdatedText, Does.Contain("_storedValue"),
                 "Should reference the new field");
         }
 
@@ -3718,7 +3718,7 @@ public class AddGuardClausesNullReturnRegressionTests
     {
         var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine should return empty for a file not in the workspace (tool layer converts to exception)");
     }
 
@@ -3727,7 +3727,7 @@ public class AddGuardClausesNullReturnRegressionTests
     {
         var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
@@ -3797,7 +3797,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
     {
         var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine should return empty for a file not in the workspace");
     }
 
@@ -3806,7 +3806,7 @@ public class AddBenchmarkStubNullReturnRegressionTests
     {
         var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
@@ -3881,7 +3881,7 @@ public class AddBracesNullReturnRegressionTests
     {
         var result = await _engine.AddBracesAsync("nonexistent.cs");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine should return empty for a file not in the workspace");
     }
 
@@ -3890,7 +3890,7 @@ public class AddBracesNullReturnRegressionTests
     {
         var result = await _engine.AddBracesAsync("nonexistent.cs");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
@@ -3899,7 +3899,7 @@ public class AddBracesNullReturnRegressionTests
     {
         var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine should return empty for a file not in the workspace");
     }
 
@@ -3908,7 +3908,7 @@ public class AddBracesNullReturnRegressionTests
     {
         var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 }
@@ -3961,7 +3961,7 @@ public class MakeClassImmutableNullReturnRegressionTests
     {
         var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine should return empty for a file not in the workspace");
     }
 
@@ -3970,7 +3970,7 @@ public class MakeClassImmutableNullReturnRegressionTests
     {
         var result = await _engine.MakeClassImmutableAsync("nonexistent.cs", "MyClass");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
     }
 
@@ -4103,7 +4103,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
         // passing ConvertExpressionBody_Tool test).
         var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty string when file is not in the workspace");
     }
 
@@ -4112,7 +4112,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     {
         var result = await _engine.ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
 
-        Assert.That(result, Is.Null.Or.Empty,
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty,
             "Engine returns empty string when file is not in the workspace");
     }
 }

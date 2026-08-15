@@ -53,9 +53,9 @@ public class B02extra_Immutability_ReadonlySpacing
 
         var result = await _engine.MakeClassImmutableAsync("Config.cs", "Config");
 
-        Assert.That(result, Does.Contain("readonly int"),
+        Assert.That(result.UpdatedText, Does.Contain("readonly int"),
             "readonly modifier for 'int' field must be separated by a space: 'readonly int', not 'readonlyint'.");
-        Assert.That(result, Does.Not.Contain("readonlyint"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"),
             "There must be no fused 'readonlyint' token.");
     }
 
@@ -75,7 +75,7 @@ public class B02extra_Immutability_ReadonlySpacing
 
         var result = await _engine.MakeClassImmutableAsync("Greeter.cs", "Greeter");
 
-        Assert.That(result, Does.Contain("readonly string"),
+        Assert.That(result.UpdatedText, Does.Contain("readonly string"),
             "readonly modifier for 'string' field must emit 'readonly string' not 'readonlystring'.");
     }
 
@@ -96,7 +96,7 @@ public class B02extra_Immutability_ReadonlySpacing
 
         var result = await _engine.MakeClassImmutableAsync("Box.cs", "Box");
 
-        Assert.That(result, Does.Not.Contain("readonlyint"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"),
             "No field should produce 'readonlyint' — all must have space.");
         var readonlyCount = result.UpdatedText!.Split("readonly int").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(2),
@@ -138,7 +138,7 @@ public class B02extra_Immutability_ReadonlySpacing
 
         var result = await _engine.MakeClassImmutableAsync("Registry.cs", "Registry");
 
-        Assert.That(result, Does.Contain("readonly int"),
+        Assert.That(result.UpdatedText, Does.Contain("readonly int"),
             "Static field made readonly must still have space between 'readonly' and 'int'.");
     }
 }

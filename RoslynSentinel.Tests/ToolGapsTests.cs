@@ -58,8 +58,8 @@ public class ToolGapsTests
             "public class C { public void DoWork() { int x = 1; } }",
             "C.cs");
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_myLock");
-        Assert.That(result, Does.Contain("_myLock"));
-        Assert.That(result, Does.Not.Contain("_lock"));
+        Assert.That(result.UpdatedText, Does.Contain("_myLock"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_lock"));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class ToolGapsTests
             "public class C { public void DoWork() { int x = 1; } }",
             "C.cs");
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork");
-        Assert.That(result, Does.Contain("_lock"));
+        Assert.That(result.UpdatedText, Does.Contain("_lock"));
     }
 
     [Test]
@@ -394,8 +394,8 @@ public class C {
     }
 }", "C.cs");
         var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("C.cs", "M");
-        Assert.That(result, Does.Contain("ThrowIfNull"));
-        Assert.That(result, Does.Not.Contain("new ArgumentNullException"));
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("new ArgumentNullException"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -411,7 +411,7 @@ public class C {
     public void M(string name) {}
 }", "C.cs");
         var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("C.cs", "M");
-        Assert.That(result, Does.Contain("<param name=\"name\""));
+        Assert.That(result.UpdatedText, Does.Contain("<param name=\"name\""));
     }
 
     [Test]
@@ -424,8 +424,8 @@ public class C {
     public void M(string name) {}
 }", "C.cs");
         var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("C.cs", "M");
-        Assert.That(result, Does.Not.Contain("oldParam"));
-        Assert.That(result, Does.Contain("name"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("oldParam"));
+        Assert.That(result.UpdatedText, Does.Contain("name"));
     }
 
     [Test]
@@ -436,8 +436,8 @@ public class C {
             "C.cs");
         var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("C.cs", "M");
         // Should now GENERATE XML docs when they're missing (BUG-59 fix)
-        Assert.That(result, Does.Contain("public void M"));
-        Assert.That(result, Does.Contain("<summary>"), "Should generate XML docs when missing");
-        Assert.That(result, Does.Contain("<param name=\"name\">"), "Should generate param tags");
+        Assert.That(result.UpdatedText, Does.Contain("public void M"));
+        Assert.That(result.UpdatedText, Does.Contain("<summary>"), "Should generate XML docs when missing");
+        Assert.That(result.UpdatedText, Does.Contain("<param name=\"name\">"), "Should generate param tags");
     }
 }

@@ -112,7 +112,7 @@ public class Greeter
 
         var result = await _engine.ReplaceStringConcatWithInterpolationAsync("Greeter.cs");
 
-        Assert.That(result, Does.Contain("$\""), "result should use string interpolation syntax");
+        Assert.That(result.UpdatedText, Does.Contain("$\""), "result should use string interpolation syntax");
     }
 
     [Test]
@@ -170,8 +170,8 @@ public abstract class Animal
 
         var result = await _engine.ConvertAbstractClassToInterfaceAsync("Animal.cs", "Animal");
 
-        Assert.That(result, Does.Contain("interface IAnimal"), "abstract class should become an interface");
-        Assert.That(result, Does.Contain("Speak"), "interface should include the abstract method signature");
+        Assert.That(result.UpdatedText, Does.Contain("interface IAnimal"), "abstract class should become an interface");
+        Assert.That(result.UpdatedText, Does.Contain("Speak"), "interface should include the abstract method signature");
     }
 
     [Test]
@@ -190,8 +190,8 @@ public class Widget
 
         var result = await _engine.ReplaceConstructorWithFactoryAsync("Widget.cs", "Widget");
 
-        Assert.That(result, Does.Contain("static"), "factory method should be static");
-        Assert.That(result, Does.Contain("Create"), "factory method should be named Create");
+        Assert.That(result.UpdatedText, Does.Contain("static"), "factory method should be static");
+        Assert.That(result.UpdatedText, Does.Contain("Create"), "factory method should be named Create");
     }
 }
 

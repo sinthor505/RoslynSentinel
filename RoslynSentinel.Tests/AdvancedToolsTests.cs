@@ -109,10 +109,10 @@ public class MyService {
 
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
 
-        Assert.That(result, Does.Contain("MyService(IRepo repo)"));
-        Assert.That(result, Does.Contain("repo.Save()"));
-        Assert.That(result, Does.Not.Contain("private readonly IRepo _repo"));
-        Assert.That(result, Does.Not.Contain("public MyService(IRepo repo)"));
+        Assert.That(result.UpdatedText, Does.Contain("MyService(IRepo repo)"));
+        Assert.That(result.UpdatedText, Does.Contain("repo.Save()"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("private readonly IRepo _repo"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("public MyService(IRepo repo)"));
     }
 
     [Test]
@@ -128,7 +128,7 @@ public class MyService {
 
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
 
-        Assert.That(result, Does.Contain("// Cannot convert"));
+        Assert.That(result.UpdatedText, Does.Contain("// Cannot convert"));
     }
 
     [Test]
@@ -146,9 +146,9 @@ public class MyService {
 
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
 
-        Assert.That(result, Does.Contain("MyService(IRepo repo, ILogger logger)"));
-        Assert.That(result, Does.Not.Contain("_repo"));
-        Assert.That(result, Does.Not.Contain("_logger"));
+        Assert.That(result.UpdatedText, Does.Contain("MyService(IRepo repo, ILogger logger)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_repo"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_logger"));
     }
 
     // ===== Tool 3: AddCancellationTokenToMethod =====
@@ -166,7 +166,7 @@ public class C {
 
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
 
-        Assert.That(result, Does.Contain("CancellationToken cancellationToken"));
+        Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"));
     }
 
     [Test]
@@ -207,9 +207,9 @@ public interface IRepo {
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
 
         // Parameter should be added
-        Assert.That(result, Does.Contain("CancellationToken cancellationToken"));
+        Assert.That(result.UpdatedText, Does.Contain("CancellationToken cancellationToken"));
         // Semantic model finds CT overload on IRepo → should propagate
-        Assert.That(result, Does.Contain("GetAllAsync(cancellationToken)"));
+        Assert.That(result.UpdatedText, Does.Contain("GetAllAsync(cancellationToken)"));
     }
 
     // ===== Tool 4: SyncInterfaceToImplementation =====
@@ -226,8 +226,8 @@ public class Service : IService {
 
         var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
-        Assert.That(result, Does.Contain("void DoB()"));
-        Assert.That(result, Does.Contain("void DoA()"));
+        Assert.That(result.UpdatedText, Does.Contain("void DoB()"));
+        Assert.That(result.UpdatedText, Does.Contain("void DoA()"));
     }
 
     [Test]
@@ -244,8 +244,8 @@ public class Service : IService {
 
         // No new members should have been added — both already present
         // Count occurrences of DoB in interface section
-        Assert.That(result, Does.Not.Contain("// Interface not found"));
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Not.Contain("// Interface not found"));
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -260,8 +260,8 @@ public class Service : IService {
 
         var result = await _refactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
-        Assert.That(result, Does.Contain("Name"));
-        Assert.That(result, Does.Contain("get;"));
+        Assert.That(result.UpdatedText, Does.Contain("Name"));
+        Assert.That(result.UpdatedText, Does.Contain("get;"));
     }
 
     // ===== Tool 5: IntroduceParameterObject =====
@@ -280,9 +280,9 @@ public class C {
 
         var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("C.cs", "CreateUser");
 
-        Assert.That(result, Does.Contain("record CreateUserParameters"));
-        Assert.That(result, Does.Contain("request"));
-        Assert.That(result, Does.Contain("request.Name") | Does.Contain("Name"));
+        Assert.That(result.UpdatedText, Does.Contain("record CreateUserParameters"));
+        Assert.That(result.UpdatedText, Does.Contain("request"));
+        Assert.That(result.UpdatedText, Does.Contain("request.Name") | Does.Contain("Name"));
     }
 
     [Test]
@@ -300,9 +300,9 @@ public class C {
         var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync(
             "C.cs", "CreateUser", "UserNameEmail", new[] { "name", "email" });
 
-        Assert.That(result, Does.Contain("record UserNameEmail"));
+        Assert.That(result.UpdatedText, Does.Contain("record UserNameEmail"));
         // age should remain as a separate parameter
-        Assert.That(result, Does.Contain("int age"));
+        Assert.That(result.UpdatedText, Does.Contain("int age"));
     }
 
     [Test]
@@ -319,8 +319,8 @@ public class C {
         var result = await _granularRefactoringEngine.IntroduceParameterObjectAsync("C.cs", "Process");
 
         // Record should be emitted and params rewritten
-        Assert.That(result, Does.Contain("record ProcessParameters"));
-        Assert.That(result, Does.Contain("ProcessParameters request"));
-        Assert.That(result, Does.Contain("request.Input") | Does.Contain("request.Count"));
+        Assert.That(result.UpdatedText, Does.Contain("record ProcessParameters"));
+        Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"));
+        Assert.That(result.UpdatedText, Does.Contain("request.Input") | Does.Contain("request.Count"));
     }
 }

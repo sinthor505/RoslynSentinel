@@ -430,8 +430,8 @@ public class ThreadSafeLockGotchaTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "Increment");
 
-        Assert.That(result, Does.Contain("lock"), "Method body must be wrapped in a lock statement.");
-        Assert.That(result, Does.Contain("_lock"), "A _lock field must be introduced.");
+        Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body must be wrapped in a lock statement.");
+        Assert.That(result.UpdatedText, Does.Contain("_lock"), "A _lock field must be introduced.");
     }
 
     [Test]
@@ -447,7 +447,7 @@ public class ThreadSafeLockGotchaTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("Worker.cs", "NonExistent");
 
-        Assert.That(result, Does.Contain("Error"),
+        Assert.That(result.UpdatedText, Does.Contain("Error"),
             "Requesting a non-existent method must return an error string, not throw.");
     }
 
@@ -468,7 +468,7 @@ public class ThreadSafeLockGotchaTests
         var result = await _engine.MakeMethodThreadSafeAsync("AlreadyLocked.cs", "DoWork");
 
         Assert.That(result, Is.Not.Null, "Engine must return a non-null result even for an already-locked method.");
-        Assert.That(result, Does.Contain("lock"), "The lock keyword must still be present in the result.");
+        Assert.That(result.UpdatedText, Does.Contain("lock"), "The lock keyword must still be present in the result.");
     }
 
     [Test]
@@ -489,8 +489,8 @@ public class ThreadSafeLockGotchaTests
 
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("Serialized.cs", "Process");
 
-        Assert.That(result, Does.Contain("SemaphoreSlim"), "lock must be replaced with SemaphoreSlim.");
-        Assert.That(result, Does.Contain("WaitAsync"), "Converted method must call WaitAsync.");
+        Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"), "lock must be replaced with SemaphoreSlim.");
+        Assert.That(result.UpdatedText, Does.Contain("WaitAsync"), "Converted method must call WaitAsync.");
     }
 
     [Test]
@@ -508,7 +508,7 @@ public class ThreadSafeLockGotchaTests
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("NoLock.cs", "Process");
 
         Assert.That(result, Is.Not.Null, "Must return the original code, not null, when no lock exists.");
-        Assert.That(result, Does.Contain("NoLockAtAll"), "Original class name must be present in returned code.");
+        Assert.That(result.UpdatedText, Does.Contain("NoLockAtAll"), "Original class name must be present in returned code.");
     }
 
     [Test]
@@ -525,7 +525,7 @@ public class ThreadSafeLockGotchaTests
 
         var result = await _engine.ConvertLockToSemaphoreSlimAsync("Migrated.cs", "Run");
 
-        Assert.That(result, Does.Contain("Release"),
+        Assert.That(result.UpdatedText, Does.Contain("Release"),
             "SemaphoreSlim.Release() must appear in the converted output.");
     }
 }
@@ -805,8 +805,8 @@ public class ImmutabilityGotchaTests
 
         var result = await _engine.MakeClassImmutableAsync("Entity.cs", "Entity");
 
-        Assert.That(result, Does.Contain("init"), "set; accessor must be replaced with init;");
-        Assert.That(result, Does.Not.Contain("set;"), "set; must no longer be present after mutation.");
+        Assert.That(result.UpdatedText, Does.Contain("init"), "set; accessor must be replaced with init;");
+        Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "set; must no longer be present after mutation.");
     }
 
     [Test]
@@ -823,8 +823,8 @@ public class ImmutabilityGotchaTests
         var result = await _engine.MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
 
         Assert.That(result, Is.Not.Null, "Must not return null for an already-immutable class.");
-        Assert.That(result, Does.Contain("init"), "init keyword must still be present.");
-        Assert.That(result, Does.Not.Contain("set;"), "No spurious set; must be introduced.");
+        Assert.That(result.UpdatedText, Does.Contain("init"), "init keyword must still be present.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "No spurious set; must be introduced.");
     }
 
     [Test]
@@ -841,7 +841,7 @@ public class ImmutabilityGotchaTests
 
         var result = await _engine.MakeClassImmutableAsync("Mutable.cs", "MutableFields");
 
-        Assert.That(result, Does.Contain("readonly"), "Public mutable fields must receive the readonly modifier.");
+        Assert.That(result.UpdatedText, Does.Contain("readonly"), "Public mutable fields must receive the readonly modifier.");
     }
 
     [Test]
@@ -857,7 +857,7 @@ public class ImmutabilityGotchaTests
 
         var result = await _engine.MakeClassImmutableAsync("Real.cs", "NonExistent");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             "Unknown class name must return the original file content, not null or empty.");
         Assert.That(result, Does.Contain("RealClass"),
             "The original class name must be present in the returned (unchanged) source.");
@@ -875,7 +875,7 @@ public class ImmutabilityGotchaTests
         var result = await _engine.MakeClassImmutableAsync("Empty.cs", "EmptyClass");
 
         Assert.That(result, Is.Not.Null, "Engine must not crash or return null for a class with no properties.");
-        Assert.That(result, Does.Contain("EmptyClass"), "Class name must be present in the returned code.");
+        Assert.That(result.UpdatedText, Does.Contain("EmptyClass"), "Class name must be present in the returned code.");
     }
 }
 

@@ -259,7 +259,7 @@ public class StructuralRefinementEngineTests
         var result = await _engine.SyncTypeAndFilenameAsync("Wrong.cs");
 
         Assert.That(result.UpdatedText!, Does.StartWith("CHANGE_"), "Should propose a rename via staging change ID");
-        Assert.That(result, Does.Contain("MyService.cs"), "Target filename should be the type name");
+        Assert.That(result.UpdatedText, Does.Contain("MyService.cs"), "Target filename should be the type name");
     }
 
     [Test]

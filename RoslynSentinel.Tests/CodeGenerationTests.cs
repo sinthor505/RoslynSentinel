@@ -43,13 +43,13 @@ public class EmailService
 
         var result = await _engine.GenerateConstructorAsync("EmailService.cs", "EmailService");
 
-        Assert.That(result, Does.Contain("EmailService("),
+        Assert.That(result.UpdatedText, Does.Contain("EmailService("),
             "Generated constructor should have the class name.");
-        Assert.That(result, Does.Contain("smtpHost"),
+        Assert.That(result.UpdatedText, Does.Contain("smtpHost"),
             "Constructor parameter should be derived from _smtpHost field.");
-        Assert.That(result, Does.Contain("port"),
+        Assert.That(result.UpdatedText, Does.Contain("port"),
             "Constructor parameter should be derived from _port field.");
-        Assert.That(result, Does.Contain("this._smtpHost"),
+        Assert.That(result.UpdatedText, Does.Contain("this._smtpHost"),
             "Constructor body should assign this._smtpHost.");
     }
 
@@ -70,7 +70,7 @@ public class MyService
         var result = await _engine.GenerateConstructorAsync("MyService.cs", "MyService");
 
         // Should return unchanged (constructor already exists)
-        Assert.That(result, Does.Contain("public MyService(string name)"),
+        Assert.That(result.UpdatedText, Does.Contain("public MyService(string name)"),
             "Existing constructor should be preserved unchanged.");
         // No duplicate constructor
         Assert.That(result.UpdatedText!.IndexOf("public MyService("), Is.EqualTo(result.UpdatedText!.LastIndexOf("public MyService(")),
@@ -88,7 +88,7 @@ public class Empty
 
         var result = await _engine.GenerateConstructorAsync("Empty.cs", "Empty");
 
-        Assert.That(result, Does.Not.Contain("Empty("),
+        Assert.That(result.UpdatedText, Does.Not.Contain("Empty("),
             "Class with no private/readonly fields should not get a generated constructor.");
     }
 
@@ -179,11 +179,11 @@ public class Startup
 
         var result = await _engine.GenerateDefaultConfigJsonAsync("TestProj");
 
-        Assert.That(result, Does.Contain("SmtpHost"),
+        Assert.That(result.UpdatedText, Does.Contain("SmtpHost"),
             "Config key SmtpHost should be extracted.");
-        Assert.That(result, Does.Contain("SmtpPort"),
+        Assert.That(result.UpdatedText, Does.Contain("SmtpPort"),
             "Config key SmtpPort should be extracted.");
-        Assert.That(result, Does.Contain("{"),
+        Assert.That(result.UpdatedText, Does.Contain("{"),
             "Result should be valid JSON.");
     }
 
@@ -195,7 +195,7 @@ public class Empty { }", "Empty.cs");
 
         var result = await _engine.GenerateDefaultConfigJsonAsync("TestProj");
 
-        Assert.That(result, Does.Contain("{"),
+        Assert.That(result.UpdatedText, Does.Contain("{"),
             "Should return at least an empty JSON object.");
     }
 

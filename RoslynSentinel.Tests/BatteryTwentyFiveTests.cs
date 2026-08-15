@@ -441,7 +441,7 @@ public class Slicer {
 
         var result = await _engine.UseIndexFromEndAsync("NoSuchFile.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 }
 
@@ -687,7 +687,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -710,7 +710,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.InlineParameterAsync("NoFile.cs", "Foo", "bar");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -733,7 +733,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.ConvertMethodToIndexerAsync("NoFile.cs", "Get");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -874,7 +874,7 @@ public class Cache {
 
         var result = await _engine.ConvertIndexerToMethodAsync("NoFile.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -897,7 +897,7 @@ public class Cache {
 
         var result = await _engine.AddRemoveParamsAsync("NoFile.cs", "Foo");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -1154,7 +1154,7 @@ public class Router {
 
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]
@@ -1178,6 +1178,6 @@ public class Router {
 
         var result = await _engine.UseFieldBackedPropertiesAsync("NoFile.cs");
 
-        Assert.That(result, Does.Contain("not found").Or.Contain("not in workspace"));
+        Assert.That(result.UpdatedText, Does.Contain("not found").Or.Contain("not in workspace"));
     }
 }

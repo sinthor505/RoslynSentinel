@@ -114,9 +114,9 @@ public class Parser
     public string Process(string input) { return input.Substring(1); }
 }");
         var result = await _engine.UseSpanForParsingAsync("Test.cs", "Process");
-        Assert.That(result, Does.Contain("Process"), "Method name should be preserved");
-        Assert.That(result, Does.Contain("AsSpan"), "Substring should be replaced with AsSpan");
-        Assert.That(result, Does.Not.Contain("Substring"), "Original Substring call should be gone");
+        Assert.That(result.UpdatedText, Does.Contain("Process"), "Method name should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("AsSpan"), "Substring should be replaced with AsSpan");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Substring"), "Original Substring call should be gone");
     }
 
     [Test]
@@ -139,7 +139,7 @@ public class Processor
         var result = await _engine.UpgradePatternMatchingAsync("Test.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result, Does.Contain("Process"), "Method name should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("Process"), "Method name should be preserved");
         Assert.That(result.UpdatedText!.Length, Is.GreaterThan(10), "Should return non-empty code");
     }
 
@@ -158,8 +158,8 @@ public class Guard
 }");
         var result = await _engine.UseThrowExpressionsAsync("Test.cs");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
-        Assert.That(result, Does.Contain("Validate"), "Method name should be preserved");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Contain("Validate"), "Method name should be preserved");
     }
 }
 
@@ -262,11 +262,11 @@ public class AuthService
 }", "AuthService.cs");
         var result = await _engine.ConvertToSourceGeneratedLoggingAsync("AuthService.cs", "AuthService");
 
-        Assert.That(result, Does.Contain("partial"), "Class should be made partial");
-        Assert.That(result, Does.Contain("LogInformationEvent1"), "Should generate LogInformationEvent1 method");
-        Assert.That(result, Does.Contain("LoggerMessage"), "Should add [LoggerMessage] attribute");
+        Assert.That(result.UpdatedText, Does.Contain("partial"), "Class should be made partial");
+        Assert.That(result.UpdatedText, Does.Contain("LogInformationEvent1"), "Should generate LogInformationEvent1 method");
+        Assert.That(result.UpdatedText, Does.Contain("LoggerMessage"), "Should add [LoggerMessage] attribute");
         // Original direct logger call is replaced with generated method call
-        Assert.That(result, Does.Not.Contain("_logger.LogInformation("), "Original LogInformation call should be replaced");
+        Assert.That(result.UpdatedText, Does.Not.Contain("_logger.LogInformation("), "Original LogInformation call should be replaced");
     }
 
     [Test]
@@ -279,7 +279,7 @@ public class UserService
 }", "UserService.cs");
         var result = await _engine.ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
 
-        Assert.That(result, Does.Contain("GetName"), "Method should be unchanged");
+        Assert.That(result.UpdatedText, Does.Contain("GetName"), "Method should be unchanged");
         Assert.That(result, Does.Not.Contain("partial"), "No logging calls — class should not be made partial");
         Assert.That(result, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
     }
@@ -331,8 +331,8 @@ public class Counter
 }");
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");
 
-        Assert.That(result, Does.Not.Contain("this."), "this. qualifiers should be removed");
-        Assert.That(result, Does.Contain("_count"), "Field name should be preserved");
+        Assert.That(result.UpdatedText, Does.Not.Contain("this."), "this. qualifiers should be removed");
+        Assert.That(result.UpdatedText, Does.Contain("_count"), "Field name should be preserved");
     }
 
     [Test]
@@ -352,8 +352,8 @@ public class Factory
 public class Product { public string Name { get; set; } public decimal Price { get; set; } }");
         var result = await _engine.UseObjectInitializersAsync("Test.cs");
 
-        Assert.That(result, Does.Contain("Name"), "Property Name should be in initializer");
-        Assert.That(result, Does.Contain("Price"), "Property Price should be in initializer");
+        Assert.That(result.UpdatedText, Does.Contain("Name"), "Property Name should be in initializer");
+        Assert.That(result.UpdatedText, Does.Contain("Price"), "Property Price should be in initializer");
         // Both assignments should be collapsed into object initializer — no separate assignment statements
         Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
         Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
@@ -373,7 +373,7 @@ public class Checker
 }");
         var result = await _engine.UseNullPropagationAsync("Test.cs");
 
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
-        Assert.That(result, Does.Contain("Check"), "Method name should be preserved in stub output");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Contain("Check"), "Method name should be preserved in stub output");
     }
 }

@@ -843,7 +843,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         const string src = @"namespace TestProj; public class C { public string Get(string s) { if (s == null) s = ""default""; return s; } }";
         SetSource(src, "C.cs");
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("C.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -879,7 +879,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Order.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -897,7 +897,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _modernizationEngine.ConvertToPatternAsync("Order.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

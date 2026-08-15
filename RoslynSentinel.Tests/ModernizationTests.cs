@@ -71,9 +71,9 @@ public class ModernizationTests
 
         var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetName");
 
-        Assert.That(result, Does.Contain("=>"),
+        Assert.That(result.UpdatedText, Does.Contain("=>"),
             "Method with single return statement should become an expression body.");
-        Assert.That(result, Does.Contain("_name"),
+        Assert.That(result.UpdatedText, Does.Contain("_name"),
             "The returned expression should still be present.");
     }
 
@@ -94,9 +94,9 @@ public class ModernizationTests
 
         var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetFullName");
 
-        Assert.That(result, Does.Not.Contain("=>"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("=>"),
             "Method with multiple statements should NOT be converted to expression body.");
-        Assert.That(result, Does.Contain("return name"),
+        Assert.That(result.UpdatedText, Does.Contain("return name"),
             "Original return statement should be preserved.");
     }
 
@@ -112,7 +112,7 @@ public class C
 
         var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "Print");
 
-        Assert.That(result, Does.Contain("=>"),
+        Assert.That(result.UpdatedText, Does.Contain("=>"),
             "Void method with single expression statement should convert to expression body.");
     }
 
@@ -135,9 +135,9 @@ public class C
 
         var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
 
-        Assert.That(result, Does.Contain("{"),
+        Assert.That(result.UpdatedText, Does.Contain("{"),
             "Braces should be added around the if-body.");
-        Assert.That(result, Does.Contain("DoWork"),
+        Assert.That(result.UpdatedText, Does.Contain("DoWork"),
             "The statement inside the if should still be present.");
     }
 
@@ -160,10 +160,10 @@ public class C
         var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
 
         // Should not duplicate braces or break formatting
-        Assert.That(result, Does.Contain("DoWork"),
+        Assert.That(result.UpdatedText, Does.Contain("DoWork"),
             "Already-braced code should still contain the method call.");
         // Count open braces — should not have extra ones
-        Assert.That(result, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             "Result should be non-empty.");
     }
 
@@ -186,9 +186,9 @@ public class C
 
         var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
 
-        Assert.That(result, Does.Contain("DoWork"),
+        Assert.That(result.UpdatedText, Does.Contain("DoWork"),
             "if-branch should be present.");
-        Assert.That(result, Does.Contain("Fallback"),
+        Assert.That(result.UpdatedText, Does.Contain("Fallback"),
             "else-branch should be present.");
     }
 
@@ -216,8 +216,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("is null"), "Should convert to pattern matching 'is null'");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert to pattern matching 'is null'");
     }
 
     /// <summary>
@@ -240,8 +240,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("is null"), "Should convert reversed null check to pattern");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert reversed null check to pattern");
     }
 
     /// <summary>
@@ -266,7 +266,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
         var countOfIsNull = result.UpdatedText!.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert both null checks");
     }
@@ -291,8 +291,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
-        Assert.That(result, Does.Contain("if (x > 0)"), "Code without patterns should remain unchanged");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
+        Assert.That(result.UpdatedText, Does.Contain("if (x > 0)"), "Code without patterns should remain unchanged");
     }
 
     /// <summary>
@@ -318,7 +318,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
         var countOfIsNull = result.UpdatedText!.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert nested null checks");
     }
@@ -343,9 +343,9 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return code");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
         // For now, not null patterns might not be converted depending on implementation
-        Assert.That(result, Does.Contain("Not null"), "Logic should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("Not null"), "Logic should be preserved");
     }
 
     /// <summary>
@@ -367,8 +367,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("is null"), "Should convert null check");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert null check");
     }
 
     /// <summary>
@@ -388,8 +388,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        Assert.That(result, Does.Contain("is null"), "Should convert single-line null check");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert single-line null check");
     }
 
     [Test]
@@ -417,6 +417,6 @@ public class C
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _styleEngine.SimplifyAllNamesAsync("C.cs");
         Assert.That(result.UpdatedText!, Contains.Substring("System.String s;"));
-        Assert.That(result, Does.Not.Contain("global::"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("global::"));
     }
 }

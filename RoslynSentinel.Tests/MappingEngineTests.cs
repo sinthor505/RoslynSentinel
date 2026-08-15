@@ -49,11 +49,11 @@ public class ProductEntity
 
         var result = await _engine.GenerateMappingAsync("Models.cs", "ProductDto", "ProductEntity");
 
-        Assert.That(result, Does.Contain("MapProductDtoToProductEntity"),
+        Assert.That(result.UpdatedText, Does.Contain("MapProductDtoToProductEntity"),
             "Mapping method should be named Map{From}To{To}.");
-        Assert.That(result, Does.Contain("dest.Name = source.Name"),
+        Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"),
             "Should generate Name property assignment.");
-        Assert.That(result, Does.Contain("dest.Price = source.Price"),
+        Assert.That(result.UpdatedText, Does.Contain("dest.Price = source.Price"),
             "Should generate Price property assignment.");
     }
 
@@ -67,9 +67,9 @@ public class DestEntity { public string Title { get; set; } }
 
         var result = await _engine.GenerateMappingAsync("Mapping.cs", "SourceDto", "DestEntity");
 
-        Assert.That(result, Does.Contain("public"),
+        Assert.That(result.UpdatedText, Does.Contain("public"),
             "Mapping method should be public.");
-        Assert.That(result, Does.Contain("static"),
+        Assert.That(result.UpdatedText, Does.Contain("static"),
             "Mapping method should be static.");
     }
 
@@ -91,11 +91,11 @@ public class TargetModel
 
         var result = await _engine.GenerateMappingAsync("Models.cs", "SourceModel", "TargetModel");
 
-        Assert.That(result, Does.Contain("dest.Name = source.Name"),
+        Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"),
             "Matching property Name should be mapped.");
-        Assert.That(result, Does.Not.Contain("SourceOnlyField"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("SourceOnlyField"),
             "Source-only field should NOT appear in mapping output.");
-        Assert.That(result, Does.Not.Contain("TargetOnlyField"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("TargetOnlyField"),
             "Target-only field without a source match should not be assigned.");
     }
 
@@ -119,9 +119,9 @@ public class TargetModel
 
         var result = await _engine.InvertAssignmentsAsync("Mapper.cs", 5, 6);
 
-        Assert.That(result, Does.Contain("src.Name = dest.Name"),
+        Assert.That(result.UpdatedText, Does.Contain("src.Name = dest.Name"),
             "Inverted: left and right sides should be swapped for Name.");
-        Assert.That(result, Does.Contain("src.Price = dest.Price"),
+        Assert.That(result.UpdatedText, Does.Contain("src.Price = dest.Price"),
             "Inverted: left and right sides should be swapped for Price.");
     }
 
@@ -138,7 +138,7 @@ public class TargetModel
 
         var result = await _engine.InvertAssignmentsAsync("Syncer.cs", 5, 5);
 
-        Assert.That(result, Does.Contain("local.Value = remote.Value"),
+        Assert.That(result.UpdatedText, Does.Contain("local.Value = remote.Value"),
             "Single assignment should be inverted.");
     }
 
@@ -156,7 +156,7 @@ public class TargetModel
         // Lines 5-5 contain "return a + b;" — no assignment expressions
         var result = await _engine.InvertAssignmentsAsync("NoOp.cs", 5, 5);
 
-        Assert.That(result, Does.Contain("return a + b"),
+        Assert.That(result.UpdatedText, Does.Contain("return a + b"),
             "Source without assignments in range should be returned unchanged.");
     }
 }

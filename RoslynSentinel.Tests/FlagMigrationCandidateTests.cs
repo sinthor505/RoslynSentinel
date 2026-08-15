@@ -315,11 +315,11 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
 
         var result = await _engine.ConvertToAsyncBridgeAsync("Svc.cs", "Search");
 
-        Assert.That(result, Does.Not.Contain("[MigrationCandidate("),
+        Assert.That(result.UpdatedText, Does.Not.Contain("[MigrationCandidate("),
             "[MigrationCandidate] should be removed from the bridge wrapper after conversion.");
-        Assert.That(result, Does.Contain("[Obsolete("),
+        Assert.That(result.UpdatedText, Does.Contain("[Obsolete("),
             "[Obsolete] attribute should still be present on the bridge wrapper.");
-        Assert.That(result, Does.Contain("SearchAsync"),
+        Assert.That(result.UpdatedText, Does.Contain("SearchAsync"),
             "Async overload should still be created.");
     }
 

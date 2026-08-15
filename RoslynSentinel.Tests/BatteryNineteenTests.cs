@@ -127,7 +127,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.GenerateConstructorAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -135,7 +135,7 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.GenerateConstructorAsync("NonExistent.cs", "Order");
-        Assert.That(result, Is.Null.Or.Empty);
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     // --- GenerateToString ---
@@ -212,7 +212,7 @@ public interface IOrderRepository
         const string src = "namespace TestProj; public class Service { public string GetData() { return \"data\"; } }";
         SetSource(src, "Service.cs");
         var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Service.cs", "GetData");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -230,7 +230,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _apiIntegrationEngine.AddValidationToPocoAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -238,7 +238,7 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _apiIntegrationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
-        Assert.That(result, Is.Null.Or.Empty);
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     // --- ImplementInterfaceSafe ---
@@ -248,7 +248,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Order.cs", "Order", "IOrderRepository");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -264,7 +264,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Order.cs", "OrderId", "ToFullProperty");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -272,7 +272,7 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("NonExistent.cs", "OrderId", "ToFullProperty");
-        Assert.That(result, Is.Null.Or.Empty);
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     // --- InterpolateStringSafe ---

@@ -65,10 +65,10 @@ public class Math
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "6 * 7", "product");
         
-        Assert.That(result, Does.Contain("product"), "Variable name must appear in result");
-        Assert.That(result, Does.Contain("var product"), "Should declare with var keyword");
-        Assert.That(result, Does.Contain("return product"), "Should replace original expression with variable reference");
-        Assert.That(result, Does.Not.Contain("return 6 * 7"), "Original expression should be replaced");
+        Assert.That(result.UpdatedText, Does.Contain("product"), "Variable name must appear in result");
+        Assert.That(result.UpdatedText, Does.Contain("var product"), "Should declare with var keyword");
+        Assert.That(result.UpdatedText, Does.Contain("return product"), "Should replace original expression with variable reference");
+        Assert.That(result.UpdatedText, Does.Not.Contain("return 6 * 7"), "Original expression should be replaced");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -90,10 +90,10 @@ public class StringTest
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "\"Hello, World!\"", "greeting");
         
-        Assert.That(result, Does.Contain("greeting"), "Variable name must appear in result");
-        Assert.That(result, Does.Contain("var greeting"), "Should declare string variable with var");
-        Assert.That(result, Does.Contain("return greeting"), "Should replace string literal with variable reference");
-        Assert.That(result, Does.Not.Contain("return \"Hello, World!\""), "String literal should be replaced");
+        Assert.That(result.UpdatedText, Does.Contain("greeting"), "Variable name must appear in result");
+        Assert.That(result.UpdatedText, Does.Contain("var greeting"), "Should declare string variable with var");
+        Assert.That(result.UpdatedText, Does.Contain("return greeting"), "Should replace string literal with variable reference");
+        Assert.That(result.UpdatedText, Does.Not.Contain("return \"Hello, World!\""), "String literal should be replaced");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -117,9 +117,9 @@ public class Person
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "this.Name", "personName", lineBefore: "return this.Name.ToUpperInvariant();");
         
-        Assert.That(result, Does.Contain("personName"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var personName"), "Should declare with var");
-        Assert.That(result, Does.Contain("personName.ToUpperInvariant()"), "Should use extracted variable in method call");
+        Assert.That(result.UpdatedText, Does.Contain("personName"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var personName"), "Should declare with var");
+        Assert.That(result.UpdatedText, Does.Contain("personName.ToUpperInvariant()"), "Should use extracted variable in method call");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -141,9 +141,9 @@ public class Calculator
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "a + b", "sum");
         
-        Assert.That(result, Does.Contain("sum"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var sum = a + b"), "Should declare with addition");
-        Assert.That(result, Does.Contain("return sum"), "Should replace original binary operation");
+        Assert.That(result.UpdatedText, Does.Contain("sum"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var sum = a + b"), "Should declare with addition");
+        Assert.That(result.UpdatedText, Does.Contain("return sum"), "Should replace original binary operation");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -165,9 +165,9 @@ public class Comparison
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "x > y", "isGreater");
         
-        Assert.That(result, Does.Contain("isGreater"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var isGreater = x > y"), "Should declare with comparison");
-        Assert.That(result, Does.Contain("return isGreater"), "Should replace comparison with variable");
+        Assert.That(result.UpdatedText, Does.Contain("isGreater"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var isGreater = x > y"), "Should declare with comparison");
+        Assert.That(result.UpdatedText, Does.Contain("return isGreater"), "Should replace comparison with variable");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -191,9 +191,9 @@ public class Logic
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "a + b", "total");
         
-        Assert.That(result, Does.Contain("total"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var total = a + b"), "Should create var declaration");
-        Assert.That(result, Does.Contain("Console.WriteLine(total)"), "Should replace in print statement");
+        Assert.That(result.UpdatedText, Does.Contain("total"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var total = a + b"), "Should create var declaration");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(total)"), "Should replace in print statement");
         
         // Verify the insertion is before the WriteLine statement
         var lines = result.UpdatedText!.Split('\n');
@@ -226,8 +226,8 @@ public class Counter
             "Test.cs", "2 + 3", "result");
         
         // Should automatically generate result2 since result and result1 exist
-        Assert.That(result, Does.Contain("var result2"), "Should generate unique name avoiding conflicts");
-        Assert.That(result, Does.Contain("Console.WriteLine(result2)"), "Should use unique name in usage");
+        Assert.That(result.UpdatedText, Does.Contain("var result2"), "Should generate unique name avoiding conflicts");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(result2)"), "Should use unique name in usage");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -252,7 +252,7 @@ public class Calculator
             "Test.cs", "Add(5, 3)", "value");
         
         // Should return empty for method call (has side effects)
-        Assert.That(result, Is.Empty, 
+        Assert.That(result.UpdatedText, Is.Empty, 
             "Should skip extraction of method calls due to potential side effects");
     }
 
@@ -276,8 +276,8 @@ public class Values
             "Test.cs", "42", null);  // No variable name provided - should infer
         
         // Should generate a default name for numeric literal
-        Assert.That(result, Does.Contain("var"), "Should declare variable with var");
-        Assert.That(result, Does.Contain("return"), "Should return the extracted variable");
+        Assert.That(result.UpdatedText, Does.Contain("var"), "Should declare variable with var");
+        Assert.That(result.UpdatedText, Does.Contain("return"), "Should return the extracted variable");
         Assert.That(result.UpdatedText!.Contains("42"), "Numeric literal should be in the declaration");
     }
 
@@ -300,9 +300,9 @@ public class Calc
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "(5 + 3)", "subTotal");
         
-        Assert.That(result, Does.Contain("subTotal"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var subTotal"), "Should declare parenthesized expression");
-        Assert.That(result, Does.Contain("return subTotal * 2"), "Should replace in calculation");
+        Assert.That(result.UpdatedText, Does.Contain("subTotal"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var subTotal"), "Should declare parenthesized expression");
+        Assert.That(result.UpdatedText, Does.Contain("return subTotal * 2"), "Should replace in calculation");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -326,9 +326,9 @@ public class Multi
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "x + y", "result");
         
-        Assert.That(result, Does.Contain("result"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var result = x + y"), "Should create declaration");
-        Assert.That(result, Does.Contain("return result"), "Should return the extracted variable");
+        Assert.That(result.UpdatedText, Does.Contain("result"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var result = x + y"), "Should create declaration");
+        Assert.That(result.UpdatedText, Does.Contain("return result"), "Should return the extracted variable");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -350,8 +350,8 @@ public class Printer
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "10 * 5", "product");
         
-        Assert.That(result, Does.Contain("product"), "Variable name must appear");
-        Assert.That(result, Does.Contain("var product"), "Should declare variable");
-        Assert.That(result, Does.Contain("Console.WriteLine(product)"), "Should use variable as argument");
+        Assert.That(result.UpdatedText, Does.Contain("product"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var product"), "Should declare variable");
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(product)"), "Should use variable as argument");
     }
 }

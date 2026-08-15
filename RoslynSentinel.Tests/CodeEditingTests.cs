@@ -48,8 +48,8 @@ public record Person(string Name, int Age);
 
         var result = await _engine.AddMemberAsync("Person.cs", "Person", "public string Greet() => $\"Hello {Name}\";");
 
-        Assert.That(result, Does.Contain("Greet"), "Method should be added to record.");
-        Assert.That(result, Does.Contain("Person"), "Record declaration should still be present.");
+        Assert.That(result.UpdatedText, Does.Contain("Greet"), "Method should be added to record.");
+        Assert.That(result.UpdatedText, Does.Contain("Person"), "Record declaration should still be present.");
     }
 
     [Test]
@@ -65,8 +65,8 @@ public struct Point
 
         var result = await _engine.AddMemberAsync("Point.cs", "Point", "public double Length() => Math.Sqrt(X * X + Y * Y);");
 
-        Assert.That(result, Does.Contain("Length"), "Method should be added to struct.");
-        Assert.That(result, Does.Contain("Point"), "Struct declaration should still be present.");
+        Assert.That(result.UpdatedText, Does.Contain("Length"), "Method should be added to struct.");
+        Assert.That(result.UpdatedText, Does.Contain("Point"), "Struct declaration should still be present.");
     }
 
     [Test]
@@ -81,7 +81,7 @@ public class Animal
 
         var result = await _engine.AddMemberAsync("Animal.cs", "Animal", "public string Speak() => \"...\";");
 
-        Assert.That(result, Does.Contain("Speak"), "Method should be added to class.");
+        Assert.That(result.UpdatedText, Does.Contain("Speak"), "Method should be added to class.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -97,7 +97,7 @@ public class Foo { }
 
         var result = await _engine.AddUsingDirectiveAsync("Foo.cs", "System.Linq");
 
-        Assert.That(result, Does.Contain("using System.Linq"), "New using directive should be present.");
+        Assert.That(result.UpdatedText, Does.Contain("using System.Linq"), "New using directive should be present.");
     }
 
     [Test]
@@ -124,8 +124,8 @@ public class Calc { }
 
         var result = await _engine.AddUsingDirectiveAsync("Calc.cs", "static System.Math");
 
-        Assert.That(result, Does.Contain("System.Math"), "Static using directive should reference the namespace.");
-        Assert.That(result, Does.Contain("static"), "Static keyword should be present.");
+        Assert.That(result.UpdatedText, Does.Contain("System.Math"), "Static using directive should reference the namespace.");
+        Assert.That(result.UpdatedText, Does.Contain("static"), "Static keyword should be present.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -145,8 +145,8 @@ public enum Color
 
         var result = await _engine.AddEnumValueAsync("Color.cs", "Color", "Blue");
 
-        Assert.That(result, Does.Contain("Blue"), "New enum value should be present.");
-        Assert.That(result, Does.Contain("Red"), "Existing values should remain.");
+        Assert.That(result.UpdatedText, Does.Contain("Blue"), "New enum value should be present.");
+        Assert.That(result.UpdatedText, Does.Contain("Red"), "Existing values should remain.");
     }
 
     [Test]
@@ -162,8 +162,8 @@ public enum Status
 
         var result = await _engine.AddEnumValueAsync("Status.cs", "Status", "Archived", explicitValue: 99);
 
-        Assert.That(result, Does.Contain("Archived"), "New value should be present.");
-        Assert.That(result, Does.Contain("99"), "Explicit integer value should be present.");
+        Assert.That(result.UpdatedText, Does.Contain("Archived"), "New value should be present.");
+        Assert.That(result.UpdatedText, Does.Contain("99"), "Explicit integer value should be present.");
     }
 
     [Test]
@@ -175,7 +175,7 @@ public class Foo { }
 
         var result = await _engine.AddEnumValueAsync("Foo.cs", "NonExistentEnum", "SomeValue");
 
-        Assert.That(result, Does.Contain("class Foo"), "Original source should be returned unchanged.");
+        Assert.That(result.UpdatedText, Does.Contain("class Foo"), "Original source should be returned unchanged.");
         Assert.That(result, Does.Not.Contain("SomeValue"), "Value should not be injected into wrong place.");
     }
 
@@ -218,8 +218,8 @@ public class Repo
         var result = await _engine.InsertMemberAfterAsync("Repo.cs", "Repo", "NonExistent",
             "public void Delete() { }");
 
-        Assert.That(result, Does.Contain("Delete"), "Member should be appended when anchor not found.");
-        Assert.That(result, Does.Contain("Save"), "Existing member should remain.");
+        Assert.That(result.UpdatedText, Does.Contain("Delete"), "Member should be appended when anchor not found.");
+        Assert.That(result.UpdatedText, Does.Contain("Save"), "Existing member should remain.");
     }
 
     [Test]
@@ -278,7 +278,7 @@ public class Cache
         var result = await _engine.InsertMemberBeforeAsync("Cache.cs", "Cache", "NonExistent",
             "public void Evict() { }");
 
-        Assert.That(result, Does.Contain("Evict"), "Member should be appended when anchor not found.");
+        Assert.That(result.UpdatedText, Does.Contain("Evict"), "Member should be appended when anchor not found.");
     }
 
     [Test]
@@ -316,8 +316,8 @@ public class MyController
 
         var result = await _engine.AddAttributeAsync("MyController.cs", "MyController", "[Serializable]");
 
-        Assert.That(result, Does.Contain("Serializable"), "Attribute should be added to class.");
-        Assert.That(result, Does.Contain("MyController"), "Class should still be present.");
+        Assert.That(result.UpdatedText, Does.Contain("Serializable"), "Attribute should be added to class.");
+        Assert.That(result.UpdatedText, Does.Contain("MyController"), "Class should still be present.");
     }
 
     [Test]
@@ -332,7 +332,7 @@ public class Api
 
         var result = await _engine.AddAttributeAsync("Api.cs", "GetItems", "Obsolete");
 
-        Assert.That(result, Does.Contain("Obsolete"), "Attribute should be added to method.");
+        Assert.That(result.UpdatedText, Does.Contain("Obsolete"), "Attribute should be added to method.");
     }
 
     [Test]
@@ -347,7 +347,7 @@ public class Handler
 
         var result = await _engine.AddAttributeAsync("Handler.cs", "Handler", "[Description(\"My handler\")]");
 
-        Assert.That(result, Does.Contain("Description"), "Attribute with argument should be added.");
+        Assert.That(result.UpdatedText, Does.Contain("Description"), "Attribute with argument should be added.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -366,7 +366,7 @@ public class Repository
 
         var result = await _engine.AddBaseTypeAsync("Repository.cs", "Repository", "IRepository");
 
-        Assert.That(result, Does.Contain("IRepository"), "Interface should be added to base list.");
+        Assert.That(result.UpdatedText, Does.Contain("IRepository"), "Interface should be added to base list.");
     }
 
     [Test]
@@ -381,8 +381,8 @@ public class Service : IService
 
         var result = await _engine.AddBaseTypeAsync("Service.cs", "Service", "IDisposable");
 
-        Assert.That(result, Does.Contain("IService"), "First interface should still be present.");
-        Assert.That(result, Does.Contain("IDisposable"), "Second interface should be added.");
+        Assert.That(result.UpdatedText, Does.Contain("IService"), "First interface should still be present.");
+        Assert.That(result.UpdatedText, Does.Contain("IDisposable"), "Second interface should be added.");
     }
 
     [Test]
@@ -420,8 +420,8 @@ public class Foo
 
         var result = await _engine.RemoveAttributeAsync("Foo.cs", "DoIt", "Obsolete");
 
-        Assert.That(result, Does.Not.Contain("[Obsolete("), "Attribute should be removed from method.");
-        Assert.That(result, Does.Contain("[Obsolete]"), "Class attribute should remain.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("[Obsolete("), "Attribute should be removed from method.");
+        Assert.That(result.UpdatedText, Does.Contain("[Obsolete]"), "Class attribute should remain.");
     }
 
     [Test]
@@ -436,8 +436,8 @@ public class Bar
 
         var result = await _engine.RemoveAttributeAsync("Bar.cs", "Run", "Obsolete");
 
-        Assert.That(result, Does.Contain("public void Run()"));
-        Assert.That(result, Does.Not.Contain("[Obsolete]"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Run()"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("[Obsolete]"));
     }
 
     [Test]
@@ -450,8 +450,8 @@ public class Baz { }
 
         var result = await _engine.RemoveAttributeAsync("Baz.cs", "Baz", "Obsolete");
 
-        Assert.That(result, Does.Not.Contain("[ObsoleteAttribute]"));
-        Assert.That(result, Does.Contain("public class Baz"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("[ObsoleteAttribute]"));
+        Assert.That(result.UpdatedText, Does.Contain("public class Baz"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -471,8 +471,8 @@ public class Service : IService, IDisposable
 
         var result = await _engine.RemoveBaseTypeAsync("Service.cs", "Service", "IDisposable");
 
-        Assert.That(result, Does.Contain("IService"), "IService should remain.");
-        Assert.That(result, Does.Not.Contain("IDisposable"), "IDisposable should be removed.");
+        Assert.That(result.UpdatedText, Does.Contain("IService"), "IService should remain.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("IDisposable"), "IDisposable should be removed.");
     }
 
     [Test]
@@ -487,8 +487,8 @@ public class Child : Parent
 
         var result = await _engine.RemoveBaseTypeAsync("Child.cs", "Child", "Parent");
 
-        Assert.That(result, Does.Not.Contain(": Parent"), "Base list should be gone.");
-        Assert.That(result, Does.Contain("public class Child"), "Class declaration should remain.");
+        Assert.That(result.UpdatedText, Does.Not.Contain(": Parent"), "Base list should be gone.");
+        Assert.That(result.UpdatedText, Does.Contain("public class Child"), "Class declaration should remain.");
     }
 
     [Test]
@@ -500,7 +500,7 @@ public class Worker : IWorker { }
 
         var result = await _engine.RemoveBaseTypeAsync("Worker.cs", "Worker", "IDisposable");
 
-        Assert.That(result, Does.Contain(": IWorker"), "Base list should be unchanged.");
+        Assert.That(result.UpdatedText, Does.Contain(": IWorker"), "Base list should be unchanged.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -519,8 +519,8 @@ public class Calc
 
         var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", "private");
 
-        Assert.That(result, Does.Contain("private int Add"), "Method should now be private.");
-        Assert.That(result, Does.Not.Contain("public int Add"));
+        Assert.That(result.UpdatedText, Does.Contain("private int Add"), "Method should now be private.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("public int Add"));
     }
 
     [Test]
@@ -535,7 +535,7 @@ public class Calc
 
         var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "_value", "public");
 
-        Assert.That(result, Does.Contain("public int _value"));
+        Assert.That(result.UpdatedText, Does.Contain("public int _value"));
     }
 
     [Test]
@@ -550,8 +550,8 @@ public class Base
 
         var result = await _engine.ChangeAccessibilityAsync("Base.cs", "Hook", "internal");
 
-        Assert.That(result, Does.Contain("internal void Hook"), "Should be internal.");
-        Assert.That(result, Does.Not.Contain("protected internal void Hook"));
+        Assert.That(result.UpdatedText, Does.Contain("internal void Hook"), "Should be internal.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("protected internal void Hook"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -570,7 +570,7 @@ public class Base
 
         var result = await _engine.AddModifierAsync("Base.cs", "Execute", "virtual");
 
-        Assert.That(result, Does.Contain("virtual"), "Method should now be virtual.");
+        Assert.That(result.UpdatedText, Does.Contain("virtual"), "Method should now be virtual.");
     }
 
     [Test]
@@ -601,8 +601,8 @@ public class Helper
 
         var result = await _engine.RemoveModifierAsync("Helper.cs", "Go", "static");
 
-        Assert.That(result, Does.Not.Contain("static void Go"));
-        Assert.That(result, Does.Contain("public void Go"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("static void Go"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Go"));
     }
 
     [Test]
@@ -617,7 +617,7 @@ public class Helper
 
         var result = await _engine.RemoveModifierAsync("Helper.cs", "Go", "static");
 
-        Assert.That(result, Does.Contain("public void Go"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Go"));
         Assert.That(result, Does.Not.Contain("static"));
     }
 
@@ -637,8 +637,8 @@ public class Greeter
 
         var result = await _engine.AddSummaryCommentAsync("Greeter.cs", "Hello", "Returns a greeting.");
 
-        Assert.That(result, Does.Contain("/// <summary>"));
-        Assert.That(result, Does.Contain("Returns a greeting."));
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
+        Assert.That(result.UpdatedText, Does.Contain("Returns a greeting."));
     }
 
     [Test]
@@ -650,8 +650,8 @@ public class Widget { }
 
         var result = await _engine.AddSummaryCommentAsync("Widget.cs", "Widget", "A reusable widget.");
 
-        Assert.That(result, Does.Contain("/// <summary>"));
-        Assert.That(result, Does.Contain("A reusable widget."));
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
+        Assert.That(result.UpdatedText, Does.Contain("A reusable widget."));
     }
 
     [Test]
@@ -669,8 +669,8 @@ public class Service
 
         var result = await _engine.AddSummaryCommentAsync("Service.cs", "Run", "New comment.");
 
-        Assert.That(result, Does.Contain("New comment."));
-        Assert.That(result, Does.Not.Contain("Old comment."));
+        Assert.That(result.UpdatedText, Does.Contain("New comment."));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Old comment."));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -686,9 +686,9 @@ public class Person { }
 
         var result = await _engine.AddPropertyAsync("Person.cs", "Person", "Name", "string", hasSetter: false);
 
-        Assert.That(result, Does.Contain("string Name"));
-        Assert.That(result, Does.Contain("get;"));
-        Assert.That(result, Does.Not.Contain("set;"));
+        Assert.That(result.UpdatedText, Does.Contain("string Name"));
+        Assert.That(result.UpdatedText, Does.Contain("get;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("set;"));
     }
 
     [Test]
@@ -700,9 +700,9 @@ public class Person { }
 
         var result = await _engine.AddPropertyAsync("Person.cs", "Person", "Age", "int");
 
-        Assert.That(result, Does.Contain("int Age"));
-        Assert.That(result, Does.Contain("get;"));
-        Assert.That(result, Does.Contain("set;"));
+        Assert.That(result.UpdatedText, Does.Contain("int Age"));
+        Assert.That(result.UpdatedText, Does.Contain("get;"));
+        Assert.That(result.UpdatedText, Does.Contain("set;"));
     }
 
     [Test]
@@ -714,9 +714,9 @@ public class Record { }
 
         var result = await _engine.AddPropertyAsync("Record.cs", "Record", "Id", "Guid", hasSetter: true, isInit: true);
 
-        Assert.That(result, Does.Contain("Guid Id"));
-        Assert.That(result, Does.Contain("init;"));
-        Assert.That(result, Does.Not.Contain("set;"));
+        Assert.That(result.UpdatedText, Does.Contain("Guid Id"));
+        Assert.That(result.UpdatedText, Does.Contain("init;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("set;"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -732,9 +732,9 @@ public class Service { }
 
         var result = await _engine.AddFieldAsync("Service.cs", "Service", "_logger", "ILogger", isReadonly: true);
 
-        Assert.That(result, Does.Contain("private"));
-        Assert.That(result, Does.Contain("readonly"));
-        Assert.That(result, Does.Contain("ILogger _logger"));
+        Assert.That(result.UpdatedText, Does.Contain("private"));
+        Assert.That(result.UpdatedText, Does.Contain("readonly"));
+        Assert.That(result.UpdatedText, Does.Contain("ILogger _logger"));
     }
 
     [Test]
@@ -747,10 +747,10 @@ public class Config { }
         var result = await _engine.AddFieldAsync("Config.cs", "Config", "MaxRetries", "int",
             accessibility: "public", isStatic: true, initializer: "3");
 
-        Assert.That(result, Does.Contain("public"));
-        Assert.That(result, Does.Contain("static"));
-        Assert.That(result, Does.Contain("int MaxRetries"));
-        Assert.That(result, Does.Contain("= 3"));
+        Assert.That(result.UpdatedText, Does.Contain("public"));
+        Assert.That(result.UpdatedText, Does.Contain("static"));
+        Assert.That(result.UpdatedText, Does.Contain("int MaxRetries"));
+        Assert.That(result.UpdatedText, Does.Contain("= 3"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -831,9 +831,9 @@ public class Processor
 
         var result = await _engine.WrapInTryCatchAsync("Processor.cs", 6, 6);
 
-        Assert.That(result, Does.Contain("try"));
-        Assert.That(result, Does.Contain("catch"));
-        Assert.That(result, Does.Contain("DoWork()"));
+        Assert.That(result.UpdatedText, Does.Contain("try"));
+        Assert.That(result.UpdatedText, Does.Contain("catch"));
+        Assert.That(result.UpdatedText, Does.Contain("DoWork()"));
     }
 
     [Test]
@@ -853,10 +853,10 @@ public class Processor
 
         var result = await _engine.WrapInTryCatchAsync("Processor.cs", 6, 8);
 
-        Assert.That(result, Does.Contain("try"));
-        Assert.That(result, Does.Contain("var a = 1"));
-        Assert.That(result, Does.Contain("var b = 2"));
-        Assert.That(result, Does.Contain("var c = a + b"));
+        Assert.That(result.UpdatedText, Does.Contain("try"));
+        Assert.That(result.UpdatedText, Does.Contain("var a = 1"));
+        Assert.That(result.UpdatedText, Does.Contain("var b = 2"));
+        Assert.That(result.UpdatedText, Does.Contain("var c = a + b"));
     }
 
     [Test]
@@ -877,9 +877,9 @@ public class Handler
             catchVariableName: "ioe",
             catchBody: "Console.WriteLine(ioe.Message);");
 
-        Assert.That(result, Does.Contain("InvalidOperationException"));
-        Assert.That(result, Does.Contain("ioe"));
-        Assert.That(result, Does.Contain("Console.WriteLine"));
+        Assert.That(result.UpdatedText, Does.Contain("InvalidOperationException"));
+        Assert.That(result.UpdatedText, Does.Contain("ioe"));
+        Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -903,9 +903,9 @@ public class OrderService
 
         var result = await _engine.AddConstructorParameterAsync("OrderService.cs", "OrderService", "logger", "ILogger");
 
-        Assert.That(result, Does.Contain("ILogger logger"), "New param should be in ctor signature.");
-        Assert.That(result, Does.Contain("private readonly ILogger _logger"), "Field should be added.");
-        Assert.That(result, Does.Contain("_logger = logger"), "Assignment should be in body.");
+        Assert.That(result.UpdatedText, Does.Contain("ILogger logger"), "New param should be in ctor signature.");
+        Assert.That(result.UpdatedText, Does.Contain("private readonly ILogger _logger"), "Field should be added.");
+        Assert.That(result.UpdatedText, Does.Contain("_logger = logger"), "Assignment should be in body.");
     }
 
     [Test]
@@ -920,9 +920,9 @@ public class UserService
 
         var result = await _engine.AddConstructorParameterAsync("UserService.cs", "UserService", "repo", "IUserRepo");
 
-        Assert.That(result, Does.Contain("IUserRepo repo"), "New param should be in ctor.");
-        Assert.That(result, Does.Contain("private readonly IUserRepo _repo"), "Field should exist.");
-        Assert.That(result, Does.Contain("_repo = repo"), "Assignment should be in body.");
+        Assert.That(result.UpdatedText, Does.Contain("IUserRepo repo"), "New param should be in ctor.");
+        Assert.That(result.UpdatedText, Does.Contain("private readonly IUserRepo _repo"), "Field should exist.");
+        Assert.That(result.UpdatedText, Does.Contain("_repo = repo"), "Assignment should be in body.");
     }
 
     [Test]
@@ -935,8 +935,8 @@ public class NotifyService { }
         var result = await _engine.AddConstructorParameterAsync("NotifyService.cs", "NotifyService",
             "sender", "IEmailSender", fieldName: "_emailSender");
 
-        Assert.That(result, Does.Contain("private readonly IEmailSender _emailSender"));
-        Assert.That(result, Does.Contain("_emailSender = sender"));
+        Assert.That(result.UpdatedText, Does.Contain("private readonly IEmailSender _emailSender"));
+        Assert.That(result.UpdatedText, Does.Contain("_emailSender = sender"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -956,10 +956,10 @@ public class MyClass
 
         var result = await _engine.WrapInRegionAsync("MyClass.cs", 4, 5, "Public Methods");
 
-        Assert.That(result, Does.Contain("#region Public Methods"));
-        Assert.That(result, Does.Contain("#endregion"));
-        Assert.That(result, Does.Contain("MethodA"));
-        Assert.That(result, Does.Contain("MethodB"));
+        Assert.That(result.UpdatedText, Does.Contain("#region Public Methods"));
+        Assert.That(result.UpdatedText, Does.Contain("#endregion"));
+        Assert.That(result.UpdatedText, Does.Contain("MethodA"));
+        Assert.That(result.UpdatedText, Does.Contain("MethodB"));
     }
 
     [Test]

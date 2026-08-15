@@ -162,7 +162,7 @@ public class QualityClass
     {
         SetSource(QualitySource, "Quality.cs");
         var result = await _logicOptimizationEngine.AddGuardClausesAsync("Quality.cs", "Process");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -180,7 +180,7 @@ public class QualityClass
     {
         SetSource(QualitySource, "Quality.cs");
         var result = await _testingEngine.AddBenchmarkStubAsync("Quality.cs", "QualityClass", "Process");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -198,7 +198,7 @@ public class QualityClass
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("Async.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -217,7 +217,7 @@ public class QualityClass
         const string src = "using System.Threading.Tasks; namespace TestProj; public class W { public async Task DoAsync() { await System.Threading.Tasks.Task.Delay(1).ConfigureAwait(false); } }";
         SetSource(src, "W.cs");
         var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("W.cs");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -235,7 +235,7 @@ public class QualityClass
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("Async.cs", "MethodWithLock");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -255,7 +255,7 @@ public class QualityClass
 public class Streamer { public IEnumerable<int> GetData() { yield return 1; yield return 2; } }";
         SetSource(src, "Streamer.cs");
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("Streamer.cs", "GetData");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -273,7 +273,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("Async.cs", "WorkAsync");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -291,7 +291,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("Async.cs", "SyncMethod");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

@@ -49,8 +49,8 @@ public class PersonDto
 
         var result = await _engine.AddValidationToPocoAsync("PersonDto.cs", "PersonDto");
 
-        Assert.That(result, Does.Contain("Required"), "string property should get [Required] attribute");
-        Assert.That(result, Does.Contain("StringLength"), "string property should get [StringLength] attribute");
+        Assert.That(result.UpdatedText, Does.Contain("Required"), "string property should get [Required] attribute");
+        Assert.That(result.UpdatedText, Does.Contain("StringLength"), "string property should get [StringLength] attribute");
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class ProductDto
 
         var result = await _engine.AddValidationToPocoAsync("ProductDto.cs", "ProductDto");
 
-        Assert.That(result, Does.Contain("Range"), "int property should get [Range] attribute");
+        Assert.That(result.UpdatedText, Does.Contain("Range"), "int property should get [Range] attribute");
     }
 }
 
@@ -113,7 +113,7 @@ public class MyService
 
         var result = await _engine.OptimizeToValueTaskAsync("MyService.cs", "DoWorkAsync");
 
-        Assert.That(result, Does.Contain("ValueTask"),
+        Assert.That(result.UpdatedText, Does.Contain("ValueTask"),
             "Task-returning method with single await should be convertable to ValueTask");
     }
 
@@ -135,7 +135,7 @@ public class MyService
 
         var result = await _engine.OptimizeToValueTaskAsync("MyService.cs", "ProcessAsync");
 
-        Assert.That(result, Does.Contain("WARNING"), "method with multiple awaits should produce a warning comment");
+        Assert.That(result.UpdatedText, Does.Contain("WARNING"), "method with multiple awaits should produce a warning comment");
     }
 }
 
@@ -183,8 +183,8 @@ public class Processor
 
         var result = await _engine.ReduceBlockDepthAsync("Processor.cs", "Process");
 
-        Assert.That(result, Does.Contain("return"), "early return should be added");
-        Assert.That(result, Does.Contain("!"), "inverted condition should use logical NOT");
+        Assert.That(result.UpdatedText, Does.Contain("return"), "early return should be added");
+        Assert.That(result.UpdatedText, Does.Contain("!"), "inverted condition should use logical NOT");
     }
 
     [Test]
@@ -205,7 +205,7 @@ public class Logger
         var result = await _engine.ReduceBlockDepthAsync("Logger.cs", "Log");
 
         Assert.That(result.UpdatedText!, Does.Not.StartWith("// Error:"), "should return source, not error comment");
-        Assert.That(result, Does.Contain("Log"), "method name should still appear");
+        Assert.That(result.UpdatedText, Does.Contain("Log"), "method name should still appear");
     }
 }
 
@@ -252,8 +252,8 @@ public class Worker
 
         var result = await _engine.FixThreadSleepAsync("Worker.cs");
 
-        Assert.That(result, Does.Contain("Task.Delay"), "Thread.Sleep in async method should be replaced with Task.Delay");
-        Assert.That(result, Does.Contain("await"), "replacement should be awaited");
+        Assert.That(result.UpdatedText, Does.Contain("Task.Delay"), "Thread.Sleep in async method should be replaced with Task.Delay");
+        Assert.That(result.UpdatedText, Does.Contain("await"), "replacement should be awaited");
     }
 
     [Test]
@@ -273,7 +273,7 @@ public class SyncWorker
 
         var result = await _engine.FixThreadSleepAsync("SyncWorker.cs");
 
-        Assert.That(result, Does.Contain("Thread.Sleep"), "Thread.Sleep in sync method should not be touched");
-        Assert.That(result, Does.Not.Contain("Task.Delay"), "no Task.Delay should appear for sync context");
+        Assert.That(result.UpdatedText, Does.Contain("Thread.Sleep"), "Thread.Sleep in sync method should not be touched");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Task.Delay"), "no Task.Delay should appear for sync context");
     }
 }

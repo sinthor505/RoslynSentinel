@@ -196,9 +196,9 @@ namespace MyApp
         SetSource(src, "Multi.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Multi.cs");
 
-        Assert.That(result, Does.Contain("namespace MyApp;"), "File-scoped namespace should be present");
-        Assert.That(result, Does.Contain("IFoo"), "Interface should be preserved");
-        Assert.That(result, Does.Contain("FooImpl"), "Class should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("namespace MyApp;"), "File-scoped namespace should be present");
+        Assert.That(result.UpdatedText, Does.Contain("IFoo"), "Interface should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("FooImpl"), "Class should be preserved");
     }
 
     // ======================================================================

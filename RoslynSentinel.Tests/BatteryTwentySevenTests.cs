@@ -127,12 +127,12 @@ public class B02_Immutability_ConstFieldNotReadonly
 
         var result = await _engine.MakeClassImmutableAsync("Config.cs", "Config");
 
-        Assert.That(result, Does.Not.Contain("const readonly"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("const readonly"),
             "const fields must NOT receive a readonly modifier.");
-        Assert.That(result, Does.Contain("const int MaxRetries"),
+        Assert.That(result.UpdatedText, Does.Contain("const int MaxRetries"),
             "const field must remain unchanged.");
         // The non-const field should get readonly
-        Assert.That(result, Does.Contain("readonly string _name"),
+        Assert.That(result.UpdatedText, Does.Contain("readonly string _name"),
             "Non-const mutable field should receive readonly.");
     }
 }
@@ -176,12 +176,12 @@ public class B01_Instrumentation_ValidThrowStatement
 
         // The output must not contain a bare expression-statement "throw;"  written as
         // ExpressionStatement; instead it must appear as the ThrowStatement "throw;"
-        Assert.That(result, Does.Contain("throw;"),
+        Assert.That(result.UpdatedText, Does.Contain("throw;"),
             "catch block must end with a valid throw; rethrow statement.");
-        Assert.That(result, Does.Contain("catch"),
+        Assert.That(result.UpdatedText, Does.Contain("catch"),
             "Output must contain a catch clause.");
         // Must not contain syntax errors from invalid throw expression
-        Assert.That(result, Does.Not.Contain("throw )"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("throw )"),
             "Output must not contain broken throw expression syntax.");
     }
 
@@ -246,11 +246,11 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
         var result = await _engine.ConvertToBackgroundServiceAsync("MyWorker.cs", "MyWorker");
 
         // The result must contain "stoppingToken.IsCancellationRequested" as proper member access
-        Assert.That(result, Does.Contain("stoppingToken.IsCancellationRequested"),
+        Assert.That(result.UpdatedText, Does.Contain("stoppingToken.IsCancellationRequested"),
             "Output must reference stoppingToken.IsCancellationRequested via member access.");
         // Crucially, the dotted form must NOT appear inside an IdentifierName literal string
         // in the output (which would indicate un-parsed invalid syntax)
-        Assert.That(result, Does.Not.Contain("\"stoppingToken.IsCancellationRequested\""),
+        Assert.That(result.UpdatedText, Does.Not.Contain("\"stoppingToken.IsCancellationRequested\""),
             "Output must not contain dotted identifier as a literal string.");
     }
 }
@@ -293,7 +293,7 @@ public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 
         var result = await _engine.OptimizeTaskWaitAsync("Service.cs");
 
-        Assert.That(result, Does.Contain("_gate.WaitOne()"),
+        Assert.That(result.UpdatedText, Does.Contain("_gate.WaitOne()"),
             "Non-Task .WaitOne() must not be touched by OptimizeTaskWaitAsync.");
     }
 }
@@ -561,7 +561,7 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
         var result = await _engine.ClassToRecordAsync("Point.cs", "Point");
 
         // Should produce: public record Point(int X, int Y)
-        Assert.That(result, Does.Contain("record Point"),
+        Assert.That(result.UpdatedText, Does.Contain("record Point"),
             "Output must contain a record declaration.");
         // Count occurrences of "X" as a standalone word in the record output
         // There should be exactly ONE declaration of X (either as positional param or body member)
@@ -587,9 +587,9 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 
         var result = await _engine.ClassToRecordAsync("Shape.cs", "Shape");
 
-        Assert.That(result, Does.Contain("record Shape"),
+        Assert.That(result.UpdatedText, Does.Contain("record Shape"),
             "Output must contain a record declaration.");
-        Assert.That(result, Does.Contain("Area()"),
+        Assert.That(result.UpdatedText, Does.Contain("Area()"),
             "Non-property member (method) must be preserved in the record.");
     }
 }
@@ -633,16 +633,16 @@ public class B10_ModernizationEngine_OrChainFullPattern
         var result = await _engine.ConvertToPatternAsync("C.cs");
 
         // The result must contain all three values in some form
-        Assert.That(result, Does.Contain("1"),
+        Assert.That(result.UpdatedText, Does.Contain("1"),
             "Converted OR pattern must retain the first value (1).");
-        Assert.That(result, Does.Contain("2"),
+        Assert.That(result.UpdatedText, Does.Contain("2"),
             "Converted OR pattern must retain the second value (2).");
-        Assert.That(result, Does.Contain("3"),
+        Assert.That(result.UpdatedText, Does.Contain("3"),
             "Converted OR pattern must retain the third value (3).");
         // If actual OR-pattern conversion occurred it should contain "or"
         if (result.UpdatedText!.Contains("is"))
         {
-            Assert.That(result, Does.Contain("or").Or.Contain("||"),
+            Assert.That(result.UpdatedText, Does.Contain("or").Or.Contain("||"),
                 "If converted to is-pattern, must include all values with 'or'; otherwise chain preserved.");
         }
     }
@@ -684,7 +684,7 @@ public class B20_LogicOptimization_NullableParamNoGuard
 
         var result = await _engine.AddGuardClausesAsync("Processor.cs", "Handle");
 
-        Assert.That(result, Does.Not.Contain("ThrowIfNull(optionalName)"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("ThrowIfNull(optionalName)"),
             "Nullable parameter 'string?' must NOT receive an ArgumentNullException.ThrowIfNull guard.");
     }
 
@@ -703,7 +703,7 @@ public class B20_LogicOptimization_NullableParamNoGuard
 
         var result = await _engine.AddGuardClausesAsync("Processor.cs", "Handle");
 
-        Assert.That(result, Does.Contain("ThrowIfNull"),
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"),
             "Non-nullable 'string' parameter must receive an ArgumentNullException guard.");
     }
 }
