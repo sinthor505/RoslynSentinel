@@ -88,17 +88,16 @@ public class BugFixTests
 
         // No solutionPath passed — just uses in-memory test solution
         var diffEngine = new DiffEngine(_workspaceManager);
-        var report = await new SentinelWorkspaceTools(
-            _workspaceManager,
+        var report = await new SentinelWorkspaceTools(_workspaceManager,
             new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine),
             diffEngine,
             new DiagnosticEngine(_workspaceManager),
             new SolutionManagementEngine(_workspaceManager),
             new StructuralRefinementEngine(_workspaceManager),
             new DependencyEngine(_workspaceManager),
+            new ProjectConsistencyEngine(_workspaceManager),
             _config,
-            NullLogger<SentinelWorkspaceTools>.Instance
-        ).Diagnose();
+            NullLogger<SentinelWorkspaceTools>.Instance).Diagnose();
 
         Assert.That(report.Healthy, Is.True,
             $"Healthy should be true on an SDK-only system. Errors: {string.Join(", ", report.Errors.Select(e => e.Message))}");
@@ -2067,8 +2066,12 @@ public class ProductsController
                 System.Diagnostics.Debug.WriteLine($"Found doc: {doc.Name}, FilePath={doc.FilePath}, Project={doc.Project.Name}, Namespace={doc.Project.DefaultNamespace}");
             }
 
-            // Pass just the filename - the engine will look it up
-            var result = await _projectStructureEngine.MoveFileToNamespaceFolderAsync("ProductsController.cs");
+            // Pass just the filename - the engine will look it up.
+            // MoveFileToNamespaceFolderAsync became PreviewMoveFileToNamespaceFolderAsync, which
+            // returns a DocumentEditResult whose Message carries the "MOVE_REQUIRED: from -> to"
+            // path suggestion the old string-returning API produced.
+            var result = (await _projectStructureEngine
+                .PreviewMoveFileToNamespaceFolderAsync("ProductsController.cs")).Message;
 
             System.Diagnostics.Debug.WriteLine($"Result: '{result}'");
 
@@ -3698,24 +3701,17 @@ public class AddGuardClausesNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelQualityTools CreateTools() => new SentinelQualityTools(
-        new PerformanceEngine(_workspaceManager),
-        new SecurityEngine(_workspaceManager),
-        new TestingEngine(_workspaceManager),
-        new ControlFlowEngine(_workspaceManager),
-        _engine,
-        new AnalysisEngine(_workspaceManager, _config),
-        new AsyncSafetyEngine(_workspaceManager),
-        new AntiPatternEngine(_workspaceManager),
-        new AsyncOptimizationEngine(_workspaceManager),
-        new ThreadSafetyEngine(_workspaceManager),
-        new DiagnosticEngine(_workspaceManager),
-        new CodeStyleAnalysisEngine(_workspaceManager),
-        new PathDrivenTestEngine(_workspaceManager),
-        new StackOverflowEngine(_workspaceManager),
-        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance),
-    _workspaceManager,
-        NullLogger<SentinelQualityTools>.Instance);
+    private SentinelQualityTools CreateTools() => new SentinelQualityTools(new TestingEngine(_workspaceManager),
+            new ControlFlowEngine(_workspaceManager),
+            new AnalysisEngine(_workspaceManager, _config),
+            new AntiPatternEngine(_workspaceManager),
+            new ThreadSafetyEngine(_workspaceManager),
+            new DiagnosticEngine(_workspaceManager),
+            new CodeStyleAnalysisEngine(_workspaceManager),
+            new StackOverflowEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            _workspaceManager,
+            NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
     public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -3784,24 +3780,17 @@ public class AddBenchmarkStubNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelQualityTools CreateTools() => new SentinelQualityTools(
-        new PerformanceEngine(_workspaceManager),
-        new SecurityEngine(_workspaceManager),
-        _engine,
-        new ControlFlowEngine(_workspaceManager),
-        new LogicOptimizationEngine(_workspaceManager),
-        new AnalysisEngine(_workspaceManager, _config),
-        new AsyncSafetyEngine(_workspaceManager),
-        new AntiPatternEngine(_workspaceManager),
-        new AsyncOptimizationEngine(_workspaceManager),
-        new ThreadSafetyEngine(_workspaceManager),
-        new DiagnosticEngine(_workspaceManager),
-        new CodeStyleAnalysisEngine(_workspaceManager),
-        new PathDrivenTestEngine(_workspaceManager),
-        new StackOverflowEngine(_workspaceManager),
-        new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance),
-        _workspaceManager,
-        NullLogger<SentinelQualityTools>.Instance);
+    private SentinelQualityTools CreateTools() => new SentinelQualityTools(_engine,
+            new ControlFlowEngine(_workspaceManager),
+            new AnalysisEngine(_workspaceManager, _config),
+            new AntiPatternEngine(_workspaceManager),
+            new ThreadSafetyEngine(_workspaceManager),
+            new DiagnosticEngine(_workspaceManager),
+            new CodeStyleAnalysisEngine(_workspaceManager),
+            new StackOverflowEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            _workspaceManager,
+            NullLogger<SentinelQualityTools>.Instance);
 
     [Test]
     public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
@@ -4035,29 +4024,47 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private SentinelRefactoringTools CreateTools() => new SentinelRefactoringTools(
-        _engine,
-        new StandardRefactoringEngine(_workspaceManager),
-        new AdvancedStructuralEngine(_workspaceManager),
-        new MappingEngine(_workspaceManager),
-        new SemanticRefactoringLibrary(_workspaceManager),
-        new GranularRefactoringEngine(_workspaceManager),
-        new AdvancedLogicEngine(_workspaceManager),
-        new RefinementEngine(_workspaceManager),
-        new AdvancedTypeEngine(_workspaceManager),
-        new StructuralRefinementEngine(_workspaceManager),
-        new CodeStyleEngine(_workspaceManager, _config),
-        new CodeFlowEngine(_workspaceManager),
-        new AdvancedRefactoringEngine(_workspaceManager),
-        new LogicOptimizationEngine(_workspaceManager),
-        new ModernizationEngine(_workspaceManager, _config),
-        new OutParamRefactoringEngine(_workspaceManager),
-        new MsToolAugmentEngine(_workspaceManager),
-        new CodeGenerationEngine(_workspaceManager),
-        new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-        _workspaceManager,
-        _config,
-        NullLogger<SentinelRefactoringTools>.Instance);
+    private SentinelRefactoringTools CreateTools() => new SentinelRefactoringTools(_engine,
+            new StandardRefactoringEngine(_workspaceManager),
+            new MappingEngine(_workspaceManager),
+            new SemanticRefactoringLibrary(_workspaceManager),
+            new GranularRefactoringEngine(_workspaceManager),
+            new StructuralRefinementEngine(_workspaceManager),
+            new CodeStyleEngine(_workspaceManager, _config),
+            new CodeFlowEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager,
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            _config,
+            NullLogger<SentinelRefactoringTools>.Instance);
+
+    // SyncInterface moved to SentinelAdvancedRefactoringTools in the Basic/Advanced server split.
+    private SentinelAdvancedRefactoringTools CreateAdvancedTools() => new SentinelAdvancedRefactoringTools(
+            _engine,
+            new StandardRefactoringEngine(_workspaceManager),
+            new AdvancedStructuralEngine(_workspaceManager),
+            new MappingEngine(_workspaceManager),
+            new SemanticRefactoringLibrary(_workspaceManager),
+            new GranularRefactoringEngine(_workspaceManager),
+            new AdvancedLogicEngine(_workspaceManager),
+            new RefinementEngine(_workspaceManager),
+            new AdvancedTypeEngine(_workspaceManager),
+            new StructuralRefinementEngine(_workspaceManager),
+            new CodeStyleEngine(_workspaceManager, _config),
+            new CodeFlowEngine(_workspaceManager),
+            new AdvancedRefactoringEngine(_workspaceManager),
+            new LogicOptimizationEngine(_workspaceManager),
+            new ModernizationEngine(_workspaceManager, _config),
+            new OutParamRefactoringEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager,
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            _config,
+            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
 
     [Test]
     public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
@@ -4078,7 +4085,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
     {
         // Because the engine returns non-empty content, the tool's file-not-found IOE guard
         // does NOT fire. The tool returns the engine's content to the caller.
-        var tools = CreateTools();
+        var tools = CreateAdvancedTools();
         object? result = null;
 
         Assert.DoesNotThrowAsync(async () =>

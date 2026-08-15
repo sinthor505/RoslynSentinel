@@ -11,6 +11,7 @@ public class MassiveRefactoringTests
     private PersistentWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
     private SentinelRefactoringTools _refactoringTools;
+    private SentinelAdvancedRefactoringTools _advancedRefactoringTools;
 
     [SetUp]
     public void Setup()
@@ -34,7 +35,35 @@ public class MassiveRefactoringTests
         var logicOpt = new LogicOptimizationEngine(_workspaceManager);
         var modernization = new ModernizationEngine(_workspaceManager, config);
 
-        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine, standard, advStruct, mapping, semLib, granular, advLogic, refinement, advType, sr, style, codeFlow, advRefactoring, logicOpt, modernization, new OutParamRefactoringEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), new CodeGenerationEngine(_workspaceManager), new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), _workspaceManager, config, NullLogger<SentinelRefactoringTools>.Instance);
+        _refactoringTools = new SentinelRefactoringTools(_refactoringEngine,
+            standard,
+            mapping,
+            semLib,
+            granular,
+            sr,
+            style,
+            codeFlow,
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager,
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            config,
+            NullLogger<SentinelRefactoringTools>.Instance);
+
+        // ExtractMembers / MoveType moved to SentinelAdvancedRefactoringTools in the server split.
+        _advancedRefactoringTools = new SentinelAdvancedRefactoringTools(
+            _refactoringEngine, standard, advStruct, mapping, semLib, granular,
+            advLogic, refinement, advType, sr, style, codeFlow,
+            advRefactoring, logicOpt, modernization,
+            new OutParamRefactoringEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager,
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            config,
+            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
     }
 
     [TearDown]
@@ -55,7 +84,7 @@ public class MassiveRefactoringTests
     public async Task ExtractInterface_ShouldCreateInterface(int id)
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = await _refactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
+        var result = await _advancedRefactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
         var data = (Dictionary<string, string>?)result.Data;
         Assert.That(data?.Count, Is.GreaterThan(0));
     }
@@ -85,7 +114,7 @@ public class MassiveRefactoringTests
     public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = await _refactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
+        var result = await _advancedRefactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
         var data = (Dictionary<string, string>?)result.Data;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }

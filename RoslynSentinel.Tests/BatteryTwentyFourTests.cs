@@ -28,7 +28,10 @@ public class BatteryTwentyFourTests
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private ModernizationEngine _modernizationEngine;
+    private DiffEngine _diffEngine;
+    private ValidationEngine _validationEngine;
     private SentinelRefactoringTools _tools;
+    private SentinelAdvancedRefactoringTools _advTools;
 
     private const string RefactorSource = @"
 using System;
@@ -117,7 +120,18 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
+        _diffEngine = new DiffEngine(_workspaceManager);
+        _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
         _tools = new SentinelRefactoringTools(
+            _refactoringEngine, _standardRefactoringEngine,
+            _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine,
+            _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine,
+            new MsToolAugmentEngine(_workspaceManager),
+            new CodeGenerationEngine(_workspaceManager),
+            new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            _workspaceManager, _validationEngine, _config,
+            NullLogger<SentinelRefactoringTools>.Instance);
+        _advTools = new SentinelAdvancedRefactoringTools(
             _refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine,
             _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine,
             _advancedLogicEngine, _refinementEngine, _advancedTypeEngine,
@@ -127,7 +141,8 @@ public enum Status { Active = 1, Pending = 2 }
             new MsToolAugmentEngine(_workspaceManager),
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
+            _workspaceManager, _validationEngine, _config,
+            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
     }
 
     [TearDown]
@@ -153,7 +168,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractSuperclass_AutoStageTrue_ReturnsStagedChangeSummary()
     {
         SetMultiFile(("Dog.cs", RefactorSource));
-        var result = await _tools.ExtractMembers("Dog.cs", "Dog", "superclass", "AnimalBase");
+        var result = await _advTools.ExtractMembers("Dog.cs", "Dog", "superclass", "AnimalBase");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -173,7 +188,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ChangeSignature("Order.cs", "Order", [1, 0]);
+        var result = await _advTools.ChangeSignature("Order.cs", "Order", [1, 0]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -183,7 +198,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ExtractMembers("Order.cs", "Order", "interface", "IOrder");
+        var result = await _advTools.ExtractMembers("Order.cs", "Order", "interface", "IOrder");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -193,7 +208,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MoveType("Order.cs", "Status", "ownFile");
+        var result = await _advTools.MoveType("Order.cs", "Status", "ownFile");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -203,7 +218,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MoveAllTypesToFiles("Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles("Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -231,7 +246,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MoveAllTypesToFiles("project", "TestProj");
+        var result = await _advTools.MoveAllTypesToFiles("project", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -241,7 +256,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.MoveAllTypesToFiles("solution");
+        var result = await _advTools.MoveAllTypesToFiles("solution");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -299,7 +314,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute("Order.cs", "Order", "[Serializable]", "add");
+        var result = await _tools.ModifyAttribute("Order.cs", "Order", "[Serializable]", "", AttributeModifyAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -309,7 +324,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType("Order.cs", "Order", "IService", "add");
+        var result = await _tools.ModifyBaseType("Order.cs", "Order", "IService", AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -319,7 +334,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyAttribute("Order.cs", "Order", "Serializable", "remove");
+        var result = await _tools.ModifyAttribute("Order.cs", "Order", "Serializable", "", AttributeModifyAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -329,7 +344,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyBaseType("Order.cs", "Order", "IService", "remove");
+        var result = await _tools.ModifyBaseType("Order.cs", "Order", "IService", AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -339,7 +354,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task PullUpMember_AutoStageTrue_ReturnsNotNull()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _tools.PullUpMember("Refactor.cs", "Dog", "Sound");
+        var result = await _advTools.PullUpMember("Refactor.cs", "Dog", "Sound");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -359,7 +374,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", "add");
+        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -369,7 +384,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", "remove");
+        var result = await _tools.ModifyModifier("Order.cs", "Order", "sealed", AddRemoveAction.remove);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -389,7 +404,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMemberTyped("Order.cs", "Order", "Description", "string", "property");
+        var result = await _tools.AddMemberTyped("Order.cs", "Order", "Description", "string", TypedMemberKind.property);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -399,7 +414,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMemberTyped("Order.cs", "Order", "_tag", "string", "field");
+        var result = await _tools.AddMemberTyped("Order.cs", "Order", "_tag", "string", TypedMemberKind.field);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -419,7 +434,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.WrapRange("Order.cs", 8, 10, "tryCatch");
+        var result = await _advTools.WrapRange("Order.cs", 8, 10, "tryCatch");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -439,7 +454,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.WrapRange("Order.cs", 3, 6, "region", "Properties");
+        var result = await _advTools.WrapRange("Order.cs", 3, 6, "region", "Properties");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -461,7 +476,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Inline("Order.cs", "GetLabel", "method");
+        var result = await _advTools.Inline("Order.cs", "GetLabel", "method");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -481,7 +496,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceField_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Introduce("Order.cs", "string.Format", "labelFormatter", "field");
+        var result = await _advTools.Introduce("Order.cs", "string.Format", "labelFormatter", "field");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -491,7 +506,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceParameter_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Introduce("Order.cs", "GetLabel", "GetLabel", "parameter");
+        var result = await _advTools.Introduce("Order.cs", "GetLabel", "GetLabel", "parameter");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -501,7 +516,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineField_ValidField_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Inline("Order.cs", "OrderId", "field");
+        var result = await _advTools.Inline("Order.cs", "OrderId", "field");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -511,7 +526,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineParameter_ValidParameter_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Inline("Order.cs", "orderId", "parameter", "Order");
+        var result = await _advTools.Inline("Order.cs", "orderId", "parameter", "Order");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -521,7 +536,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", "static", "add");
+        var result = await _tools.ModifyModifier("Order.cs", "GetLabel", "static", AddRemoveAction.add);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -562,7 +577,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task WrapInUsing_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.WrapRange("Order.cs", 8, 10, "using", "resource");
+        var result = await _advTools.WrapRange("Order.cs", 8, 10, "using", "resource");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -572,7 +587,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ConvertAnonymousToNamed("Order.cs", "OrderData");
+        var result = await _advTools.ConvertAnonymousToNamed("Order.cs", "OrderData");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -584,7 +599,7 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
             ("Owner.cs", "namespace App; public class Owner {}"));
-        var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
+        var result = await _advTools.InlineClass("Helper.cs", "Owner.cs", "Helper");
         Assert.That(result.Data, Does.ContainKey("Owner.cs"));
         Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Value"));
         Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Go"));
@@ -596,7 +611,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task IntroduceVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Introduce("Order.cs", "string.Format", "formatted", "localVariable");
+        var result = await _advTools.Introduce("Order.cs", "string.Format", "formatted", "localVariable");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -606,7 +621,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InlineVariable_ValidVariable_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.Inline("Order.cs", "OrderId", "variable");
+        var result = await _advTools.Inline("Order.cs", "OrderId", "variable");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -626,7 +641,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractClass_ValidMembers_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ExtractMembers("Order.cs", "Order", "class", "OrderInfo", ["GetLabel", "GetStatus"]);
+        var result = await _advTools.ExtractMembers("Order.cs", "Order", "class", "OrderInfo", ["GetLabel", "GetStatus"]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -636,7 +651,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ExtractMembers("Order.cs", "Order", "partial", memberNames: ["GetLabel"]);
+        var result = await _advTools.ExtractMembers("Order.cs", "Order", "partial", memberNames: ["GetLabel"]);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -657,7 +672,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         const string src = "namespace TestProj; public class Outer { public class Inner {} }";
         SetSource(src, "Outer.cs");
-        var result = await _tools.MoveType("Outer.cs", "Inner", "outerScope");
+        var result = await _advTools.MoveType("Outer.cs", "Inner", "outerScope");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -707,7 +722,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InvertAssignments_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.InvertAssignments("Order.cs", 8, 12);
+        var result = await _advTools.InvertAssignments("Order.cs", 8, 12);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -740,7 +755,7 @@ public enum Status { Active = 1, Pending = 2 }
 public interface IWorker { void Work(); }
 public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         SetSource(src, "Worker.cs");
-        var result = await _tools.SyncInterface("Worker.cs", "IWorker", "sync", "Worker");
+        var result = await _advTools.SyncInterface("Worker.cs", "IWorker", "sync", "Worker");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -750,7 +765,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task IntroduceParameterObject_ValidMethod_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
-        var result = await _tools.IntroduceParameterObject("Refactor.cs", "Process");
+        var result = await _advTools.IntroduceParameterObject("Refactor.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -758,7 +773,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     public async Task IntroduceParameterObject_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.IntroduceParameterObject("NonExistent.cs", "Process");
+        var result = await _advTools.IntroduceParameterObject("NonExistent.cs", "Process");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -787,7 +802,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "C.cs");
-        var result = await _tools.Introduce("C.cs", @"""hello""", "HelloLabel", "constant");
+        var result = await _advTools.Introduce("C.cs", @"""hello""", "HelloLabel", "constant");
     }
 
     // --- AnalyzeControlFlow ---

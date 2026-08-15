@@ -79,15 +79,25 @@ public class BatteryThirtyThreeTests
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
 
-        _intelligenceTools = new SentinelIntelligenceTools(
-            _impactAnalyzer, _semanticSearchEngine, _metricsEngine, _inventoryEngine,
-            _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine,
-            _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine,
-            _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
-            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager),
-            new CloneDetectionEngine(_workspaceManager),
+        _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
+            _semanticSearchEngine,
+            _metricsEngine,
+            _inventoryEngine,
+            _deadCodeEngine,
+            _analysisEngine,
+            _documentationEngine,
+            _dependencyEngine,
+            _projectStructureEngine,
+            _asyncSafetyEngine,
+            _healthOrchestrationEngine,
+            _architecturalEngine,
+            _symbolNavigationEngine,
+            _dependencyInjectionEngine,
+            _discoveryEngine,
+            new ProjectConsistencyEngine(_workspaceManager),
             _workspaceManager,
-            _config, NullLogger<SentinelIntelligenceTools>.Instance);
+            _config,
+            NullLogger<SentinelIntelligenceTools>.Instance);
 
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
@@ -99,15 +109,17 @@ public class BatteryThirtyThreeTests
         _diffEngine = new DiffEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
 
-        _qualityTools = new SentinelQualityTools(
-            _performanceEngine, _securityEngine, _testingEngine, _controlFlowEngine,
-            _logicOptimizationEngine, _analysisEngine, _asyncSafetyEngine,
-            new AntiPatternEngine(_workspaceManager), _asyncOptimizationEngine,
-            new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine,
+        _qualityTools = new SentinelQualityTools(_testingEngine,
+            _controlFlowEngine,
+            _analysisEngine,
+            new AntiPatternEngine(_workspaceManager),
+            new ThreadSafetyEngine(_workspaceManager),
+            _diagnosticEngine,
             new CodeStyleAnalysisEngine(_workspaceManager),
-            new PathDrivenTestEngine(_workspaceManager),
             new StackOverflowEngine(_workspaceManager),
-            _asyncBatchEngine, _workspaceManager, NullLogger<SentinelQualityTools>.Instance);
+            new MsToolAugmentEngine(_workspaceManager),
+            _workspaceManager,
+            NullLogger<SentinelQualityTools>.Instance);
     }
 
     [TearDown]

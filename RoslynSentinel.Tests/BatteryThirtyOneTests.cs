@@ -30,7 +30,8 @@ public class BatteryThirtyOneTests
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private LogicOptimizationEngine _logicOptimizationEngine;
     private ModernizationEngine _modernizationEngine;
-    private SentinelRefactoringTools _tools;
+    private ValidationEngine _validationEngine;
+    private SentinelAdvancedRefactoringTools _tools;
 
     [SetUp]
     public void SetUp()
@@ -52,8 +53,10 @@ public class BatteryThirtyOneTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
+        _validationEngine = new ValidationEngine(
+            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager));
 
-        _tools = new SentinelRefactoringTools(
+        _tools = new SentinelAdvancedRefactoringTools(
             _refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine,
             _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine,
             _advancedLogicEngine, _refinementEngine, _advancedTypeEngine,
@@ -63,7 +66,8 @@ public class BatteryThirtyOneTests
             new MsToolAugmentEngine(_workspaceManager),
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            _workspaceManager, _config, NullLogger<SentinelRefactoringTools>.Instance);
+            _workspaceManager, _validationEngine, _config,
+            NullLogger<SentinelAdvancedRefactoringTools>.Instance);
     }
 
     [TearDown]

@@ -69,11 +69,8 @@ public interface IOrderRepository
         _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _apiIntegrationEngine = new ApiIntegrationEngine(_workspaceManager);
-        _tools = new SentinelGenerationTools(
-            _codeGenerationEngine,
+        _tools = new SentinelGenerationTools(_codeGenerationEngine,
             _apiAutomationEngine,
-            _asyncOptimizationEngine,
-            _apiIntegrationEngine,
             _workspaceManager,
             NullLogger<SentinelGenerationTools>.Instance);
     }

@@ -1,5 +1,6 @@
-// Battery #18 — SentinelAugmentTools
-// Tests all 12 public methods of SentinelAugmentTools in-memory via TestSolutionBuilder.
+// Battery #18 — MsToolAugmentEngine
+// The SentinelAugmentTools MCP wrappers were removed in the Basic/Advanced server split;
+// these tests now exercise MsToolAugmentEngine directly, which is where the behaviour lives.
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -12,7 +13,6 @@ namespace RoslynSentinel.Tests;
 public class BatteryEighteenTests
 {
     private PersistentWorkspaceManager _workspaceManager;
-    private SentinelAugmentTools _tools;
     private MsToolAugmentEngine _msEngine;
 
     private const string RichSource = @"
@@ -93,10 +93,6 @@ public class OrderService : IOrderService
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _msEngine = new MsToolAugmentEngine(_workspaceManager);
-        _tools = new SentinelAugmentTools(
-            new MsToolAugmentEngine(_workspaceManager),
-            _workspaceManager,
-            NullLogger<SentinelAugmentTools>.Instance);
     }
 
     [TearDown]
@@ -114,7 +110,7 @@ public class OrderService : IOrderService
     public async Task EncapsulateFieldSafe_PublicField_ReturnsResult()
     {
         SetSource("namespace TestProj; public class Order { public int OrderId; }", "Test.cs");
-        var result = await _tools.EncapsulateFieldSafe("Test.cs", "OrderId");
+        var result = await _msEngine.EncapsulateFieldSafeAsync("Test.cs", "OrderId");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -122,7 +118,7 @@ public class OrderService : IOrderService
     public async Task EncapsulateFieldSafe_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.EncapsulateFieldSafe("NonExistent.cs", "OrderId");
+        var result = await _msEngine.EncapsulateFieldSafeAsync("NonExistent.cs", "OrderId");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -130,7 +126,7 @@ public class OrderService : IOrderService
     public async Task AnalyzeSwitchForPatternConversion_WithSwitchStatement_ReturnsAnalysis()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.AnalyzeSwitchForPatternConversion("Test.cs", "switch (status)");
+        var result = await _msEngine.AnalyzeSwitchForPatternConversionAsync("Test.cs", "switch (status)");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -138,7 +134,7 @@ public class OrderService : IOrderService
     public async Task AnalyzeSwitchForPatternConversion_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.AnalyzeSwitchForPatternConversion("NonExistent.cs", "switch (x)");
+        var result = await _msEngine.AnalyzeSwitchForPatternConversionAsync("NonExistent.cs", "switch (x)");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -148,7 +144,7 @@ public class OrderService : IOrderService
     public async Task ConvertSwitchToPatternSafe_WithSwitchStatement_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.ConvertSwitchToPatternSafe("Test.cs", "switch (status)");
+        var result = await _msEngine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (status)");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -156,7 +152,7 @@ public class OrderService : IOrderService
     public async Task ConvertSwitchToPatternSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ConvertSwitchToPatternSafe("NonExistent.cs", "switch (x)");
+        var result = await _msEngine.ConvertSwitchToPatternSafeAsync("NonExistent.cs", "switch (x)");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -220,7 +216,7 @@ public class OrderService : IOrderService
     public async Task AnalyzeForeachForLinqConversion_WithForeach_ReturnsAnalysis()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.AnalyzeForeachForLinqConversion("Test.cs", "foreach (var i in");
+        var result = await _msEngine.AnalyzeForeachForLinqConversionAsync("Test.cs", "foreach (var i in");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -228,7 +224,7 @@ public class OrderService : IOrderService
     public async Task AnalyzeForeachForLinqConversion_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.AnalyzeForeachForLinqConversion("NonExistent.cs", "foreach");
+        var result = await _msEngine.AnalyzeForeachForLinqConversionAsync("NonExistent.cs", "foreach");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -238,14 +234,14 @@ public class OrderService : IOrderService
     public async Task GetWorkspaceHealth_WithLoadedSolution_ReturnsReport()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.GetWorkspaceHealth();
+        var result = await _msEngine.GetWorkspaceHealthAsync();
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
     public async Task GetWorkspaceHealth_NoSolution_ReturnsReport()
     {
-        var result = await _tools.GetWorkspaceHealth();
+        var result = await _msEngine.GetWorkspaceHealthAsync();
         Assert.That(result, Is.Not.Null);
     }
 
@@ -310,7 +306,7 @@ public class OrderService : IOrderService
     public async Task ExtractMethodSafe_WithMethodBody_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.ExtractMethodSafe("Test.cs", "DoProcess", @"var result = string.Format");
+        var result = await _msEngine.ExtractMethodSafeAsync("Test.cs", "DoProcess", @"var result = string.Format");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -318,7 +314,7 @@ public class OrderService : IOrderService
     public async Task ExtractMethodSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _tools.ExtractMethodSafe("NonExistent.cs", "NewMethod", "some code");
+        var result = await _msEngine.ExtractMethodSafeAsync("NonExistent.cs", "NewMethod", "some code");
         Assert.That(result, Is.Not.Null);
     }
 }

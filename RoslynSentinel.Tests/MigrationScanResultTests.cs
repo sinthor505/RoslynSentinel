@@ -27,6 +27,7 @@ public class MigrationScanResultTests
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AntiPatternEngine _antiPatternEngine;
     private SentinelQualityTools _qualityTools;
+    private SentinelAsyncifyTools _asyncifyTools;
     private SentinelScanTools _scanTools;
     private string _tempDir;
 
@@ -49,29 +50,38 @@ public class MigrationScanResultTests
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
 
         _qualityTools = new SentinelQualityTools(
-            new PerformanceEngine(_workspaceManager),
-            new SecurityEngine(_workspaceManager),
             new TestingEngine(_workspaceManager),
             new ControlFlowEngine(_workspaceManager),
-            new LogicOptimizationEngine(_workspaceManager),
             new AnalysisEngine(_workspaceManager, new SentinelConfiguration()),
-            new AsyncSafetyEngine(_workspaceManager),
             _antiPatternEngine,
-            _asyncOptimizationEngine,
             new ThreadSafetyEngine(_workspaceManager),
             new DiagnosticEngine(_workspaceManager),
             new CodeStyleAnalysisEngine(_workspaceManager),
-            new PathDrivenTestEngine(_workspaceManager),
             new StackOverflowEngine(_workspaceManager),
+            new MsToolAugmentEngine(_workspaceManager),
+            _workspaceManager,
+            NullLogger<SentinelQualityTools>.Instance);
+
+        // The async-migration scan/progress tools moved from SentinelQualityTools to
+        // SentinelAsyncifyTools during the Basic/Advanced server split.
+        var validationEngine = new ValidationEngine(
+            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager));
+        _asyncifyTools = new SentinelAsyncifyTools(
+            _antiPatternEngine,
+            _asyncOptimizationEngine,
             new AsyncBatchEngine(
                 _workspaceManager,
                 _asyncOptimizationEngine,
-                new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
-                new AntiPatternEngine(_workspaceManager),
+                validationEngine,
+                _antiPatternEngine,
                 new MigrationLedger(),
                 NullLogger<AsyncBatchEngine>.Instance),
+            new MsToolAugmentEngine(_workspaceManager),
             _workspaceManager,
-            NullLogger<SentinelQualityTools>.Instance);
+            validationEngine,
+            new FailureRouter(ToolGraph.Empty),
+            new MigrationLedger(),
+            NullLogger<SentinelAsyncifyTools>.Instance);
 
         var config = new SentinelConfiguration();
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -97,6 +107,7 @@ public class MigrationScanResultTests
             new CodeStyleAnalysisEngine(_workspaceManager),
             new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config),
             symbolNavEngine,
+            new BreakingChangeEngine(_workspaceManager),
             _workspaceManager,
             NullLogger<SentinelScanTools>.Instance);
 
@@ -178,7 +189,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
 
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
@@ -226,7 +237,7 @@ public class Svc
         // 10 candidates — request page of 3 starting at offset 2.
         SetSource(BuildManyFlaggedMethods(10));
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 3, offset: 2);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 3, offset: 2);
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -235,7 +246,7 @@ public class Svc
         Assert.That(result.LargeResult, Is.Null, "LargeResult should be null for a small page.");
         Assert.That(result.Data!.Count, Is.EqualTo(3), "Page should contain 3 items.");
         Assert.That(result.TotalRecords, Is.EqualTo(10), "TotalRecords should reflect all candidates.");
-        Assert.That(result.HasMore, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
+        Assert.That(result.HasMorePages, Is.True, "More pages exist beyond offset 2 + limit 3 = 5 < 10.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -252,7 +263,7 @@ public class Svc
         // The server threshold is 256 KB. This must stay inline.
         SetSource(BuildManyFlaggedMethods(55));
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(); // default limit=50, offset=0
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(); // default limit=50, offset=0
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -278,7 +289,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Use a large limit to capture all findings in one page.
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
 
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(result, Is.Not.Null);
@@ -305,7 +316,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Run the scan to produce the spill file (same as T4).
-        var scanRaw = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
+        var scanRaw = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
         var scanResult = scanRaw.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
@@ -319,7 +330,7 @@ public class Svc
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
         Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
             "TotalRecords from get_scan_result must match TotalRecords from the original scan.");
-        Assert.That(page1Result.HasMore, Is.True);
+        Assert.That(page1Result.HasMorePages, Is.True);
 
         // ── verify structured records (not preview text) ──────────────────────
         var first = page1Result.Data![0];
@@ -359,13 +370,13 @@ public class Svc
         _workspaceManager.SetTestSolution(solution);
 
         // Query using only the filename (suffix match).
-        var rawSuffix = await _qualityTools.ScanAsyncMigrationCandidates(filePath: "Service.cs");
+        var rawSuffix = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: "Service.cs");
         var suffixResult = rawSuffix.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(suffixResult?.Success, Is.True, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.Data?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path — should yield the same finding.
-        var rawAbs = await _qualityTools.ScanAsyncMigrationCandidates(filePath: AbsPath);
+        var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: AbsPath);
         var absResult = rawAbs.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
         Assert.That(absResult?.Success, Is.True, "Full absolute filePath should succeed.");
         Assert.That(absResult!.Data?.Count, Is.EqualTo(1));
@@ -391,7 +402,7 @@ public class Svc
 }}
 {AttrStub}", "RealFile.cs");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(filePath: "NonExistent.cs");
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: "NonExistent.cs");
 
         var result = rawResult.Data as MigrationEnvelope<object>;
         Assert.That(result, Is.Not.Null);
@@ -408,7 +419,7 @@ public class Svc
     public async Task T8_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded()
     {
         // Intentionally do NOT set a solution.
-        var result = await _qualityTools.GetAsyncMigrationProgress();
+        var result = await _asyncifyTools.GetAsyncMigrationProgress();
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -429,7 +440,7 @@ public class Svc
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // already cancelled
 
-        var result = await _qualityTools.GetAsyncMigrationProgress(
+        var result = await _asyncifyTools.GetAsyncMigrationProgress(
             cancellationToken: cts.Token);
 
         Assert.That(result.Success, Is.False);
@@ -459,7 +470,7 @@ public class Svc
         sb.AppendLine(AttrStub);
         SetSource(sb.ToString());
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true, topN: 5, minScore: 70);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true, topN: 5, minScore: 70);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -496,7 +507,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -540,7 +551,7 @@ public class Svc
     public async Task<int> GetVal(System.Threading.CancellationToken ct) { return await Task.FromResult(1); }
 }");
 
-        var result = await _qualityTools.GetAsyncMigrationProgress();
+        var result = await _asyncifyTools.GetAsyncMigrationProgress();
 
         Assert.That(result.Success, Is.True, "Should succeed with a loaded solution.");
         Assert.That(result.Error, Is.Null);
@@ -562,7 +573,7 @@ public class Svc
     public async Task DoWork() { await Task.Delay(1); }
 }");
 
-        var result = await _qualityTools.GetAsyncMigrationProgress(projectName: "TestProj");
+        var result = await _asyncifyTools.GetAsyncMigrationProgress(projectName: "TestProj");
 
         Assert.That(result.Success, Is.True, "Scoped project query should succeed.");
         Assert.That(result.Error, Is.Null);
@@ -586,7 +597,7 @@ public class Svc
             _workspaceManager,
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentationTools>.Instance);
 
-        var result = docTools.ProjectDoc("read", "state") as DocReadResult;
+        var result = docTools.ProjectDoc(DocAction.read, DocType.state) as DocReadResult;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Error, Is.Null,
@@ -617,7 +628,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates();
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates();
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);
@@ -638,37 +649,20 @@ public class Svc
         }
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // T17 – async_migrate with unknown operation → ErrorCode="InvalidArgument"
-    // ══════════════════════════════════════════════════════════════════════════
-
-    [Test, CancelAfter(5000)]
-    public async Task T17_AsyncMigrate_UnknownOperation_ReturnsInvalidArgument()
-    {
-        SetSource("public class C { public void M() {} }");
-
-        var result = await _qualityTools.AsyncMigrate(
-            "totally_unknown_operation",
-            new AsyncMigrateInput());
-
-        Assert.That(result.Success, Is.False);
-        Assert.That(result.Error, Is.Not.Null);
-        Assert.That(result.Error!.ErrorCode, Is.EqualTo(MigrationErrorCode.InvalidArgument));
-        Assert.That(result.Error.Message, Does.Contain("propagate_cancellation_token").Or.Contain("asyncify"),
-            "Error message should list valid operation names.");
-    }
+    // T17 removed: it asserted that the `async_migrate` string-dispatch tool rejected an
+    // unknown operation name. That dispatcher no longer exists — the operations it routed to
+    // are now separate tools (Asyncify, PropagateCancellationToken, …), so an invalid
+    // operation name is a compile error rather than a runtime InvalidArgument.
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T18 – async_migrate with no solution loaded → ErrorCode="SolutionNotLoaded"
+    // T18 – asyncify with no solution loaded → ErrorCode="SolutionNotLoaded"
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
-    public async Task T18_AsyncMigrate_NoSolution_ReturnsSolutionNotLoaded()
+    public async Task T18_Asyncify_NoSolution_ReturnsSolutionNotLoaded()
     {
         // Intentionally do NOT set a solution.
-        var result = await _qualityTools.AsyncMigrate(
-            "propagate_cancellation_token",
-            new AsyncMigrateInput());
+        var result = await _asyncifyTools.Asyncify();
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -686,7 +680,7 @@ public class Svc
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
@@ -730,7 +724,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(summarize: true, minScore: 80);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true, minScore: 80);
         var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
 
         Assert.That(result, Is.Not.Null);
@@ -782,7 +776,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _qualityTools.ScanAsyncMigrationCandidates(minScore: 85, limit: 20);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(minScore: 85, limit: 20);
         var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
 
         Assert.That(result, Is.Not.Null);

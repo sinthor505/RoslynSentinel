@@ -29,6 +29,8 @@ public class BatteryTwentyTwoTests
     private DependencyInjectionEngine _dependencyInjectionEngine;
     private DiscoveryEngine _discoveryEngine;
     private SentinelIntelligenceTools _tools;
+    private SentinelSymbolTools _symbolTools;
+    private SentinelScanTools _scanTools;
 
     private const string RichSource = @"
 using System;
@@ -129,10 +131,29 @@ public class OrderService : IOrderService
             _deadCodeEngine, _analysisEngine, _documentationEngine, _dependencyEngine,
             _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine,
             _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine,
-            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), new BreakingChangeEngine(_workspaceManager),
-            new CloneDetectionEngine(_workspaceManager),
+            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager),
             _workspaceManager,
             _config, NullLogger<SentinelIntelligenceTools>.Instance);
+
+        // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
+        _symbolTools = new SentinelSymbolTools(
+            _impactAnalyzer, _semanticSearchEngine, _inventoryEngine, _analysisEngine,
+            _dependencyEngine, _projectStructureEngine, _symbolNavigationEngine,
+            _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager),
+            _workspaceManager, _config, NullLogger<SentinelSymbolTools>.Instance);
+
+        // GetPublicApiSurface moved to SentinelScanTools (Advanced).
+        _scanTools = new SentinelScanTools(
+            _analysisEngine, new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager),
+            _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager),
+            new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _architecturalEngine,
+            _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager),
+            _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine,
+            new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config),
+            new CodeStyleAnalysisEngine(_workspaceManager),
+            new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config),
+            _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager),
+            _workspaceManager, NullLogger<SentinelScanTools>.Instance);
     }
 
     [TearDown]
@@ -160,7 +181,7 @@ public class OrderService : IOrderService
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.InspectSymbol("Test.cs", "ProcessAsync", "blastRadius");
+        var result = await _symbolTools.InspectSymbol("Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -377,7 +398,7 @@ public class OrderService : IOrderService
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.InspectSymbol("Test.cs", "ProcessAsync", "info");
+        var result = await _symbolTools.InspectSymbol("Test.cs", "ProcessAsync", InspectSymbolAspect.info);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -416,7 +437,7 @@ public class OrderService : IOrderService
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetTypeInfo("Order", "members");
+        var result = await _symbolTools.GetTypeInfo("Order", TypeInfoInclude.members);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -491,7 +512,7 @@ public class OrderService : IOrderService
     public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.MoveFileToNamespaceFolder("Test.cs");
+        var result = await _tools.PreviewMoveFileToNamespaceFolder("Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -520,7 +541,7 @@ public class OrderService : IOrderService
     public async Task GetPublicApiSurface_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetPublicApiSurface("TestProj");
+        var result = await _scanTools.GetPublicApiSurface("TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -540,7 +561,7 @@ public class OrderService : IOrderService
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetBestInsertionPoint("Test.cs", "Order", "method");
+        var result = await _symbolTools.GetBestInsertionPoint("Test.cs", "Order", "method");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -560,7 +581,7 @@ public class OrderService : IOrderService
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.PreviewRenameImpact("Test.cs", "ProcessAsync");
+        var result = await _symbolTools.PreviewRenameImpact("Test.cs", "ProcessAsync");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -570,7 +591,7 @@ public class OrderService : IOrderService
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindReferences("Test.cs", "ProcessAsync", "callers");
+        var result = await _symbolTools.FindReferences("ProcessAsync", FindReferencesKind.callers, filepath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -580,7 +601,7 @@ public class OrderService : IOrderService
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.FindReferences("Test.cs", "IOrderService", "implementations");
+        var result = await _symbolTools.FindReferences("IOrderService", FindReferencesKind.implementations, filepath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
 }
