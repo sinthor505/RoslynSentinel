@@ -78,6 +78,15 @@ public record ToolResult<T>
     {
         get; init;
     }
+
+    /// <summary>
+    /// Optional non-fatal hint surfaced alongside a successful result (e.g. a likely-mistaken
+    /// argument value). Null when there is nothing noteworthy to flag.
+    /// </summary>
+    public string? Warning
+    {
+        get; init;
+    }
 }
 
 // ── Error detail ─────────────────────────────────────────────────────────────

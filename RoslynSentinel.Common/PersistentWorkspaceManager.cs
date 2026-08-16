@@ -28,6 +28,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _stagedChanges = new();
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _appliedChanges = new();
     private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _revertedChanges = new();
+    private readonly ConcurrentDictionary<string, string> _stagedDescriptions = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
@@ -70,11 +71,20 @@ public partial class PersistentWorkspaceManager : IDisposable
     public record StagedChangeSummary(
         string ChangeId,
         List<FilePath> AffectedFiles,
-        string Description
+        string Description,
+        List<string>? ConflictingChangeIds = null
     )
     {
-        /// <summary>Changes are staged in memory — not yet written to disk. Call apply_staged_changes to apply.</summary>
-        public string Note => $"Staged — not yet written to disk. Call apply_staged_changes(changeId: \"{ChangeId}\") to apply.";
+        /// <summary>Machine-parseable staging state — always "staged_in_memory" for a freshly returned summary.</summary>
+        public string Status => "staged_in_memory";
+
+        /// <summary>Machine-parseable hint for what the caller must do next: apply or discard.</summary>
+        public string NextAction => "apply_or_discard";
+
+        /// <summary>Changes are staged in memory — not yet written to disk. Call StagedChange(action: "apply"/"discard") to proceed.</summary>
+        public string Note => ConflictingChangeIds is { Count: > 0 }
+            ? $"Staged — not yet written to disk. WARNING: overlaps with unapplied changeId(s) [{string.Join(", ", ConflictingChangeIds)}] also targeting the same file(s) — apply or discard those first to avoid one silently overwriting the other. Call StagedChange(action: \"apply\", changeId: \"{ChangeId}\") to apply, or StagedChange(action: \"discard\", changeId: \"{ChangeId}\") to drop it."
+            : $"Staged — not yet written to disk. Call StagedChange(action: \"apply\", changeId: \"{ChangeId}\") to apply, or StagedChange(action: \"discard\", changeId: \"{ChangeId}\") to drop it.";
     }
 
     public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
@@ -541,11 +551,47 @@ public partial class PersistentWorkspaceManager : IDisposable
     {
         var id = Guid.NewGuid().ToString("n")[..8];
         _stagedChanges[id] = changes;
+        _stagedDescriptions[id] = description;
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("Staged change {DocCommentId}: {Description} ({Count} files)", id, description, changes.Count);
         }
         return id;
+    }
+
+    /// <summary>
+    /// Returns the changeIds of any other currently-staged (unapplied) change sets that touch at
+    /// least one of the same files as <paramref name="changeId"/>. Used to warn callers before they
+    /// apply/discard one change while a conflicting sibling change on the same file is still pending.
+    /// </summary>
+    public List<string> GetConflictingStagedChangeIds(string changeId)
+    {
+        if (!_stagedChanges.TryGetValue(changeId, out var changes) || changes.Count == 0)
+        {
+            return [];
+        }
+
+        var files = new HashSet<FilePath>(changes.Keys);
+        return _stagedChanges
+            .Where(kvp => kvp.Key != changeId && kvp.Value.Keys.Any(f => files.Contains(f)))
+            .Select(kvp => kvp.Key)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Lists every currently staged (unapplied) change set with its affected files and description.
+    /// Lets a caller recover/enumerate outstanding changeIds instead of having to track them itself
+    /// across a long conversation.
+    /// </summary>
+    public List<StagedChangeSummary> ListStagedChanges()
+    {
+        return _stagedChanges
+            .Select(kvp => new StagedChangeSummary(
+                kvp.Key,
+                kvp.Value.Keys.ToList(),
+                _stagedDescriptions.TryGetValue(kvp.Key, out var desc) ? desc : "(no description)",
+                GetConflictingStagedChangeIds(kvp.Key) is { Count: > 0 } conflicts ? conflicts : null))
+            .ToList();
     }
 
     /// <summary>
@@ -643,6 +689,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         {
             _appliedChanges.AddOrUpdate(changeId, changes, (key, oldValue) => changes);
             _stagedChanges.TryRemove(changeId, out _);
+            _stagedDescriptions.TryRemove(changeId, out _);
         }
         else if (result.SucceededFiles.Count > 0)
         {
@@ -662,6 +709,91 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     /// <summary>
+    /// Result of applying every currently-staged change set, one at a time. Surfaces which
+    /// changeIds succeeded, which failed, and — critically — which changeIds remain staged
+    /// afterward (e.g. because they conflicted with an earlier apply in the same batch and were
+    /// re-queued, or because their apply failed and validateChanges left them untouched).
+    /// </summary>
+    public record ApplyAllResult(
+        bool Success,
+        List<string> AppliedChangeIds,
+        Dictionary<string, string> FailedChangeIds,
+        List<string> RemainingStagedChangeIds,
+        string Summary
+    );
+
+    /// <summary>
+    /// Applies every currently staged (unapplied) change set to disk, one changeId at a time, in an
+    /// order that pushes conflicting (same-file) change sets later so an earlier apply doesn't get
+    /// silently clobbered. When two pending changeIds touch the same file, the first one processed
+    /// (fewest conflicts, in insertion order) is applied; any later changeId still targeting an
+    /// already-applied file is left staged and reported in <see cref="ApplyAllResult.FailedChangeIds"/>
+    /// so the caller can decide how to reconcile it, rather than one silently overwriting the other.
+    /// </summary>
+    public async Task<ApplyAllResult> ApplyAllStagedChangesAsync(int retryCount = 3, bool validateChanges = true)
+    {
+        var appliedIds = new List<string>();
+        var failedIds = new Dictionary<string, string>();
+
+        // Snapshot the ids up front; order changeIds with the fewest same-file conflicts first so
+        // conflict-free changes land before ones sharing a file with something else pending.
+        var pendingIds = _stagedChanges.Keys
+            .OrderBy(id => GetConflictingStagedChangeIds(id).Count)
+            .ToList();
+
+        // Tracks files already claimed by a changeId applied earlier in this same batch, so that
+        // when two pending changeIds conflict, the first one processed wins and later ones are
+        // skipped (rather than both mutually seeing each other as still-staged and skipping).
+        var claimedFiles = new HashSet<FilePath>();
+
+        foreach (var id in pendingIds)
+        {
+            if (!_stagedChanges.TryGetValue(id, out var changes))
+            {
+                // Already applied/removed earlier in this same loop (e.g. discarded concurrently).
+                continue;
+            }
+
+            var overlapWithClaimed = changes.Keys.Where(f => claimedFiles.Contains(f)).ToList();
+            if (overlapWithClaimed.Count > 0)
+            {
+                var conflictingIds = GetConflictingStagedChangeIds(id).Where(c => appliedIds.Contains(c)).ToList();
+                failedIds[id] = $"Skipped: conflicts with already-applied changeId(s) in this batch [{string.Join(", ", conflictingIds)}] touching the same file(s) [{string.Join(", ", overlapWithClaimed)}]. Resolve the conflict (re-stage against the new file content, or apply/discard manually) before retrying.";
+                continue;
+            }
+
+            try
+            {
+                var result = await ApplyStagedChangesAsync(id, retryCount, validateChanges);
+                if (result.Success)
+                {
+                    appliedIds.Add(id);
+                    foreach (var f in changes.Keys)
+                    {
+                        claimedFiles.Add(f);
+                    }
+                }
+                else
+                {
+                    failedIds[id] = result.Summary;
+                }
+            }
+            catch (Exception ex)
+            {
+                failedIds[id] = $"Apply failed unexpectedly ({ex.GetType().Name}): {ex.Message}";
+            }
+        }
+
+        var remaining = _stagedChanges.Keys.ToList();
+        return new ApplyAllResult(
+            Success: failedIds.Count == 0,
+            AppliedChangeIds: appliedIds,
+            FailedChangeIds: failedIds,
+            RemainingStagedChangeIds: remaining,
+            Summary: $"Applied {appliedIds.Count} of {pendingIds.Count} staged change(s); {failedIds.Count} failed/skipped; {remaining.Count} still staged.");
+    }
+
+    /// <summary>
     /// Manually removes a staged change set without applying it.
     /// </summary>
     public bool DiscardStagedChanges(string changeId)
@@ -673,6 +805,7 @@ public partial class PersistentWorkspaceManager : IDisposable
             throw new KeyNotFoundException($"Staged change ID '{changeId}' not found in current staged, applied, or reverted changes. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
         }
 
+        _stagedDescriptions.TryRemove(changeId, out _);
         return _stagedChanges.TryRemove(changeId, out _);
     }
 

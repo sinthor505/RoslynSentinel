@@ -425,10 +425,10 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "StagedChange")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Manages a staged change set. apply → write to disk; get → return file dict; validate → dry-run diagnostics; discard → remove. retryCount applies to apply only (default 3).")]
+    [Description("Manages staged change sets. apply → write one changeId to disk; applyAll → write every currently staged changeId to disk (conflict-aware; skips changeIds that still overlap another pending changeId's files); list → enumerate all outstanding staged changeIds with their files/description/conflicts (no changeId needed); get → return file dict for one changeId; validate → dry-run diagnostics for one changeId; discard → remove one changeId. changeId is required for apply/get/validate/discard, ignored for list/applyAll. retryCount applies to apply/applyAll only (default 3).")]
     public async Task<ToolResult<object>> StagedChange(
         [Consumes(DataTag.Action, required: true)] StagedChangeAction action,
-        [Consumes(DataTag.ChangeId, required: true)] string changeId,
+        [Consumes(DataTag.ChangeId, required: false)] string? changeId = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         RequestContext<CallToolRequestParams> requestParams = null,
@@ -436,15 +436,38 @@ public class SentinelWorkspaceTools
     {
         try
         {
+            if (action == StagedChangeAction.list)
+            {
+                return new ToolResult<object>() { Success = true, Data = _workspaceManager.ListStagedChanges() };
+            }
+            if (action == StagedChangeAction.applyAll)
+            {
+                var allResult = await _workspaceManager.ApplyAllStagedChangesAsync(retryCount, validateChanges: validateOnApply);
+                foreach (var appliedId in allResult.AppliedChangeIds)
+                {
+                    // Best-effort forensic blob per applied changeId so undo_last_apply resolves each one.
+                    await WriteBlobForApplyAsync("staged_change", new PersistentWorkspaceManager.ApplyChangesResult(true, [], new Dictionary<FilePath, string>(), allResult.Summary), appliedId);
+                }
+                _logger.LogInformation(allResult.Summary);
+                return new ToolResult<object>() { Success = allResult.Success, Data = allResult, Error = allResult.Success ? null : new ResultError(ToolErrorCode.Exception, allResult.Summary) };
+            }
+            if (string.IsNullOrWhiteSpace(changeId))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"changeId is required for action '{action}'. Use action: \"list\" to enumerate outstanding staged changeIds.") };
+            }
             if (action == StagedChangeAction.apply)
             {
+                var conflicts = _workspaceManager.GetConflictingStagedChangeIds(changeId);
                 var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount, validateChanges: validateOnApply);
                 if (!result.Success && result.ValidationResult != null)
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
                 // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
                 await WriteBlobForApplyAsync("staged_change", result, changeId);
+                var remaining = _workspaceManager.ListStagedChanges();
                 string resultMessage = result.SucceededFiles.Count > 0
                     ? $"Staged change '{changeId}' applied successfully with {result.SucceededFiles.Count} files changed."
+                        + (conflicts.Count > 0 ? $" NOTE: this changeId overlapped with still-staged changeId(s) [{string.Join(", ", conflicts)}] — verify those are still intended before applying them." : string.Empty)
+                        + (remaining.Count > 0 ? $" {remaining.Count} other changeId(s) remain staged: [{string.Join(", ", remaining.Select(r => r.ChangeId))}]." : " No other changeIds remain staged.")
                     : $"Staged change '{changeId}' apply failed: no files were changed.";
                 _logger.LogInformation(resultMessage);
                 return new ToolResult<object>() { Success = true, Data = resultMessage };
@@ -872,10 +895,13 @@ public class SentinelWorkspaceTools
         }
     }
 
+    /// <summary>Regex metacharacters that suggest the caller meant to pass isRegex=true.</summary>
+    private static readonly Regex LikelyRegexPattern = new(@"[\^\$\.\*\+\?\(\)\[\]\{\}\|\\]", RegexOptions.Compiled);
+
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
         [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
@@ -953,7 +979,13 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            return new ToolResult<object>() { Success = true, Data = results };
+            string? warning = null;
+            if (!isRegex && LikelyRegexPattern.IsMatch(pattern))
+            {
+                warning = $"Pattern '{pattern}' contains regex metacharacters but isRegex is false, so it was matched as a literal substring. If you intended a regex, retry with isRegex=true.";
+            }
+
+            return new ToolResult<object>() { Success = true, Data = results, Warning = warning };
         }
         catch (Exception ex)
         {

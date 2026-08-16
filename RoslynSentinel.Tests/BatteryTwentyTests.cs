@@ -129,6 +129,38 @@ public class BatteryTwentyTests
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- SearchSolutionText ---
+
+    [Test]
+    public async Task SearchSolutionText_LiteralPattern_ReturnsNoWarning()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.SearchSolutionText("Order");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Is.Null);
+    }
+
+    [Test]
+    public async Task SearchSolutionText_RegexLikePatternWithoutIsRegex_ReturnsWarning()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.SearchSolutionText(@"^\s*public enum OrderStatus");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Does.Contain("isRegex=true"));
+    }
+
+    [Test]
+    public async Task SearchSolutionText_RegexLikePatternWithIsRegex_ReturnsNoWarning()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.SearchSolutionText(@"^\s*public class Order", isRegex: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Is.Null);
+    }
+
     // --- LoadSolution ---
 
     [Test]
@@ -262,6 +294,119 @@ public class BatteryTwentyTests
         var result = await _tools.StagedChange(StagedChangeAction.discard, "nonexistent-change-id");
         Assert.That(result, Is.Not.Null);
         Assert.That(result?.ToString(), Does.Contain("not found").IgnoreCase);
+    }
+
+    [Test]
+    public async Task StagedChange_List_NoStagedChanges_ReturnsEmptyList()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.StagedChange(StagedChangeAction.list);
+
+        Assert.That(result.Success, Is.True);
+        var list = result.Data as List<PersistentWorkspaceManager.StagedChangeSummary>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list, Is.Empty);
+    }
+
+    [Test]
+    public async Task StagedChange_List_WithStagedChange_ReturnsChangeIdAndFiles()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var changeId = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // staged" },
+            "Test staged change");
+
+        var result = await _tools.StagedChange(StagedChangeAction.list);
+
+        Assert.That(result.Success, Is.True);
+        var list = result.Data as List<PersistentWorkspaceManager.StagedChangeSummary>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list!.Select(s => s.ChangeId), Does.Contain(changeId));
+    }
+
+    [Test]
+    public async Task StagedChange_List_ConflictingChangeIds_ReportsConflict()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var changeIdA = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // A" },
+            "Change A");
+        var changeIdB = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // B" },
+            "Change B");
+
+        var result = await _tools.StagedChange(StagedChangeAction.list);
+
+        Assert.That(result.Success, Is.True);
+        var list = result.Data as List<PersistentWorkspaceManager.StagedChangeSummary>;
+        var summaryA = list!.Single(s => s.ChangeId == changeIdA);
+        Assert.That(summaryA.ConflictingChangeIds, Does.Contain(changeIdB));
+        Assert.That(summaryA.Note, Does.Contain("WARNING").IgnoreCase);
+    }
+
+    [Test]
+    public async Task StagedChange_ApplyAll_NoStagedChanges_ReturnsSuccessWithZeroApplied()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.StagedChange(StagedChangeAction.applyAll);
+
+        Assert.That(result.Success, Is.True);
+        var allResult = result.Data as PersistentWorkspaceManager.ApplyAllResult;
+        Assert.That(allResult, Is.Not.Null);
+        Assert.That(allResult!.AppliedChangeIds, Is.Empty);
+    }
+
+    [Test]
+    public async Task StagedChange_ApplyAll_MultipleNonConflictingChanges_AppliesAll()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+            [("Test.cs", SimpleSource), ("Other.cs", "namespace TestProj; public class Other { }")]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var idA = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // A" },
+            "Change A");
+        var idB = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Other.cs")] = "namespace TestProj; public class Other { } // B" },
+            "Change B");
+
+        var result = await _tools.StagedChange(StagedChangeAction.applyAll, validateOnApply: false);
+
+        Assert.That(result.Success, Is.True);
+        var allResult = result.Data as PersistentWorkspaceManager.ApplyAllResult;
+        Assert.That(allResult, Is.Not.Null);
+        Assert.That(allResult!.AppliedChangeIds, Is.EquivalentTo(new[] { idA, idB }));
+        Assert.That(allResult.RemainingStagedChangeIds, Is.Empty);
+    }
+
+    [Test]
+    public async Task StagedChange_ApplyAll_ConflictingChanges_SkipsSecondAndReportsRemaining()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var idA = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // A" },
+            "Change A");
+        var idB = _workspaceManager.StageChanges(
+            new Dictionary<FilePath, string> { [new FilePath("Test.cs")] = SimpleSource + " // B" },
+            "Change B");
+
+        var result = await _tools.StagedChange(StagedChangeAction.applyAll, validateOnApply: false);
+
+        var allResult = result.Data as PersistentWorkspaceManager.ApplyAllResult;
+        Assert.That(allResult, Is.Not.Null);
+        Assert.That(allResult!.AppliedChangeIds.Count, Is.EqualTo(1));
+        Assert.That(allResult.RemainingStagedChangeIds.Count, Is.EqualTo(1));
+        Assert.That(allResult.FailedChangeIds, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task StagedChange_MissingChangeId_ForApplyAction_ReturnsStructuredError()
+    {
+        var result = await _tools.StagedChange(StagedChangeAction.apply, changeId: null);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("list"));
     }
 
     // --- GetDiagnostics (consolidated: file, project, solution) ---
