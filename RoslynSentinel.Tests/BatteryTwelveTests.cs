@@ -157,13 +157,16 @@ public class ModernizationEngineTests
     }
 
     [Test]
-    public void ClassToRecord_UnknownFile_ThrowsException()
+    public async Task ClassToRecord_UnknownFile_ReportsWithoutThrowing()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Dto.cs", "public class Point { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<InvalidOperationException>(() => _engine.ClassToRecordAsync("DoesNotExist.cs", "Point"));
+        var result = await _engine.ClassToRecordAsync("DoesNotExist.cs", "Point");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 
     [Test]

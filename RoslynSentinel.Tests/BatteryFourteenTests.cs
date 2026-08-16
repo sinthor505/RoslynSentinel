@@ -86,15 +86,16 @@ public class AdvancedRefactoringEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public void ReplaceStringConcat_UnknownFile_ThrowsException()
+    public async Task ReplaceStringConcat_UnknownFile_ReportsWithoutThrowing()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<Exception>(
-            async () => await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"),
-            "missing file should throw Exception");
+        var result = await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 
     [Test]
@@ -116,15 +117,16 @@ public class Greeter
     }
 
     [Test]
-    public void OptimizeTaskWait_UnknownFile_ThrowsException()
+    public async Task OptimizeTaskWait_UnknownFile_ReportsWithoutThrowing()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<Exception>(
-            async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"),
-            "missing file should throw Exception");
+        var result = await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 }
 

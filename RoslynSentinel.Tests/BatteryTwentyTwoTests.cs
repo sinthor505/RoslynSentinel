@@ -481,11 +481,13 @@ public class OrderService : IOrderService
     }
 
     [Test]
-    public void GetCallGraph_NonExistentMethod_Throws()
+    public async Task GetCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GetCallGraph("Test.cs", "NoSuchMethod99"));
+        var result = await _tools.GetCallGraph("Test.cs", "NoSuchMethod99");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
@@ -499,11 +501,13 @@ public class OrderService : IOrderService
     }
 
     [Test]
-    public void GetReverseCallGraph_NonExistentMethod_Throws()
+    public async Task GetReverseCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GetCallGraph("Test.cs", "NoSuchMethod99", "reverse"));
+        var result = await _tools.GetCallGraph("Test.cs", "NoSuchMethod99", "reverse");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     // --- MoveFileToNamespaceFolder ---

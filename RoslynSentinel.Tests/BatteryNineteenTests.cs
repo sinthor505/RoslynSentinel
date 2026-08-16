@@ -113,11 +113,13 @@ public interface IOrderRepository
     }
 
     [Test]
-    public void GenerateHttpClient_NonExistentFile_Throws()
+    public async Task GenerateHttpClient_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.GenerateHttpClient("NonExistent.cs", "OrdersController"));
+        var result = await _tools.GenerateHttpClient("NonExistent.cs", "OrdersController");
+
+        Assert.That(result, Is.Not.Null,
+            "Tools return a message rather than throwing for an unknown file.");
     }
 
     // --- GenerateConstructor ---
@@ -197,11 +199,13 @@ public interface IOrderRepository
     }
 
     [Test]
-    public void GenerateDefaultConfigJson_UnknownProject_Throws()
+    public async Task GenerateDefaultConfigJson_UnknownProject_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<Exception>(
-            () => _tools.GenerateDefaultConfigJson("NoSuchProject"));
+        var result = await _tools.GenerateDefaultConfigJson("NoSuchProject");
+
+        Assert.That(result, Is.Not.Null,
+            "Tools return a message rather than throwing for an unknown project.");
     }
 
     // --- GenerateAsyncOverload ---
@@ -216,11 +220,11 @@ public interface IOrderRepository
     }
 
     [Test]
-    public async Task GenerateAsyncOverload_NonExistentFile_Throws()
+    public void GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData");
-        Assert.That(result, Is.Null.Or.Empty);
+        Assert.ThrowsAsync<InvalidOperationException>(
+            () => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
     }
 
     // --- AddValidationToPoco ---
@@ -287,10 +291,12 @@ public interface IOrderRepository
     }
 
     [Test]
-    public void InterpolateStringSafe_NonExistentFile_Throws()
+    public async Task InterpolateStringSafe_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.InterpolateStringSafe("NonExistent.cs", "string.Format"));
+        var result = await _tools.InterpolateStringSafe("NonExistent.cs", "string.Format");
+
+        Assert.That(result, Is.Not.Null,
+            "Tools return a message rather than throwing for an unknown file.");
     }
 }

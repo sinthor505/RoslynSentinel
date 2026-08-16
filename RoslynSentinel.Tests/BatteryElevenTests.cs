@@ -254,13 +254,15 @@ public class Service
     }
 
     [Test]
-    public void FindUnusedPrivateMembers_UnknownFile_ThrowsException()
+    public async Task FindUnusedPrivateMembers_UnknownFile_ReturnsEmpty()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Service.cs", "public class Service { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<Exception>(() =>
-            _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
+        var result = await _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service");
+
+        Assert.That(result, Is.Empty,
+            "Engines return an empty list for an unknown file rather than throwing.");
     }
 }

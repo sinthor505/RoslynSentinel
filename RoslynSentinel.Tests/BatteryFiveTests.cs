@@ -316,11 +316,11 @@ public class Converter
     }
 
     [Test]
-    public async Task FindUnsafeTypeCasts_FileNotFound_ThrowsException()
+    public void FindUnsafeTypeCasts_FileNotFound_ThrowsFileNotFound()
     {
         SetSource("public class C { }", "Test.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _engine.FindUnsafeTypeCastsAsync("NonExistent.cs"));
     }
 
@@ -588,8 +588,10 @@ public class MetricsService
     {
         SetSource(@"public class C { public void Existing() { } }");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.AddTryCatchToMethodAsync("Test.cs", "NonExistentMethod"));
+        var result = await _engine.AddTryCatchToMethodAsync("Test.cs", "NonExistentMethod");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 
     // Helper: count non-overlapping occurrences of a substring

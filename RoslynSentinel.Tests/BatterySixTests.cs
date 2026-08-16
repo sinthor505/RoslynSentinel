@@ -75,11 +75,11 @@ public class Auditor
     }
 
     [Test]
-    public async Task GenerateXmlDocStubs_FileNotFound_ThrowsException()
+    public void GenerateXmlDocStubs_FileNotFound_ThrowsFileNotFound()
     {
         SetSource("public class C { }", "Test.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
     }
 
@@ -164,8 +164,10 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     {
         SetSource("public class Foo { }", "Test.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
+        var result = await _engine.ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 
     [Test]

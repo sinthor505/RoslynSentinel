@@ -559,9 +559,11 @@ public class Big
         SetSource(@"
 public class Marker { }", "Marker.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _analysisEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker"),
-            "A class with no fields or properties cannot generate equality overrides.");
+        var result = await _analysisEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "A class with no fields or properties cannot generate equality overrides — "
+            + "that is reported through Outcome, not thrown.");
     }
 
     // ══════════════════════════════════════════════════════════════

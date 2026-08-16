@@ -865,11 +865,13 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
-    public void ExtractLocalVariable_NonExistentFile_Throws()
+    public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.ExtractLocalVariable("NonExistent.cs", "GetLabel", "label"));
+        var result = await _tools.ExtractLocalVariable("NonExistent.cs", "GetLabel", "label");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     // --- ConvertToSwitch ---

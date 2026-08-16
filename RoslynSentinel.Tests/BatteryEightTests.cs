@@ -70,11 +70,11 @@ namespace ExpressRecipe.Services
     }
 
     [Test]
-    public void GetCodeInventory_UnknownFile_Throws()
+    public void GetCodeInventory_UnknownFile_ThrowsFileNotFound()
     {
         SetSource("public class Foo { }");
 
-        Assert.ThrowsAsync<Exception>(async () =>
+        Assert.ThrowsAsync<FileNotFoundException>(async () =>
             await _engine.GetCodeInventoryAsync("NonExistent.cs"));
     }
 }
@@ -197,14 +197,16 @@ public class DependencyEngineTests
     }
 
     [Test]
-    public void GetProjectDependencies_UnknownProject_Throws()
+    public async Task GetProjectDependencies_UnknownProject_ReportsWithoutThrowing()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.GetProjectDependenciesAsync("NonExistent"));
+        var result = await _engine.GetProjectDependenciesAsync("NonExistent");
+
+        Assert.That(result, Is.Not.Null,
+            "Engines return an empty report for an unknown project rather than throwing.");
     }
 
     [Test]
@@ -285,12 +287,14 @@ public class UserService
     }
 
     [Test]
-    public void ConvertToSourceGeneratedLogging_UnknownClass_Throws()
+    public async Task ConvertToSourceGeneratedLogging_UnknownClass_ReportsWithoutThrowing()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
+        var result = await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 }
 

@@ -227,11 +227,10 @@ public class ProjectStructureEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public void FixMismatchedNamespaces_UnknownFile_ThrowsException()
+    public void FixMismatchedNamespaces_UnknownFile_ThrowsFileNotFound()
     {
-        Assert.ThrowsAsync<Exception>(
-            async () => await _engine.FixMismatchedNamespacesAsync("NoSuchFile.cs"),
-            "missing file should throw Exception");
+        Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await _engine.FixMismatchedNamespacesAsync("NoSuchFile.cs"));
     }
 
     [Test]

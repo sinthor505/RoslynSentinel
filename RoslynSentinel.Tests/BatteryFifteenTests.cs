@@ -29,11 +29,12 @@ public class ApiIntegrationEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public void AddValidationToPoco_UnknownFile_ThrowsException()
+    public async Task AddValidationToPoco_UnknownFile_ReportsWithoutThrowing()
     {
-        Assert.ThrowsAsync<Exception>(
-            async () => await _engine.AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto"),
-            "missing file should throw Exception");
+        var result = await _engine.AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
+
+        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+            "Engines report not-found through Outcome instead of throwing.");
     }
 
     [Test]

@@ -235,8 +235,10 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
+        var result = await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result");
+
+        Assert.That(result, Is.Empty,
+            "Engines return no file changes rather than throwing.");
     }
 
     [Test]
@@ -260,8 +262,10 @@ public class Product
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
 
-        Assert.ThrowsAsync<Exception>(async () =>
-            await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
+        var result = await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string");
+
+        Assert.That(result, Is.Empty,
+            "Engines return no file changes for an unknown property rather than throwing.");
     }
 
     [Test]

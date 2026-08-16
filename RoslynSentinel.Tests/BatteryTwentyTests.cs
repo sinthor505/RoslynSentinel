@@ -93,9 +93,13 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public void List_Projects_NoSolution_Throws()
+    public async Task List_Projects_NoSolution_ReturnsStructuredError()
     {
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListSolutionItems(SolutionItemsKind.projects));
+        // Tools no longer throw: they return ToolResult with Success=false and a ResultError.
+        var result = await _tools.ListSolutionItems(SolutionItemsKind.projects);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
@@ -107,10 +111,14 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public void List_Files_UnknownProject_ThrowsException()
+    public async Task List_Files_UnknownProject_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _tools.ListSolutionItems(SolutionItemsKind.files, "NoSuchProject"));
+        var result = await _tools.ListSolutionItems(SolutionItemsKind.files, "NoSuchProject");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("NoSuchProject"));
     }
 
     [Test]
@@ -190,20 +198,25 @@ public class BatteryTwentyTests
     // --- StagedChange (consolidated: apply, get, validate, discard) ---
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
-    public void StagedChange_Validate_UnknownChangeId_Throws()
+    public async Task StagedChange_Validate_UnknownChangeId_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.CatchAsync<Exception>(() => _tools.StagedChange(StagedChangeAction.validate, "nonexistent-change-id"));
+        var result = await _tools.StagedChange(StagedChangeAction.validate, "nonexistent-change-id");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
-    public void ProposedChange_Diff_Apply_NonExistentFile_ThrowsException()
+    public async Task ProposedChange_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
-            () => _tools.ProposedChange(ChangesetFormat.diff, ProposedChangeAction.apply, filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new"));
+        var result = await _tools.ProposedChange(
+            ChangesetFormat.diff, ProposedChangeAction.apply,
+            filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
@@ -225,18 +238,22 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Style", "IDE0058:Expression value is never used", Justification = "Test is only verifying exception throwing")]
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer06:Task<T> to Task conversion silently discards result", Justification = "Test is only verifying exception throwing")]
-    public void StagedChange_Apply_UnknownChangeId_Throws()
+    public async Task StagedChange_Apply_UnknownChangeId_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.CatchAsync<Exception>(() => _tools.StagedChange(StagedChangeAction.apply, "nonexistent-change-id"));
+        var result = await _tools.StagedChange(StagedChangeAction.apply, "nonexistent-change-id");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
-    public void StagedChange_Get_UnknownChangeId_Throws()
+    public async Task StagedChange_Get_UnknownChangeId_ReturnsStructuredError()
     {
-        Assert.CatchAsync<Exception>(() => _tools.StagedChange(StagedChangeAction.get, "nonexistent-change-id"));
+        var result = await _tools.StagedChange(StagedChangeAction.get, "nonexistent-change-id");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
@@ -270,10 +287,13 @@ public class BatteryTwentyTests
     // --- CreateProject ---
 
     [Test]
-    public void CreateProject_NewProjectName_Throws()
+    public async Task CreateProject_NewProjectName_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<Exception>(() => _tools.CreateProject("NewTestProject"));
+        var result = await _tools.CreateProject("NewTestProject");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     [Test]
@@ -295,9 +315,12 @@ public class BatteryTwentyTests
     // --- SplitProjectByFolder ---
 
     [Test]
-    public void SplitProjectByFolder_NonExistentFolder_Throws()
+    public async Task SplitProjectByFolder_NonExistentFolder_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        Assert.ThrowsAsync<Exception>(() => _tools.SplitProjectByFolder("TestProj", "NonExistentFolder", "NewProject"));
+        var result = await _tools.SplitProjectByFolder("TestProj", "NonExistentFolder", "NewProject");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 }
