@@ -96,10 +96,10 @@ public class BatteryThirtyOneTests
 public class Helper { public int Value = 42; public void Go() {} }
 public class Owner {}";
         SetSource(src, "SameFile.cs");
-        var result = await _tools.InlineClass("SameFile.cs", "SameFile.cs", "Helper");
+        var result = await _advancedStructuralEngine.InlineClassAsync("SameFile.cs", "SameFile.cs", "Helper");
 
-        Assert.That(result, Does.ContainKey("SameFile.cs"), "Should produce updated file");
-        var content = ((Dictionary<string, string>)result.Data)["SameFile.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("SameFile.cs")), "Should produce updated file");
+        var content = result["SameFile.cs"];
         Assert.That(content, Does.Contain("Value"), "Owner should contain the inlined field");
         Assert.That(content, Does.Contain("Go"), "Owner should contain the inlined method");
         Assert.That(content, Does.Not.Contain("class Helper"), "Helper class should be removed");
@@ -115,11 +115,11 @@ public class HelperClass { public string Tag = ""hello""; }
 public class Consumer {}";
         SetSource(src, "File.cs");
         // Must not throw
-        Dictionary<string, string>? result = null;
+        Dictionary<FilePath, string>? result = null;
         Assert.DoesNotThrowAsync(async () =>
         {
-            var rawResult = await _tools.InlineClass("File.cs", "File.cs", "HelperClass");
-            result = (Dictionary<string, string>?)rawResult.Data;
+            var rawResult = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "HelperClass");
+            result = rawResult;
         });
         Assert.That(result, Is.Not.Null);
     }
@@ -136,8 +136,8 @@ public class DataClass {
 }
 public class Target {}";
         SetSource(src, "Multi.cs");
-        var result = await _tools.InlineClass("Multi.cs", "Multi.cs", "DataClass");
-        var content = ((Dictionary<string, string>)result.Data)["Multi.cs"];
+        var result = await _advancedStructuralEngine.InlineClassAsync("Multi.cs", "Multi.cs", "DataClass");
+        var content = result["Multi.cs"];
         Assert.That(content, Does.Contain("Alpha"));
         Assert.That(content, Does.Contain("Beta"));
         Assert.That(content, Does.Contain("Gamma"));
@@ -151,10 +151,10 @@ public class Target {}";
         SetMultiFile(
             ("Source.cs", "namespace App; public class Helper { public int Value; public void Act() {} }"),
             ("Target.cs", "namespace App; public class Owner {}"));
-        var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "Target.cs", "Helper");
 
-        Assert.That(result, Does.ContainKey("Target.cs"), "Target file should be updated");
-        var targetContent = ((Dictionary<string, string>)result.Data)["Target.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("Target.cs")), "Target file should be updated");
+        var targetContent = result["Target.cs"];
         Assert.That(targetContent, Does.Contain("Value"), "Value field should be in target");
         Assert.That(targetContent, Does.Contain("Act"), "Act method should be in target");
     }
@@ -165,10 +165,10 @@ public class Target {}";
         SetMultiFile(
             ("Source.cs", "namespace App; public class Helper { public int X; }"),
             ("Target.cs", "namespace App; public class Owner {}"));
-        var result = await _tools.InlineClass("Source.cs", "Target.cs", "Helper");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "Target.cs", "Helper");
 
-        Assert.That(result, Does.ContainKey("Source.cs"), "Source file should also be returned");
-        var sourceContent = ((Dictionary<string, string>)result.Data)["Source.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("Source.cs")), "Source file should also be returned");
+        var sourceContent = result["Source.cs"];
         Assert.That(sourceContent, Does.Not.Contain("class Helper"), "Helper should be removed from source");
     }
 
@@ -177,10 +177,10 @@ public class Target {}";
     {
         const string src = "public class Existing {}";
         SetSource(src, "File.cs");
-        var result = await _tools.InlineClass("File.cs", "File.cs", "NonExistent");
+        var result = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "NonExistent");
 
-        Assert.That(result, Does.ContainKey("__error__"), "Should return __error__ key");
-        var errorContent = ((Dictionary<string, string>)result.Data)["__error__"];
+        Assert.That(result, Does.ContainKey(new FilePath("__error__")), "Should return __error__ key");
+        var errorContent = result["__error__"];
         Assert.That(errorContent, Does.Contain("NonExistent"), "Error should mention the missing class");
     }
 
@@ -188,18 +188,18 @@ public class Target {}";
     public async Task InlineClass_SourceFileNotFound_ReturnsErrorKey()
     {
         SetSource("public class Existing {}", "File.cs");
-        var result = await _tools.InlineClass("doesnotexist.cs", "File.cs", "Anything");
+        var result = await _advancedStructuralEngine.InlineClassAsync("doesnotexist.cs", "File.cs", "Anything");
 
-        Assert.That(result, Does.ContainKey("__error__"), "Should return __error__ key");
+        Assert.That(result, Does.ContainKey(new FilePath("__error__")), "Should return __error__ key");
     }
 
     [Test]
     public async Task InlineClass_TargetFileNotFound_ReturnsErrorKey()
     {
         SetSource("public class Src {}", "Source.cs");
-        var result = await _tools.InlineClass("Source.cs", "doesnotexist.cs", "Src");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "doesnotexist.cs", "Src");
 
-        Assert.That(result, Does.ContainKey("__error__"), "Should return __error__ key");
+        Assert.That(result, Does.ContainKey(new FilePath("__error__")), "Should return __error__ key");
     }
 
     [Test]
@@ -207,9 +207,9 @@ public class Target {}";
     {
         const string src = "public class LoneClass { public int X; }";
         SetSource(src, "Lone.cs");
-        var result = await _tools.InlineClass("Lone.cs", "Lone.cs", "LoneClass");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Lone.cs", "Lone.cs", "LoneClass");
 
-        Assert.That(result, Does.ContainKey("__error__"), "Should return error — no target class to inline into");
+        Assert.That(result, Does.ContainKey(new FilePath("__error__")), "Should return error — no target class to inline into");
     }
 
     [Test]
@@ -219,11 +219,11 @@ public class Target {}";
 public class Empty {}
 public class Recipient { public int Existing; }";
         SetSource(src, "F.cs");
-        var result = await _tools.InlineClass("F.cs", "F.cs", "Empty");
+        var result = await _advancedStructuralEngine.InlineClassAsync("F.cs", "F.cs", "Empty");
 
         // Empty class inlined — should succeed, Recipient should still exist, Empty removed
-        Assert.That(result, Does.ContainKey("F.cs"));
-        var updatedContent = ((Dictionary<string, string>)result.Data)["F.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("F.cs")));
+        var updatedContent = result["F.cs"];
         Assert.That(updatedContent, Does.Contain("class Recipient"));
         Assert.That(updatedContent, Does.Not.Contain("class Empty"));
     }
@@ -242,16 +242,16 @@ public class Recipient { public int Existing; }";
             ("Owner.cs", "namespace App; public class Owner {}"),
             ("Consumer.cs", "namespace App; public class Consumer { public Helper? Instance; }"));
 
-        var result = await _tools.InlineClass("Helper.cs", "Owner.cs", "Helper");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Helper.cs", "Owner.cs", "Helper");
 
         // Primary files updated
-        Assert.That(result, Does.ContainKey("Owner.cs"), "Target file should be in result");
-        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
+        Assert.That(result, Does.ContainKey(new FilePath("Owner.cs")), "Target file should be in result");
+        Assert.That(result["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
 
         // Third file should also be updated: 'Helper' → 'Owner'
-        Assert.That(result, Does.ContainKey("Consumer.cs"), "Third file with type reference should also be updated");
-        Assert.That(((Dictionary<string, string>)result.Data)["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
-        Assert.That(((Dictionary<string, string>)result.Data)["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
+        Assert.That(result, Does.ContainKey(new FilePath("Consumer.cs")), "Third file with type reference should also be updated");
+        Assert.That(result["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
+        Assert.That(result["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
     }
 
     [Test]
@@ -266,11 +266,11 @@ public class Service
     public string Name { get; set; }
 }";
         SetSource(src, "Service.cs");
-        var rawResult = await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
-        var result = (Dictionary<string, string>?)rawResult.Data;
+        var result = await _advancedStructuralEngine.ExtractClassAsync(
+            "Service.cs", "Service", "Validator", new[] { "Process", "Validate" });
 
-        Assert.That(result, Does.ContainKey("Service.cs"), "Updated source should be in result");
-        var updatedSource = ((Dictionary<string, string>)result)["Service.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("Service.cs")), "Updated source should be in result");
+        var updatedSource = result["Service.cs"];
         // Should have public property, NOT private readonly field
         Assert.That(updatedSource, Does.Contain("public Validator"), "Should expose extracted class via public property");
         Assert.That(updatedSource, Does.Not.Contain("private readonly Validator"), "Should not use private field");
@@ -285,11 +285,11 @@ public class Service
             ("Service.cs", "namespace App; public class Service { public void Process() {} public void Validate() {} public string Name { get; set; } }"),
             ("Client.cs", "namespace App; public class Client { public void Run(Service s) { s.Process(); s.Validate(); } }"));
 
-        var rawResult = await _tools.ExtractMembers("Service.cs", "Service", "class", "Validator", new[] { "Process", "Validate" });
-        var result = (Dictionary<string, string>?)rawResult.Data;
+        var result = await _advancedStructuralEngine.ExtractClassAsync(
+            "Service.cs", "Service", "Validator", new[] { "Process", "Validate" });
 
-        Assert.That(result, Does.ContainKey("Client.cs"), "Client file should be updated with new call sites");
-        var clientContent = ((Dictionary<string, string>)result)["Client.cs"];
+        Assert.That(result, Does.ContainKey(new FilePath("Client.cs")), "Client file should be updated with new call sites");
+        var clientContent = result["Client.cs"];
         // Call sites should now go through the Validator property
         Assert.That(clientContent, Does.Contain("Validator"), "Cross-file call sites should reference the extracted class");
     }

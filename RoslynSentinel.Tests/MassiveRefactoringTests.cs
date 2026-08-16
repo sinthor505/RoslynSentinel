@@ -85,8 +85,12 @@ public class MassiveRefactoringTests
     {
         SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
         var result = await _advancedRefactoringTools.ExtractMembers($"C{id}.cs", $"C{id}", "interface", $"IC{id}", autoStage: false);
-        var data = (Dictionary<string, string>?)result.Data;
-        Assert.That(data?.Count, Is.GreaterThan(0));
+
+        // With autoStage:false the tool returns Data = new { Changes = Dictionary<FilePath, string> }.
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var changes = result.Data!.GetType().GetProperty("Changes")!.GetValue(result.Data)
+            as Dictionary<FilePath, string>;
+        Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]
@@ -115,7 +119,10 @@ public class MassiveRefactoringTests
     {
         SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
         var result = await _advancedRefactoringTools.MoveType($"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
-        var data = (Dictionary<string, string>?)result.Data;
+
+        // Dictionary keys are FilePath, not string, since the server split.
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var data = (Dictionary<FilePath, string>?)result.Data;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }
