@@ -126,10 +126,10 @@ public class SentinelRefactoringTools
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution. Returns changeId and updatedHandle for the renamed symbol.")]
     public async Task<ToolResult<object>> RenameSymbol(
-        [Description(ToolParams.SessionId)] string sessionId,
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)] string docCommentId,
         [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
+        [Description(ToolParams.SessionId)] string sessionId = "",
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {

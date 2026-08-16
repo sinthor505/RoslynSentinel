@@ -237,7 +237,7 @@ public enum Status { Active = 1, Pending = 2 }
         var handle = located.Single();
 
         var result = await _tools.RenameSymbol(
-            _workspaceManager.SessionId.ToString(), handle.ProjectName, handle.DocCommentId!, "GetDisplayLabel");
+            handle.ProjectName, handle.DocCommentId!, "GetDisplayLabel", _workspaceManager.SessionId.ToString());
         Assert.That(result, Is.Not.Null);
     }
 
@@ -246,7 +246,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _tools.RenameSymbol(
-            _workspaceManager.SessionId.ToString(), "TestProj", "M:TestProj.Order.NoSuchSymbol", "NewName");
+            "TestProj", "M:TestProj.Order.NoSuchSymbol", "NewName", _workspaceManager.SessionId.ToString());
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);

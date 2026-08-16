@@ -3,8 +3,9 @@ namespace RoslynSentinel.Common;
 public static class ToolParams
 {
     public const string SessionId =
-        "Session ID returned by load_solution. Used to detect workspace reload. " +
-        "Pass the value exactly as returned — do not construct or modify.";
+        "Optional. Only needed if you are explicitly tracking workspace sessions yourself. " +
+        "Leave empty/omitted — the server will resolve the symbol fresh from docCommentId " +
+        "and projectName without requiring a session round-trip.";
 
     public const string ProjectName =
         "Project name returned by locate_symbol in the projectName field. " +

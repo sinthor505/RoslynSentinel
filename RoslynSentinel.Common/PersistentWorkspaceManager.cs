@@ -1423,8 +1423,10 @@ public partial class PersistentWorkspaceManager : IDisposable
 
     public bool IsCurrentSession(string sessionId)
     {
-        // TODO: revisit after empirical agent testing
-        return sessionId == this.SessionId.ToString();
+        // An absent sessionId means the caller isn't tracking sessions — nothing to compare
+        // against, so it can't be stale. Only a non-empty sessionId that doesn't match the
+        // current workspace session counts as stale.
+        return string.IsNullOrEmpty(sessionId) || sessionId == this.SessionId.ToString();
     }
 
     // v1 — single integration point for all symbol-accepting tools
