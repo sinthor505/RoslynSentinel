@@ -223,12 +223,21 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- RenameSymbol ---
+    // RenameSymbol now takes a SymbolHandle (sessionId, projectName, docCommentId) instead of
+    // (filepath, methodName, contextSnippet) — resolve the handle via SymbolNavigationEngine
+    // first, matching how an agent would call LocateSymbol before RenameSymbol.
 
     [Test]
     public async Task RenameSymbol_ValidSymbol_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RenameSymbol("Order.cs", "GetLabel", "GetLabel", "GetDisplayLabel");
+        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        // "GetLabel" is declared on both Order and IService in SimpleSource — disambiguate.
+        var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
+        var handle = located.Single();
+
+        var result = await _tools.RenameSymbol(
+            _workspaceManager.SessionId.ToString(), handle.ProjectName, handle.DocCommentId!, "GetDisplayLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -236,8 +245,11 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RenameSymbol("Order.cs", "NoSuchSymbol", "NoSuchSymbol", "NewName");
-        Assert.That(result, Is.Not.Null);
+        var result = await _tools.RenameSymbol(
+            _workspaceManager.SessionId.ToString(), "TestProj", "M:TestProj.Order.NoSuchSymbol", "NewName");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
     }
 
     // --- MoveAllTypesToFilesInProject ---

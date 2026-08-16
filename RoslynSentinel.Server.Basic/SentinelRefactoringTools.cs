@@ -133,8 +133,8 @@ public class SentinelRefactoringTools
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+        ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+        IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
         SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
             sessionId, projectName, docCommentId, cancellationToken);
@@ -212,8 +212,8 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+            ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
             var result = await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType, progress: progress, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
@@ -245,8 +245,8 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            ProgressToken progressToken = requestParams.Params?.ProgressToken ?? new ProgressToken();
-            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams.Server.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
+            ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
+            IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
             var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource, progress, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))

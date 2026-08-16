@@ -104,7 +104,13 @@ public class MassiveRefactoringTests
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
         SetSource(source, $"C{id}.cs");
 
-        var result = await _refactoringTools.RenameSymbol($"C{id}.cs", $"OldM{id}", $"void OldM{id}()", $"NewM{id}");
+        // RenameSymbol takes a SymbolHandle (sessionId, projectName, docCommentId) — resolve it
+        // via SymbolNavigationEngine first, as an agent would via LocateSymbol.
+        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
+
+        var result = await _refactoringTools.RenameSymbol(
+            _workspaceManager.SessionId.ToString(), handle.ProjectName, handle.DocCommentId!, $"NewM{id}");
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }
