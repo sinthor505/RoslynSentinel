@@ -2946,9 +2946,9 @@ public class StringExtensions
             var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("StringExtensions.cs", "IsValidEmail");
 
             Assert.That(result, Is.Not.Null, "Should return a result");
-            Assert.That(result, Does.Contain("static class StringExtensions"),
+            Assert.That(result.UpdatedText, Does.Contain("static class StringExtensions"),
                 "Extension class must be declared static");
-            Assert.That(result, Does.Contain("this string input"),
+            Assert.That(result.UpdatedText, Does.Contain("this string input"),
                 "Method should be converted to extension (this parameter)");
         }
 

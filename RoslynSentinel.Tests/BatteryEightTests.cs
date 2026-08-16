@@ -197,16 +197,14 @@ public class DependencyEngineTests
     }
 
     [Test]
-    public async Task GetProjectDependencies_UnknownProject_ReportsWithoutThrowing()
+    public void GetProjectDependencies_UnknownProject_ThrowsInvalidOperation()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.GetProjectDependenciesAsync("NonExistent");
-
-        Assert.That(result, Is.Not.Null,
-            "Engines return an empty report for an unknown project rather than throwing.");
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _engine.GetProjectDependenciesAsync("NonExistent"));
     }
 
     [Test]
@@ -287,14 +285,12 @@ public class UserService
     }
 
     [Test]
-    public async Task ConvertToSourceGeneratedLogging_UnknownClass_ReportsWithoutThrowing()
+    public void ConvertToSourceGeneratedLogging_UnknownClass_ThrowsInvalidOperation()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
 
-        var result = await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _engine.ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }
 

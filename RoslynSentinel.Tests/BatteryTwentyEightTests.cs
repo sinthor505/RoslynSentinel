@@ -368,9 +368,9 @@ public class Looper {
 
         var result = await _engine.ConvertWhileToForAsync("Looper.cs", 5);
 
-        Assert.That(result, Does.Contain("for"),
+        Assert.That(result.UpdatedText, Does.Contain("for"),
             "Converted output must contain a 'for' loop.");
-        Assert.That(result, Does.Not.Contain("while"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("while"),
             "The 'while' loop must be removed after conversion.");
     }
 
@@ -394,13 +394,13 @@ public class Processor {
 
         var result = await _engine.ConvertWhileToForAsync("Processor.cs", 6);
 
-        Assert.That(result, Does.Contain("for"),
+        Assert.That(result.UpdatedText, Does.Contain("for"),
             "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
         var bodyStatements = result.UpdatedText!
             .Split(new[] { "for " }, StringSplitOptions.None)
             .Skip(1).FirstOrDefault() ?? "";
-        Assert.That(result, Does.Contain("i * 2"),
+        Assert.That(result.UpdatedText, Does.Contain("i * 2"),
             "Body statement _data[i] = i * 2 must be preserved in the for body.");
     }
 
@@ -420,7 +420,7 @@ public class Safe {
 
         var result = await _engine.ConvertWhileToForAsync("Safe.cs", 5);
 
-        Assert.That(result, Does.Not.Contain("for ("),
+        Assert.That(result.UpdatedText, Does.Not.Contain("for ("),
             "When no while is found, no for-loop must be emitted.");
     }
 
@@ -440,7 +440,7 @@ public class Streamer {
         var result = await _engine.ConvertWhileToForAsync("Streamer.cs", 4);
 
         // Without a local declaration as the previous statement, engine returns unchanged
-        Assert.That(result, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             "Even when conversion is not applicable, result must not be null/empty.");
     }
 }

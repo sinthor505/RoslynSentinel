@@ -472,7 +472,7 @@ public class Worker
         const string src = "namespace TestProj; public static class Helper { public static string Format(string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
         var result = await _advancedLogicEngine.ConvertStaticToExtensionAsync("Helper.cs", "Format");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

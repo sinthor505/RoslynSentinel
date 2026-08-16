@@ -54,7 +54,7 @@ public class Calc {
 
         var result = await _engine.ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
 
-        Assert.That(result, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Empty);
     }
 
     [Test]

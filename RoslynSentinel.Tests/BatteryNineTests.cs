@@ -124,25 +124,25 @@ public class SolutionManagementEngineTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public async Task CreateProject_NullSolutionPath_ReportsMissingSolutionPath()
+    public void CreateProject_NullSolutionPath_ThrowsMissingSolutionPath()
     {
         // AdhocWorkspace has no FilePath; SolutionPath is also null → "Solution path not found."
-        var result = await _engine.CreateProjectAsync("NewProject", "classlib");
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _engine.CreateProjectAsync("NewProject", "classlib"));
 
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified));
-        Assert.That(result.Message, Does.Contain("Solution path not found"),
-            "Should report the missing solution file path through Message instead of throwing.");
+        Assert.That(ex!.Message, Does.Contain("Solution path not found"),
+            "Should fail when no solution file path is available.");
     }
 
     [Test]
-    public async Task SplitProjectByFolder_NullSolutionPath_ReportsMissingSolutionPath()
+    public void SplitProjectByFolder_NullSolutionPath_ThrowsMissingSolutionPath()
     {
         // SplitProject internally calls CreateProjectAsync first, which propagates the null-path error
-        var result = await _engine.SplitProjectByFolderAsync("Source", "Services", "Source.Services");
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _engine.SplitProjectByFolderAsync("Source", "Services", "Source.Services"));
 
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified));
-        Assert.That(result.Message, Does.Contain("Solution path not found"),
-            "SplitProject should propagate the null solution path through Message.");
+        Assert.That(ex!.Message, Does.Contain("Solution path not found"),
+            "SplitProject should propagate the missing solution path from CreateProject.");
     }
 }
 
@@ -263,14 +263,12 @@ public class StructuralRefinementEngineTests
     }
 
     [Test]
-    public async Task SyncTypeAndFilename_UnknownFile_ReportsWithoutThrowing()
+    public void SyncTypeAndFilename_UnknownFile_ThrowsFileNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class C {}")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.SyncTypeAndFilenameAsync("DoesNotExist.cs");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        Assert.ThrowsAsync<FileNotFoundException>(
+            () => _engine.SyncTypeAndFilenameAsync("DoesNotExist.cs"));
     }
 }

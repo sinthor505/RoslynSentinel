@@ -29,12 +29,10 @@ public class DependencyInjectionEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public async Task AnalyzeDependencies_UnknownFile_ReturnsEmpty()
+    public void AnalyzeDependencies_UnknownFile_ThrowsFileNotFound()
     {
-        var result = await _engine.AnalyzeDependenciesAsync("NoSuchFile.cs", "MyClass");
-
-        Assert.That(result, Is.Empty,
-            "Engines return an empty list for an unknown file rather than throwing.");
+        Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await _engine.AnalyzeDependenciesAsync("NoSuchFile.cs", "MyClass"));
     }
 
     [Test]

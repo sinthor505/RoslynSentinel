@@ -64,8 +64,8 @@ public static class MyExtensions
 
         var result = await _engine.ExtensionToStaticAsync("Extensions.cs", "Shout");
 
-        Assert.That(result, Does.Not.Contain("this string"), "this keyword should be stripped from first parameter");
-        Assert.That(result, Does.Contain("Shout"), "method should still be present");
+        Assert.That(result.UpdatedText, Does.Not.Contain("this string"), "this keyword should be stripped from first parameter");
+        Assert.That(result.UpdatedText, Does.Contain("Shout"), "method should still be present");
     }
 }
 
@@ -86,16 +86,14 @@ public class AdvancedRefactoringEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public async Task ReplaceStringConcat_UnknownFile_ReportsWithoutThrowing()
+    public void ReplaceStringConcat_UnknownFile_ThrowsFileNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        var result = await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await _engine.ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
     }
 
     [Test]
@@ -117,16 +115,14 @@ public class Greeter
     }
 
     [Test]
-    public async Task OptimizeTaskWait_UnknownFile_ReportsWithoutThrowing()
+    public void OptimizeTaskWait_UnknownFile_ThrowsFileNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
 
-        var result = await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
     }
 }
 
