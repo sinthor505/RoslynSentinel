@@ -73,7 +73,6 @@ public class CodeSmellAndStyleEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -84,7 +83,6 @@ public class CodeSmellAndStyleEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.SourceInvalid,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -123,7 +121,6 @@ public class CodeSmellAndStyleEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }

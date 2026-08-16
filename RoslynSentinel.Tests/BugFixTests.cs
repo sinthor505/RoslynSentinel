@@ -2541,10 +2541,10 @@ public class Standalone
                 var result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Standalone", "GetValue");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-                Assert.That(result, Is.InstanceOf<Dictionary<string, string>>(), "Should return dictionary");
-                if (result.ContainsKey("error"))
+                Assert.That(result, Is.InstanceOf<Dictionary<FilePath, string>>(), "Should return dictionary");
+                if (result.ContainsKey(new FilePath("error")))
                 {
-                    Assert.That(result["error"], Does.Contain("base"), "Error message should mention base class");
+                    Assert.That(result[new FilePath("error")], Does.Contain("base"), "Error message should mention base class");
                 }
             }
 
@@ -2575,7 +2575,7 @@ public class Derived : Base
                 var result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Derived", "DoWork");
 
                 Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-                Assert.That(result, Is.InstanceOf<Dictionary<string, string>>(), "Should return dictionary");
+                Assert.That(result, Is.InstanceOf<Dictionary<FilePath, string>>(), "Should return dictionary");
                 // Should either succeed or fail with error, but not crash
             }
         }

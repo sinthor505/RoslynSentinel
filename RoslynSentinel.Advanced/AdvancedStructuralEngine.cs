@@ -23,7 +23,6 @@ public class AdvancedStructuralEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -52,7 +51,6 @@ public class AdvancedStructuralEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.TargetNotFound,
-            UpdatedText = null,
             FilePath = filePath
         };
     }
@@ -66,7 +64,6 @@ public class AdvancedStructuralEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -99,7 +96,6 @@ public class AdvancedStructuralEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.TargetNotFound,
-            UpdatedText = null,
             FilePath = filePath
         };
     }

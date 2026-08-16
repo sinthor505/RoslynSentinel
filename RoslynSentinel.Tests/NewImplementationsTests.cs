@@ -1194,7 +1194,7 @@ public class Standalone
         Assert.DoesNotThrowAsync(async () =>
             result = await _refinementEngine.PullUpMemberAsync("Standalone.cs", "Standalone", "Feature"),
             "A class with no explicit base class should return an error dict, not throw.");
-        Assert.That(result, Contains.Key("error"));
+        Assert.That(result, Contains.Key(new FilePath("error")));
     }
 
     [Test]

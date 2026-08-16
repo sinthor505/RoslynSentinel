@@ -96,7 +96,7 @@ public class AsyncOptimizationEngine
         if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
         {
             var interfaceNames = string.Join(", ", methodSymbol.ContainingType.Interfaces.Select(i => i.Name));
-            return new DocumentEditResult { Outcome = EditOutcome.CannotOptimize, UpdatedText = null, Message = $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.CannotOptimize, Message = $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}", FilePath = filePath };
         }
 
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.ToFullString(), FilePath = filePath };
@@ -111,14 +111,14 @@ public class AsyncOptimizationEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, Message = $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// Error: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
         }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.

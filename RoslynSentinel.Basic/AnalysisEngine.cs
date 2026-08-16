@@ -328,7 +328,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -386,7 +385,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -397,7 +395,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -460,7 +457,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -473,7 +469,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -502,7 +497,6 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }

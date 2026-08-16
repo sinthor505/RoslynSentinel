@@ -28,7 +28,6 @@ public class AdvancedRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -46,7 +45,6 @@ public class AdvancedRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -115,7 +113,6 @@ public class AdvancedRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }
@@ -250,7 +247,6 @@ public class AdvancedRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
                 FilePath = filePath
             };
         }

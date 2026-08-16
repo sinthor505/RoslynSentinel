@@ -280,7 +280,7 @@ public class RefinementEngineTests
     {
         // PullUpMemberAsync(filePath, className, memberName)
         var dict = await _engine.PullUpMemberAsync("NoSuchFile.cs", "Base", "DoWork");
-        Assert.That(dict, Contains.Key("error"), "unknown file should return dict with 'error' key");
+        Assert.That(dict, Contains.Key(new FilePath("error")), "unknown file should return dict with 'error' key");
     }
 
     [Test]
@@ -296,7 +296,7 @@ public class Derived
 
         var dict = await _engine.PullUpMemberAsync("Derived.cs", "NoBase", "DoWork");
 
-        Assert.That(dict, Contains.Key("error"), "unknown class should return dict with 'error' key");
+        Assert.That(dict, Contains.Key(new FilePath("error")), "unknown class should return dict with 'error' key");
     }
 
     [Test]
