@@ -1196,13 +1196,14 @@ public class RefactoringEngine
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
-        if (newMember == null)
+        if (newMember == null || newMember.ContainsDiagnostics)
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = "// Failed to parse new member."
+                Message = "// newSource is not a valid member declaration (method/property/class/etc. with a signature). " +
+                    "Provide the full member, not just a statement or method body."
             };
         }
 

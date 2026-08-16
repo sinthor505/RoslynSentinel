@@ -234,7 +234,9 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ReplaceMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces a member (method, property, or class) in a file by name with new source code. Returns changeId.")]
+    [Description("Replaces an entire member (method, property, or class) in a file by name with new source code. " +
+        "newSource must be a complete member declaration including its signature/modifiers and body " +
+        "(e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. Returns changeId.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
@@ -250,7 +252,17 @@ public class SentinelRefactoringTools
 
             var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource, progress, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ReplaceMember: member '{memberName}' not found in '{filePath}'.") };
+            {
+                string reason = result.Outcome switch
+                {
+                    EditOutcome.DocumentNotFound => $"ReplaceMember: document '{filePath}' not found in the workspace.",
+                    EditOutcome.SourceInvalid => $"ReplaceMember: newSource for '{memberName}' is not a valid member declaration. " +
+                        "Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), not just a statement or method body fragment.",
+                    EditOutcome.TargetNotFound => $"ReplaceMember: member '{memberName}' not found in '{filePath}'.",
+                    _ => $"ReplaceMember: no changes produced for '{memberName}' in '{filePath}' ({result.Outcome}). {result.Message}"
+                };
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, reason) };
+            }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
             var (changeId, error) = await ValidateAndStageAsync(changes, $"Replace member '{memberName}'.", "ReplaceMember", progress, cancellationToken);
