@@ -164,11 +164,11 @@ public class GetScanResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
         Assert.That(result.HasMorePages, Is.True, "limit=3 of 5 total → HasMorePages should be true.");
 
-        var inner = result.Data as ToolResult<object>;
-        Assert.That(inner, Is.Not.Null, "Data should be an inner ToolResult<object>.");
-        Assert.That(inner!.Success, Is.True);
-        var returnedFindings = inner.Data as List<MigrationCandidateFinding>;
-        Assert.That(returnedFindings, Is.Not.Null, "Inner Data should be List<MigrationCandidateFinding>.");
+        // GetScanResult's Data is the flat, paged List<MigrationCandidateFinding> — the same
+        // shape every other ToolResult<object>-returning tool uses; it used to be double-wrapped
+        // in an inner ToolResult<object>, which was a bug (fixed alongside these assertions).
+        var returnedFindings = result.Data as List<MigrationCandidateFinding>;
+        Assert.That(returnedFindings, Is.Not.Null, "Data should be List<MigrationCandidateFinding>.");
         Assert.That(returnedFindings!.Any(f => f.MethodName == "loadList_0"), Is.True,
             "loadList_0 should be present in the returned findings.");
     }
@@ -190,10 +190,8 @@ public class GetScanResultTests
         Assert.That(result.TotalRecords, Is.EqualTo(4));
         Assert.That(result.HasMorePages, Is.False, "limit=10 of 4 total → HasMorePages should be false.");
 
-        var inner = result.Data as ToolResult<object>;
-        Assert.That(inner, Is.Not.Null);
-        var returnedEntries = inner!.Data as List<ApiSurfaceEntry>;
-        Assert.That(returnedEntries, Is.Not.Null, "Inner Data should be List<ApiSurfaceEntry>.");
+        var returnedEntries = result.Data as List<ApiSurfaceEntry>;
+        Assert.That(returnedEntries, Is.Not.Null, "Data should be List<ApiSurfaceEntry>.");
         Assert.That(returnedEntries!.Count, Is.EqualTo(4));
     }
 
@@ -212,9 +210,7 @@ public class GetScanResultTests
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
-        var inner = result.Data as ToolResult<object>;
-        Assert.That(inner, Is.Not.Null);
-        Assert.That(inner!.Data, Is.InstanceOf<List<MigrationCandidateFinding>>());
+        Assert.That(result.Data, Is.InstanceOf<List<MigrationCandidateFinding>>());
     }
 
     // ══════════════════════════════════════════════════════════════════════════

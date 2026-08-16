@@ -632,29 +632,37 @@ public class SentinelScanTools
             {
                 case ScanWrapperType.MigrationCandidateFindingList:
                     {
+                        var findings = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = JsonSerializer.Deserialize<List<MigrationCandidateFinding>>(all.Data.ToString(), _jsonOptions)
+                            // limit/offset were previously accepted but never applied — the full
+                            // on-disk list was returned regardless of the requested page.
+                            Data = findings.Skip(offset).Take(limit).ToList()
                         };
                         break;
                     }
 
                 case ScanWrapperType.ApiSurfaceEntryList:
                     {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            Data = entries.Skip(offset).Take(limit).ToList()
                         };
                         break;
                     }
                 case ScanWrapperType.CodeInventoryReport:
                     {
+                        var entries = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
                         result = new ToolResult<object>
                         {
                             Success = true,
-                            Data = JsonSerializer.Deserialize<List<ApiSurfaceEntry>>(all.Data.ToString(), _jsonOptions)
+                            Data = entries.Skip(offset).Take(limit).ToList()
                         };
                         break;
                     }
@@ -679,7 +687,10 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = true,
-                Data = result,
+                // Unwrap: `result` is itself a ToolResult<object> built above per ScanWrapperType.
+                // Returning it as-is here double-wraps the payload (Data.Data instead of Data),
+                // which doesn't match every other tool's flat ToolResult<object> shape.
+                Data = result.Data,
                 TotalRecords = totalRecords,
                 HasMorePages = hasMorePages,
             };

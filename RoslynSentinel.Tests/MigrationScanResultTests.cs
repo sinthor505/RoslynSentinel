@@ -137,6 +137,28 @@ public class MigrationScanResultTests
     }
 
     /// <summary>
+    /// Adapts a plain <see cref="ToolResult{object}"/> to a typed <see cref="MigrationEnvelope{T}"/>.
+    /// The migration-scan-result-handling spec (v2) this test file was written against expected
+    /// scan tools to return a nested envelope (Data = MigrationEnvelope&lt;T&gt;). The shipped
+    /// implementation flattens that: Success/Error/TotalRecords/HasMorePages/LargeResult all live
+    /// directly on the outer ToolResult&lt;object&gt;, and Data is the plain T. Rather than rewrite
+    /// every assertion in this file against the outer result, wrap it back into the shape the
+    /// tests already expect.
+    /// </summary>
+    private static MigrationEnvelope<T> Wrap<T>(ToolResult<object> raw) where T : class
+    {
+        return new MigrationEnvelope<T>
+        {
+            Success = raw.Success,
+            Data = raw.Data as T,
+            Error = raw.Error,
+            LargeResult = raw.LargeResult,
+            TotalRecords = raw.TotalRecords,
+            HasMorePages = raw.HasMorePages,
+        };
+    }
+
+    /// <summary>
     /// Builds a C# source file containing <paramref name="count"/> methods, each decorated
     /// with a <c>[MigrationCandidate]</c> attribute. When <paramref name="reason"/> is
     /// supplied it is written into the Reason named argument to pad the JSON output.
@@ -191,7 +213,7 @@ public class Svc
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
 
-        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
+        var result = Wrap<MigrationScanSummary>(rawResult);
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null);
@@ -239,7 +261,7 @@ public class Svc
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 3, offset: 2);
 
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
         Assert.That(result.Data, Is.Not.Null, "Inline Data should be populated.");
@@ -265,7 +287,7 @@ public class Svc
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(); // default limit=50, offset=0
 
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
         Assert.That(result.LargeResult, Is.Null,
@@ -291,7 +313,7 @@ public class Svc
         // Use a large limit to capture all findings in one page.
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
 
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.LargeResult, Is.Not.Null,
             "A page > 256 KB should trigger the file-write path.");
@@ -317,14 +339,14 @@ public class Svc
 
         // Run the scan to produce the spill file (same as T4).
         var scanRaw = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
-        var scanResult = scanRaw.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var scanResult = Wrap<List<MigrationCandidateFinding>>(scanRaw);
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
         var operationId = scanResult!.LargeResult!.ScanId;
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 0)).Data;
+        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 0));
         Assert.That(page1Result.Success, Is.True);
         Assert.That(page1Result.Data, Is.Not.Null);
         Assert.That(page1Result.Data!.Count, Is.EqualTo(10));
@@ -340,7 +362,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) — must be disjoint from page 1 ──────
-        var page2Result = (MigrationEnvelope<List<MigrationCandidateFinding>>)(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 10)).Data;
+        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _scanTools.GetScanResult(scanId: operationId, limit: 10, offset: 10));
         Assert.That(page2Result.Success, Is.True);
         var page1Names = page1Result.Data!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.Data!.Select(f => f.MethodName).ToHashSet();
@@ -371,13 +393,13 @@ public class Svc
 
         // Query using only the filename (suffix match).
         var rawSuffix = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: "Service.cs");
-        var suffixResult = rawSuffix.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var suffixResult = Wrap<List<MigrationCandidateFinding>>(rawSuffix);
         Assert.That(suffixResult?.Success, Is.True, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.Data?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path — should yield the same finding.
         var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: AbsPath);
-        var absResult = rawAbs.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var absResult = Wrap<List<MigrationCandidateFinding>>(rawAbs);
         Assert.That(absResult?.Success, Is.True, "Full absolute filePath should succeed.");
         Assert.That(absResult!.Data?.Count, Is.EqualTo(1));
 
@@ -389,6 +411,12 @@ public class Svc
 
     // ══════════════════════════════════════════════════════════════════════════
     // T7 – filePath matching nothing → Success=false, ErrorCode="InvalidArgument"
+    //
+    // filePath only takes effect under scope=file — the tool's own docstring says scope=solution
+    // (the default) ignores filePath entirely, and FindMigrationCandidatesAsync confirms it:
+    // called with scope=file it throws ArgumentException("filePath '...' matched no documents in
+    // solution"), which the tool converts to InvalidArgument. The original test never set
+    // scope=file, so it always hit the "filePath ignored" path and never actually exercised this.
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -402,9 +430,10 @@ public class Svc
 }}
 {AttrStub}", "RealFile.cs");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(filePath: "NonExistent.cs");
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(
+            scope: ToolScope.file, filePath: "NonExistent.cs");
 
-        var result = rawResult.Data as MigrationEnvelope<object>;
+        var result = Wrap<object>(rawResult);
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.False);
         Assert.That(result.Error, Is.Not.Null);
@@ -471,7 +500,7 @@ public class Svc
         SetSource(sb.ToString());
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true, topN: 5, minScore: 70);
-        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
+        var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -508,7 +537,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true);
-        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
+        var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -629,7 +658,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates();
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -681,7 +710,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(limit: 5000, offset: 0);
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
@@ -725,7 +754,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(summarize: true, minScore: 80);
-        var result = rawResult.Data as MigrationEnvelope<MigrationScanSummary>;
+        var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);
@@ -777,7 +806,7 @@ public class Svc
 {AttrStub}");
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(minScore: 85, limit: 20);
-        var result = rawResult.Data as MigrationEnvelope<List<MigrationCandidateFinding>>;
+        var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Success, Is.True);

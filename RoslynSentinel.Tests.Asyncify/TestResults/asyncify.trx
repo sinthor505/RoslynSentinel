@@ -1,0 +1,321 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="496e9fb7-3c66-40f7-a18e-be0ba0045fa7" name="Administrator@WIN-6FVIVBDM0RR 2026-08-15 22:58:05" runUser="WIN-6FVIVBDM0RR\Administrator" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-08-15T22:58:05.6972508-07:00" queuing="2026-08-15T22:58:05.6972513-07:00" start="2026-08-15T22:58:04.5452598-07:00" finish="2026-08-15T22:58:09.0428436-07:00" />
+  <TestSettings name="default" id="dec4749d-17cf-4a49-be50-99d046f6f86f">
+    <Deployment runDeploymentRoot="Administrator_WIN-6FVIVBDM0RR_2026-08-15_22_58_05" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="b4a79bab-cbec-4f60-94db-c2dcef42f5de" testId="efa672db-c949-a200-bd9c-28a78170195f" testName="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.1244680" startTime="2026-08-15T22:58:08.1876505-07:00" endTime="2026-08-15T22:58:08.3121185-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b4a79bab-cbec-4f60-94db-c2dcef42f5de" />
+    <UnitTestResult executionId="84bbac8d-322f-48ab-b99f-063ac88cc4f4" testId="ed4bbe84-af4d-aafe-6fb1-80dd79e0cfbe" testName="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0254280" startTime="2026-08-15T22:58:07.1719535-07:00" endTime="2026-08-15T22:58:07.1973810-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="84bbac8d-322f-48ab-b99f-063ac88cc4f4" />
+    <UnitTestResult executionId="c0d08712-a0d1-49bc-818d-4289724278ae" testId="b6f1502c-7fff-5065-8637-8322d1d1fb20" testName="Router_TwoEqualWeightProducers_SameToolSelectedAcrossRepeatedCalls" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0007590" startTime="2026-08-15T22:58:05.5995385-07:00" endTime="2026-08-15T22:58:05.6002976-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c0d08712-a0d1-49bc-818d-4289724278ae" />
+    <UnitTestResult executionId="884b53d2-c184-461c-a02c-72e883fa4db1" testId="6db6f941-86b3-efe1-dca2-2e4f27c315b6" testName="T3_GetScanResult_ValidScanId_MigrationCandidates_ReturnsFindingsAndTotalRecords" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.1308780" startTime="2026-08-15T22:58:05.4218060-07:00" endTime="2026-08-15T22:58:05.5526844-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="884b53d2-c184-461c-a02c-72e883fa4db1">
+      <Output>
+        <ErrorInfo>
+          <Message>  Data should be an inner ToolResult&lt;object&gt;.&#xD;
+Assert.That(inner, Is.Not.Null)&#xD;
+  Expected: not null&#xD;
+  But was:  null&#xD;
+</Message>
+          <StackTrace>   at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T3_GetScanResult_ValidScanId_MigrationCandidates_ReturnsFindingsAndTotalRecords() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 168&#xD;
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.BlockUntilCompleted()&#xD;
+   at NUnit.Framework.Internal.MessagePumpStrategy.NoMessagePumpStrategy.WaitForCompletion(AwaitAdapter awaiter)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.&lt;&gt;c__DisplayClass1_0.&lt;Execute&gt;b__0()&#xD;
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)&#xD;
+
+1)    at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T3_GetScanResult_ValidScanId_MigrationCandidates_ReturnsFindingsAndTotalRecords() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 168&#xD;
+
+</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="28348db6-11b3-421b-bcf9-924174cc286a" testId="31bb0ec6-9809-79b7-a45d-79ba408ad571" testName="T2_GetScanResult_UnknownScanId_ReturnsError" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0025510" startTime="2026-08-15T22:58:05.4192267-07:00" endTime="2026-08-15T22:58:05.4217774-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="28348db6-11b3-421b-bcf9-924174cc286a" />
+    <UnitTestResult executionId="58ce47a7-906b-46aa-a9c7-6271fb266628" testId="fe49f4ab-cc83-9411-3bee-61d0ad65d852" testName="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0031260" startTime="2026-08-15T22:58:08.8659590-07:00" endTime="2026-08-15T22:58:08.8690843-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="58ce47a7-906b-46aa-a9c7-6271fb266628" />
+    <UnitTestResult executionId="c85b7c82-1edb-4ea5-bebf-bb5eb8a0aaa4" testId="4494bcc5-6efb-6722-8bb2-4277797d9643" testName="Router_OverloadAlreadyExists_NoProducerRegistered_ReturnsNull" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0010780" startTime="2026-08-15T22:58:05.5921012-07:00" endTime="2026-08-15T22:58:05.5931791-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c85b7c82-1edb-4ea5-bebf-bb5eb8a0aaa4" />
+    <UnitTestResult executionId="d1ac7f9d-8905-4578-bbb1-0f522769607e" testId="190dfb5a-0838-d6dd-67f5-a3f9ee3607e8" testName="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.9250330" startTime="2026-08-15T22:58:07.2625285-07:00" endTime="2026-08-15T22:58:08.1875708-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d1ac7f9d-8905-4578-bbb1-0f522769607e" />
+    <UnitTestResult executionId="fae9ed83-4f16-485a-b91e-5914cfd22186" testId="102c5c1a-93b8-e9ec-365f-bb9e7b252377" testName="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0087200" startTime="2026-08-15T22:58:05.6004754-07:00" endTime="2026-08-15T22:58:05.6091953-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="fae9ed83-4f16-485a-b91e-5914cfd22186" />
+    <UnitTestResult executionId="47423250-f37a-4d71-a40a-2a43bc164a4d" testId="0d8c9103-963e-e17c-1fbf-e9a53cb76707" testName="Router_NoAsyncEquivalent_ReturnsNullHint_ItemStillInActionable" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0029430" startTime="2026-08-15T22:58:05.5891427-07:00" endTime="2026-08-15T22:58:05.5920856-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="47423250-f37a-4d71-a40a-2a43bc164a4d" />
+    <UnitTestResult executionId="4366fb70-cfd7-4f8b-bbb5-5df93bea1fa1" testId="fec4a67a-aa0c-5862-0b6a-87c8a8181bfe" testName="T4_GetScanResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0117610" startTime="2026-08-15T22:58:05.5532222-07:00" endTime="2026-08-15T22:58:05.5649838-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4366fb70-cfd7-4f8b-bbb5-5df93bea1fa1">
+      <Output>
+        <ErrorInfo>
+          <Message>  Assert.That(inner, Is.Not.Null)&#xD;
+  Expected: not null&#xD;
+  But was:  null&#xD;
+</Message>
+          <StackTrace>   at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T4_GetScanResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 194&#xD;
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.BlockUntilCompleted()&#xD;
+   at NUnit.Framework.Internal.MessagePumpStrategy.NoMessagePumpStrategy.WaitForCompletion(AwaitAdapter awaiter)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.&lt;&gt;c__DisplayClass1_0.&lt;Execute&gt;b__0()&#xD;
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)&#xD;
+
+1)    at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T4_GetScanResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 194&#xD;
+
+</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="4d94bb7c-9cd4-4891-9d06-cb80a10ceba3" testId="40dca888-4e82-a53a-947a-482153a2f256" testName="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0030890" startTime="2026-08-15T22:58:07.2564988-07:00" endTime="2026-08-15T22:58:07.2595870-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4d94bb7c-9cd4-4891-9d06-cb80a10ceba3" />
+    <UnitTestResult executionId="dd7d19ed-a889-4f9c-8f7b-92e52def4d45" testId="a64c3d94-c08e-8f69-82b0-a7ce6a5e5e25" testName="T5_GetScanResult_ValidFilePath_InScansDir_ReturnsFindigns" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0051930" startTime="2026-08-15T22:58:05.5650188-07:00" endTime="2026-08-15T22:58:05.5702112-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="dd7d19ed-a889-4f9c-8f7b-92e52def4d45">
+      <Output>
+        <ErrorInfo>
+          <Message>  Assert.That(inner, Is.Not.Null)&#xD;
+  Expected: not null&#xD;
+  But was:  null&#xD;
+</Message>
+          <StackTrace>   at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T5_GetScanResult_ValidFilePath_InScansDir_ReturnsFindigns() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 216&#xD;
+   at NUnit.Framework.Internal.TaskAwaitAdapter.GenericAdapter`1.BlockUntilCompleted()&#xD;
+   at NUnit.Framework.Internal.MessagePumpStrategy.NoMessagePumpStrategy.WaitForCompletion(AwaitAdapter awaiter)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await[TResult](TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.AsyncToSyncAdapter.Await(TestExecutionContext context, Func`1 invoke)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.RunTestMethod(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.TestMethodCommand.Execute(TestExecutionContext context)&#xD;
+   at NUnit.Framework.Internal.Commands.BeforeAndAfterTestCommand.&lt;&gt;c__DisplayClass1_0.&lt;Execute&gt;b__0()&#xD;
+   at NUnit.Framework.Internal.Commands.DelegatingTestCommand.RunTestMethodInThreadAbortSafeZone(TestExecutionContext context, Action action)&#xD;
+
+1)    at RoslynSentinel.Tests.Asyncify.GetScanResultTests.T5_GetScanResult_ValidFilePath_InScansDir_ReturnsFindigns() in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\GetScanResultTests.cs:line 216&#xD;
+
+</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="07b5b4d0-4813-40e1-a3a3-b5c5d62732bc" testId="156d4733-d6a7-b846-fd61-c5761da15799" testName="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.1204490" startTime="2026-08-15T22:58:08.3121977-07:00" endTime="2026-08-15T22:58:08.4326473-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="07b5b4d0-4813-40e1-a3a3-b5c5d62732bc" />
+    <UnitTestResult executionId="c9e838ec-fed9-4ab7-b512-9464a01c9be2" testId="82daf901-598b-6f08-f9bd-5ea433eb814d" testName="T6_GetScanResult_FilePathOutsideScansDir_ReturnsError" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0044409" startTime="2026-08-15T22:58:05.5702463-07:00" endTime="2026-08-15T22:58:05.5746870-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c9e838ec-fed9-4ab7-b512-9464a01c9be2" />
+    <UnitTestResult executionId="98b563d0-96b0-4136-be66-73489a7b2ea7" testId="b04f702d-c074-4f0a-1956-18a22ee44f67" testName="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(NoProgress)" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0002930" startTime="2026-08-15T22:58:05.5879212-07:00" endTime="2026-08-15T22:58:05.5882145-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="98b563d0-96b0-4136-be66-73489a7b2ea7" />
+    <UnitTestResult executionId="f530d0ea-d4bf-4f72-9f9b-9bfd993bdf00" testId="94fab00b-2938-4a4b-ce52-03535c4c6230" testName="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(PartialProgress)" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0006970" startTime="2026-08-15T22:58:05.5871961-07:00" endTime="2026-08-15T22:58:05.5878932-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f530d0ea-d4bf-4f72-9f9b-9bfd993bdf00" />
+    <UnitTestResult executionId="943d63a6-acb9-48d8-9fca-e48ae7ef8f75" testId="014db33b-973c-8df4-5d65-449ea46d2010" testName="FromCounts_NoProgress_WhenZeroSucceededAndFailed" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0001530" startTime="2026-08-15T22:58:05.5886526-07:00" endTime="2026-08-15T22:58:05.5888055-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="943d63a6-acb9-48d8-9fca-e48ae7ef8f75" />
+    <UnitTestResult executionId="e13327ba-19ee-44fc-a1a6-51afd0b71a49" testId="2bf60369-d24b-fd6f-478a-d2290095c920" testName="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0518400" startTime="2026-08-15T22:58:08.8140826-07:00" endTime="2026-08-15T22:58:08.8659230-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e13327ba-19ee-44fc-a1a6-51afd0b71a49" />
+    <UnitTestResult executionId="daa6b75c-d984-4285-9caf-bb4c28db821e" testId="429d245e-1f54-0b98-6ec9-c8c2505008b4" testName="T11_AddCancellationToken_DryRun_ReturnsWithoutError" computerName="WIN-6FVIVBDM0RR" duration="00:00:01.0152590" startTime="2026-08-15T22:58:06.1566105-07:00" endTime="2026-08-15T22:58:07.1718800-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="daa6b75c-d984-4285-9caf-bb4c28db821e" />
+    <UnitTestResult executionId="50b750cc-bc2d-4824-9ef0-b9bad30a8828" testId="5b2c910a-2f69-0933-37e1-bc6af6e46c48" testName="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0028860" startTime="2026-08-15T22:58:07.2596174-07:00" endTime="2026-08-15T22:58:07.2625034-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="50b750cc-bc2d-4824-9ef0-b9bad30a8828" />
+    <UnitTestResult executionId="330e654d-6275-4de1-b76b-3d92fe04c76f" testId="934e786e-4ed1-4cc1-fc94-69bfaa0ddf96" testName="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0295850" startTime="2026-08-15T22:58:08.7806174-07:00" endTime="2026-08-15T22:58:08.8102018-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="330e654d-6275-4de1-b76b-3d92fe04c76f" />
+    <UnitTestResult executionId="44c64bc3-fa01-4e93-9a5e-03228d8e6ab9" testId="a94c279f-c1dd-be4e-f88e-352572d68550" testName="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.5473470" startTime="2026-08-15T22:58:05.6092182-07:00" endTime="2026-08-15T22:58:06.1565712-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="44c64bc3-fa01-4e93-9a5e-03228d8e6ab9" />
+    <UnitTestResult executionId="2904d6ec-6011-4ef9-b549-92504506239e" testId="2d540322-9744-0089-fc4c-66a575084250" testName="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0158230" startTime="2026-08-15T22:58:08.8691113-07:00" endTime="2026-08-15T22:58:08.8849337-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="2904d6ec-6011-4ef9-b549-92504506239e" />
+    <UnitTestResult executionId="8ca5e94a-2b3a-48df-ac1d-024cfccfe5f1" testId="d1a82b96-1028-160c-5c03-5029f4c700f5" testName="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0037950" startTime="2026-08-15T22:58:08.8102479-07:00" endTime="2026-08-15T22:58:08.8140424-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8ca5e94a-2b3a-48df-ac1d-024cfccfe5f1" />
+    <UnitTestResult executionId="d3b689a6-ffa9-4421-8636-f2f8b67e16c1" testId="f437086d-1aaa-ba53-2514-f3b150079acc" testName="FromCounts_CompletedFully_WhenSucceededAndNoFailuresNoAlreadySatisfied" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0002000" startTime="2026-08-15T22:58:05.5882760-07:00" endTime="2026-08-15T22:58:05.5884759-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d3b689a6-ffa9-4421-8636-f2f8b67e16c1" />
+    <UnitTestResult executionId="08b36446-f667-427d-8948-2c7350d6c5e2" testId="e0be2919-9a30-4964-cfaa-ca4fd5185e7a" testName="FromCounts_PartialProgress_WhenSucceededAndFailed" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0001540" startTime="2026-08-15T22:58:05.5889797-07:00" endTime="2026-08-15T22:58:05.5891339-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="08b36446-f667-427d-8948-2c7350d6c5e2" />
+    <UnitTestResult executionId="3d698b33-f269-444f-aac2-d38c42809ca3" testId="fee86906-b615-94c2-2e84-b878ebf8bf01" testName="Router_OverloadAlreadyExists_ReturnsHintWithPrefilledFileAndMethod" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0063300" startTime="2026-08-15T22:58:05.5931938-07:00" endTime="2026-08-15T22:58:05.5995235-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="3d698b33-f269-444f-aac2-d38c42809ca3" />
+    <UnitTestResult executionId="5d99ed2b-0829-488b-a336-a6e3e73df5f5" testId="030aedd2-987d-04f4-4268-f00e737c986c" testName="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.2486450" startTime="2026-08-15T22:58:08.4774564-07:00" endTime="2026-08-15T22:58:08.7261041-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="5d99ed2b-0829-488b-a336-a6e3e73df5f5" />
+    <UnitTestResult executionId="4d0c9d86-b243-467d-ac18-950c4ae66c0a" testId="a96d79fd-f4d1-4a55-34d9-ae1b1067807f" testName="FromCounts_NothingToDo_WhenAttemptedIsZero" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0001570" startTime="2026-08-15T22:58:05.5888137-07:00" endTime="2026-08-15T22:58:05.5889709-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="4d0c9d86-b243-467d-ac18-950c4ae66c0a" />
+    <UnitTestResult executionId="a9d1dc75-500d-47c4-9fa7-7e4a572bbfc3" testId="88fd0c82-d946-8668-dbb6-06d0ffbdedb3" testName="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0544230" startTime="2026-08-15T22:58:08.7261430-07:00" endTime="2026-08-15T22:58:08.7805658-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9d1dc75-500d-47c4-9fa7-7e4a572bbfc3" />
+    <UnitTestResult executionId="f3fb827b-016b-4eb4-b190-2d0dad3af5c5" testId="a2ce9062-2e06-c984-b9d2-4a42170748d0" testName="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0300040" startTime="2026-08-15T22:58:08.8849711-07:00" endTime="2026-08-15T22:58:08.9149742-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f3fb827b-016b-4eb4-b190-2d0dad3af5c5" />
+    <UnitTestResult executionId="66c92e58-5e53-42d4-88f8-a8ff7f13922f" testId="0b40f05a-2a60-f5dc-96ab-07901ea72bd2" testName="T14_UpliftCallers_EmptyTargets_ZeroAttempted" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0362130" startTime="2026-08-15T22:58:07.2202317-07:00" endTime="2026-08-15T22:58:07.2564447-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="66c92e58-5e53-42d4-88f8-a8ff7f13922f" />
+    <UnitTestResult executionId="a9fca6b5-37a4-45ff-bf33-d7fe49889434" testId="1a93e664-739e-ee9e-0694-902841ee7cfb" testName="FromCounts_CompletedWithNoOps_WhenAlreadySatisfiedAndNoFailures" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0001580" startTime="2026-08-15T22:58:05.5884858-07:00" endTime="2026-08-15T22:58:05.5886440-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="a9fca6b5-37a4-45ff-bf33-d7fe49889434" />
+    <UnitTestResult executionId="16a992b7-d1a4-4c5f-97ef-cd7c4a6a98e6" testId="da11f4e4-78f7-0fce-826a-6d74687688cb" testName="AlreadySatisfied_AbsentFromActionable_AndOutcomeIsCompletedWithNoOps" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0091410" startTime="2026-08-15T22:58:05.5779663-07:00" endTime="2026-08-15T22:58:05.5871072-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="16a992b7-d1a4-4c5f-97ef-cd7c4a6a98e6" />
+    <UnitTestResult executionId="0b165004-5b46-4fe1-b45b-61eea67a140b" testId="e89e300d-cd33-3b3c-ceda-71e04a0fff6c" testName="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0227760" startTime="2026-08-15T22:58:07.1974205-07:00" endTime="2026-08-15T22:58:07.2201964-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0b165004-5b46-4fe1-b45b-61eea67a140b" />
+    <UnitTestResult executionId="c9ffaf2e-7c5a-40e1-96db-8db91f895424" testId="a460e5d0-1e16-c710-824f-cbb8fef5e76a" testName="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0446920" startTime="2026-08-15T22:58:08.4326865-07:00" endTime="2026-08-15T22:58:08.4773778-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="c9ffaf2e-7c5a-40e1-96db-8db91f895424" />
+    <UnitTestResult executionId="e0055c38-d6ca-4649-a142-96d9ebd571a2" testId="5462cade-f872-d8ba-c7a3-07f852602477" testName="T1_GetScanResult_NoScanIdNoFilePath_ReturnsError" computerName="WIN-6FVIVBDM0RR" duration="00:00:00.0543370" startTime="2026-08-15T22:58:05.3633121-07:00" endTime="2026-08-15T22:58:05.4175648-07:00" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="e0055c38-d6ca-4649-a142-96d9ebd571a2" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(NoProgress)" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="b04f702d-c074-4f0a-1956-18a22ee44f67">
+      <Execution id="98b563d0-96b0-4136-be66-73489a7b2ea7" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(NoProgress)" />
+    </UnitTest>
+    <UnitTest name="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a460e5d0-1e16-c710-824f-cbb8fef5e76a">
+      <Execution id="c9ffaf2e-7c5a-40e1-96db-8db91f895424" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T2_ScanAsyncMigrationCandidates_LoadListWithAttribute_FindsCandidate" />
+    </UnitTest>
+    <UnitTest name="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="ed4bbe84-af4d-aafe-6fb1-80dd79e0cfbe">
+      <Execution id="84bbac8d-322f-48ab-b99f-063ac88cc4f4" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T12_PropagateCancellationToken_EmptyTargets_ZeroAttempted" />
+    </UnitTest>
+    <UnitTest name="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a2ce9062-2e06-c984-b9d2-4a42170748d0">
+      <Execution id="f3fb827b-016b-4eb4-b190-2d0dad3af5c5" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T9_FlagAsyncMigrationCandidates_DryRunTargets_Succeeds" />
+    </UnitTest>
+    <UnitTest name="T4_GetScanResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fec4a67a-aa0c-5862-0b6a-87c8a8181bfe">
+      <Execution id="4366fb70-cfd7-4f8b-bbb5-5df93bea1fa1" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T4_GetScanResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries" />
+    </UnitTest>
+    <UnitTest name="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="5b2c910a-2f69-0933-37e1-bc6af6e46c48">
+      <Execution id="50b750cc-bc2d-4824-9ef0-b9bad30a8828" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded" />
+    </UnitTest>
+    <UnitTest name="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a94c279f-c1dd-be4e-f88e-352572d68550">
+      <Execution id="44c64bc3-fa01-4e93-9a5e-03228d8e6ab9" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T10_BridgeAsyncMethods_DryRun_AllItemsAttempted" />
+    </UnitTest>
+    <UnitTest name="T6_GetScanResult_FilePathOutsideScansDir_ReturnsError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="82daf901-598b-6f08-f9bd-5ea433eb814d">
+      <Execution id="c9e838ec-fed9-4ab7-b512-9464a01c9be2" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T6_GetScanResult_FilePathOutsideScansDir_ReturnsError" />
+    </UnitTest>
+    <UnitTest name="T5_GetScanResult_ValidFilePath_InScansDir_ReturnsFindigns" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a64c3d94-c08e-8f69-82b0-a7ce6a5e5e25">
+      <Execution id="dd7d19ed-a889-4f9c-8f7b-92e52def4d45" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T5_GetScanResult_ValidFilePath_InScansDir_ReturnsFindigns" />
+    </UnitTest>
+    <UnitTest name="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="2d540322-9744-0089-fc4c-66a575084250">
+      <Execution id="2904d6ec-6011-4ef9-b549-92504506239e" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T8_BridgeAsyncMethods_EmptyTargets_ZeroAttempted" />
+    </UnitTest>
+    <UnitTest name="T11_AddCancellationToken_DryRun_ReturnsWithoutError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="429d245e-1f54-0b98-6ec9-c8c2505008b4">
+      <Execution id="daa6b75c-d984-4285-9caf-bb4c28db821e" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T11_AddCancellationToken_DryRun_ReturnsWithoutError" />
+    </UnitTest>
+    <UnitTest name="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="e89e300d-cd33-3b3c-ceda-71e04a0fff6c">
+      <Execution id="0b165004-5b46-4fe1-b45b-61eea67a140b" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T13_ExtractEventHandlers_MissingContextSnippet_ReturnsFailed" />
+    </UnitTest>
+    <UnitTest name="T1_GetScanResult_NoScanIdNoFilePath_ReturnsError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="5462cade-f872-d8ba-c7a3-07f852602477">
+      <Execution id="e0055c38-d6ca-4649-a142-96d9ebd571a2" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T1_GetScanResult_NoScanIdNoFilePath_ReturnsError" />
+    </UnitTest>
+    <UnitTest name="FromCounts_CompletedWithNoOps_WhenAlreadySatisfiedAndNoFailures" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="1a93e664-739e-ee9e-0694-902841ee7cfb">
+      <Execution id="a9fca6b5-37a4-45ff-bf33-d7fe49889434" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="FromCounts_CompletedWithNoOps_WhenAlreadySatisfiedAndNoFailures" />
+    </UnitTest>
+    <UnitTest name="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="030aedd2-987d-04f4-4268-f00e737c986c">
+      <Execution id="5d99ed2b-0829-488b-a336-a6e3e73df5f5" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T20_Asyncify_DefaultParams_Score70WithCaller_BridgesAndUpliftsCallers" />
+    </UnitTest>
+    <UnitTest name="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="88fd0c82-d946-8668-dbb6-06d0ffbdedb3">
+      <Execution id="a9d1dc75-500d-47c4-9fa7-7e4a572bbfc3" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T3_ScanAsyncMigrationCandidates_Summarize_ReturnsMigrationScanSummary" />
+    </UnitTest>
+    <UnitTest name="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="40dca888-4e82-a53a-947a-482153a2f256">
+      <Execution id="4d94bb7c-9cd4-4891-9d06-cb80a10ceba3" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded" />
+    </UnitTest>
+    <UnitTest name="T14_UpliftCallers_EmptyTargets_ZeroAttempted" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="0b40f05a-2a60-f5dc-96ab-07901ea72bd2">
+      <Execution id="66c92e58-5e53-42d4-88f8-a8ff7f13922f" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T14_UpliftCallers_EmptyTargets_ZeroAttempted" />
+    </UnitTest>
+    <UnitTest name="Router_OverloadAlreadyExists_ReturnsHintWithPrefilledFileAndMethod" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fee86906-b615-94c2-2e84-b878ebf8bf01">
+      <Execution id="3d698b33-f269-444f-aac2-d38c42809ca3" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Router_OverloadAlreadyExists_ReturnsHintWithPrefilledFileAndMethod" />
+    </UnitTest>
+    <UnitTest name="Router_NoAsyncEquivalent_ReturnsNullHint_ItemStillInActionable" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="0d8c9103-963e-e17c-1fbf-e9a53cb76707">
+      <Execution id="47423250-f37a-4d71-a40a-2a43bc164a4d" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Router_NoAsyncEquivalent_ReturnsNullHint_ItemStillInActionable" />
+    </UnitTest>
+    <UnitTest name="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="fe49f4ab-cc83-9411-3bee-61d0ad65d852">
+      <Execution id="58ce47a7-906b-46aa-a9c7-6271fb266628" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T7_FlagAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
+    </UnitTest>
+    <UnitTest name="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="190dfb5a-0838-d6dd-67f5-a3f9ee3607e8">
+      <Execution id="d1ac7f9d-8905-4578-bbb1-0f522769607e" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier" />
+    </UnitTest>
+    <UnitTest name="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(PartialProgress)" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="94fab00b-2938-4a4b-ce52-03535c4c6230">
+      <Execution id="f530d0ea-d4bf-4f72-9f9b-9bfd993bdf00" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Directive_DoesNotClaimCompletion_WhenOutcomeIsPartialOrNoProgress(PartialProgress)" />
+    </UnitTest>
+    <UnitTest name="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="2bf60369-d24b-fd6f-478a-d2290095c920">
+      <Execution id="e13327ba-19ee-44fc-a1a6-51afd0b71a49" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T6_GetAsyncMigrationProgress_WithAsyncMethods_ReturnsReport" />
+    </UnitTest>
+    <UnitTest name="FromCounts_PartialProgress_WhenSucceededAndFailed" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="e0be2919-9a30-4964-cfaa-ca4fd5185e7a">
+      <Execution id="08b36446-f667-427d-8948-2c7350d6c5e2" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="FromCounts_PartialProgress_WhenSucceededAndFailed" />
+    </UnitTest>
+    <UnitTest name="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="934e786e-4ed1-4cc1-fc94-69bfaa0ddf96">
+      <Execution id="330e654d-6275-4de1-b76b-3d92fe04c76f" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T4_ScanAsyncMigrationCandidates_MinScoreAboveAll_ReturnsEmptyList" />
+    </UnitTest>
+    <UnitTest name="AlreadySatisfied_AbsentFromActionable_AndOutcomeIsCompletedWithNoOps" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="da11f4e4-78f7-0fce-826a-6d74687688cb">
+      <Execution id="16a992b7-d1a4-4c5f-97ef-cd7c4a6a98e6" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="AlreadySatisfied_AbsentFromActionable_AndOutcomeIsCompletedWithNoOps" />
+    </UnitTest>
+    <UnitTest name="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="efa672db-c949-a200-bd9c-28a78170195f">
+      <Execution id="b4a79bab-cbec-4f60-94db-c2dcef42f5de" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T18_UpliftCallers_ChainedMemberAccess_AwaitIsParenthesised" />
+    </UnitTest>
+    <UnitTest name="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="d1a82b96-1028-160c-5c03-5029f4c700f5">
+      <Execution id="8ca5e94a-2b3a-48df-ac1d-024cfccfe5f1" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded" />
+    </UnitTest>
+    <UnitTest name="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="102c5c1a-93b8-e9ec-365f-bb9e7b252377">
+      <Execution id="fae9ed83-4f16-485a-b91e-5914cfd22186" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded" />
+    </UnitTest>
+    <UnitTest name="Router_TwoEqualWeightProducers_SameToolSelectedAcrossRepeatedCalls" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="b6f1502c-7fff-5065-8637-8322d1d1fb20">
+      <Execution id="c0d08712-a0d1-49bc-818d-4289724278ae" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Router_TwoEqualWeightProducers_SameToolSelectedAcrossRepeatedCalls" />
+    </UnitTest>
+    <UnitTest name="T3_GetScanResult_ValidScanId_MigrationCandidates_ReturnsFindingsAndTotalRecords" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="6db6f941-86b3-efe1-dca2-2e4f27c315b6">
+      <Execution id="884b53d2-c184-461c-a02c-72e883fa4db1" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T3_GetScanResult_ValidScanId_MigrationCandidates_ReturnsFindingsAndTotalRecords" />
+    </UnitTest>
+    <UnitTest name="FromCounts_NothingToDo_WhenAttemptedIsZero" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="a96d79fd-f4d1-4a55-34d9-ae1b1067807f">
+      <Execution id="4d0c9d86-b243-467d-ac18-950c4ae66c0a" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="FromCounts_NothingToDo_WhenAttemptedIsZero" />
+    </UnitTest>
+    <UnitTest name="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="156d4733-d6a7-b846-fd61-c5761da15799">
+      <Execution id="07b5b4d0-4813-40e1-a3a3-b5c5d62732bc" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.SentinelAsyncifyToolsTests" name="T19_Asyncify_DefaultParams_Score49BelowThreshold_NoUplift" />
+    </UnitTest>
+    <UnitTest name="FromCounts_CompletedFully_WhenSucceededAndNoFailuresNoAlreadySatisfied" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="f437086d-1aaa-ba53-2514-f3b150079acc">
+      <Execution id="d3b689a6-ffa9-4421-8636-f2f8b67e16c1" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="FromCounts_CompletedFully_WhenSucceededAndNoFailuresNoAlreadySatisfied" />
+    </UnitTest>
+    <UnitTest name="T2_GetScanResult_UnknownScanId_ReturnsError" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="31bb0ec6-9809-79b7-a45d-79ba408ad571">
+      <Execution id="28348db6-11b3-421b-bcf9-924174cc286a" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.GetScanResultTests" name="T2_GetScanResult_UnknownScanId_ReturnsError" />
+    </UnitTest>
+    <UnitTest name="FromCounts_NoProgress_WhenZeroSucceededAndFailed" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="014db33b-973c-8df4-5d65-449ea46d2010">
+      <Execution id="943d63a6-acb9-48d8-9fca-e48ae7ef8f75" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="FromCounts_NoProgress_WhenZeroSucceededAndFailed" />
+    </UnitTest>
+    <UnitTest name="Router_OverloadAlreadyExists_NoProducerRegistered_ReturnsNull" storage="c:\users\administrator\source\repos\roslynsentinel\roslynsentinel.tests.asyncify\bin\debug\net10.0\roslynsentinel.tests.asyncify.dll" id="4494bcc5-6efb-6722-8bb2-4277797d9643">
+      <Execution id="c85b7c82-1edb-4ea5-bebf-bb5eb8a0aaa4" />
+      <TestMethod codeBase="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll" adapterTypeName="executor://nunit3testexecutor/" className="RoslynSentinel.Tests.Asyncify.OperationOutcomeRoutingTests" name="Router_OverloadAlreadyExists_NoProducerRegistered_ReturnsNull" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="efa672db-c949-a200-bd9c-28a78170195f" executionId="b4a79bab-cbec-4f60-94db-c2dcef42f5de" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="ed4bbe84-af4d-aafe-6fb1-80dd79e0cfbe" executionId="84bbac8d-322f-48ab-b99f-063ac88cc4f4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b6f1502c-7fff-5065-8637-8322d1d1fb20" executionId="c0d08712-a0d1-49bc-818d-4289724278ae" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="6db6f941-86b3-efe1-dca2-2e4f27c315b6" executionId="884b53d2-c184-461c-a02c-72e883fa4db1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="31bb0ec6-9809-79b7-a45d-79ba408ad571" executionId="28348db6-11b3-421b-bcf9-924174cc286a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fe49f4ab-cc83-9411-3bee-61d0ad65d852" executionId="58ce47a7-906b-46aa-a9c7-6271fb266628" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4494bcc5-6efb-6722-8bb2-4277797d9643" executionId="c85b7c82-1edb-4ea5-bebf-bb5eb8a0aaa4" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="190dfb5a-0838-d6dd-67f5-a3f9ee3607e8" executionId="d1ac7f9d-8905-4578-bbb1-0f522769607e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="102c5c1a-93b8-e9ec-365f-bb9e7b252377" executionId="fae9ed83-4f16-485a-b91e-5914cfd22186" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0d8c9103-963e-e17c-1fbf-e9a53cb76707" executionId="47423250-f37a-4d71-a40a-2a43bc164a4d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fec4a67a-aa0c-5862-0b6a-87c8a8181bfe" executionId="4366fb70-cfd7-4f8b-bbb5-5df93bea1fa1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="40dca888-4e82-a53a-947a-482153a2f256" executionId="4d94bb7c-9cd4-4891-9d06-cb80a10ceba3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a64c3d94-c08e-8f69-82b0-a7ce6a5e5e25" executionId="dd7d19ed-a889-4f9c-8f7b-92e52def4d45" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="156d4733-d6a7-b846-fd61-c5761da15799" executionId="07b5b4d0-4813-40e1-a3a3-b5c5d62732bc" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="82daf901-598b-6f08-f9bd-5ea433eb814d" executionId="c9e838ec-fed9-4ab7-b512-9464a01c9be2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="b04f702d-c074-4f0a-1956-18a22ee44f67" executionId="98b563d0-96b0-4136-be66-73489a7b2ea7" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="94fab00b-2938-4a4b-ce52-03535c4c6230" executionId="f530d0ea-d4bf-4f72-9f9b-9bfd993bdf00" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="014db33b-973c-8df4-5d65-449ea46d2010" executionId="943d63a6-acb9-48d8-9fca-e48ae7ef8f75" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2bf60369-d24b-fd6f-478a-d2290095c920" executionId="e13327ba-19ee-44fc-a1a6-51afd0b71a49" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="429d245e-1f54-0b98-6ec9-c8c2505008b4" executionId="daa6b75c-d984-4285-9caf-bb4c28db821e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5b2c910a-2f69-0933-37e1-bc6af6e46c48" executionId="50b750cc-bc2d-4824-9ef0-b9bad30a8828" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="934e786e-4ed1-4cc1-fc94-69bfaa0ddf96" executionId="330e654d-6275-4de1-b76b-3d92fe04c76f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a94c279f-c1dd-be4e-f88e-352572d68550" executionId="44c64bc3-fa01-4e93-9a5e-03228d8e6ab9" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="2d540322-9744-0089-fc4c-66a575084250" executionId="2904d6ec-6011-4ef9-b549-92504506239e" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d1a82b96-1028-160c-5c03-5029f4c700f5" executionId="8ca5e94a-2b3a-48df-ac1d-024cfccfe5f1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="f437086d-1aaa-ba53-2514-f3b150079acc" executionId="d3b689a6-ffa9-4421-8636-f2f8b67e16c1" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e0be2919-9a30-4964-cfaa-ca4fd5185e7a" executionId="08b36446-f667-427d-8948-2c7350d6c5e2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="fee86906-b615-94c2-2e84-b878ebf8bf01" executionId="3d698b33-f269-444f-aac2-d38c42809ca3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="030aedd2-987d-04f4-4268-f00e737c986c" executionId="5d99ed2b-0829-488b-a336-a6e3e73df5f5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a96d79fd-f4d1-4a55-34d9-ae1b1067807f" executionId="4d0c9d86-b243-467d-ac18-950c4ae66c0a" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="88fd0c82-d946-8668-dbb6-06d0ffbdedb3" executionId="a9d1dc75-500d-47c4-9fa7-7e4a572bbfc3" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a2ce9062-2e06-c984-b9d2-4a42170748d0" executionId="f3fb827b-016b-4eb4-b190-2d0dad3af5c5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="0b40f05a-2a60-f5dc-96ab-07901ea72bd2" executionId="66c92e58-5e53-42d4-88f8-a8ff7f13922f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1a93e664-739e-ee9e-0694-902841ee7cfb" executionId="a9fca6b5-37a4-45ff-bf33-d7fe49889434" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="da11f4e4-78f7-0fce-826a-6d74687688cb" executionId="16a992b7-d1a4-4c5f-97ef-cd7c4a6a98e6" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="e89e300d-cd33-3b3c-ceda-71e04a0fff6c" executionId="0b165004-5b46-4fe1-b45b-61eea67a140b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a460e5d0-1e16-c710-824f-cbb8fef5e76a" executionId="c9ffaf2e-7c5a-40e1-96db-8db91f895424" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="5462cade-f872-d8ba-c7a3-07f852602477" executionId="e0055c38-d6ca-4649-a142-96d9ebd571a2" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Failed">
+    <Counters total="38" executed="38" passed="35" failed="3" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>NUnit Adapter 1.0.0.0: Test execution started&#xD;
+Running all tests in C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests.Asyncify\bin\Debug\net10.0\RoslynSentinel.Tests.Asyncify.dll&#xD;
+   NUnit3TestExecutor discovered 38 of 38 NUnit test cases using Current Discovery mode, Non-Explicit run&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>
