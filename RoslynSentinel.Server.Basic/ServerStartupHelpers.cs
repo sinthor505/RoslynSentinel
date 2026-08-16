@@ -40,20 +40,21 @@ public static class ServerStartupHelpers
     /// <param name="allModes">Full mode set for this variant (Basic vs Advanced).</param>
     /// <param name="modeArg">The raw --mode value (or "all").</param>
     /// <param name="activeModes">Resolved, expanded set of active modes.</param>
-    /// <param name="solutionPath">Value of --solution=, or null.</param>
+    /// <param name="solutionPath">Value of --solution=, or null. May be absolute or relative;
+    /// relative paths are resolved via <see cref="RoslynSentinel.Common.PersistentWorkspaceManager"/>
+    /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
+    /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
     public static void ParseArgs(
         string[] args,
         HashSet<string> allModes,
         out string modeArg,
         out HashSet<string> activeModes,
-        out string? solutionPath)
+        out string? solutionPath,
+        out string? baseRepoDirectory)
     {
-        modeArg = args.FirstOrDefault(a => a.StartsWith("--mode=", StringComparison.Ordinal))
-                      ?.Replace("--mode=", "", StringComparison.Ordinal)
-                  ?? "all";
-
-        solutionPath = args.FirstOrDefault(a => a.StartsWith("--solution=", StringComparison.Ordinal))
-                          ?.Replace("--solution=", "", StringComparison.Ordinal);
+        modeArg = GetArgValue(args, "--mode") ?? "all";
+        solutionPath = GetArgValue(args, "--solution");
+        baseRepoDirectory = GetArgValue(args, "--base-repo-dir");
 
         var resolvedModeArg = ToolsetAliases.TryGetValue(modeArg, out var alias) ? alias : modeArg;
 
@@ -62,11 +63,27 @@ public static class ServerStartupHelpers
             : resolvedModeArg.Split(',').Select(m => m.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
-    /// <summary>Parses --port=N; returns <paramref name="defaultPort"/> if absent or unparseable.</summary>
+    /// <summary>
+    /// Reads a command-line flag's value, accepting both "--flag=value" and "--flag value" forms.
+    /// Returns null if the flag is absent (or "--flag value" is missing its value).
+    /// </summary>
+    private static string? GetArgValue(string[] args, string flag)
+    {
+        var inlinePrefix = flag + "=";
+        var inline = args.FirstOrDefault(a => a.StartsWith(inlinePrefix, StringComparison.Ordinal));
+        if (inline is not null)
+        {
+            return inline[inlinePrefix.Length..];
+        }
+
+        var index = Array.FindIndex(args, a => a.Equals(flag, StringComparison.Ordinal));
+        return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    /// <summary>Parses --port (either "--port=N" or "--port N"); returns <paramref name="defaultPort"/> if absent or unparseable.</summary>
     public static int ParsePort(string[] args, int defaultPort = 5100)
     {
-        var portArg = args.FirstOrDefault(a => a.StartsWith("--port=", StringComparison.Ordinal))
-                         ?.Replace("--port=", "", StringComparison.Ordinal);
+        var portArg = GetArgValue(args, "--port");
         return int.TryParse(portArg, out var parsed) ? parsed : defaultPort;
     }
 
@@ -83,8 +100,7 @@ public static class ServerStartupHelpers
             return false;
         }
 
-        var outputPath = args.FirstOrDefault(a => a.StartsWith("--output=", StringComparison.Ordinal))
-                            ?.Replace("--output=", "", StringComparison.Ordinal);
+        var outputPath = GetArgValue(args, "--output");
         SentinelConsoleMode.ListTools(activeModes, outputPath);
         return true;
     }

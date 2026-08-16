@@ -33,6 +33,13 @@ public partial class PersistentWorkspaceManager : IDisposable
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
     public readonly Guid SessionId = Guid.NewGuid();
+
+    /// <summary>
+    /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
+    /// Defaults to <see cref="AppDomain.CurrentDomain"/>'s base directory when not explicitly set
+    /// (e.g. via the server's --base-repo-dir startup argument).
+    /// </summary>
+    public string? BaseRepoDirectory { get; set; }
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
@@ -85,6 +92,51 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     /// <summary>
+    /// Resolves a solution path that may be absolute or relative. Relative paths are checked,
+    /// in order, against: the current working directory, <paramref name="baseRepoDirOverride"/>
+    /// (if supplied for this call), <see cref="BaseRepoDirectory"/> (the server-wide default set
+    /// via --base-repo-dir, if any), and the server's <see cref="AppDomain.CurrentDomain"/> base directory.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">
+    /// Thrown when a relative <paramref name="solutionPath"/> does not exist under any of the
+    /// candidate directories. Lists every candidate tried so the caller can diagnose a missing
+    /// or misconfigured base repo directory.
+    /// </exception>
+    private string ResolveSolutionPath(string solutionPath, string? baseRepoDirOverride = null)
+    {
+        if (string.IsNullOrWhiteSpace(solutionPath) || Path.IsPathRooted(solutionPath))
+        {
+            return solutionPath;
+        }
+
+        var candidates = new List<string> { Path.GetFullPath(solutionPath) };
+
+        if (!string.IsNullOrWhiteSpace(baseRepoDirOverride))
+        {
+            candidates.Add(Path.GetFullPath(Path.Combine(baseRepoDirOverride, solutionPath)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(BaseRepoDirectory))
+        {
+            candidates.Add(Path.GetFullPath(Path.Combine(BaseRepoDirectory, solutionPath)));
+        }
+
+        candidates.Add(Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, solutionPath)));
+
+        foreach (var candidate in candidates.Distinct())
+        {
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new FileNotFoundException(
+            $"Could not resolve relative solution path '{solutionPath}'. Tried: {string.Join(", ", candidates.Distinct())}. " +
+            $"Pass an absolute path, or supply baseRepoDir to LoadSolution (or set --base-repo-dir at server startup).");
+    }
+
+    /// <summary>
     /// Returns a list of files that have been modified externally since the last sync.
     /// </summary>
     public List<string> GetExternalDrift()
@@ -103,7 +155,16 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     public async Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default)
+        => await LoadSolutionAsync(solutionPath, baseRepoDir: null, cancellationToken);
+
+    /// <param name="baseRepoDir">
+    /// Optional per-call base directory used to resolve a relative <paramref name="solutionPath"/>.
+    /// Takes precedence over the server-wide <see cref="BaseRepoDirectory"/>.
+    /// </param>
+    public async Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default)
     {
+        solutionPath = ResolveSolutionPath(solutionPath, baseRepoDir);
+
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {

@@ -31,7 +31,7 @@ public class ProgramServerAdvanced
     public static async Task Main(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
 
         if (ServerStartupHelpers.HandleListTools(args, activeModes))
         {
@@ -90,7 +90,7 @@ public class ProgramServerAdvanced
 
             ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
 
-            host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger);
+            host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
             SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
             ServerStartupHelpers.LogStartup<ProgramServerAdvanced>(logger, logPath, activeModes, modeArg);

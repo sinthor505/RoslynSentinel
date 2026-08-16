@@ -186,13 +186,18 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
     /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
     /// </summary>
-    public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null)
+    public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null, string? baseRepoDirectory = null)
     {
         logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
         var warmupStart = System.Diagnostics.Stopwatch.StartNew();
         var workspaceManager = services.GetRequiredService<PersistentWorkspaceManager>();
         warmupStart.Stop();
         logger?.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+
+        if (!string.IsNullOrEmpty(baseRepoDirectory))
+        {
+            workspaceManager.BaseRepoDirectory = baseRepoDirectory;
+        }
 
         if (!string.IsNullOrEmpty(solutionPath))
         {

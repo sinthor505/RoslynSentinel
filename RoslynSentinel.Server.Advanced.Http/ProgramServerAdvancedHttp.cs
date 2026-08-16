@@ -21,7 +21,7 @@ public class ProgramHttpHostAdvanced
     public static async Task Main(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
-        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath);
+        ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
 
         if (ServerStartupHelpers.HandleListTools(args, activeModes))
@@ -56,7 +56,7 @@ public class ProgramHttpHostAdvanced
         var logger = app.Services.GetRequiredService<ILoggerFactory>()
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
-        app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger);
+        app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
         SentinelConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
         SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
 
