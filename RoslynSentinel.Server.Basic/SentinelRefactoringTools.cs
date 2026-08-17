@@ -304,8 +304,10 @@ public class SentinelRefactoringTools
     [McpServerTool(Name = "ReplaceMember")]
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an entire member (method, property, or class) in a file by name with new source code. " +
-        "newSource must be a complete member declaration including its signature/modifiers and body " +
-        "(e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. Returns changeId.")]
+        "This is the tool to use for editing/replacing text within a member's body — there is no separate " +
+        "snippet-and-replacement tool; instead, read the member, apply your edit in-place, and pass the full " +
+        "result as newSource. newSource must be a complete member declaration including its signature/modifiers " +
+        "and body (e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. Returns changeId.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
