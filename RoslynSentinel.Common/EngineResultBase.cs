@@ -14,10 +14,10 @@ public record EngineResultBase
         get; init;
     } = EditOutcome.Unset;
     [JsonIgnore]
-    public string UpdatedText
+    public string? UpdatedText
     {
         get; init;
-    } = string.Empty;
+    }
     public FilePath FilePath
     {
         get; init;

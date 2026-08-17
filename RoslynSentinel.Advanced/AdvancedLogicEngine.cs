@@ -95,31 +95,31 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var arms = branches.Select(b =>
@@ -143,31 +143,31 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var sections = new List<SwitchSectionSyntax>();
@@ -197,7 +197,7 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -222,7 +222,7 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -259,13 +259,13 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var forEach = root.DescendantNodes()
@@ -385,13 +385,13 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>()
@@ -439,13 +439,13 @@ public class AdvancedLogicEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = "", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, UpdatedText = null, FilePath = filePath };
         }
 
         var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>()
