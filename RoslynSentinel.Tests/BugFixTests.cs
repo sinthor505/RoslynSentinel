@@ -238,7 +238,7 @@ public class Foo : IFoo
 
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Foo.cs", "Foo", "IFoo");
 
-        Assert.That(result.UpdatedText, Does.Contain("already implemented"),
+        Assert.That(result.Message, Does.Contain("already implemented"),
             "Should report that all members are already implemented");
     }
 
@@ -1461,7 +1461,7 @@ public class Startup
             // Should NOT return the full file when nothing changed
             Assert.That(result.UpdatedText, Does.Not.Contain("public class Service"),
                 "Should not return full file when no guard patterns are found");
-            Assert.That(result.UpdatedText, Does.Contain("No"),
+            Assert.That(result.Message, Does.Contain("No"),
                 "Should return a no-op indicator message instead of full file content");
         }
 
@@ -1575,7 +1575,7 @@ public class Startup
             Assert.That(result.UpdatedText, Does.Not.Contain("var orderId = orderId"),
                 "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
-            Assert.That(result.UpdatedText, Does.Contain("already"),
+            Assert.That(result.Message, Does.Contain("already"),
                 "Should indicate the variable is already introduced");
         }
 
@@ -1636,9 +1636,9 @@ public class TargetDto
             SetSource(src, "Foo.cs");
             var result = await _mappingEngine.GenerateMappingAsync("Foo.cs", "Foo", "NonExistentType");
 
-            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("Could not"),
+            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("Could not"),
                 "Should return helpful message when type not found, not throw exception");
-            Assert.That(result, Does.Not.Contain("System.Exception"),
+            Assert.That(result.Message, Does.Not.Contain("System.Exception"),
                 "Must not surface a raw exception to the caller");
         }
 
@@ -1657,7 +1657,7 @@ public class TargetDto
             SetSource(src, "MyService.cs");
             var result = await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
 
-            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
+            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
                 "Should return a message when method not found, not throw an exception");
         }
 
@@ -1693,7 +1693,7 @@ public class TargetDto
             SetSource(src, "Loader.cs");
             var result = await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
 
-            Assert.That(result.UpdatedText, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
+            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"),
                 "Should return a message when method not found, not throw an exception");
         }
 
@@ -1805,9 +1805,9 @@ public class TargetDto
             var result = await engine.InlineFieldAsync("Service.cs", "_config");
 
             // Should error or explain why inlining failed
-            Assert.That(result.UpdatedText, Does.Contain("ERROR"),
+            Assert.That(result.Message, Does.Contain("ERROR"),
                 "Should return error message when field has no initializer");
-            Assert.That(result, Does.Contain("Cannot inline"),
+            Assert.That(result.Message, Does.Contain("Cannot inline"),
                 "Should explain the inlining cannot proceed");
         }
 
@@ -1846,9 +1846,9 @@ public class TargetDto
             var engine = new GranularRefactoringEngine(_workspaceManager);
             var result = await engine.InlineFieldAsync("Service.cs", "NonExistentField");
 
-            Assert.That(result.UpdatedText, Does.Contain("ERROR"),
+            Assert.That(result.Message, Does.Contain("ERROR"),
                 "Should return error when field not found");
-            Assert.That(result, Does.Contain("not found"),
+            Assert.That(result.Message, Does.Contain("not found"),
                 "Should explain that field was not found");
         }
     }
@@ -1895,7 +1895,7 @@ public class TargetDto
                 "MyClass.cs", "Name", "ToFullProperty",
                 contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
 
-            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
+            Assert.That(result.Message, Does.Contain("Error:"),
                 "Should return an error string when snippet is not found");
         }
 
@@ -3006,10 +3006,10 @@ public class Helper
 
             // Should error or return unchanged because GetName is used
             Assert.That(result, Is.Not.Null, "Should return a result");
-            if (!result!.UpdatedText!.Contains("error") && !result.UpdatedText!.Contains("Error"))
+            if (!result!.Message!.Contains("error") && !result.Message!.Contains("Error"))
             {
                 // If not an error, GetName should still be in the output
-                Assert.That(result.UpdatedText, Does.Contain("GetName"),
+                Assert.That(result.Message, Does.Contain("GetName"),
                     "If removal succeeds, should indicate that member is used");
             }
         }

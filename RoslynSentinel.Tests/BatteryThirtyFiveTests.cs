@@ -168,7 +168,7 @@ public class Foo
         SetSource(src, "Bar.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Bar.cs");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// Already"),
+        Assert.That(result.Message, Does.StartWith("// Already"),
             "Should return message when namespace is already file-scoped");
     }
 
@@ -179,7 +179,7 @@ public class Foo
         SetSource(src, "Global.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Global.cs");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// No block"),
+        Assert.That(result.Message, Does.StartWith("// No block"),
             "Should return a message when no namespace is found");
     }
 

@@ -61,6 +61,18 @@ public class StandardRefactoringEngine
                 };
             }
         }
+
+        if (methodNode != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = "// Could not convert method to property: methods with parameters cannot become properties.",
+                UpdatedText = root!.ToFullString()
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.CannotEdit,

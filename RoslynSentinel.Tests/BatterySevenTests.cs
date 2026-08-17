@@ -69,7 +69,7 @@ public class Calculator
 
         // Methods with parameters cannot be converted — source returned unchanged
         Assert.That(result.UpdatedText, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
-        Assert.That(result, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
     }
 
     [Test]

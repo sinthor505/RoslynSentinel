@@ -1178,6 +1178,6 @@ public class Router {
 
         var result = await _engine.UseFieldBackedPropertiesAsync("NoFile.cs");
 
-        Assert.That(result.UpdatedText, Does.Contain("not found").Or.Contain("not in workspace"));
+        Assert.That(result.Message, Does.Contain("not found").Or.Contain("not in workspace"));
     }
 }

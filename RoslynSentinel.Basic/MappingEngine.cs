@@ -120,7 +120,8 @@ public class MappingEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// No assignment expressions found in the specified range: {startLine}-{endLine}"
+                Message = $"// No assignment expressions found in the specified range: {startLine}-{endLine}",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 

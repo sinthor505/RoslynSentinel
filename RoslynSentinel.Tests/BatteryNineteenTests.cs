@@ -250,7 +250,26 @@ public interface IOrderRepository
     [Test]
     public async Task ImplementInterfaceSafe_ValidClassAndInterface_ReturnsCode()
     {
-        SetSource(PocoSource, "Order.cs");
+        // Note: PocoSource's Order class does not declare ": IOrderRepository", so
+        // ImplementInterfaceAsync would correctly report the interface as not found on
+        // the class. Use a variant where Order declares but does not implement it.
+        const string source = @"
+namespace TestProj;
+
+public class Order : IOrderRepository
+{
+    public int OrderId { get; set; }
+    public string CustomerName { get; set; }
+    public decimal Total { get; set; }
+}
+
+public interface IOrderRepository
+{
+    Task<Order> GetByIdAsync(int id);
+    Task SaveAsync(Order order);
+}
+";
+        SetSource(source, "Order.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Order.cs", "Order", "IOrderRepository");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }

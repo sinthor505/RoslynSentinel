@@ -45,7 +45,8 @@ public class ModernLoggingEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// No logging invocations found."
+                Message = "// No logging invocations found.",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 

@@ -136,7 +136,7 @@ public class NewToolTests
         DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
-        Assert.That(result!.UpdatedText, Does.StartWith("Error:"));
+        Assert.That(result!.Message, Does.Contain("Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

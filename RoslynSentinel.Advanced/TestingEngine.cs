@@ -362,7 +362,8 @@ public class TestingEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = sb.ToString()
+            Message = $"// Benchmark stub generated for {className}.{methodName}.",
+            UpdatedText = sb.ToString()
         };
     }
 }

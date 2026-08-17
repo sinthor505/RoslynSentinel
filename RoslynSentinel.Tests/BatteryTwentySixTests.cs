@@ -447,7 +447,7 @@ public class ThreadSafeLockGotchaTests
 
         var result = await _engine.MakeMethodThreadSafeAsync("Worker.cs", "NonExistent");
 
-        Assert.That(result.UpdatedText, Does.Contain("Error"),
+        Assert.That(result.Message, Does.Contain("Error"),
             "Requesting a non-existent method must return an error string, not throw.");
     }
 

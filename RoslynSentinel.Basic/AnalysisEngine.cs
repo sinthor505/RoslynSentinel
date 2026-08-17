@@ -330,7 +330,8 @@ public class AnalysisEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath
+                FilePath = filePath,
+                Message = $"// File not found: {filePath}"
             };
         }
 

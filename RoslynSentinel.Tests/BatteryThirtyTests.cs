@@ -329,7 +329,7 @@ public class Counter {
         var result = await _suEngine.UseFieldBackedPropertiesAsync("NonExistentFile.cs");
 
         Assert.That(result, Is.Not.Null, "Must return a string, not null");
-        Assert.That(result.UpdatedText!, Contains.Substring("not found").Or.Contains("No backing"),
+        Assert.That(result.Message, Contains.Substring("not found").Or.Contains("No backing"),
             "Must return graceful message when file not found");
     }
 

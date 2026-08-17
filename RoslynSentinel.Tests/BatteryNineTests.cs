@@ -246,7 +246,7 @@ public class StructuralRefinementEngineTests
 
         var result = await _engine.SyncTypeAndFilenameAsync("MyService.cs");
 
-        Assert.That(result.UpdatedText!, Is.EqualTo("Filename matches primary type."));
+        Assert.That(result.Message!, Is.EqualTo("// Filename matches primary type."));
     }
 
     [Test]

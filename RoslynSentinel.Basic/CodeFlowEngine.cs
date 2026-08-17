@@ -106,7 +106,8 @@ public class CodeFlowEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
-                Message = "// Info: No optimization could be safely applied."
+                Message = "// Info: No optimization could be safely applied.",
+                UpdatedText = root.ToFullString()
             };
         }
         catch (Exception ex)

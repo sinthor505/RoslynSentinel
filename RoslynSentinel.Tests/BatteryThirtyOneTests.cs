@@ -306,8 +306,8 @@ public class Service
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod");
 
         // Regression: was silently returning original content with no indication of failure
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
-        Assert.That(result.UpdatedText!, Does.Contain("NoSuchMethod"), "Error should mention the method name");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
+        Assert.That(result.Message!, Does.Contain("NoSuchMethod"), "Error should mention the method name");
     }
 
     [Test]
@@ -317,8 +317,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
-        Assert.That(result.UpdatedText!, Does.Contain("GetValue"), "Error should name the method");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("GetValue"), "Error should name the method");
     }
 
     [Test]
@@ -328,8 +328,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
-        Assert.That(result.UpdatedText!, Does.Contain("Get"), "Error should name the method");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("Get"), "Error should name the method");
     }
 
     [Test]
@@ -339,8 +339,8 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
-        Assert.That(result.UpdatedText!, Does.Contain("static"), "Error should mention static");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("static"), "Error should mention static");
     }
 
     [Test]
@@ -350,7 +350,7 @@ public class Service
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
     }
 
     [Test]
@@ -416,7 +416,7 @@ public class Lookup {
         SetSource(src, "C.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod");
 
-        Assert.That(result.UpdatedText, Does.Contain("class C"), "Original source should be included after error comment");
-        Assert.That(result, Does.Contain("Compute"), "Original method should still be present");
+        Assert.That(result.Message, Does.Contain("class C"), "Original source should be included after error comment");
+        Assert.That(result.Message, Does.Contain("Compute"), "Original method should still be present");
     }
 }

@@ -81,7 +81,7 @@ public class ToolGapsTests
         DocumentEditResult? result = null;
         Assert.DoesNotThrowAsync(async () =>
             result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
-        Assert.That(result!.UpdatedText, Does.StartWith("// Error:"));
+        Assert.That(result!.Message, Does.StartWith("// Error:"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

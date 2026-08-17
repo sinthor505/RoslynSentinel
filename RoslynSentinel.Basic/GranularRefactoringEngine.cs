@@ -324,7 +324,7 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}."
+                Message = $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.\n" + (root?.ToFullString() ?? "")
             };
         }
 
@@ -427,7 +427,8 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Expression not found."
+                Message = "// Expression not found.",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -568,7 +569,8 @@ public class GranularRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Expression not found."
+                Message = "// Expression not found.",
+                UpdatedText = root.ToFullString()
             };
         }
 

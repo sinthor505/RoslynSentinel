@@ -122,7 +122,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = (await formatted.GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -2247,7 +2247,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Enum not found."
+                Message = "// Enum not found.",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 
@@ -2935,7 +2936,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Cannot edit: modifier not found."
+                Message = "// Cannot edit: modifier not found.",
+                UpdatedText = root.ToFullString()
             };
         }
 

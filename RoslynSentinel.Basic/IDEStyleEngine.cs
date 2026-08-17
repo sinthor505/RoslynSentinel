@@ -40,7 +40,8 @@ public class IDEStyleEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// No member accesses to simplify."
+                Message = "// No member accesses to simplify.",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 

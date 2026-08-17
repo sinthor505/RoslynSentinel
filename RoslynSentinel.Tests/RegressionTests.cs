@@ -274,7 +274,7 @@ public class RegressionTests
         Assert.That(result.UpdatedText!, Contains.Substring("{user}"), "user arg should be inlined");
         Assert.That(result.UpdatedText!, Contains.Substring("{ip}"), "ip arg should be inlined");
         // The const itself should no longer appear as a format reference
-        Assert.That(result, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
     }
 
     [Test]

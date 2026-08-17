@@ -47,7 +47,8 @@ public class ModernizationEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Class '{className}' not found."
+                Message = $"// Class '{className}' not found.",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 
@@ -251,6 +252,18 @@ public class ModernizationEngine
                 };
             }
         }
+
+        if (method != null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotConvert,
+                FilePath = filePath,
+                Message = $"// Method '{methodName}' cannot be converted to an expression body.",
+                UpdatedText = root!.ToFullString()
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.TargetNotFound,

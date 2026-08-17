@@ -175,7 +175,8 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = root.ToFullString()
+                    Message = $"// Info: No lock statement found in method '{methodName}'; returning original code unchanged.",
+                    UpdatedText = root.ToFullString()
                 };
             }
 
@@ -193,7 +194,8 @@ public class ThreadSafetyEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = root.ToFullString()
+                    Message = $"// Info: No lock statement found using expression '{lockExpression}'; returning original code unchanged.",
+                    UpdatedText = root.ToFullString()
                 };
             }
 

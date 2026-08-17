@@ -71,6 +71,16 @@ public class AsyncOptimizationEngine
             var innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
             newReturnType = SyntaxFactory.ParseTypeName($"ValueTask<{innerType}>");
         }
+        else if (returnTypeStr == "ValueTask" || returnTypeStr.StartsWith("ValueTask<"))
+        {
+            // Already a ValueTask — nothing to optimize, and this is not an error.
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                UpdatedText = root!.ToFullString(),
+                FilePath = filePath
+            };
+        }
         else
         {
             return new DocumentEditResult
@@ -1091,6 +1101,10 @@ public class AsyncOptimizationEngine
             else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
             {
                 innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
+            }
+            else if (returnTypeStr.StartsWith("IEnumerable<") && returnTypeStr.EndsWith(">"))
+            {
+                innerType = returnTypeStr.Substring(12, returnTypeStr.Length - 13);
             }
 
             if (innerType == null)

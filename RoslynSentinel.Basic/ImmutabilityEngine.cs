@@ -38,7 +38,8 @@ public class ImmutabilityEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Class not found."
+                Message = "// Class not found.",
+                UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
 

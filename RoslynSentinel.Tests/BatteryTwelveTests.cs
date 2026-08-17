@@ -62,7 +62,7 @@ public class CodeStyleEngineTests
         var result = await _engine.ConvertPropertyToMethodsAsync("IService.cs", "Name");
 
         // The engine returns an error comment when property is not in a class (e.g. interface)
-        Assert.That(result.UpdatedText, Does.Contain("// ERROR:"), "Property in interface should return error comment");
+        Assert.That(result.Message, Does.Contain("// ERROR:"), "Property in interface should return error comment");
     }
 }
 
@@ -119,7 +119,7 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.UpgradeToModernGuardsAsync("Code.cs");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// No if-throw guard clause"),
+        Assert.That(result.Message, Does.StartWith("// No if-throw guard clause"),
             "No patterns should produce a no-op comment");
     }
 }
@@ -226,7 +226,7 @@ public class RefactoringEngineTests
         var result = await _engine.FormatDocumentAsync("Code.cs");
 
         Assert.That(result.UpdatedText, Is.Not.Empty, "Formatted text should not be empty");
-        Assert.That(result, Does.Contain("class C"), "Class declaration should remain");
+        Assert.That(result.UpdatedText, Does.Contain("class C"), "Class declaration should remain");
     }
 
     [Test]

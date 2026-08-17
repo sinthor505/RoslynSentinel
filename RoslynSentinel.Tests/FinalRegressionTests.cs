@@ -93,7 +93,7 @@ public class FinalRegressionTests
         var result = await _refactoringEngine.RemoveMemberAsync(filePath, "GetName");
 
         // Should error because GetName is used in UseHelper
-        Assert.That(result.UpdatedText, Does.Contain("ERROR") | Does.Contain("usages"),
+        Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"),
             "Should error when trying to remove a used member");
     }
 

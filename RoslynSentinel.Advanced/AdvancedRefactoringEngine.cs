@@ -247,7 +247,8 @@ public class AdvancedRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
+                FilePath = filePath,
+                UpdatedText = root.ToFullString()
             };
         }
 

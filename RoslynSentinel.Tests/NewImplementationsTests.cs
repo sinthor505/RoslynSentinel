@@ -474,7 +474,7 @@ public class Math
 
         var tree = await _analysisEngine.GenerateCallTreeAsync("Missing.cs", "Foo");
 
-        Assert.That(tree.UpdatedText, Does.Contain("not found").Or.Contain("File"),
+        Assert.That(tree.Message, Does.Contain("not found").Or.Contain("File"),
             "Missing file should produce an error message, not an exception.");
     }
 

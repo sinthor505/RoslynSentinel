@@ -208,6 +208,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
+                UpdatedText = root!.ToFullString(),
                 Message = "// Info: Constructor already exists."
             };
         }
@@ -227,6 +228,7 @@ public partial class CodeGenerationEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
+                UpdatedText = root!.ToFullString(),
                 Message = "// Info: No fields to initialize in constructor."
             };
         }
@@ -1366,7 +1368,7 @@ public partial class CodeGenerationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = (await formatted.GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
         };
     }
 

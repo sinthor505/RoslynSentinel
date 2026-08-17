@@ -351,7 +351,9 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        // RichSource contains no if-throw guard-clause patterns, so this is a no-op path;
+        // the no-op explanation is carried on Message, not UpdatedText (see convention in SyntaxUpgradeEngine).
+        Assert.That(result.Message, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

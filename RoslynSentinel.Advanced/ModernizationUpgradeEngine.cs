@@ -56,7 +56,8 @@ public class ModernizationUpgradeEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// Method '{methodName}' not found."
+                    Message = $"// Method '{methodName}' not found.",
+                    UpdatedText = root.ToFullString()
                 };
             }
 

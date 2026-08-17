@@ -183,7 +183,7 @@ public class MyClass
 
         var result = await _engine.InlineFieldAsync("MyClass.cs", "_nonexistent");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// ERROR:"), "absent field should return error comment");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "absent field should return error comment");
     }
 
     [Test]

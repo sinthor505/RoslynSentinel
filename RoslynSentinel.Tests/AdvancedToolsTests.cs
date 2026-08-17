@@ -128,7 +128,7 @@ public class MyService {
 
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
 
-        Assert.That(result.UpdatedText, Does.Contain("// Cannot convert"));
+        Assert.That(result.Message, Does.Contain("// Cannot convert"));
     }
 
     [Test]
