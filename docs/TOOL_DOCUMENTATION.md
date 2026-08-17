@@ -2400,7 +2400,8 @@ Code analysis and refactoring tool
 
 ```csharp
 public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        string? filePath = null, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
+        string? docCommentId = null, string? projectName = null, string sessionId = "", CancellationToken ct = default)
 ```
 
 
@@ -5691,7 +5692,7 @@ Code analysis and refactoring tool
 **Signature:**
 
 ```csharp
-public async Task<RenameImpactPreview> PreviewRenameImpact(string filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null)
+public async Task<RenameImpactPreview> PreviewRenameImpact(string? filePath = null, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, string sessionId = "")
 ```
 
 

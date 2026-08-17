@@ -446,4 +446,72 @@ public class MyService
         Assert.That(preview.FilesAffected, Is.EqualTo(0),
             "No files are affected when method has no callers.");
     }
+
+    [Test]
+    public async Task PreviewRenameImpact_SymbolNameOnly_LineBeforeDisambiguates()
+    {
+        // Regression test: PreviewRenameImpactAsync used to fall back to a bare symbolName
+        // search (dropping lineBefore/lineAfter entirely) whenever contextSnippet was omitted,
+        // so disambiguating hints had no effect and the call always failed as "ambiguous" —
+        // even when lineBefore uniquely identified the target, as it does here.
+        SetSource(@"
+public class MyService
+{
+    // marker comment for CalcuateTotal
+    public decimal CalcuateTotal() => 1m;
+
+    public decimal Other() => CalcuateTotal();
+}", "MyService.cs");
+
+        var preview = await _discoveryEngine.PreviewRenameImpactAsync(
+            "MyService.cs", "CalcuateTotal",
+            lineBefore: "// marker comment for CalcuateTotal");
+
+        Assert.That(preview.SymbolName, Is.EqualTo("CalcuateTotal"));
+        Assert.That(preview.TotalReferences, Is.GreaterThanOrEqualTo(1),
+            "Other() calls CalcuateTotal(), so there should be at least one reference.");
+        Assert.That(preview.FilesAffected, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public async Task PreviewRenameImpact_DocCommentIdAndProjectName_ResolvesWithoutFileOrSnippet()
+    {
+        // The preferred resolution path: a caller that already has a docCommentId + projectName
+        // from LocateSymbol shouldn't need a filepath or a disambiguating text snippet at all.
+        SetMultipleFiles(
+            ("Helper.cs", "public class MyHelper\n{\n    public void Execute() { }\n}"),
+            ("Consumer.cs", @"public class Consumer
+{
+    public void Run()
+    {
+        var h = new MyHelper();
+        h.Execute();
+    }
+}"));
+
+        var locations = await _symbolNavigationEngine.LocateSymbolAsync("Execute", "method");
+        Assert.That(locations, Has.Count.EqualTo(1));
+        var location = locations[0];
+        Assert.That(location.DocCommentId, Is.Not.Null.And.Not.Empty);
+
+        var preview = await _discoveryEngine.PreviewRenameImpactAsync(
+            docCommentId: location.DocCommentId,
+            projectName: location.ProjectName);
+
+        Assert.That(preview.SymbolName, Is.EqualTo("Execute"));
+        Assert.That(preview.TotalReferences, Is.GreaterThanOrEqualTo(1),
+            "Consumer.Run() calls Execute(), so there should be at least one reference.");
+        Assert.That(preview.FilesAffected, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void PreviewRenameImpact_DocCommentIdWithoutProjectName_ThrowsHelpfulError()
+    {
+        SetSource("public class Service\n{\n    public void Run() { }\n}", "Service.cs");
+
+        Assert.That(
+            () => _discoveryEngine.PreviewRenameImpactAsync(docCommentId: "M:Service.Run"),
+            Throws.InstanceOf<ArgumentException>()
+                .With.Message.Contains("projectName"));
+    }
 }

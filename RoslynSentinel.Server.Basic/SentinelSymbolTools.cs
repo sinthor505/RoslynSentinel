@@ -296,21 +296,27 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "PreviewRenameImpact")]
     [Produces(DataTag.Report)]
-    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count.")]
+    [Description("Previews the impact of renaming a symbol across the solution without applying changes. Returns affected files and location count. " +
+        "Resolve the target either by docCommentId+projectName (as returned by LocateSymbol — preferred, unambiguous, no filepath needed) " +
+        "or by filepath+symbolName, using contextSnippet/lineBefore/lineAfter to disambiguate if the name appears more than once in the file.")]
     public async Task<ToolResult<object>> PreviewRenameImpact(
-        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.SymbolName)] string symbolName,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null,
+        [Consumes(DataTag.SymbolName)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description(ToolParams.DocCommentId)] string? docCommentId = null,
+        [Description(ToolParams.ProjectName)] string? projectName = null,
+        [Description(ToolParams.SessionId)] string sessionId = "",
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePath filePath = FilePath.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var result = await _discoveryEngine.PreviewRenameImpactAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+            var result = await _discoveryEngine.PreviewRenameImpactAsync(
+                filePath, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, sessionId, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,

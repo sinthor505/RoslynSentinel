@@ -672,40 +672,76 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        FilePath filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+        FilePath filePath = default,
+        string? symbolName = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        string? docCommentId = null,
+        string? projectName = null,
+        string sessionId = "",
+        CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var sourceText = await document.GetTextAsync(cancellationToken);
-        int position;
-        if (contextSnippet != null)
+        ISymbol symbol;
+        string resolvedSymbolName;
+
+        if (!string.IsNullOrWhiteSpace(docCommentId))
         {
-            position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            // Preferred path: the caller already has an unambiguous handle from LocateSymbol
+            // (docCommentId + projectName), so skip file/text resolution entirely.
+            if (string.IsNullOrWhiteSpace(projectName))
+            {
+                throw new ArgumentException("projectName is required when docCommentId is provided.");
+            }
+
+            var resolution = await _workspaceManager.ResolveFromWireAsync(sessionId, projectName, docCommentId, cancellationToken);
+            if (!resolution.Resolved)
+            {
+                throw new InvalidOperationException(resolution.Error!.Message);
+            }
+
+            symbol = resolution.Symbol!;
+            resolvedSymbolName = symbol.Name;
         }
         else
         {
-            // Find first occurrence of symbolName
-            position = ContextHelper.FindSnippetPosition(sourceText.ToString(), symbolName);
-        }
+            if (string.IsNullOrWhiteSpace(symbolName))
+            {
+                throw new ArgumentException("symbolName is required when docCommentId is not provided.");
+            }
 
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        if (semanticModel == null)
-        {
-            throw new InvalidOperationException("Could not get semantic model.");
-        }
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+            if (document == null)
+            {
+                throw new FileNotFoundException($"File not found: {filePath}");
+            }
 
-        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol
-                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            var sourceText = await document.GetTextAsync(cancellationToken);
 
-        if (symbol == null)
-        {
-            throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
+            // contextSnippet, when omitted, falls back to symbolName as the search text — either
+            // way, lineBefore/lineAfter must be forwarded or disambiguation silently never happens.
+            var snippet = contextSnippet ?? symbolName;
+            var position = ContextHelper.FindSnippetPosition(sourceText, snippet, lineBefore, lineAfter);
+
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            if (semanticModel == null)
+            {
+                throw new InvalidOperationException("Could not get semantic model.");
+            }
+
+            var foundSymbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol
+                         ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken);
+
+            if (foundSymbol == null)
+            {
+                throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
+            }
+
+            symbol = foundSymbol;
+            resolvedSymbolName = symbolName;
         }
 
         var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -723,7 +759,7 @@ public class DiscoveryEngine
             f.Contains("Tests.", StringComparison.OrdinalIgnoreCase));
 
         return new RenameImpactPreview(
-            symbolName,
+            resolvedSymbolName,
             locations.Count,
             affectedFiles.Count,
             hasTestRefs,
