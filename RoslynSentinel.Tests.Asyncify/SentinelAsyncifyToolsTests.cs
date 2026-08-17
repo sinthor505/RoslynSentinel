@@ -519,9 +519,9 @@ public static class DataHelper
         Assert.That(text, Does.Contain("(await "),
             "chained await must be parenthesised: `(await GetDataAsync(...)).Member`.");
         Assert.That(text, Does.Not.Contain("await DataHelper.GetDataAsync(cancellationToken)."),
-            "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
+            "bare `await GetDataAsync(cancellationToken).Member` must not appear — parens required.");
         Assert.That(text, Does.Not.Contain("await GetDataAsync(cancellationToken)."),
-            "bare `await GetDataAsync(ct).Member` must not appear — parens required.");
+            "bare `await GetDataAsync(cancellationToken).Member` must not appear — parens required.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

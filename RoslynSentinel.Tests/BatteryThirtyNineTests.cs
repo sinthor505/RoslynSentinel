@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -43,7 +42,7 @@ public class BatteryThirtyNineTests
 
     private async Task<string> GetDocPath()
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         return solution.Projects.First().Documents.First().FilePath ?? "Test.cs";
     }
 

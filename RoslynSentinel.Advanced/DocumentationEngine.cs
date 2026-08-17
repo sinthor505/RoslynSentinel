@@ -15,9 +15,12 @@ public class DocumentationEngine
 
     public async Task<DocumentEditResult> GenerateXmlDocumentationStubsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
-        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault();
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
+            ?? solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
         if (document == null)
         {
             throw new FileNotFoundException($"File not found in solution: {normalizedPath}");
@@ -72,7 +75,7 @@ public class DocumentationEngine
 
     public async Task<DocumentEditResult> DocumentPocoFieldsAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

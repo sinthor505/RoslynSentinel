@@ -46,5 +46,8 @@ public enum ToolOptionTag
     IncludeTypes,
     PersistBaseline,
     Preview,
-    TopN
+    TopN,
+    RepoDirectory,
+    DryRun,
+    ReturnDiff
 }

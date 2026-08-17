@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -107,6 +108,38 @@ public static class OperationBlobWriter
         {
             return $"(validation blob write failed: {ex.Message})";
         }
+    }
+
+    /// <summary>
+    /// Writes a forensic blob for a completed write-through apply (direct-apply refactoring
+    /// tools that no longer go through the staging dictionaries). Mirrors the per-changeId blob
+    /// shape used by staged-change applies so UndoLastApply/GetOperationDetail resolve it
+    /// identically. No-ops (returns a diagnostic string, never throws) when nothing was written.
+    /// </summary>
+    public static async Task<string> WriteApplyBlobAsync(
+        string toolName,
+        string changeId,
+        PersistentWorkspaceManager.ApplyChangesResult result,
+        string? solutionRoot)
+    {
+        if (result.SucceededFiles.Count == 0)
+        {
+            return "(no files written — blob not needed)";
+        }
+
+        var items = result.SucceededFiles.Select(f =>
+        {
+            string? before = null;
+            result.PreImages?.TryGetValue(f, out before);
+            return new OperationItemRecord
+            {
+                FilePath = f,
+                Outcome = ItemRecordOutcome.Succeeded,
+                BeforeSource = before,
+            };
+        }).ToList();
+
+        return await WriteAsync(toolName, changeId, items, solutionRoot);
     }
 
     /// <summary>

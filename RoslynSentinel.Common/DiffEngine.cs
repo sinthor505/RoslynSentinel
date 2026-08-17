@@ -95,7 +95,7 @@ public class DiffEngine
     /// <summary>
     /// Generates a simple line-based Unified Diff between two versions of text.
     /// </summary>
-    public string CreateDiff(string oldText, string newText)
+    public static string CreateDiff(string oldText, string newText)
     {
         var oldLines = oldText.Split(separatorArray, StringSplitOptions.None);
         var newLines = newText.Split(separatorArray, StringSplitOptions.None);

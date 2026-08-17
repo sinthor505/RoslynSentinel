@@ -65,7 +65,7 @@ public class SentinelModernizationTools
     public async Task<ToolResult<object>> InvertBooleanLogic(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string boolName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());

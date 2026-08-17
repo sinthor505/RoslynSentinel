@@ -23,7 +23,7 @@ public class AnalysisEngine
     }
 
     private async Task<IEnumerable<(Document Document, SyntaxNode Root, SemanticModel? SemanticModel)>> GetTargetDocumentsAsync(
-        Solution solution, string? projectName, string? filePath, bool includeSemantic = false, CancellationToken ct = default)
+        Solution solution, string? projectName, string? filePath, bool includeSemantic = false, CancellationToken cancellationToken = default)
     {
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
@@ -42,13 +42,13 @@ public class AnalysisEngine
 
             foreach (var doc in docs)
             {
-                var root = await doc.GetSyntaxRootAsync(ct);
+                var root = await doc.GetSyntaxRootAsync(cancellationToken);
                 if (root == null)
                 {
                     continue;
                 }
 
-                var model = includeSemantic ? await doc.GetSemanticModelAsync(ct) : null;
+                var model = includeSemantic ? await doc.GetSemanticModelAsync(cancellationToken) : null;
                 documentList.Add((doc, root, model));
             }
         }
@@ -62,7 +62,7 @@ public class AnalysisEngine
             return new List<LargeTypeReport>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var reports = new List<LargeTypeReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -88,7 +88,7 @@ public class AnalysisEngine
             return new List<LargeMethodReport>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var reports = new List<LargeMethodReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -115,7 +115,7 @@ public class AnalysisEngine
             return new List<DuplicateMethodGroup>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var methodHashes = new Dictionary<string, List<MethodLocation>>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -150,7 +150,7 @@ public class AnalysisEngine
             return new List<InterfaceCandidateReport>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var candidates = new List<InterfaceCandidateReport>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -181,7 +181,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -205,7 +205,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var instantiatedTypes = new HashSet<string>();
         var declaredTypes = new List<(string Name, string Document)>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
@@ -244,7 +244,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> DetectUnreachableCodeAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -275,12 +275,14 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindCircularDependenciesAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var projects = solution.Projects.ToDictionary(p => p.Id);
 
         foreach (var project in solution.Projects)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var visited = new HashSet<ProjectId>();
             var path = new List<ProjectId>();
             if (HasCycle(project.Id, visited, path, projects))
@@ -321,7 +323,7 @@ public class AnalysisEngine
 
     public async Task<DocumentEditResult> GenerateCallTreeAsync(FilePath filePath, string methodName, int depth = 3, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -409,7 +411,7 @@ public class AnalysisEngine
         };
     }
 
-    private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken ct)
+    private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken cancellationToken)
     {
         if (currentDepth > maxDepth || !visited.Add(symbol))
         {
@@ -419,17 +421,17 @@ public class AnalysisEngine
         var indent = new string(' ', currentDepth * 2);
         sb.AppendLine($"{indent}- {symbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}");
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
         {
-            var node = await syntaxRef.GetSyntaxAsync(ct);
+            var node = await syntaxRef.GetSyntaxAsync(cancellationToken);
             var document = solution.GetDocument(node.SyntaxTree);
             if (document == null)
             {
                 continue;
             }
 
-            var model = await document.GetSemanticModelAsync(ct);
+            var model = await document.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -437,11 +439,11 @@ public class AnalysisEngine
 
             foreach (var inv in node.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                var info = model.GetSymbolInfo(inv, ct);
+                var info = model.GetSymbolInfo(inv, cancellationToken);
                 if (info.Symbol is IMethodSymbol callee
                     && callee.ContainingAssembly?.Name == symbol.ContainingAssembly?.Name)
                 {
-                    await BuildCallTree(callee, currentDepth + 1, maxDepth, sb, visited, ct);
+                    await BuildCallTree(callee, currentDepth + 1, maxDepth, sb, visited, cancellationToken);
                 }
             }
         }
@@ -449,7 +451,7 @@ public class AnalysisEngine
 
     public async Task<DocumentEditResult> GenerateEqualityOverridesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -664,7 +666,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
         var results = new List<string>();
 
@@ -866,7 +868,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, true, cancellationToken);
 
@@ -949,7 +951,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindPossibleInfiniteLoopsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, null, filePath, false, cancellationToken);
         var results = new List<string>();
 
@@ -995,7 +997,7 @@ public class AnalysisEngine
 
     public async Task<List<string>> FindInternalClassesThatCouldBePrivateAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
 
@@ -1033,7 +1035,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1146,7 +1148,7 @@ public class AnalysisEngine
                 }
 
                 // Skip: the invocation is an argument to a new ValueTask<T>(...) constructor.
-                // e.g.  ct => new ValueTask<T>(GetByIdFromDbAsync(id, ct))
+                // e.g.  cancellationToken => new ValueTask<T>(GetByIdFromDbAsync(id, cancellationToken))
                 // The Task is propagated to the caller via the ValueTask wrapper.
                 if (invocation.Parent is ArgumentSyntax &&
                     invocation.Parent.Parent?.Parent is ObjectCreationExpressionSyntax valueTaskCtor &&
@@ -1174,7 +1176,7 @@ public class AnalysisEngine
                 }
 
                 // Skip: Task / ValueTask factory methods — synchronous, no actual async work
-                // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(ct)
+                // e.g. Task.FromResult(x), Task.FromException(ex), Task.FromCanceled(cancellationToken)
                 if (invocation.Expression is MemberAccessExpressionSyntax factoryMa &&
                     (factoryMa.Expression.ToString() is "Task" or "ValueTask") &&
                     factoryMa.Name.Identifier.Text is "FromResult" or "FromException" or "FromCanceled")
@@ -1183,7 +1185,7 @@ public class AnalysisEngine
                 }
 
                 // Skip: await using — the await keyword is on the using declaration, not the invocation directly
-                // e.g.  await using var conn = OpenConnectionAsync(ct);
+                // e.g.  await using var conn = OpenConnectionAsync(cancellationToken);
                 var ancestorLocalDecl = invocation.Ancestors().OfType<LocalDeclarationStatementSyntax>().FirstOrDefault();
                 if (ancestorLocalDecl?.AwaitKeyword.IsKind(SyntaxKind.AwaitKeyword) == true)
                 {
@@ -1287,7 +1289,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1314,7 +1316,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
 
@@ -1336,7 +1338,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1370,7 +1372,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
         var disposalExclusions = new HashSet<string> { "HttpClient", "Task", "MemoryStream" };
@@ -1415,7 +1417,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1441,7 +1443,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1468,7 +1470,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
 
@@ -1544,7 +1546,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
 
@@ -1569,7 +1571,7 @@ public class AnalysisEngine
             return new List<string>();
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
@@ -1609,7 +1611,7 @@ public class AnalysisEngine
     /// </summary>
     public async Task<List<string>> FindCircularTypeReferencesAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
 
         // Build map: simpleName → set of constructor-parameter simple names
@@ -1679,7 +1681,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindFinalizerOnDisposableAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
         var results = new List<string>();
 
@@ -1737,7 +1739,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindUnboundedStaticCollectionsAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, false, cancellationToken);
         var results = new List<string>();
 
@@ -1807,7 +1809,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindUnboundedRecursionAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, true, cancellationToken);
         var results = new List<string>();
 
@@ -1911,7 +1913,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindMisboundOverloadChainsAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, null, true, cancellationToken);
         var results = new List<string>();
 
@@ -1985,7 +1987,7 @@ public class AnalysisEngine
     public async Task<List<string>> FindMissingGenericConstraintsAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var targets = await GetTargetDocumentsAsync(solution, projectName, filePath, false, cancellationToken);
         var results = new List<string>();
 

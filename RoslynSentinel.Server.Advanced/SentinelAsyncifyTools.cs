@@ -359,7 +359,7 @@ public class SentinelAsyncifyTools
         """)]
     public async Task<ToolResult<AsyncMigrationProgressReport>> GetAsyncMigrationProgress(
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -487,7 +487,7 @@ public class SentinelAsyncifyTools
         string? filePath = null,
         string? pattern = null,
         bool dryRun = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         if (_workspaceManager.CurrentSolution == null)
@@ -1379,6 +1379,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<LedgerSnapshot>> ResetMigrationLedger(
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         await _ledger.ResetAsync();
         return new ToolResult<LedgerSnapshot>
         {
@@ -2474,7 +2475,7 @@ public class SentinelAsyncifyTools
                             lineBefore: null,
                             lineAfter: null,
                             extractEntireBody: true,
-                            ct: innerToken);
+                            cancellationToken: innerToken);
 
                         if (!extractResult.Success)
                         {
@@ -3638,7 +3639,7 @@ public class SentinelAsyncifyTools
 
             if (!extractResult.Success)
             {
-                var reason = extractResult.Error ?? "ExtractMethodSafeAsync returned failure with no message";
+                var reason = extractResult.Error ?? "ExtractConstantSafeAsync returned failure with no message";
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,

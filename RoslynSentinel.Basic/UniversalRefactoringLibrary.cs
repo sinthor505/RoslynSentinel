@@ -21,7 +21,7 @@ public class UniversalRefactoringLibrary
     /// </summary>
     public async Task<string> RunRefactoringAsync(FilePath filePath, string refactoringId, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

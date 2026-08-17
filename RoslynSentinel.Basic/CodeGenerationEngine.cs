@@ -5,8 +5,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record GenerationResult(FilePath filePath, string Content);
@@ -130,7 +128,7 @@ public partial class CodeGenerationEngine
         CancellationToken ct)
     {
         // Primary: semantic type info
-        var resolved = semanticModel.GetTypeInfo(receiverSyntax, ct).Type;
+        var resolved = semanticModel.GetTypeInfo(receiverSyntax).Type;
         if (resolved != null)
         {
             return configTypeNames.Contains(resolved.Name);
@@ -176,9 +174,9 @@ public partial class CodeGenerationEngine
         return false;
     }
 
-    public async Task<DocumentEditResult> GenerateConstructorAsync(FilePath filePath, string className, CancellationToken ct = default)
+    public async Task<DocumentEditResult> GenerateConstructorAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -191,7 +189,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
@@ -265,8 +263,8 @@ public partial class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(ctor);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: ct);
-        var updatedText = (await formatted.GetTextAsync(ct)).ToString();
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: cancellationToken);
+        var updatedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -293,9 +291,9 @@ public partial class CodeGenerationEngine
         FilePath filePath,
         string className,
         string[]? excludeProperties = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -303,7 +301,7 @@ public partial class CodeGenerationEngine
             return new GenerateToStringResult(string.Empty, [], [], "File not found.");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
@@ -355,8 +353,8 @@ public partial class CodeGenerationEngine
 
         var updatedClass = classNode.AddMembers(method);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: ct);
-        var updatedContent = (await formatted.GetTextAsync(ct)).ToString();
+        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: cancellationToken);
+        var updatedContent = (await formatted.GetTextAsync(cancellationToken)).ToString();
 
         string? warning = allExcluded.Count > 0
             ? $"Excluded sensitive/specified properties: {string.Join(", ", allExcluded)}. These are NOT in the ToString() output."
@@ -370,7 +368,7 @@ public partial class CodeGenerationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project == null)
         {
@@ -502,9 +500,9 @@ public partial class CodeGenerationEngine
     /// Given a concrete repository class, generates: interface code, DI registration snippet, and Moq mock setup snippet.
     /// </summary>
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
-        FilePath filePath, string className, CancellationToken ct = default)
+        FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -512,7 +510,7 @@ public partial class CodeGenerationEngine
             throw new FileNotFoundException($"File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
@@ -611,9 +609,9 @@ public partial class CodeGenerationEngine
     }
 
     public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
-        FilePath filePath, string className, CancellationToken ct = default)
+        FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
         if (document == null)
@@ -622,7 +620,7 @@ public partial class CodeGenerationEngine
                 Error: $"File not found: '{filePath}'. Verify the path and ensure the solution is loaded.");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
 
         // Support both class and record declarations
         MemberDeclarationSyntax? typeNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -748,9 +746,9 @@ public partial class CodeGenerationEngine
         string interfaceName,
         string decoratorPrefix = "Logging",
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -759,14 +757,14 @@ public partial class CodeGenerationEngine
         INamedTypeSymbol? interfaceSymbol = null;
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             interfaceSymbol = compilation
-                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
             if (interfaceSymbol != null)
@@ -868,9 +866,9 @@ public partial class CodeGenerationEngine
         );
     }
 
-    public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -883,8 +881,8 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
-        var root = await document.GetSyntaxRootAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
             return new DocumentEditResult
@@ -907,7 +905,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: ct) as INamedTypeSymbol;
+        var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: cancellationToken) as INamedTypeSymbol;
         if (classSymbol == null)
         {
             return new DocumentEditResult
@@ -1005,11 +1003,11 @@ public partial class CodeGenerationEngine
         var newClass = classDecl.AddMembers(newMembers.ToArray());
         var newRoot = root.ReplaceNode(classDecl, newClass);
         var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = (await formatted.GetTextAsync(ct)).ToString(),
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString(),
             FilePath = filePath
         };
     }
@@ -1027,9 +1025,9 @@ public partial class CodeGenerationEngine
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1042,7 +1040,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -1056,7 +1054,7 @@ public partial class CodeGenerationEngine
         PropertyDeclarationSyntax? propNode = null;
         if (contextSnippet != null)
         {
-            var srcText = await document.GetTextAsync(ct);
+            var srcText = await document.GetTextAsync(cancellationToken);
             var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
             if (pos < 0)
             {
@@ -1096,11 +1094,11 @@ public partial class CodeGenerationEngine
         };
 
         var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = (await formatted.GetTextAsync(ct)).ToString(),
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString(),
             FilePath = filePath
         };
     }
@@ -1250,9 +1248,9 @@ public partial class CodeGenerationEngine
         string contextSnippet,
         string? lineBefore = null,
         string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1265,7 +1263,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -1276,7 +1274,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var srcText = await document.GetTextAsync(ct);
+        var srcText = await document.GetTextAsync(cancellationToken);
         var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
         {
@@ -1314,7 +1312,7 @@ public partial class CodeGenerationEngine
             };
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
 
         string? formatString = null;
         var formatArgExpr = args[0].Expression;
@@ -1327,7 +1325,7 @@ public partial class CodeGenerationEngine
         {
             try
             {
-                var constVal = semanticModel.GetConstantValue(formatArgExpr, ct);
+                var constVal = semanticModel.GetConstantValue(formatArgExpr, cancellationToken);
                 if (constVal.HasValue && constVal.Value is string s)
                 {
                     formatString = s;
@@ -1363,12 +1361,12 @@ public partial class CodeGenerationEngine
         var newRoot = root.ReplaceNode(invocation, replacement);
 
         var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, ct);
+        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = (await formatted.GetTextAsync(ct)).ToString()
+            Message = (await formatted.GetTextAsync(cancellationToken)).ToString()
         };
     }
 

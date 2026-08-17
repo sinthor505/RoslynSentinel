@@ -174,7 +174,7 @@ public class GitTools
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunGitAsync(
-        string gitRoot, string[] args, CancellationToken ct)
+        string gitRoot, string[] args, CancellationToken cancellationToken)
     {
         using var process = new System.Diagnostics.Process();
         process.StartInfo = new System.Diagnostics.ProcessStartInfo
@@ -197,7 +197,7 @@ public class GitTools
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
-        await process.WaitForExitAsync(ct);
+        await process.WaitForExitAsync(cancellationToken);
 
         return (process.ExitCode, stdout.ToString(), stderr.ToString());
     }
@@ -257,7 +257,7 @@ public class GitTools
         // revert
         string? commitHash = null,
         bool noCommit = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         var ct = cancellationToken;
@@ -267,28 +267,28 @@ public class GitTools
 
         return operation switch
         {
-            GitOperation.status => await StatusAsync(gitRoot, ct),
-            GitOperation.log => await LogAsync(gitRoot, count, ct),
-            GitOperation.diff => await DiffAsync(gitRoot, target, paths, maxBytes, ct),
-            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, stageAll, files, ct),
-            GitOperation.commit => await CommitAsync(gitRoot, message, stageAll, files, ct),
-            GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, ct),
+            GitOperation.status => await StatusAsync(gitRoot, cancellationToken),
+            GitOperation.log => await LogAsync(gitRoot, count, cancellationToken),
+            GitOperation.diff => await DiffAsync(gitRoot, target, paths, maxBytes, cancellationToken),
+            GitOperation.stage or GitOperation.add => await StageAsync(gitRoot, stageAll, files, cancellationToken),
+            GitOperation.commit => await CommitAsync(gitRoot, message, stageAll, files, cancellationToken),
+            GitOperation.revert => await RevertAsync(gitRoot, commitHash, noCommit, cancellationToken),
             _ => (object)new { Success = false, Error = $"Unknown operation '{operation}'." }
         };
     }
 
     // ── Operation implementations ─────────────────────────────────────────────
 
-    private async Task<GitStatusResult> StatusAsync(string gitRoot, CancellationToken ct)
+    private async Task<GitStatusResult> StatusAsync(string gitRoot, CancellationToken cancellationToken)
     {
         try
         {
             var (branchExit, branchOut, _) = await RunGitAsync(gitRoot,
-                ["rev-parse", "--abbrev-ref", "HEAD"], ct);
+                ["rev-parse", "--abbrev-ref", "HEAD"], cancellationToken);
             var branch = branchExit == 0 ? branchOut.Trim() : "unknown";
 
             var (statusExit, statusOut, statusErr) = await RunGitAsync(gitRoot,
-                ["status", "--porcelain=v1"], ct);
+                ["status", "--porcelain=v1"], cancellationToken);
             if (statusExit != 0)
                 return new GitStatusResult { Success = false, Branch = branch, Error = statusErr.Trim() };
 
@@ -355,7 +355,7 @@ public class GitTools
         }
     }
 
-    private async Task<GitLogResult> LogAsync(string gitRoot, int count, CancellationToken ct)
+    private async Task<GitLogResult> LogAsync(string gitRoot, int count, CancellationToken cancellationToken)
     {
         count = Math.Clamp(count, 1, 100);
         try
@@ -365,7 +365,7 @@ public class GitTools
             var format = $"%H{sep}%h{sep}%an{sep}%aI{sep}%s";
 
             var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot,
-                ["log", $"--max-count={count}", $"--format={format}"], ct);
+                ["log", $"--max-count={count}", $"--format={format}"], cancellationToken);
 
             if (exitCode != 0)
                 return new GitLogResult { Success = false, Error = stderr.Trim() };
@@ -395,7 +395,7 @@ public class GitTools
     }
 
     private async Task<GitDiffResult> DiffAsync(
-        string gitRoot, string target, string? paths, int maxBytes, CancellationToken ct)
+        string gitRoot, string target, string? paths, int maxBytes, CancellationToken cancellationToken)
     {
         maxBytes = Math.Clamp(maxBytes, 1024, 524288);
         try
@@ -420,7 +420,7 @@ public class GitTools
                     args.Add(p);
             }
 
-            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], ct);
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (exitCode != 0)
                 return new GitDiffResult { Success = false, Error = stderr.Trim() };
@@ -442,7 +442,7 @@ public class GitTools
     }
 
     private async Task<GitStatusResult> StageAsync(
-        string gitRoot, bool stageAll, string? files, CancellationToken ct)
+        string gitRoot, bool stageAll, string? files, CancellationToken cancellationToken)
     {
         try
         {
@@ -457,11 +457,11 @@ public class GitTools
                 stageArgs = ["add", "--", .. filePaths];
             }
 
-            var (stageExit, _, stageErr) = await RunGitAsync(gitRoot, stageArgs, ct);
+            var (stageExit, _, stageErr) = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
             if (stageExit != 0)
                 return new GitStatusResult { Success = false, Error = $"git add failed: {stageErr.Trim()}" };
 
-            return await StatusAsync(gitRoot, ct);
+            return await StatusAsync(gitRoot, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -471,18 +471,18 @@ public class GitTools
     }
 
     private async Task<GitCommitResult> CommitAsync(
-        string gitRoot, string? message, bool stageAll, string? files, CancellationToken ct)
+        string gitRoot, string? message, bool stageAll, string? files, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(message))
             return new GitCommitResult { Success = false, Error = "message is required for operation=commit." };
 
         try
         {
-            var stageResult = await StageAsync(gitRoot, stageAll, files, ct);
+            var stageResult = await StageAsync(gitRoot, stageAll, files, cancellationToken);
             if (!stageResult.Success)
                 return new GitCommitResult { Success = false, Error = stageResult.Error };
 
-            var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], ct);
+            var (commitExit, commitOut, commitErr) = await RunGitAsync(gitRoot, ["commit", "-m", message], cancellationToken);
             if (commitExit != 0)
             {
                 var detail = string.Join("\n", new[] { commitOut.Trim(), commitErr.Trim() }
@@ -493,7 +493,7 @@ public class GitTools
                 return new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}" };
             }
 
-            var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], ct);
+            var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
             var hash = hashExit == 0 ? hashOut.Trim() : "";
 
             return new GitCommitResult { Success = true, CommitHash = hash, Message = message };
@@ -506,7 +506,7 @@ public class GitTools
     }
 
     private async Task<GitRevertResult> RevertAsync(
-        string gitRoot, string? commitHash, bool noCommit, CancellationToken ct)
+        string gitRoot, string? commitHash, bool noCommit, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
             return new GitRevertResult { Success = false, Error = "commitHash is required for operation=revert." };
@@ -518,7 +518,7 @@ public class GitTools
                 args.Add("--no-commit");
             args.Add(commitHash);
 
-            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], ct);
+            var (exitCode, stdout, stderr) = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (exitCode != 0)
                 return new GitRevertResult { Success = false, CommitHash = commitHash, Error = stderr.Trim() };
@@ -526,7 +526,7 @@ public class GitTools
             string newHash = "";
             if (!noCommit)
             {
-                var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], ct);
+                var (hashExit, hashOut, _) = await RunGitAsync(gitRoot, ["rev-parse", "HEAD"], cancellationToken);
                 newHash = hashExit == 0 ? hashOut.Trim() : "";
             }
 

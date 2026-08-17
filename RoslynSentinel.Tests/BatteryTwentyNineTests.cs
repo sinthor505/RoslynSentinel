@@ -6,8 +6,6 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
-
 namespace RoslynSentinel.Tests;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -39,7 +37,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
 
         // Capture project name from the first available project
         _realProjectName = solution.Projects.FirstOrDefault()?.Name
@@ -563,7 +561,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         ProjectDependencyReport? result = null;
         // Uses real project name discovered in SetUp — must not throw
         Assert.DoesNotThrowAsync(async () =>
-            result = await engine.GetProjectDependenciesAsync(_realProjectName),
+            result = await engine.GetProjectDependenciesAsync(_realProjectName, CancellationToken.None),
             "GetProjectDependenciesAsync must not throw when given a real project name.");
         Assert.That(result, Is.Not.Null, "ProjectDependencyReport must not be null.");
         Assert.That(result.ProjectReferences, Is.Not.Null, "ProjectReferences list must not be null.");

@@ -16,7 +16,7 @@ public class AdvancedStructuralEngine
 
     public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -57,7 +57,7 @@ public class AdvancedStructuralEngine
 
     public async Task<DocumentEditResult> ReplaceConstructorWithFactoryAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -102,7 +102,7 @@ public class AdvancedStructuralEngine
 
     public async Task<Dictionary<FilePath, string>> ExtractSuperclassAsync(FilePath[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var changes = new Dictionary<FilePath, string>();
         var firstFile = filePaths[0];
         var document = solution.GetDocumentIdsWithFilePath(firstFile).Select(solution.GetDocument).FirstOrDefault();
@@ -146,7 +146,7 @@ public class AdvancedStructuralEngine
 
     public async Task<Dictionary<FilePath, string>> ExtractClassAsync(FilePath filePath, string className, string newClassName, string[] memberNames, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -354,7 +354,7 @@ public class AdvancedStructuralEngine
     /// </summary>
     public async Task<Dictionary<FilePath, string>> InlineClassAsync(string sourceFilePath, string targetFilePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         bool sameFile = string.Equals(
             Path.GetFullPath(sourceFilePath),
             Path.GetFullPath(targetFilePath),

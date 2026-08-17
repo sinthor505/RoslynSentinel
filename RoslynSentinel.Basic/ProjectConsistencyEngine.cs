@@ -2,8 +2,6 @@ using System.Xml.Linq;
 
 using Microsoft.CodeAnalysis;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record ProjectConsistencyIssue(
@@ -27,9 +25,9 @@ public class ProjectConsistencyEngine
         _workspaceManager = workspaceManager;
     }
 
-    public async Task<List<ProjectConsistencyIssue>> CheckConsistencyAsync(CancellationToken ct = default)
+    public async Task<List<ProjectConsistencyIssue>> CheckConsistencyAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<ProjectConsistencyIssue>();
 
         var projects = solution.Projects.ToList();
@@ -38,14 +36,14 @@ public class ProjectConsistencyEngine
             return issues;
         }
 
-        issues.AddRange(await CheckTargetFrameworkConsistencyAsync(projects, ct));
+        issues.AddRange(await CheckTargetFrameworkConsistencyAsync(projects, cancellationToken));
         issues.AddRange(CheckNamingConventions(projects));
 
         return issues;
     }
 
     private static async Task<List<ProjectConsistencyIssue>> CheckTargetFrameworkConsistencyAsync(
-        List<Project> projects, CancellationToken ct)
+        List<Project> projects, CancellationToken cancellationToken)
     {
         var issues = new List<ProjectConsistencyIssue>();
 
@@ -54,7 +52,7 @@ public class ProjectConsistencyEngine
 
         foreach (var project in projects)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrEmpty(project.FilePath) || !File.Exists(project.FilePath))
             {
                 continue;
@@ -62,7 +60,7 @@ public class ProjectConsistencyEngine
 
             try
             {
-                var xml = await File.ReadAllTextAsync(project.FilePath, ct);
+                var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
                 var doc = XDocument.Parse(xml);
                 var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
 
@@ -170,21 +168,21 @@ public class ProjectConsistencyEngine
     /// Returns a structured summary of all project names and their TargetFramework values.
     /// Useful for a quick overview before diving into specific inconsistencies.
     /// </summary>
-    public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummaryAsync(CancellationToken ct = default)
+    public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummaryAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ProjectFrameworkSummary>();
 
         foreach (var project in solution.Projects)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             string? framework = null;
 
             if (!string.IsNullOrEmpty(project.FilePath) && File.Exists(project.FilePath))
             {
                 try
                 {
-                    var xml = await File.ReadAllTextAsync(project.FilePath, ct);
+                    var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
                     var doc = XDocument.Parse(xml);
                     framework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value?.Trim()
                              ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Trim();

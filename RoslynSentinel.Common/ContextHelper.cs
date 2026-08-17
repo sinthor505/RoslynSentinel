@@ -216,11 +216,11 @@ public static class ContextHelper
     public static async Task<ISymbol?> FindSymbolAtSnippetAsync(
         Document document, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var root = await document.GetSyntaxRootAsync(ct);
-        var model = await document.GetSemanticModelAsync(ct);
-        var text = await document.GetTextAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
+        var text = await document.GetTextAsync(cancellationToken);
         if (root == null || model == null)
         {
             return null;
@@ -230,9 +230,9 @@ public static class ContextHelper
         var node = root.FindNode(new TextSpan(pos, 0));
 
         return node.AncestorsAndSelf()
-                   .Select(n => model.GetDeclaredSymbol(n, ct))
+                   .Select(n => model.GetDeclaredSymbol(n, cancellationToken))
                    .FirstOrDefault(s => s != null)
-               ?? model.GetSymbolInfo(node, ct).Symbol;
+               ?? model.GetSymbolInfo(node, cancellationToken).Symbol;
     }
 
     /// <summary>

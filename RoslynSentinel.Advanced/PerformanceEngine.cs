@@ -15,7 +15,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -780,7 +780,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -825,7 +825,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> DetectInefficientStringComparisonsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -860,7 +860,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> FindBoxingAllocationsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -932,9 +932,9 @@ public class PerformanceEngine
     /// that fires one query per iteration instead of one batch query.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindLinqN1PatternsAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -945,7 +945,7 @@ public class PerformanceEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1021,9 +1021,9 @@ public class PerformanceEngine
     /// check covers += and literal +; this covers Format() and interpolation.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindStringFormatInLoopsAsync(
-        string? filePath = null, CancellationToken ct = default)
+        string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1032,7 +1032,7 @@ public class PerformanceEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1111,9 +1111,9 @@ public class PerformanceEngine
     /// in between — which can execute a DB query or expensive generator twice.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindMultipleEnumerationAsync(
-        string? filePath = null, CancellationToken ct = default)
+        string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1122,7 +1122,7 @@ public class PerformanceEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1248,9 +1248,9 @@ public class PerformanceEngine
     /// IEnumerable allocation that can be eliminated.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindLinqRedundantWhereAsync(
-        string? filePath = null, CancellationToken ct = default)
+        string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1259,7 +1259,7 @@ public class PerformanceEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1329,9 +1329,9 @@ public class PerformanceEngine
     /// and can produce surprising null-equality behavior. Uses the semantic model for accuracy.
     /// </summary>
     public async Task<List<PerformanceIssueReport>> FindImplicitNullableBoxingAsync(
-        string? filePath = null, CancellationToken ct = default)
+        string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1340,13 +1340,13 @@ public class PerformanceEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
             }
 
-            var model = await doc.GetSemanticModelAsync(ct);
+            var model = await doc.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -1362,7 +1362,7 @@ public class PerformanceEngine
                     continue;
                 }
 
-                var exprTypeInfo = model.GetTypeInfo(cast.Expression, ct);
+                var exprTypeInfo = model.GetTypeInfo(cast.Expression, cancellationToken);
                 var exprType = exprTypeInfo.Type as INamedTypeSymbol;
                 if (exprType == null)
                 {

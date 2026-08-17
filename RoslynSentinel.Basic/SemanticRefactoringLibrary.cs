@@ -24,7 +24,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<string> InlineVariableAsync(FilePath filePath, string variableName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -147,7 +147,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string className, string propertyName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -198,7 +198,7 @@ public class SemanticRefactoringLibrary
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePath filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

@@ -1,7 +1,5 @@
 using Microsoft.CodeAnalysis;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public partial class DependencyEngine
@@ -16,9 +14,9 @@ public partial class DependencyEngine
     /// <summary>
     /// Returns all project and NuGet dependencies for a specific project.
     /// </summary>
-    public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName)
+    public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
         if (project == null)
         {
@@ -48,7 +46,7 @@ public partial class DependencyEngine
     /// </summary>
     public async Task<List<string>> FindUnusedReferencesAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project == null)
         {
@@ -103,7 +101,7 @@ public partial class DependencyEngine
     /// </summary>
     public async Task<List<string>> CheckPackageInconsistencyAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var packageVersions = new Dictionary<string, List<(string Project, string Version)>>();
 
         foreach (var project in solution.Projects)

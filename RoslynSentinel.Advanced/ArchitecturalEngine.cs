@@ -24,7 +24,7 @@ public class ArchitecturalEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -86,9 +86,9 @@ public class ArchitecturalEngine
     }
 
     public async Task<List<CircularDependencyChain>> FindCircularDependenciesAsync(
-        string? projectName = null, CancellationToken ct = default)
+        string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
         {
@@ -99,8 +99,8 @@ public class ArchitecturalEngine
         var allSymbols = new Dictionary<string, (INamedTypeSymbol Symbol, string? FilePath)>();
         foreach (var project in projects)
         {
-            ct.ThrowIfCancellationRequested();
-            var compilation = await project.GetCompilationAsync(ct);
+            cancellationToken.ThrowIfCancellationRequested();
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
@@ -109,10 +109,10 @@ public class ArchitecturalEngine
             foreach (var syntaxTree in compilation.SyntaxTrees)
             {
                 var semanticModel = compilation.GetSemanticModel(syntaxTree);
-                var root = await syntaxTree.GetRootAsync(ct);
+                var root = await syntaxTree.GetRootAsync(cancellationToken);
                 foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
                 {
-                    if (semanticModel.GetDeclaredSymbol(typeDecl, ct) is not INamedTypeSymbol symbol)
+                    if (semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken) is not INamedTypeSymbol symbol)
                     {
                         continue;
                     }
@@ -146,7 +146,7 @@ public class ArchitecturalEngine
 
         foreach (var (key, (symbol, _)) in allSymbols)
         {
-            ct.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
             foreach (var dep in GetReferencedNamedTypes(symbol))
             {
                 var depKey = dep.ToDisplayString();
@@ -461,9 +461,9 @@ public class ArchitecturalEngine
     public async Task<List<LayerViolation>> DetectLayerViolationsAsync(
         string? projectName = null,
         string? filePath = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var violations = new List<LayerViolation>();
 
         IEnumerable<Document?> documents;
@@ -489,7 +489,7 @@ public class ArchitecturalEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;

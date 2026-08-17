@@ -1111,7 +1111,7 @@ public class RegressionTests
 
     // ══════════════════════════════════════════════════════════════════════════
     // 16. New Augmented Tools — FormatDocumentSafe, AnalyzeForeachForLinqConversion,
-    //     GetWorkspaceHealth, PreviewAddMissingUsings, ExtractConstantSafe
+    //     GetWorkspaceHealthAsync, PreviewAddMissingUsings, ExtractConstantSafe
     // ══════════════════════════════════════════════════════════════════════════
 
     // ── FormatDocumentSafe ────────────────────────────────────────────────────
@@ -1276,7 +1276,7 @@ public class RegressionTests
         }
     }
 
-    // ── GetWorkspaceHealth ────────────────────────────────────────────────────
+    // ── GetWorkspaceHealthAsync ────────────────────────────────────────────────────
 
     [Test]
     public async Task GetWorkspaceHealth_NoSolutionLoaded_IsOperationalTrue_HasLoadedSolutionFalse()

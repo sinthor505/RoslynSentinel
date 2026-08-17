@@ -18,7 +18,7 @@ public class SolutionManagementEngine
     /// </summary>
     public async Task<DocumentEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
         var slnDir = Path.GetDirectoryName(slnPath);
         if (slnDir == null)
@@ -58,7 +58,7 @@ public class SolutionManagementEngine
         await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
 
         // 2. Identify files to move
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName);
         if (sourceProject == null)
         {

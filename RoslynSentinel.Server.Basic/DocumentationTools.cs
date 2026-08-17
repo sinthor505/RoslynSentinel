@@ -163,7 +163,7 @@ public class DocumentationTools
         DocType docType,
         string? name = null,
         string? content = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try

@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -46,7 +45,7 @@ public class BatteryThirtyEightTests
 
     private async Task<string> GetDocPath()
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         return solution.Projects.First().Documents.First().FilePath ?? "Test.cs";
     }
 
@@ -326,16 +325,16 @@ public class BatchService {
 
         var report = await _engine.GeneratePathDrivenTestsAsync(docPath, "Sum");
 
-        bool hasZero    = report.TestCases.Any(t => t.ScenarioDescription.Contains("never executes") ||
+        bool hasZero = report.TestCases.Any(t => t.ScenarioDescription.Contains("never executes") ||
                                                     t.ScenarioDescription.Contains("ZeroIterations") ||
                                                     t.TestMethodName.Contains("Zero"));
-        bool hasOne     = report.TestCases.Any(t => t.TestMethodName.Contains("One") ||
+        bool hasOne = report.TestCases.Any(t => t.TestMethodName.Contains("One") ||
                                                     t.ScenarioDescription.Contains("exactly once"));
-        bool hasMulti   = report.TestCases.Any(t => t.TestMethodName.Contains("Multiple") ||
+        bool hasMulti = report.TestCases.Any(t => t.TestMethodName.Contains("Multiple") ||
                                                     t.ScenarioDescription.Contains("N > 1"));
 
-        Assert.That(hasZero,  Is.True, "For loop must produce a zero-iterations test case");
-        Assert.That(hasOne,   Is.True, "For loop must produce a one-iteration boundary test case");
+        Assert.That(hasZero, Is.True, "For loop must produce a zero-iterations test case");
+        Assert.That(hasOne, Is.True, "For loop must produce a one-iteration boundary test case");
         Assert.That(hasMulti, Is.True, "For loop must produce a multiple-iterations test case");
     }
 
@@ -361,7 +360,7 @@ public class QueueService {
 
         bool hasNeverEnters = report.TestCases.Any(t => t.TestMethodName.Contains("NeverEnters") ||
                                                         t.ScenarioDescription.Contains("never"));
-        bool hasTerminates  = report.TestCases.Any(t => t.TestMethodName.Contains("Terminates") ||
+        bool hasTerminates = report.TestCases.Any(t => t.TestMethodName.Contains("Terminates") ||
                                                         t.ScenarioDescription.Contains("terminates") ||
                                                         t.ScenarioDescription.Contains("executes then"));
 
@@ -392,7 +391,7 @@ public class RetryService {
 
         bool hasSinglePass = report.TestCases.Any(t => t.TestMethodName.Contains("SinglePass") ||
                                                        t.ScenarioDescription.Contains("once"));
-        bool hasMultiPass  = report.TestCases.Any(t => t.TestMethodName.Contains("MultiplePasses") ||
+        bool hasMultiPass = report.TestCases.Any(t => t.TestMethodName.Contains("MultiplePasses") ||
                                                        t.ScenarioDescription.Contains("multiple times"));
 
         Assert.That(hasSinglePass, Is.True,

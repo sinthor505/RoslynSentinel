@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public sealed class StackOverflowEngine
@@ -15,9 +13,10 @@ public sealed class StackOverflowEngine
 
     public async Task<StackOverflowReport> AnalyzeStackOverflowRisksAsync(
         FilePath filePath,
-        bool includeInformational = false)
+        bool includeInformational = false,
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath != null &&

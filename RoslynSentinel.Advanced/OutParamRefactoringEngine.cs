@@ -27,9 +27,9 @@ public class OutParamRefactoringEngine
     }
 
     public async Task<OutParamConversionResult> ConvertOutParamsToValueTupleAsync(
-        FilePath filePath, string methodName, CancellationToken ct = default)
+        FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)
@@ -47,13 +47,13 @@ public class OutParamRefactoringEngine
             return new OutParamConversionResult(false, $"File not found: {filePath}", null, null, 0, []);
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
             return new OutParamConversionResult(false, "Could not get semantic model.", null, null, 0, []);
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new OutParamConversionResult(false, "Could not get syntax root.", null, null, 0, []);
@@ -80,7 +80,7 @@ public class OutParamRefactoringEngine
                 null, null, 0, []);
         }
 
-        if (semanticModel.GetDeclaredSymbol(methodDecl, ct) is not IMethodSymbol methodSymbol)
+        if (semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) is not IMethodSymbol methodSymbol)
         {
             return new OutParamConversionResult(false, "Could not resolve method symbol.", null, null, 0, []);
         }
@@ -117,7 +117,7 @@ public class OutParamRefactoringEngine
 
         // --- Rewrite the method declaration ---
         var workspace = solution.Workspace;
-        var editor = await DocumentEditor.CreateAsync(document, ct);
+        var editor = await DocumentEditor.CreateAsync(document, cancellationToken);
 
         // 1. Change return type
         var newReturnType = SyntaxFactory.ParseTypeName(tupleType)
@@ -144,7 +144,7 @@ public class OutParamRefactoringEngine
         int callSitesRewritten = 0;
 
         // --- Find and rewrite call sites ---
-        var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, ct);
+        var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, cancellationToken);
         var callSitesByDocument = references
             .SelectMany(r => r.Locations)
             .GroupBy(l => l.Document.Id);
@@ -160,13 +160,13 @@ public class OutParamRefactoringEngine
                 continue;
             }
 
-            var callRoot = await callDoc.GetSyntaxRootAsync(ct);
+            var callRoot = await callDoc.GetSyntaxRootAsync(cancellationToken);
             if (callRoot == null)
             {
                 continue;
             }
 
-            var callEditor = await DocumentEditor.CreateAsync(callDoc, ct);
+            var callEditor = await DocumentEditor.CreateAsync(callDoc, cancellationToken);
             bool changed = false;
 
             foreach (var location in docGroup)

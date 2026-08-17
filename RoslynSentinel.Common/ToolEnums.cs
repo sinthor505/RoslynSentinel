@@ -24,9 +24,6 @@ public enum ProposedChangeAction { apply, validate }
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ChangesetFormat { files, diff }
 
-[JsonConverter(typeof(JsonStringEnumConverter))]
-public enum StagedChangeAction { apply, applyAll, get, list, validate, discard }
-
 // ── Symbols ───────────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

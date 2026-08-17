@@ -27,7 +27,7 @@ public class ModernizationEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -144,7 +144,7 @@ public class ModernizationEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -205,9 +205,9 @@ public class ModernizationEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertMethodToExpressionBodyAsync(FilePath filePath, string methodName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertMethodToExpressionBodyAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -219,7 +219,7 @@ public class ModernizationEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (method?.Body != null && method.Body.Statements.Count == 1)
@@ -261,7 +261,7 @@ public class ModernizationEngine
 
     public async Task<DocumentEditResult> ConvertToPatternAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {

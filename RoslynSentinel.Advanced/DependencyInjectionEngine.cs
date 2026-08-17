@@ -33,7 +33,7 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -94,9 +94,9 @@ public class DependencyInjectionEngine
         string? projectName = null,
         string? filePath = null,
         string? lifetimeFilter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<DiRegistration>();
 
         IEnumerable<Document> documents = solution.Projects
@@ -115,7 +115,7 @@ public class DependencyInjectionEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -182,7 +182,7 @@ public class DependencyInjectionEngine
                     }
                 }
 
-                var lineSpan = root.SyntaxTree.GetLineSpan(invocation.Span, ct);
+                var lineSpan = root.SyntaxTree.GetLineSpan(invocation.Span, cancellationToken);
                 var callSite = invocation.ToString();
                 if (callSite.Length > 200)
                 {
@@ -233,7 +233,7 @@ public class DependencyInjectionEngine
                            : lifetimeArg.Contains("Transient") ? "Transient"
                            : "Unknown";
 
-                var lineSpan2 = root.SyntaxTree.GetLineSpan(objCreation.Span, ct);
+                var lineSpan2 = root.SyntaxTree.GetLineSpan(objCreation.Span, cancellationToken);
                 var callSite2 = objCreation.ToString();
                 if (callSite2.Length > 200)
                 {
@@ -253,7 +253,7 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<DocumentEditResult> AddDependencyAsync(FilePath filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -421,9 +421,9 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<List<UnregisteredServiceFinding>> FindServicesNotRegisteredAsync(
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
+        var registrations = await FindDiRegistrationsAsync(projectName: projectName, cancellationToken: cancellationToken);
         // Include both service types (interfaces) and implementation types (concrete classes)
         // so that direct concrete class injection isn't flagged when the class IS registered.
         var registeredTypes = new HashSet<string>(
@@ -432,7 +432,7 @@ public class DependencyInjectionEngine
                 .Select(t => t!.Split('<')[0].Split('.').Last())),
             StringComparer.OrdinalIgnoreCase);
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<UnregisteredServiceFinding>();
 
         var documents = solution.Projects
@@ -454,7 +454,7 @@ public class DependencyInjectionEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -522,10 +522,10 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<List<CaptiveDependencyFinding>> FindCaptiveDependenciesAsync(
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
         // Build a map: simple type name → lifetime (checking both service and impl type)
-        var registrations = await FindDiRegistrationsAsync(projectName: projectName, ct: ct);
+        var registrations = await FindDiRegistrationsAsync(projectName: projectName, cancellationToken: cancellationToken);
 
         // Also parse lambda factory registrations (task 13)
         var lifetimeMap = new Dictionary<FilePath, string>();
@@ -546,7 +546,7 @@ public class DependencyInjectionEngine
 
         // Also scan for lambda factory registrations:
         // services.AddSingleton(sp => new Foo(sp.GetRequiredService<IBar>()))
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var docs = solution.Projects
             .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
             .SelectMany(p => p.Documents);
@@ -558,7 +558,7 @@ public class DependencyInjectionEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -623,7 +623,7 @@ public class DependencyInjectionEngine
                 continue;
             }
 
-            var root2 = await doc.GetSyntaxRootAsync(ct);
+            var root2 = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root2 == null)
             {
                 continue;

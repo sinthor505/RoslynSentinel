@@ -21,7 +21,7 @@ public class MassiveAnalyzerEngine
     /// </summary>
     public async Task<List<AnalyzerIssue>> RunSpecificRuleAsync(FilePath filePath, string ruleId, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

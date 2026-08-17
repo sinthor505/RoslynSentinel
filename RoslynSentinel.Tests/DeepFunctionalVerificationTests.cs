@@ -2,8 +2,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
-
 namespace RoslynSentinel.Tests;
 
 [TestFixture]
@@ -170,7 +168,7 @@ public class C {
         _workspaceManager.SetTestSolution(solution);
 
         // Act
-        var report = await _dependencyEngine.GetProjectDependenciesAsync("MyProj");
+        var report = await _dependencyEngine.GetProjectDependenciesAsync("MyProj", CancellationToken.None);
 
         // Assert
         Assert.That(report.PackageReferences, Contains.Item("Newtonsoft.Json"));

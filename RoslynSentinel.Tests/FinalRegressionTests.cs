@@ -1,8 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
-
 namespace RoslynSentinel.Tests;
 
 /// <summary>
@@ -56,7 +54,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code, "WrongName.cs");
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
 
@@ -88,7 +86,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
 
@@ -111,7 +109,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
 
@@ -141,7 +139,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
 
@@ -176,7 +174,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
 
@@ -205,7 +203,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
 
@@ -228,7 +226,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
 
@@ -256,7 +254,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
 
@@ -277,7 +275,7 @@ public class FinalRegressionTests
             }";
 
         SetSource(code);
-        var doc = (await _workspaceManager.GetBranchedSolutionAsync()
+        var doc = (await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None)
 ).Projects.First().Documents.First();
         var root = await doc.GetSyntaxRootAsync();
 

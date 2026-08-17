@@ -18,7 +18,7 @@ public class ModernLoggingEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

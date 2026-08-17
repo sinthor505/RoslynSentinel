@@ -23,7 +23,7 @@ public class ValidationEngine
 
     public async Task<DiagnosticReport> ValidateDiffAsync(FilePath filePath, string unifiedDiff, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
 
         if (documentId == null)
@@ -61,7 +61,7 @@ public class ValidationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var report = await ValidateChangesAsync(solution, fileChanges, cancellationToken);
 
         if (!report.Success && report.Diagnostics.Count > 0)
@@ -84,7 +84,7 @@ public class ValidationEngine
     /// cannot validate new files in-memory, so it allows them rather than blocking.
     /// </summary>
     public static async Task<DiagnosticReport> ValidateChangesAsync(
-        Solution baseline, Dictionary<FilePath, string> fileChanges, CancellationToken ct = default)
+        Solution baseline, Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
         var candidate = baseline;
@@ -123,7 +123,7 @@ public class ValidationEngine
 
             Debug.WriteLine($"Compiling project {baselineProject.Name} (baseline + candidate)...");
 
-            var baselineCompilation = await baselineProject.GetCompilationAsync(ct);
+            var baselineCompilation = await baselineProject.GetCompilationAsync(cancellationToken);
             if (baselineCompilation == null)
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
@@ -132,12 +132,12 @@ public class ValidationEngine
             }
 
             var baselineErrors = baselineCompilation
-                .GetDiagnostics(ct)
+                .GetDiagnostics(cancellationToken)
                 .Where(d => d.Severity == DiagnosticSeverity.Error)
                 .Select(DiagnosticKey)
                 .ToHashSet();
 
-            var candidateCompilation = await candidateProject.GetCompilationAsync(ct);
+            var candidateCompilation = await candidateProject.GetCompilationAsync(cancellationToken);
             if (candidateCompilation == null)
             {
                 introducedDiagnostics.Add(new DiagnosticInfo("RS002", "Error",
@@ -145,7 +145,7 @@ public class ValidationEngine
                 continue;
             }
 
-            foreach (var diagnostic in candidateCompilation.GetDiagnostics(ct))
+            foreach (var diagnostic in candidateCompilation.GetDiagnostics(cancellationToken))
             {
                 if (diagnostic.Severity != DiagnosticSeverity.Error)
                     continue;

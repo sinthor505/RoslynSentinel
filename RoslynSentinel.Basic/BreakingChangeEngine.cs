@@ -42,9 +42,9 @@ public class BreakingChangeEngine
     public async Task<List<PublicApiMember>> GetPublicApiSurfaceAsync(
         string? projectName = null,
         string? filePath = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<PublicApiMember>();
 
         IEnumerable<Document?> documents;
@@ -74,7 +74,7 @@ public class BreakingChangeEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -132,9 +132,9 @@ public class BreakingChangeEngine
         List<PublicApiMember> baseline,
         string? projectName = null,
         string? filePath = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var current = await GetPublicApiSurfaceAsync(projectName, filePath, ct);
+        var current = await GetPublicApiSurfaceAsync(projectName, filePath, cancellationToken);
         var changes = new List<BreakingChange>();
 
         // Index current by signature for fast lookup

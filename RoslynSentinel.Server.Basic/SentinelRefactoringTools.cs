@@ -93,33 +93,96 @@ public class SentinelRefactoringTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    private async Task<(string? ChangeId, ResultError? Error)> ValidateAndStageAsync(
+    /// <summary>
+    /// Validates proposed changes against the current in-memory solution and, unless
+    /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through — no
+    /// intermediate staging step). Rolls back any already-written files if a multi-file change
+    /// partially fails, so a change never lands half-applied.
+    /// </summary>
+    private async Task<ApplyOutcome> ValidateAndApplyAsync(
         Dictionary<FilePath, string> changes,
         string description,
         string operationName,
+        bool dryRun = false,
+        bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         DiagnosticReport validation;
         try
         {
-            validation = await _validationEngine.ValidateChangesAsync(changes);
+            validation = await _validationEngine.ValidateChangesAsync(changes, progress, cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ValidateAndStage pre-validate failed for {OperationName}", operationName);
-            return (null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} pre-validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}"));
+            _logger.LogError(ex, "ValidateAndApply pre-validate failed for {OperationName}", operationName);
+            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
+                $"{operationName} pre-validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}"), dryRun);
         }
 
         if (!validation.Success)
         {
-            return (null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} introduces new compiler errors — change not staged. " +
-                $"Fix diagnostics and retry: {validation.Diagnostics.ToJson()}"));
+            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
+                $"{operationName} introduces new compiler errors — change not applied. " +
+                $"Fix diagnostics and retry: {validation.Diagnostics.ToJson()}"), dryRun);
         }
 
-        return (_workspaceManager.StageChanges(changes, description), null);
+        if (dryRun)
+        {
+            var previewDiff = returnDiff ? await BuildDiffAsync(changes, cancellationToken) : null;
+            return new ApplyOutcome(null, null, true, previewDiff);
+        }
+
+        var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+            changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
+            progress: progress, cancellationToken: cancellationToken);
+
+        if (!applyResult.Success)
+        {
+            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
+                $"{operationName} apply failed: {applyResult.Summary}"), false);
+        }
+
+        var changeId = Guid.NewGuid().ToString("n")[..8];
+        await OperationBlobWriter.WriteApplyBlobAsync(operationName, changeId, applyResult, _workspaceManager.GetSolutionRoot());
+
+        var appliedDiff = returnDiff ? BuildDiffFromPreImages(changes, applyResult.PreImages) : null;
+        return new ApplyOutcome(changeId, null, false, appliedDiff);
+    }
+
+    private async Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var parts = new List<string>();
+        foreach (var (path, newText) in changes)
+        {
+            var docId = solution.GetDocumentIdsWithFilePath(path).FirstOrDefault();
+            string before = "";
+            if (docId != null)
+            {
+                var doc = solution.GetDocument(docId);
+                before = (await doc!.GetTextAsync(cancellationToken)).ToString();
+            }
+            else if (File.Exists(path))
+            {
+                before = await File.ReadAllTextAsync(path, cancellationToken);
+            }
+            parts.Add($"--- {path}\n{DiffEngine.CreateDiff(before, newText)}");
+        }
+        return string.Join("\n", parts);
+    }
+
+    private static string BuildDiffFromPreImages(
+        Dictionary<FilePath, string> changes,
+        IReadOnlyDictionary<string, string?>? preImages)
+    {
+        var parts = new List<string>();
+        foreach (var (path, newText) in changes)
+        {
+            string before = preImages != null && preImages.TryGetValue(path, out var pre) && pre != null ? pre : "";
+            parts.Add($"--- {path}\n{DiffEngine.CreateDiff(before, newText)}");
+        }
+        return string.Join("\n", parts);
     }
 
     [McpServerTool(Name = "RenameSymbol")]
@@ -130,6 +193,8 @@ public class SentinelRefactoringTools
         [Description(ToolParams.DocCommentId)] string docCommentId,
         [Description("New name for the symbol. Must be a valid C# identifier.")] string newName,
         [Description(ToolParams.SessionId)] string sessionId = "",
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -169,20 +234,22 @@ public class SentinelRefactoringTools
             };
         }
 
-        var (changeId, stageError) = await ValidateAndStageAsync(
+        var apply = await ValidateAndApplyAsync(
             result.PendingChanges,
             $"Rename '{result.OldName}' to '{result.NewName}'.",
-            "RenameSymbol");
+            "RenameSymbol", dryRun, returnDiff, cancellationToken: cancellationToken);
 
-        if (stageError is not null)
-            return new ToolResult<object> { Success = false, Error = stageError };
+        if (apply.Error is not null)
+            return new ToolResult<object> { Success = false, Error = apply.Error };
 
         return new ToolResult<object>
         {
             Success = true,
             Data = new
             {
-                changeId,
+                changeId = apply.ChangeId,
+                dryRun = apply.DryRun,
+                diff = apply.Diff,
                 oldName = result.OldName,
                 newName = result.NewName,
                 filesChanged = result.PendingChanges.Count,
@@ -206,6 +273,8 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.DataType, required: true)] string fromType,
         [ExternalInputRequired(DataTag.DataType)] string toType,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -220,10 +289,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePath}'. Ensure both types exist in the solution.") };
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var (changeId, error) = await ValidateAndStageAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping");
-            if (error is not null)
-                return new ToolResult<object> { Success = false, Error = error };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -241,6 +310,8 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
         [Consumes(DataTag.SourceCode, required: true)] string newSource,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -265,10 +336,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var (changeId, error) = await ValidateAndStageAsync(changes, $"Replace member '{memberName}'.", "ReplaceMember", progress, cancellationToken);
-            if (error is not null)
-                return new ToolResult<object> { Success = false, Error = error };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "ReplaceMember", dryRun, returnDiff, progress, cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -283,7 +354,9 @@ public class SentinelRefactoringTools
     public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -294,10 +367,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RemoveMember: member '{memberName}' not found in '{filePath}'.") };
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var (changeId, error) = await ValidateAndStageAsync(changes, $"Remove member '{memberName}'.", "RemoveMember");
-            if (error is not null)
-                return new ToolResult<object> { Success = false, Error = error };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Removes '{memberName}' from {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "RemoveMember", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Removes '{memberName}' from {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -313,7 +386,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string namespaceName,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -326,10 +401,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add using {namespaceName}.", "AddUsingDirective");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Add using {namespaceName}.", "AddUsingDirective", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -347,7 +422,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SymbolName, required: true)] string valueName,
         [Consumes(DataTag.DataType, required: false)] int? explicitValue = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -360,10 +437,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add enum value '{valueName}' to '{enumName}'.", "AddEnumValue");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Add enum value '{valueName}' to '{enumName}'.", "AddEnumValue", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -380,7 +457,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] string accessibility,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -393,10 +472,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -413,7 +492,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         string summaryText,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -426,10 +507,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add summary comment to '{targetName}'.", "AddSummaryComment");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Add summary comment to '{targetName}'.", "AddSummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -447,7 +528,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.DataType, required: true)] string paramType,
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -460,10 +543,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"Add constructor parameter '{paramName}' to '{className}'.", "AddConstructorParameter");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Add constructor parameter '{paramName}' to '{className}'.", "AddConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -481,7 +564,9 @@ public class SentinelRefactoringTools
         [Consumes(DataTag.SymbolName)] string variableName,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -494,10 +579,10 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var (changeId, stageError) = await ValidateAndStageAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.StagedChangeSummary(changeId!, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.") };
+            var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -516,7 +601,7 @@ public class SentinelRefactoringTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -526,8 +611,8 @@ public class SentinelRefactoringTools
         }
         try
         {
-            var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
-                filePath, newMethodName, contextSnippet, lineBefore, lineAfter);
+            var result = await _msToolAugmentEngine.ExtractConstantSafeAsync(
+                filePath, newMethodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -555,7 +640,9 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string newAttribute,
         [ExternalInputRequired(DataTag.Action, required: true)] AttributeModifyAction action,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -583,10 +670,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -605,7 +692,9 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.Modifier, required: true)] string modifier,
         [Consumes(DataTag.Action, required: true)] AddRemoveAction action,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -629,10 +718,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.");
+            var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -651,7 +740,9 @@ public class SentinelRefactoringTools
         string baseTypeName,
         AddRemoveAction action,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -675,10 +766,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.");
+            var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -697,7 +788,9 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.ClassName)] string newMemberSource,
         [ExternalInputRequired(DataTag.Position)] string? position = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -731,10 +824,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
-            var (id, stageError) = await ValidateAndStageAsync(changes, description, "AddMember");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], description);
+            var apply = await ValidateAndApplyAsync(changes, description, "AddMember", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -760,7 +853,9 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
         [ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
         [Description(ToolParams.AutoStage)][ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -787,10 +882,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-            var (id, stageError) = await ValidateAndStageAsync(changes, description, "AddMemberTyped");
-            if (stageError is not null)
-                return new ToolResult<object> { Success = false, Error = stageError };
-            var summary = new PersistentWorkspaceManager.StagedChangeSummary(id!, [filePath], description);
+            var apply = await ValidateAndApplyAsync(changes, description, "AddMemberTyped", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -805,7 +900,7 @@ public class SentinelRefactoringTools
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
     public async Task<ToolResult<object>> SyncTypeAndFilename(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());

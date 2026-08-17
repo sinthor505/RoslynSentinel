@@ -49,7 +49,7 @@ public class MetricsEngine
 
     public async Task<SolutionMetrics> GetSolutionMetricsAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var projectMetrics = new List<ProjectMetric>();
 
         int totalTypes = 0;
@@ -102,9 +102,9 @@ public class MetricsEngine
     }
 
     public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesionAsync(
-        FilePath filePath, string? className = null, CancellationToken ct = default)
+        FilePath filePath, string? className = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)
@@ -121,13 +121,13 @@ public class MetricsEngine
             return new List<CohesionAnalysis>();
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
             return new List<CohesionAnalysis>();
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new List<CohesionAnalysis>();
@@ -143,7 +143,7 @@ public class MetricsEngine
 
         foreach (var classDecl in classDecls)
         {
-            if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol typeSymbol)
+            if (semanticModel.GetDeclaredSymbol(classDecl, cancellationToken) is not INamedTypeSymbol typeSymbol)
             {
                 continue;
             }
@@ -172,7 +172,7 @@ public class MetricsEngine
             foreach (var method in instanceMethods)
             {
                 var methodSyntax = method.DeclaringSyntaxReferences
-                    .Select(r => r.GetSyntax(ct))
+                    .Select(r => r.GetSyntax(cancellationToken))
                     .OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault();
 
@@ -185,7 +185,7 @@ public class MetricsEngine
                     {
                         foreach (var id in body.DescendantNodes().OfType<IdentifierNameSyntax>())
                         {
-                            var si = semanticModel.GetSymbolInfo(id, ct);
+                            var si = semanticModel.GetSymbolInfo(id, cancellationToken);
                             var sym = si.Symbol ?? si.CandidateSymbols.FirstOrDefault();
                             if (sym is IFieldSymbol fs && fieldDisplayMap.TryGetValue(fs, out var dn))
                             {

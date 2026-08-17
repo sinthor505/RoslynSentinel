@@ -36,9 +36,9 @@ public class CloneDetectionEngine
     // ── Within a single class ─────────────────────────────────────────────────
 
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClassAsync(
-        FilePath filePath, string className, int minStatements = 4, CancellationToken ct = default)
+        FilePath filePath, string className, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)
@@ -55,13 +55,13 @@ public class CloneDetectionEngine
             return [];
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
             return [];
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return [];
@@ -84,9 +84,9 @@ public class CloneDetectionEngine
     // ── Within an inheritance / interface hierarchy ───────────────────────────
 
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchyAsync(
-        string typeName, string? projectName = null, int minStatements = 4, CancellationToken ct = default)
+        string typeName, string? projectName = null, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var projects = string.IsNullOrEmpty(projectName)
             ? solution.Projects
@@ -98,13 +98,13 @@ public class CloneDetectionEngine
 
         foreach (var project in projects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
-            var candidate = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
+            var candidate = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
 
@@ -141,7 +141,7 @@ public class CloneDetectionEngine
         // Find all concrete types that implement / inherit from the root
         foreach (var project in solution.Projects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
@@ -150,11 +150,11 @@ public class CloneDetectionEngine
             foreach (var tree in compilation.SyntaxTrees)
             {
                 var semanticModel = compilation.GetSemanticModel(tree);
-                var treeRoot = await tree.GetRootAsync(ct);
+                var treeRoot = await tree.GetRootAsync(cancellationToken);
 
                 foreach (var classDecl in treeRoot.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
-                    if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol typeSymbol)
+                    if (semanticModel.GetDeclaredSymbol(classDecl, cancellationToken) is not INamedTypeSymbol typeSymbol)
                     {
                         continue;
                     }
@@ -179,13 +179,13 @@ public class CloneDetectionEngine
         {
             foreach (var document in project.Documents)
             {
-                var root = await document.GetSyntaxRootAsync(ct);
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
                 if (root == null)
                 {
                     continue;
                 }
 
-                var semanticModel = await document.GetSemanticModelAsync(ct);
+                var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
                 if (semanticModel == null)
                 {
                     continue;

@@ -84,16 +84,16 @@ public class MsToolAugmentEngine
     /// </summary>
     public async Task<MsAugmentResult> EncapsulateFieldSafeAsync(
         FilePath filePath, string fieldName, string? overridePropertyName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
             return MsAugmentResult.Fail($"File not found: {filePath}");
         }
 
-        var root = await doc.GetSyntaxRootAsync(ct);
+        var root = await doc.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return MsAugmentResult.Fail("Could not parse syntax tree.");
@@ -219,17 +219,17 @@ public class MsToolAugmentEngine
     /// tool to avoid silent data loss.
     /// </summary>
     public async Task<SwitchConversionAnalysis> AnalyzeSwitchForPatternConversionAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
             return new SwitchConversionAnalysis(false, 0, [], $"File not found: {filePath}");
         }
 
-        var root = await doc.GetSyntaxRootAsync(ct);
-        var text = await doc.GetTextAsync(ct);
+        var root = await doc.GetSyntaxRootAsync(cancellationToken);
+        var text = await doc.GetTextAsync(cancellationToken);
         if (root == null)
         {
             return new SwitchConversionAnalysis(false, 0, [], "Could not parse syntax tree.");
@@ -272,34 +272,34 @@ public class MsToolAugmentEngine
         string? blockingReason = safe ? null
             : $"Cannot safely convert: {multiAssignCases.Count} case(s) assign to multiple variables. " +
               string.Join("; ", multiAssignCases.Select(c => $"'{c.CaseLabel}' assigns [{string.Join(", ", c.AssignedVariables)}]")) +
-              ". The standard tool will silently drop all but the last assignment. Refactor to a single assignment or helper method first.";
+              ". The standard tool will silently drop all but the last assignment. RefacancellationTokenor to a single assignment or helper method first.";
 
         return new SwitchConversionAnalysis(safe, caseInfos.Count, caseInfos, blockingReason);
     }
 
     // ── 3. ConvertSwitchToPatternSafe ─────────────────────────────────────────
     // MS Bug: convert_to_pattern_matching drops all but the last assignment in
-    // multi-assignment cases. This version rejects those with a clear error message
-    // and only converts when the output will be correct.
+    // multi-assignment cases. This version rejecancellationTokens those with a clear error message
+    // and only converts when the output will be correcancellationToken.
 
     /// <summary>
     /// Converts a switch statement to a switch expression. Unlike the standard
-    /// <c>convert_to_pattern_matching</c> tool, this version rejects switch statements
+    /// <c>convert_to_pattern_matching</c> tool, this version rejecancellationTokens switch statements
     /// where cases assign to multiple variables — preventing silent data loss.
     /// </summary>
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, ct);
+        var analysis = await AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (!analysis.IsSafeToConvert)
         {
             return MsAugmentResult.Fail(analysis.BlockingReason ?? "Switch cannot be safely converted.");
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault()!;
-        var root = (await doc.GetSyntaxRootAsync(ct))!;
-        var text = await doc.GetTextAsync(ct);
+        var root = (await doc.GetSyntaxRootAsync(cancellationToken))!;
+        var text = await doc.GetTextAsync(cancellationToken);
 
         var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
@@ -422,18 +422,18 @@ public class MsToolAugmentEngine
     /// (e.g., <c>string.Format(MyConst, arg1, arg2)</c>).
     /// </summary>
     public async Task<MsAugmentResult> ConvertStringFormatToInterpolatedSmartAsync(
-        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
             return MsAugmentResult.Fail($"File not found: {filePath}");
         }
 
-        var root = await doc.GetSyntaxRootAsync(ct);
-        var text = await doc.GetTextAsync(ct);
-        var model = await doc.GetSemanticModelAsync(ct);
+        var root = await doc.GetSyntaxRootAsync(cancellationToken);
+        var text = await doc.GetTextAsync(cancellationToken);
+        var model = await doc.GetSemanticModelAsync(cancellationToken);
         if (root == null || model == null)
         {
             return MsAugmentResult.Fail("Could not load document.");
@@ -480,7 +480,7 @@ public class MsToolAugmentEngine
         else
         {
             // Try to resolve via semantic constant value
-            var constValue = model.GetConstantValue(args[0].Expression, ct);
+            var constValue = model.GetConstantValue(args[0].Expression, cancellationToken);
             if (constValue.HasValue && constValue.Value is string sv)
             {
                 formatStr = sv;
@@ -564,22 +564,22 @@ public class MsToolAugmentEngine
     // This combines sort + dedup in one pass.
 
     /// <summary>
-    /// Sorts <c>using</c> directives alphabetically (System.* first) AND removes
+    /// Sorts <c>using</c> direcancellationTokenives alphabetically (System.* first) AND removes
     /// duplicates in a single operation. Fixes the gap between <c>sort_usings</c>
     /// (no dedup) and <c>remove_unused_usings</c> (won't remove a duplicate that
     /// is technically "used").
     /// </summary>
     public async Task<UsingsCleanupResult> SortAndDeduplicateUsingsAsync(
-        FilePath filePath, bool writeToFile = true, CancellationToken ct = default)
+        FilePath filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
             throw new InvalidOperationException($"File not found: {filePath}");
         }
 
-        var root = (await doc.GetSyntaxRootAsync(ct) as CompilationUnitSyntax)!;
+        var root = (await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax)!;
         var original = root.Usings;
         int originalCount = original.Count;
 
@@ -611,7 +611,7 @@ public class MsToolAugmentEngine
 
         if (writeToFile)
         {
-            await File.WriteAllTextAsync(filePath, updatedContent, ct);
+            await File.WriteAllTextAsync(filePath, updatedContent, cancellationToken);
         }
 
         return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: writeToFile);
@@ -649,23 +649,23 @@ public class MsToolAugmentEngine
     /// returns the formatted content WITHOUT modifying the file on disk.
     /// </summary>
     public async Task<MsAugmentResult> FormatDocumentSafeAsync(
-        FilePath filePath, bool preview = true, CancellationToken ct = default)
+        FilePath filePath, bool preview = true, CancellationToken cancellationToken = default)
     {
         string source;
-        try { source = await File.ReadAllTextAsync(filePath, ct); }
+        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
         catch (Exception ex) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
 
-        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: ct);
-        var root = await tree.GetRootAsync(ct);
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
+        var root = await tree.GetRootAsync(cancellationToken);
 
-        // Use an AdhocWorkspace for formatting options — no project or solution needed
+        // Use an AdhocWorkspace for formatting options — no projecancellationToken or solution needed
         using var workspace = new AdhocWorkspace();
-        var formattedRoot = Formatter.Format(root, workspace, cancellationToken: ct);
+        var formattedRoot = Formatter.Format(root, workspace, cancellationToken: cancellationToken);
         var formatted = formattedRoot.ToFullString();
 
         if (!preview)
         {
-            try { await File.WriteAllTextAsync(filePath, formatted, ct); }
+            try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
             catch (Exception ex) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
 
             // If a solution is loaded, keep the workspace in sync
@@ -699,10 +699,10 @@ public class MsToolAugmentEngine
     public async Task<ForeachLinqAnalysis> AnalyzeForeachForLinqConversionAsync(
         FilePath filePath, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
         string source;
-        try { source = await File.ReadAllTextAsync(filePath, ct); }
+        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
         catch (Exception ex)
         {
             return new ForeachLinqAnalysis(false, "", 0,
@@ -710,8 +710,8 @@ public class MsToolAugmentEngine
         }
 
         var sourceText = SourceText.From(source);
-        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: ct);
-        var root = await tree.GetRootAsync(ct);
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
+        var root = await tree.GetRootAsync(cancellationToken);
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
@@ -729,7 +729,7 @@ public class MsToolAugmentEngine
                 "No foreach statement found at contextSnippet location.", "Cannot analyze.");
         }
 
-        // Find List.Add() calls in the foreach body to determine the collection variable
+        // Find List.Add() calls in the foreach body to determine the collecancellationTokenion variable
         var addCalls = forEach.Statement.DescendantNodesAndSelf()
             .OfType<InvocationExpressionSyntax>()
             .Where(inv => inv.Expression is MemberAccessExpressionSyntax mae
@@ -743,7 +743,7 @@ public class MsToolAugmentEngine
                 "Manual analysis required — this foreach may not be convertible to LINQ.");
         }
 
-        // All Add() calls must target the same collection
+        // All Add() calls must target the same collecancellationTokenion
         var collectionNames = addCalls
             .Select(c => ((MemberAccessExpressionSyntax)c.Expression).Expression.ToString())
             .Distinct()
@@ -784,7 +784,7 @@ public class MsToolAugmentEngine
         if (declIndex < 0)
         {
             return new ForeachLinqAnalysis(true, collectionName, 0, null,
-                "Collection is not a local variable in this block. " +
+                $"Collection '{collectionName}' is not a local variable in this block. " +
                 "Use standard convert_foreach_linq tool if the preceding code is safe.");
         }
 
@@ -821,8 +821,6 @@ public class MsToolAugmentEngine
             Recommendation: "Use standard convert_foreach_linq tool — collection has no modifications before the foreach.");
     }
 
-
-
     // ── 9. PreviewAddMissingUsings ────────────────────────────────────────────
     // MS Bug: roslyn-add_missing_usings with preview:true silently APPLIES changes
     // to the file on disk anyway — preview is completely ignored. This was confirmed
@@ -831,12 +829,12 @@ public class MsToolAugmentEngine
     // without ever touching the file.
 
     /// <summary>
-    /// Computes which <c>using</c> directives would be added without modifying the file.
+    /// Computes which <c>using</c> direcancellationTokenives would be added without modifying the file.
     /// Fixes the standard <c>add_missing_usings</c> tool's bug where <c>preview:true</c>
     /// is silently ignored and the file is modified on disk.
     /// </summary>
     public async Task<AddUsingsPreview> PreviewAddMissingUsingsAsync(
-        FilePath filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
         // Solution must be loaded — this tool requires semantic analysis
         var currentSolution = _workspaceManager.CurrentSolution;
@@ -863,8 +861,8 @@ public class MsToolAugmentEngine
                 UpdatedContent: "");
         }
 
-        var root = await doc.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
-        var model = await doc.GetSemanticModelAsync(ct);
+        var root = await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        var model = await doc.GetSemanticModelAsync(cancellationToken);
 
         if (root == null || model == null)
         {
@@ -876,7 +874,7 @@ public class MsToolAugmentEngine
         }
 
         // Find CS0246 ("type not found") and CS0103 ("name not found") diagnostics
-        var diagnostics = model.GetDiagnostics(cancellationToken: ct)
+        var diagnostics = model.GetDiagnostics(cancellationToken: cancellationToken)
             .Where(d => d.Id is "CS0246" or "CS0103")
             .ToList();
 
@@ -889,7 +887,7 @@ public class MsToolAugmentEngine
                 UpdatedContent: root.ToFullString());
         }
 
-        // Extract unresolved identifier names from diagnostics
+        // ExtracancellationToken unresolved identifier names from diagnostics
         var unresolvedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var diag in diagnostics)
         {
@@ -904,7 +902,7 @@ public class MsToolAugmentEngine
             }
         }
 
-        // Search all projects in the solution for types matching each unresolved name
+        // Search all projecancellationTokens in the solution for types matching each unresolved name
         var namespacesToAdd = new HashSet<string>(StringComparer.Ordinal);
         var warnings = new List<string>();
 
@@ -913,13 +911,13 @@ public class MsToolAugmentEngine
             bool found = false;
             foreach (var proj in currentSolution.Projects)
             {
-                var compilation = await proj.GetCompilationAsync(ct);
+                var compilation = await proj.GetCompilationAsync(cancellationToken);
                 if (compilation == null)
                 {
                     continue;
                 }
 
-                var types = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, ct);
+                var types = compilation.GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken);
                 foreach (var type in types)
                 {
                     var ns = type.ContainingNamespace?.ToDisplayString();
@@ -979,11 +977,11 @@ public class MsToolAugmentEngine
 
     // ── 10. ExtractConstantSafe ───────────────────────────────────────────────
     // MS Bug: roslyn-extract_constant gives a cryptic error like
-    // "Column 99 is beyond end of line" when coordinates don't match exactly,
+    // "Column 99 is beyond end of line" when coordinates don't match ExtractConstantSafeAsync,
     // because the tool takes raw 1-based line/column offsets and provides no
     // human-readable error messages when they are wrong.
     // Fix: uses contextSnippet (not line/col) to find the literal, validates it
-    // before extraction, and gives human-readable errors.
+    // before ExtractConstantSafeAsync, and gives human-readable errors.
 
     /// <summary>
     /// Extracts a literal expression to a named constant, using <c>contextSnippet</c>
@@ -994,7 +992,7 @@ public class MsToolAugmentEngine
     public async Task<MsAugmentResult> ExtractConstantSafeAsync(
         FilePath filePath, string contextSnippet, string constantName,
         string? lineBefore = null, string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
         if (!SyntaxFacts.IsValidIdentifier(constantName))
         {
@@ -1002,12 +1000,12 @@ public class MsToolAugmentEngine
         }
 
         string source;
-        try { source = await File.ReadAllTextAsync(filePath, ct); }
+        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
         catch (Exception ex) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
 
         var sourceText = SourceText.From(source);
-        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: ct);
-        var root = await tree.GetRootAsync(ct);
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
+        var root = await tree.GetRootAsync(cancellationToken);
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
@@ -1022,7 +1020,7 @@ public class MsToolAugmentEngine
         {
             return MsAugmentResult.Fail(
                 "No literal expression found at contextSnippet location. " +
-                "Provide a contextSnippet that directly contains or is adjacent to the literal.");
+                "Provide a contextSnippet that direcancellationTokenly contains or is adjacent to the literal.");
         }
 
         if (!literal.IsKind(SyntaxKind.StringLiteralExpression) &&
@@ -1135,7 +1133,7 @@ public class MsToolAugmentEngine
     /// <summary>
     /// Generates a <c>ToString()</c> override for a type using a properly-escaped
     /// interpolated string. Fixes the standard <c>generate_tostring</c> bug where
-    /// literal <c>{</c> in the format section is left unescaped, causing CS8086.
+    /// literal <c>{</c> in the format secancellationTokenion is left unescaped, causing CS8086.
     /// </summary>
     /// <param name="filePath">Absolute path to the .cs file.</param>
     /// <param name="typeName">Name of the type to add ToString() to.</param>
@@ -1143,7 +1141,7 @@ public class MsToolAugmentEngine
     ///     If null/empty, all public instance properties and fields are used.</param>
     public async Task<MsAugmentResult> GenerateToStringSafeAsync(
         FilePath filePath, string typeName, IList<string>? members = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
         // Read source: prefer workspace (always in sync, supports testability)
         // then fall back to disk for files not loaded in the solution.
@@ -1155,17 +1153,17 @@ public class MsToolAugmentEngine
 
         if (wsDoc != null)
         {
-            var wsText = await wsDoc.GetTextAsync(ct);
+            var wsText = await wsDoc.GetTextAsync(cancellationToken);
             source = wsText.ToString();
         }
         else
         {
-            try { source = await File.ReadAllTextAsync(filePath, ct); }
+            try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
             catch (Exception ex) { return MsAugmentResult.Fail($"Could not read '{filePath}': {ex.Message}"); }
         }
 
-        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: ct);
-        var root = await tree.GetRootAsync(ct);
+        var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
+        var root = await tree.GetRootAsync(cancellationToken);
 
         var typeDecl = root.DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
@@ -1183,15 +1181,15 @@ public class MsToolAugmentEngine
                 $"'{typeName}' already has a ToString() override. Remove it first.");
         }
 
-        // Collect members to include in the ToString output
-        var selectedMembers = new List<string>();
+        // CollecancellationToken members to include in the ToString output
+        var SelectedMembers = new List<string>();
         if (members != null && members.Count > 0)
         {
-            selectedMembers.AddRange(members);
+            SelectedMembers.AddRange(members);
         }
         else
         {
-            selectedMembers.AddRange(
+            SelectedMembers.AddRange(
                 typeDecl.Members.OfType<PropertyDeclarationSyntax>()
                     .Where(p => p.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
                              && !p.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
@@ -1200,14 +1198,14 @@ public class MsToolAugmentEngine
                                  || p.ExpressionBody != null))
                     .Select(p => p.Identifier.Text));
 
-            selectedMembers.AddRange(
+            SelectedMembers.AddRange(
                 typeDecl.Members.OfType<FieldDeclarationSyntax>()
                     .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword))
                              && !f.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
                     .SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text)));
         }
 
-        if (selectedMembers.Count == 0)
+        if (SelectedMembers.Count == 0)
         {
             return MsAugmentResult.Fail(
                 $"No public properties or fields found on '{typeName}'. Specify members explicitly.");
@@ -1222,16 +1220,16 @@ public class MsToolAugmentEngine
             MakeText(typeName + " {{ ")
         };
 
-        for (int i = 0; i < selectedMembers.Count; i++)
+        for (int i = 0; i < SelectedMembers.Count; i++)
         {
             if (i > 0)
             {
                 contents.Add(MakeText(", "));
             }
 
-            contents.Add(MakeText($"{selectedMembers[i]} = "));
+            contents.Add(MakeText($"{SelectedMembers[i]} = "));
             contents.Add(SyntaxFactory.Interpolation(
-                SyntaxFactory.IdentifierName(selectedMembers[i])));
+                SyntaxFactory.IdentifierName(SelectedMembers[i])));
         }
 
         contents.Add(MakeText(" }}"));
@@ -1260,29 +1258,29 @@ public class MsToolAugmentEngine
 
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
     // MS Bug: extract_method generates `private void MethodName(...)` when the
-    // selected block ends with `return <expression>`, producing a compile error
-    // because the extracted method has the wrong (void) return type.
+    // Selected block ends with `return <expression>`, producing a compile error
+    // because the extracancellationTokened method has the wrong (void) return type.
     // Fix: use SemanticModel.GetTypeInfo() on the return expression, and
     // DataFlowAnalysis.DataFlowsIn to determine the correct parameter list.
 
     /// <summary>
-    /// Extracts a block of statements into a new private method using semantic
+    /// Extract a block of statements into a new private method using semantic
     /// analysis to determine the correct return type. Fixes the standard
-    /// <c>extract_method</c> bug where selections ending with <c>return expr</c>
-    /// produce <c>void</c> return type instead of the expression's actual type.
+    /// <c>extracancellationToken_method</c> bug where Selections ending with <c>return expr</c>
+    /// produce <c>void</c> return type instead of the expression's acancellationTokenual type.
     /// </summary>
     /// <param name="filePath">Absolute path to the .cs file (must be in loaded solution).</param>
     /// <param name="newMethodName">Valid C# identifier for the new method.</param>
     /// <param name="contextSnippet">
-    /// A short unique code snippet identifying the selection.
-    /// When <paramref name="extractEntireBody"/> is <c>true</c>, treated as the name of
+    /// A short unique code snippet identifying the Selection.
+    /// When <paramref name="extracancellationTokenEntireBody"/> is <c>true</c>, treated as the name of
     /// the source method whose entire body is extracted.
     /// </param>
     /// <param name="lineBefore">Optional line immediately before the snippet for disambiguation.</param>
     /// <param name="lineAfter">Optional line immediately after the snippet for disambiguation.</param>
-    /// <param name="extractEntireBody">
+    /// <param name="extracancellationTokenEntireBody">
     /// When <c>true</c>, <paramref name="contextSnippet"/> is interpreted as a method name
-    /// and the entire block body of that method is used as the selection.
+    /// and the entire block body of that method is used as the Selection.
     /// <paramref name="lineBefore"/> and <paramref name="lineAfter"/> are ignored.
     /// Expression-bodied methods are not supported in this mode.
     /// </param>
@@ -1290,14 +1288,14 @@ public class MsToolAugmentEngine
         FilePath filePath, string newMethodName, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
         bool extractEntireBody = false,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
         if (!SyntaxFacts.IsValidIdentifier(newMethodName))
         {
             return MsAugmentResult.Fail($"'{newMethodName}' is not a valid C# identifier.");
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var doc = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
             .FirstOrDefault();
@@ -1306,9 +1304,9 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail($"File not found in solution: {filePath}");
         }
 
-        var root = await doc.GetSyntaxRootAsync(ct);
-        var model = await doc.GetSemanticModelAsync(ct);
-        var sourceText = await doc.GetTextAsync(ct);
+        var root = await doc.GetSyntaxRootAsync(cancellationToken);
+        var model = await doc.GetSemanticModelAsync(cancellationToken);
+        var sourceText = await doc.GetTextAsync(cancellationToken);
         if (root == null || model == null)
         {
             return MsAugmentResult.Fail("Could not load semantic model.");
@@ -1329,19 +1327,19 @@ public class MsToolAugmentEngine
             if (candidates.Count > 1)
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' is overloaded ({candidates.Count} declarations). " +
-                    "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.");
+                    "Use contextSnippet + lineBefore/lineAfter to identify the correcancellationToken overload.");
 
             var sourceMethod = candidates[0];
             if (sourceMethod.Body == null)
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' has an expression body (=> ...) which is not supported " +
-                    "with extractEntireBody. Use the contextSnippet path instead.");
+                    "with extracancellationTokenEntireBody. Use the contextSnippet path instead.");
 
             block = sourceMethod.Body;
             stmtsInSelection = block.Statements.ToList();
 
             if (stmtsInSelection.Count == 0)
-                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.");
+                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extracancellationToken.");
         }
         else
         {
@@ -1349,8 +1347,8 @@ public class MsToolAugmentEngine
             try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
             catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
 
-            var selectionSpan = new TextSpan(pos, contextSnippet.Length);
-            var node = root.FindNode(selectionSpan);
+            var SelectionSpan = new TextSpan(pos, contextSnippet.Length);
+            var node = root.FindNode(SelectionSpan);
 
             // Walk up to the nearest block so we can work with statement-level items
             block = node.AncestorsAndSelf().OfType<BlockSyntax>().FirstOrDefault();
@@ -1360,14 +1358,14 @@ public class MsToolAugmentEngine
                     "Selection must be inside a method body (no enclosing block found).");
             }
 
-            // Find statements that overlap the selection
+            // Find statements that overlap the Selection
             stmtsInSelection = block.Statements
-                .Where(s => selectionSpan.Contains(s.Span) || selectionSpan.OverlapsWith(s.Span))
+                .Where(s => SelectionSpan.Contains(s.Span) || SelectionSpan.OverlapsWith(s.Span))
                 .ToList();
 
             if (stmtsInSelection.Count == 0)
             {
-                // Fall back to the single statement that contains the selection
+                // Fall back to the single statement that contains the Selection
                 var single = node.AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault();
                 if (single != null && block.Statements.Contains(single))
                 {
@@ -1384,13 +1382,13 @@ public class MsToolAugmentEngine
         var firstStmt = stmtsInSelection.First();
         var lastStmt = stmtsInSelection.Last();
 
-        // Determine the return type of the extracted method
+        // Determine the return type of the extracancellationTokened method
         string returnTypeStr = "void";
         bool returnsValue = false;
 
         if (lastStmt is ReturnStatementSyntax retStmt && retStmt.Expression != null)
         {
-            var typeInfo = model.GetTypeInfo(retStmt.Expression, ct);
+            var typeInfo = model.GetTypeInfo(retStmt.Expression, cancellationToken);
             if (typeInfo.Type != null
              && typeInfo.Type.SpecialType != SpecialType.System_Void
              && typeInfo.Type.TypeKind != TypeKind.Error)
@@ -1401,7 +1399,7 @@ public class MsToolAugmentEngine
             }
         }
 
-        // Find variables that flow into the selection — these become parameters
+        // Find variables that flow into the Selection — these become parameters
         var parameters = new List<(string Name, string TypeStr)>();
         try
         {
@@ -1439,10 +1437,10 @@ public class MsToolAugmentEngine
         if (containingType == null)
         {
             return MsAugmentResult.Fail(
-                "No containing type found — cannot place extracted method.");
+                "No containing type found — cannot place extracancellationTokened method.");
         }
 
-        // Build the extracted method source text
+        // Build the extracancellationTokened method source text
         var sb = new StringBuilder();
         sb.Append("private ");
         if (isStatic)
@@ -1477,7 +1475,7 @@ public class MsToolAugmentEngine
             .WithLeadingTrivia(firstStmt.GetLeadingTrivia())
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
 
-        // Replace the selected statements in the block with the call
+        // Replace the Selected statements in the block with the call
         var stmtList = block.Statements.ToList();
         int firstIdx = stmtList.IndexOf(firstStmt);
         if (firstIdx < 0)
@@ -1512,7 +1510,7 @@ public class MsToolAugmentEngine
         return MsAugmentResult.Ok(finalRoot.NormalizeWhitespace().ToFullString());
     }
 
-    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken ct = default)
+    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync()
     {
         Solution? currentSolution;
         try { currentSolution = _workspaceManager.CurrentSolution; }

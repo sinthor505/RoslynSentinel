@@ -166,11 +166,11 @@ public static partial class SentinelConsoleMode
     /// Reads JSON-RPC messages from <paramref name="reader"/> until one matching
     /// <paramref name="expectedId"/> is found.  Notifications (no id) are skipped.
     /// </summary>
-    private static async Task<JsonNode?> ReadResponseAsync(StreamReader reader, int expectedId, CancellationToken ct)
+    private static async Task<JsonNode?> ReadResponseAsync(StreamReader reader, int expectedId, CancellationToken cancellationToken)
     {
-        while (!ct.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
+            var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
             if (line is null)
             {
                 return null;          // stream closed
@@ -362,7 +362,7 @@ public static partial class SentinelConsoleMode
     private static async Task ListToolsViaReplAsync(
         StreamWriter writer, StreamReader reader,
         string? filter,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var id = System.Threading.Interlocked.Increment(ref _msgId);
         await writer.WriteAsync(JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -376,7 +376,7 @@ public static partial class SentinelConsoleMode
         try
         {
             using var tcs = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(tcs.Token, ct);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(tcs.Token, cancellationToken);
             var resp = await ReadResponseAsync(reader, id, linked.Token).ConfigureAwait(false);
 
             if (resp?["result"]?["tools"] is not JsonArray toolsArr)
@@ -407,7 +407,7 @@ public static partial class SentinelConsoleMode
     private static async Task CallToolAsync(
         StreamWriter writer, StreamReader reader,
         string toolName, JsonNode? args,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var id = System.Threading.Interlocked.Increment(ref _msgId);
         await writer.WriteAsync(JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -423,7 +423,7 @@ public static partial class SentinelConsoleMode
         try
         {
             using var tcs = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(tcs.Token, ct);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(tcs.Token, cancellationToken);
             var resp = await ReadResponseAsync(reader, id, linked.Token).ConfigureAwait(false);
 
             if (resp is null)

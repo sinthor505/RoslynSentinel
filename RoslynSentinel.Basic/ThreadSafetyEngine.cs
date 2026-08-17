@@ -20,7 +20,7 @@ public class ThreadSafetyEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
@@ -141,7 +141,7 @@ public class ThreadSafetyEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
@@ -320,9 +320,9 @@ public class ThreadSafetyEngine
     /// Correct alternatives: Lazy&lt;T&gt;, lock, Interlocked.CompareExchange.
     /// </summary>
     public async Task<List<string>> FindUnsafeLazyInitAsync(
-        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -341,7 +341,7 @@ public class ThreadSafetyEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -450,9 +450,9 @@ public class ThreadSafetyEngine
     /// (live-lock). Use SpinWait.SpinOnce() between retries.
     /// </summary>
     public async Task<List<string>> FindCasLoopWithoutBackoffAsync(
-        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -471,7 +471,7 @@ public class ThreadSafetyEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -540,9 +540,9 @@ public class ThreadSafetyEngine
     /// declared volatile. Looks for: if (field == null) { lock(x) { if (field == null) { field = new X(); }}}
     /// </summary>
     public async Task<List<string>> FindDoubleCheckedLockingAsync(
-        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -561,7 +561,7 @@ public class ThreadSafetyEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -654,9 +654,9 @@ public class ThreadSafetyEngine
     /// using the atomic GetOrAdd overload.
     /// </summary>
     public async Task<List<string>> FindCheckThenActOnDictionaryAsync(
-        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -675,7 +675,7 @@ public class ThreadSafetyEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;

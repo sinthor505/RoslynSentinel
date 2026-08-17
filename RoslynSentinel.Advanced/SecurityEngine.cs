@@ -24,8 +24,12 @@ public class SecurityEngine
 
     public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var normalizedPath = Path.GetFullPath(filePath);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
+            ?? solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
         if (document == null)
         {
             return new List<SecurityIssueReport>();
@@ -177,12 +181,20 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindHardcodedPathsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
         {
-            docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
+            var normalizedPath = Path.GetFullPath(filePath!);
+            docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+            if (!docs.Any(d => d != null))
+            {
+                docs = solution.Projects.SelectMany(p => p.Documents)
+                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                    .Cast<Document?>();
+            }
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -231,12 +243,20 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> CheckForSqlInjectionAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
         {
-            docs = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath!)).Select(solution.GetDocument);
+            var normalizedPath = Path.GetFullPath(filePath!);
+            docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+            if (!docs.Any(d => d != null))
+            {
+                docs = solution.Projects.SelectMany(p => p.Documents)
+                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                    .Cast<Document?>();
+            }
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -335,7 +355,7 @@ public class SecurityEngine
     }
 
     /// <summary>Returns true only if any interpolation in the string is a non-constant (runtime) expression.</summary>
-    private static bool HasNonConstInterpolation(InterpolatedStringExpressionSyntax s, SemanticModel? semanticModel, CancellationToken ct)
+    private static bool HasNonConstInterpolation(InterpolatedStringExpressionSyntax s, SemanticModel? semanticModel, CancellationToken cancellationToken)
     {
         foreach (var interp in s.Contents.OfType<InterpolationSyntax>())
         {
@@ -344,7 +364,7 @@ public class SecurityEngine
                 return true; // no model — assume dynamic
             }
 
-            var constVal = semanticModel.GetConstantValue(interp.Expression, ct);
+            var constVal = semanticModel.GetConstantValue(interp.Expression, cancellationToken);
             if (!constVal.HasValue)
             {
                 return true; // not a compile-time constant → suspect
@@ -391,16 +411,20 @@ public class SecurityEngine
     /// the pattern string literal contains known dangerous constructs.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindReDoSPatternsAsync(
-        FilePath filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var normalizedPath = Path.GetFullPath(filePath);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
+            ?? solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
         if (document == null)
         {
             return [];
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return [];
@@ -498,21 +522,29 @@ public class SecurityEngine
     /// Regex injection and ReDoS attacks.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSourceAsync(
-        FilePath filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
-        var docIds = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath));
-        foreach (var docId in docIds)
+        var normalizedPath = Path.GetFullPath(filePath);
+        IEnumerable<Document?> docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+        if (!docs.Any(d => d != null))
         {
-            var doc = solution.GetDocument(docId);
+            docs = solution.Projects.SelectMany(p => p.Documents)
+                .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                .Cast<Document?>();
+        }
+
+        foreach (var doc in docs)
+        {
             if (doc == null)
             {
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -638,21 +670,29 @@ public class SecurityEngine
     /// from user input, a ReDoS amplification vector.
     /// </summary>
     public async Task<List<SecurityIssueReport>> FindRegexNewInLoopAsync(
-        FilePath filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
-        var docIds = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath));
-        foreach (var docId in docIds)
+        var normalizedPath = Path.GetFullPath(filePath);
+        IEnumerable<Document?> docs = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+        if (!docs.Any(d => d != null))
         {
-            var doc = solution.GetDocument(docId);
+            docs = solution.Projects.SelectMany(p => p.Documents)
+                .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                .Cast<Document?>();
+        }
+
+        foreach (var doc in docs)
+        {
             if (doc == null)
             {
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -701,8 +741,12 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument).FirstOrDefault();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var normalizedPath = Path.GetFullPath(filePath);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
+            ?? solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
         if (document == null)
         {
             return [];

@@ -45,7 +45,7 @@ public class HealthOrchestrationEngine
         int timeoutSeconds = 25,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var sw = Stopwatch.StartNew();
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);

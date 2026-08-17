@@ -165,7 +165,7 @@ public enum Status { Active = 1, Pending = 2 }
     // --- ExtractSuperclass ---
 
     [Test]
-    public async Task ExtractSuperclass_AutoStageTrue_ReturnsStagedChangeSummary()
+    public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
     {
         SetMultiFile(("Dog.cs", RefactorSource));
         var result = await _advTools.ExtractMembers("Dog.cs", "Dog", "superclass", "AnimalBase");

@@ -16,13 +16,11 @@
 //   All tests follow the Battery #28 contract:
 //     • DoesNotThrowAsync — engine must not crash on real-world code
 //     • result Is.Not.Null — engine must return a valid object
-//     • No ApplyStagedChangesAsync — changes are staged in memory only (safe)
+//     • Engines are called directly — no disk writes (safe)
 
 #pragma warning disable CS8618
 
 using Microsoft.Extensions.Logging.Abstractions;
-
-using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
 
@@ -58,7 +56,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         // Discover one document with a class AND a method for parameterised tests.
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         foreach (var project in solution.Projects)
         {
             foreach (var doc in project.Documents)

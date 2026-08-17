@@ -16,14 +16,22 @@ public static class ToolParams
         "Uniquely identifies the symbol across tool calls. " +
         "Do not construct this value — pass it exactly as returned by locate_symbol.";
 
-    // Staging workflow
+    // Validate-and-apply workflow
     public const string AutoStage =
-        "true (default) → validates and stages result; returns changeId to pass to StagedChange. " +
-        "false → returns updated file content without staging.";
+        "true (default) → validates and writes the result to disk immediately; returns changeId to pass to UndoLastApply. " +
+        "false → returns updated file content without validating or writing.";
 
     public const string ValidateOnApply =
         "true (default) → delta compile before writing; returns errors without touching disk if new errors found. " +
         "false → writes regardless (for intentional intermediate broken-state edits).";
+
+    public const string DryRun =
+        "true → validates only; does not write to disk and returns no changeId. " +
+        "false (default) → validates and writes to disk immediately.";
+
+    public const string ReturnDiff =
+        "true → include a unified-diff-style preview of the change in the response (costs extra context). " +
+        "false (default) → omit the diff to keep the response minimal.";
 
     // Context disambiguation
     public const string ContextSnippet =

@@ -15,7 +15,7 @@ public class AdvancedTypeEngine
 
     public async Task<Dictionary<FilePath, string>> ConvertTupleToClassAsync(FilePath filePath, string methodName, string newClassName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -84,7 +84,7 @@ public class AdvancedTypeEngine
 
     public async Task<Dictionary<FilePath, string>> ChangePropertyTypeAsync(FilePath filePath, string className, string propertyName, string newType, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -117,7 +117,7 @@ public class AdvancedTypeEngine
 
     public async Task<Dictionary<FilePath, string>> ConvertAnonymousToNamedAsync(FilePath filePath, string newClassName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

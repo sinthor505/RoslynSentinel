@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record ControlFlowAnalysisResult(
@@ -54,7 +52,7 @@ public class ControlFlowEngine
     /// </summary>
     public async Task<PathCoverageReport> AnalyzePathCoverageAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -117,17 +115,17 @@ public class ControlFlowEngine
         FilePath filePath,
         string methodName,
         int? disambiguateLine = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], $"File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
-        var text = await document.GetTextAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var text = await document.GetTextAsync(cancellationToken);
         var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName)
             .ToList() ?? [];
@@ -175,7 +173,7 @@ public class ControlFlowEngine
             return new ControlFlowAnalysisResult(methodName, true, [], [], [], [], null);
         }
 
-        var model = await document.GetSemanticModelAsync(ct);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
             return new ControlFlowAnalysisResult(methodName, false, [], [], [], [], "Semantic model unavailable.");
@@ -213,16 +211,16 @@ public class ControlFlowEngine
         FilePath filePath,
         string methodName,
         int? disambiguateLine = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], $"File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methods = root?.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .Where(m => m.Identifier.Text == methodName)
             .ToList() ?? [];
@@ -270,7 +268,7 @@ public class ControlFlowEngine
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], null);
         }
 
-        var model = await document.GetSemanticModelAsync(ct);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
             return new DataFlowAnalysisResult(methodName, [], [], [], [], [], [], "Semantic model unavailable.");
@@ -300,9 +298,9 @@ public class ControlFlowEngine
     public async Task<List<EnumSwitchGap>> FindNonExhaustiveEnumSwitchesAsync(
         string? filePath = null,
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -329,13 +327,13 @@ public class ControlFlowEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
             }
 
-            var model = await doc.GetSemanticModelAsync(ct);
+            var model = await doc.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -346,7 +344,7 @@ public class ControlFlowEngine
             foreach (var switchStmt in root.DescendantNodes().OfType<SwitchStatementSyntax>())
             {
                 // Only interested in switches on enum types
-                var switchType = model.GetTypeInfo(switchStmt.Expression, ct).Type;
+                var switchType = model.GetTypeInfo(switchStmt.Expression, cancellationToken).Type;
                 if (switchType == null || switchType.TypeKind != TypeKind.Enum)
                 {
                     continue;
@@ -368,7 +366,7 @@ public class ControlFlowEngine
                     foreach (var label in section.Labels.OfType<CaseSwitchLabelSyntax>())
                     {
                         // The case expression might be: MyEnum.Active, or just Active
-                        var caseSym = model.GetSymbolInfo(label.Value, ct).Symbol;
+                        var caseSym = model.GetSymbolInfo(label.Value, cancellationToken).Symbol;
                         if (caseSym is IFieldSymbol field && field.ContainingType.Equals(switchType, SymbolEqualityComparer.Default))
                         {
                             handledNames.Add(field.Name);
@@ -419,11 +417,11 @@ public class ControlFlowEngine
     public async Task<TestCoverageMap> GetTestCoverageMapAsync(
         FilePath filePath,
         string methodName,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var pathReport = await AnalyzePathCoverageAsync(filePath, methodName, ct);
+        var pathReport = await AnalyzePathCoverageAsync(filePath, methodName, cancellationToken);
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var coveringTests = new List<CoveringTest>();
 
         var testDocs = solution.Projects
@@ -437,7 +435,7 @@ public class ControlFlowEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;

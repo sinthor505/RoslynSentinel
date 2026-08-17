@@ -64,9 +64,9 @@ public class DiscoveryEngine
         string? filePath = null,
         string? projectName = null,
         bool sortByFrequency = false,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ThrowSiteInfo>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -76,7 +76,7 @@ public class DiscoveryEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -209,9 +209,9 @@ public class DiscoveryEngine
         string? filePath = null,
         string? projectName = null,
         bool sortByFrequency = false,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ObjectCreationSite>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -221,7 +221,7 @@ public class DiscoveryEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -304,9 +304,9 @@ public class DiscoveryEngine
         bool includeMethods = true,
         bool includeProperties = true,
         bool includeTypes = true,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ApiSurfaceEntry>();
 
         var project = solution.Projects.FirstOrDefault(p =>
@@ -319,7 +319,7 @@ public class DiscoveryEngine
 
         foreach (var doc in project.Documents)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -420,9 +420,16 @@ public class DiscoveryEngine
     {
         if (!string.IsNullOrEmpty(filePath))
         {
-            return solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath))
+            var normalizedPath = Path.GetFullPath(filePath);
+            var matches = solution.GetDocumentIdsWithFilePath(normalizedPath)
                 .Select(solution.GetDocument)
-                .Where(d => d != null)!;
+                .Where(d => d != null)!
+                .Cast<Document>();
+
+            return matches.Any() ? matches : solution.Projects
+                .SelectMany(p => p.Documents)
+                .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                            string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
         }
 
         return solution.Projects
@@ -505,16 +512,16 @@ public class DiscoveryEngine
     }
 
     public async Task<BestInsertionResult> FindBestInsertionPointAsync(
-        FilePath filePath, string containerName, string memberKind, CancellationToken ct = default)
+        FilePath filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             throw new FileNotFoundException($"File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             throw new InvalidOperationException("Could not get syntax root.");
@@ -606,9 +613,9 @@ public class DiscoveryEngine
     }
 
     public async Task<List<TodoCommentFinding>> FindTodoFixmeCommentsAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<TodoCommentFinding>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -618,7 +625,7 @@ public class DiscoveryEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -665,17 +672,17 @@ public class DiscoveryEngine
     }
 
     public async Task<RenameImpactPreview> PreviewRenameImpactAsync(
-        FilePath filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+        FilePath filePath, string symbolName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             throw new FileNotFoundException($"File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
-        var sourceText = await document.GetTextAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
         int position;
         if (contextSnippet != null)
         {
@@ -687,21 +694,21 @@ public class DiscoveryEngine
             position = ContextHelper.FindSnippetPosition(sourceText.ToString(), symbolName);
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
             throw new InvalidOperationException("Could not get semantic model.");
         }
 
-        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), ct).Symbol
-                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), ct);
+        var symbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol
+                     ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken);
 
         if (symbol == null)
         {
             throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
         }
 
-        var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var references = await Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var locations = references.SelectMany(r => r.Locations).ToList();
 
         var affectedFiles = locations
@@ -731,9 +738,9 @@ public class DiscoveryEngine
         string attributeName,
         string? projectName = null,
         string? filePath = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
         var name = attributeName.Trim('[', ']');
@@ -769,7 +776,7 @@ public class DiscoveryEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;

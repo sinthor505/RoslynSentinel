@@ -1,4 +1,5 @@
 using System.Diagnostics;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests;
@@ -125,7 +126,7 @@ public class WorkspaceRefreshTests
             // After ApplyProposedChangesAsync returns the lock must be free.
             // GetBranchedSolutionAsync should not block.
             var sw = Stopwatch.StartNew();
-            var branchedTask = _manager.GetBranchedSolutionAsync();
+            var branchedTask = _manager.GetBranchedSolutionAsync(CancellationToken.None);
             var completed = await Task.WhenAny(branchedTask, Task.Delay(TimeSpan.FromSeconds(2)));
             sw.Stop();
 

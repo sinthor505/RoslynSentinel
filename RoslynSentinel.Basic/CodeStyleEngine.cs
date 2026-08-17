@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class CodeStyleEngine
@@ -17,7 +15,7 @@ public class CodeStyleEngine
         _config = config;
     }
 
-    public async Task<DocumentEditResult> FixDangerousLockAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> FixDangerousLockAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("LockModernization"))
         {
@@ -29,7 +27,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -41,7 +39,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
             return new DocumentEditResult
@@ -94,7 +92,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string propertyName, CancellationToken ct = default)
+    public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePath filePath, string propertyName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertPropertyToMethod"))
         {
@@ -106,7 +104,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -118,7 +116,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
         if (prop == null)
         {
@@ -168,7 +166,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> SimplifyVerbosityAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SimplifyVerbosityAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("SimplifyVerbosity"))
         {
@@ -180,7 +178,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -192,7 +190,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -213,7 +211,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseCollectionExpressionsAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseCollectionExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("CollectionExpressions"))
         {
@@ -225,7 +223,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -237,7 +235,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -258,7 +256,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseTimeProviderAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseTimeProviderAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("TimeProviderInjection"))
         {
@@ -270,7 +268,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -282,7 +280,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -324,7 +322,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> SimplifyAllNamesAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> SimplifyAllNamesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("IDE0001"))
         {
@@ -336,7 +334,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -348,7 +346,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -369,7 +367,7 @@ public class CodeStyleEngine
         };
     }
 
-    public async Task<DocumentEditResult> UseIndexFromEndAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> UseIndexFromEndAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("LengthMinusOneToIndex"))
         {
@@ -381,7 +379,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -393,7 +391,7 @@ public class CodeStyleEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -415,9 +413,9 @@ public class CodeStyleEngine
     }
 
     public async Task<List<AntiPatternFinding>> FindUseFrozenCollectionsAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -444,7 +442,7 @@ public class CodeStyleEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -658,9 +656,9 @@ public class CodeStyleAnalysisEngine
     /// breaking invariants. Prefer IReadOnlyList&lt;T&gt;/IReadOnlyDictionary or init-only setters.
     /// </summary>
     public async Task<List<string>> FindMutablePublicCollectionPropertiesAsync(
-        string? projectName = null, string? filePath = null, CancellationToken ct = default)
+        string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -679,7 +677,7 @@ public class CodeStyleAnalysisEngine
 
         foreach (var doc in docs)
         {
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;

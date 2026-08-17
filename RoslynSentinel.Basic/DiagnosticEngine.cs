@@ -1,7 +1,5 @@
 using Microsoft.CodeAnalysis;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public record DiagnosticSummary(
@@ -21,7 +19,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -41,7 +39,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project == null)
         {
@@ -87,7 +85,7 @@ public class DiagnosticEngine
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var solutionDir = Path.GetDirectoryName(solution.FilePath ?? "") ?? "";
         var allDiagnostics = new List<DiagnosticInfo>();
 

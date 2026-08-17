@@ -31,7 +31,7 @@ public class SecurityAndSafetyEngine
 
     public async Task<List<SafetyIssue>> FindUnsafeTypeCastsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -78,7 +78,7 @@ public class SecurityAndSafetyEngine
 
     public async Task<List<SafetyIssue>> DetectMissingNullChecksAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -312,22 +312,22 @@ public class SecurityAndSafetyEngine
     /// </summary>
     public async Task<List<SafetyIssue>> FindNullDereferenceChainAsync(
         FilePath filePath,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             return [];
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return [];
         }
 
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
             return [];
@@ -366,7 +366,7 @@ public class SecurityAndSafetyEngine
                 }
 
                 // Use semantic model to verify the inner type is a nullable reference type
-                var innerType = semanticModel.GetTypeInfo(innerMa, ct).Type;
+                var innerType = semanticModel.GetTypeInfo(innerMa, cancellationToken).Type;
                 if (innerType == null || !innerType.IsReferenceType)
                 {
                     continue;
@@ -429,16 +429,16 @@ public class SecurityAndSafetyEngine
     /// </summary>
     public async Task<List<SafetyIssue>> FindArithmeticOverflowRisksAsync(
         FilePath filePath,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
             return [];
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return [];

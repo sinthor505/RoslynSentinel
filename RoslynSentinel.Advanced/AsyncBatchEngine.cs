@@ -492,7 +492,7 @@ public class AsyncBatchEngine
                         // Async overload already has CT. Before giving up, check whether its body
                         // still calls [Obsolete("Asyncify-bridge: ...")] sync wrappers that need
                         // rewriting to await calls — e.g. GetExpensesAsync body still calling
-                        // CommonSearch.search(sql) instead of await CommonSearch.searchAsync(sql, ct).
+                        // CommonSearch.search(sql) instead of await CommonSearch.searchAsync(sql, cancellationToken).
                         var bodyRewrite = await _asyncOptimizationEngine.RewriteObsoleteCallsInAsyncMethodAsync(
                             candidate.FilePath, asyncMethodName,
                             sourceText: null,  // read from workspace (already on disk)
@@ -780,7 +780,7 @@ public class AsyncBatchEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         foreach (var project in solution.Projects)
@@ -911,9 +911,11 @@ public class AsyncBatchEngine
             return new UpliftBatchResult(uplifted, skipped, dryRemaining, "dry_run");
         }
 
-        // 3. Process callers grouped by file.
-        //    Batch path: accumulate all transforms in-memory with a single validate+apply per file.
-        //    If batch validation fails: reset workspace and fall back to one caller at a time.
+        // 3. Process callers grouped by file, one caller at a time: transform, validate,
+        //    write to disk. Write-through — no speculative in-memory-only accumulation across
+        //    callers, so the workspace and disk never diverge mid-batch. A later caller in the
+        //    same file sees the previous caller's applied change via the workspace, because
+        //    ApplyProposedChangesAsync refreshes CurrentSolution immediately after every write.
         var fileGroups = callerPairs
             .GroupBy(pair => pair.FilePath)
             .ToList();
@@ -926,224 +928,110 @@ public class AsyncBatchEngine
             var callerFilePath = fileGroup.Key;
             var callersInFile = fileGroup.ToList();
 
-            // Load initial source — prefer workspace (sees previous file group's apply) then disk.
-            string? originalSource;
+            // Confirm the file exists (workspace or disk) before attempting any transform.
+            var initialSol = _workspaceManager.CurrentSolution;
+            bool hasInitialDoc = initialSol?.GetDocumentIdsWithFilePath(callerFilePath).Any() == true;
+            if (!hasInitialDoc && !File.Exists(callerFilePath))
             {
-                var sol = _workspaceManager.CurrentSolution;
-                var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
-                    .Select(id => sol.GetDocument(id)).FirstOrDefault();
-                if (wsDoc != null)
-                    originalSource = (await wsDoc.GetTextAsync(cancellationToken)).ToString();
-                else if (File.Exists(callerFilePath))
-                    originalSource = await File.ReadAllTextAsync(callerFilePath, cancellationToken);
-                else
-                {
-                    foreach (var (_, cm) in callersInFile)
-                        skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
-                            "Caller file not found on disk.", new List<DiagnosticInfo>()));
-                    callerIndex += callersInFile.Count;
-                    continue;
-                }
+                foreach (var (_, cm) in callersInFile)
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
+                        "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                callerIndex += callersInFile.Count;
+                continue;
             }
 
             _logger.LogDebug(
-                "RunUpliftBatch: file '{File}' — {Count} caller(s), trying batch",
+                "RunUpliftBatch: file '{File}' — {Count} caller(s)",
                 callerFilePath, callersInFile.Count);
 
-            // ── Batch try ────────────────────────────────────────────────────────────
-            // Thread source forward across callers. Between each caller update workspace
-            // in-memory so ConvertToAsyncBridgeAsync / SemanticBridgeCallRewriteAsync
-            // always see the accumulated state rather than the original disk source.
-            string currentSource = originalSource;
-            var batchTransforms = new List<(string callerMethod, string asyncName)>();
-            var batchSkips     = new List<UpliftSkippedInfo>();
-            bool batchCancelled = false;
-
-            for (int bi = 0; bi < callersInFile.Count; bi++)
+            foreach (var (_, callerMethodName) in callersInFile)
             {
-                if (cancellationToken.IsCancellationRequested) { batchCancelled = true; break; }
+                if (cancellationToken.IsCancellationRequested) break;
 
-                var callerMethodName = callersInFile[bi].CallerMethod;
                 _logger.LogInformation(
-                    "RunUpliftBatch [batch {BI}/{BN}] [{GI}/{GT}]: {Caller} in {File}",
-                    bi + 1, callersInFile.Count,
-                    callerIndex + bi + 1, callerPairs.Count,
-                    callerMethodName, callerFilePath);
+                    "RunUpliftBatch [{GI}/{GT}]: {Caller} in {File}",
+                    callerIndex + 1, callerPairs.Count, callerMethodName, callerFilePath);
+                callerIndex++;
 
-                // Sync workspace to the latest accumulated source so engine semantic calls see it.
-                if (bi > 0)
-                    await _workspaceManager.UpdateDocumentsInMemoryAsync(
-                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
-                        cancellationToken);
+                // Read current state — picks up each preceding caller's applied write.
+                string currentSource;
+                {
+                    var sol = _workspaceManager.CurrentSolution;
+                    var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
+                        .Select(id => sol.GetDocument(id)).FirstOrDefault();
+                    currentSource = wsDoc != null
+                        ? (await wsDoc.GetTextAsync(cancellationToken)).ToString()
+                        : await File.ReadAllTextAsync(callerFilePath, cancellationToken);
+                }
 
                 var (transformed, asyncName, skip) = await TryTransformCallerAsync(
                     callerFilePath, callerMethodName, bridgedMethodName,
                     currentSource, propagateCancellationTokens, progress, cancellationToken);
 
-                if (skip != null) { batchSkips.Add(skip); continue; }
-                currentSource = transformed!;
-                batchTransforms.Add((callerMethodName, asyncName!));
-            }
+                if (skip != null) { skipped.Add(skip); continue; }
 
-            // Skipped callers are always recorded (regardless of batch success or fallback).
-            skipped.AddRange(batchSkips);
-            callerIndex += callersInFile.Count;
+                // Idempotency.
+                if (transformed == currentSource)
+                {
+                    _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        "already uplifted — no change produced", new List<DiagnosticInfo>()));
+                    continue;
+                }
 
-            if (batchCancelled || batchTransforms.Count == 0 || currentSource == originalSource)
-                continue;
+                var validation = await _validationEngine.ValidateChangesAsync(
+                    new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                    progress, cancellationToken);
 
-            // Single validate for all transforms in this file.
-            var batchValidation = await _validationEngine.ValidateChangesAsync(
-                new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
-                progress, cancellationToken);
+                if (!validation.Success)
+                {
+                    _logger.LogWarning(
+                        "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
+                        callerMethodName, validation.Diagnostics.Count,
+                        validation.Diagnostics.Count > 0
+                            ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}"
+                            : "");
 
-            if (batchValidation.Success)
-            {
-                // Idempotency: final source unchanged on disk?
-                string? diskSource = File.Exists(callerFilePath)
+                    try
+                    {
+                        var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                            callerFilePath, callerMethodName, "NeedsManualReview",
+                            score: 0,
+                            reason: $"Uplift produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}",
+                            progress: progress, cancellationToken: cancellationToken);
+                        await _workspaceManager.ApplyProposedChangesAsync(
+                            flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
+                    }
+                    catch (Exception flagEx)
+                    {
+                        _logger.LogWarning(flagEx,
+                            "Could not flag {Method} as NeedsManualReview", callerMethodName);
+                    }
+
+                    _ledger.Record(callerFilePath, callerMethodName, "UpliftValidationFail",
+                        validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : null);
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; flagged NeedsManualReview",
+                        validation.Diagnostics,
+                        AttemptedSource: transformed));
+                    continue;
+                }
+
+                string? beforeSource = File.Exists(callerFilePath)
                     ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
 
-                if (diskSource != null && currentSource == diskSource)
+                await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
+                    progress: progress, cancellationToken: cancellationToken);
+
+                uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
+                    { BeforeSource = beforeSource });
+                _ledger.Record(callerFilePath, callerMethodName, "Uplift");
+                progress?.Report(new ProgressNotificationValue
                 {
-                    // Disk already has the final source (e.g. from a prior run). Skip the disk
-                    // write but still update the workspace so it reflects the final state — the
-                    // workspace may have been loaded with older content (e.g. test SetTestSolution).
-                    await _workspaceManager.UpdateDocumentsInMemoryAsync(
-                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
-                        cancellationToken);
-                    foreach (var (cm, an) in batchTransforms)
-                    {
-                        uplifted.Add(new UpliftCallerInfo(callerFilePath, cm, an) { BeforeSource = diskSource });
-                        _ledger.Record(callerFilePath, cm, "Uplift");
-                    }
-                }
-                else
-                {
-                    // Single apply — the main performance win over per-caller processing.
-                    await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { { callerFilePath, currentSource } },
-                        progress: progress, cancellationToken: cancellationToken);
-
-                    foreach (var (cm, an) in batchTransforms)
-                    {
-                        uplifted.Add(new UpliftCallerInfo(callerFilePath, cm, an) { BeforeSource = diskSource });
-                        _ledger.Record(callerFilePath, cm, "Uplift");
-                    }
-
-                    progress?.Report(new ProgressNotificationValue
-                    {
-                        Progress = (float)uplifted.Count / callerPairs.Count,
-                        Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {batchTransforms.Count} caller(s) in {callerFilePath}",
-                    });
-                }
-            }
-            else
-            {
-                // ── Fallback: one caller at a time ───────────────────────────────────
-                // Reset workspace to the original source so each individual caller starts clean.
-                // batchSkips are already in `skipped`; only retry the callers that transformed.
-                _logger.LogInformation(
-                    "RunUpliftBatch: batch validation failed for {File} ({N} error(s)) — falling back to per-caller",
-                    callerFilePath, batchValidation.Diagnostics.Count);
-
-                await _workspaceManager.UpdateDocumentsInMemoryAsync(
-                    new Dictionary<FilePath, string> { { callerFilePath, originalSource } },
-                    cancellationToken);
-
-                var batchSkipMethods = batchSkips.Select(s => s.CallerMethod)
-                    .ToHashSet(StringComparer.Ordinal);
-
-                foreach (var (_, callerMethodName) in callersInFile
-                    .Where(p => !batchSkipMethods.Contains(p.CallerMethod)))
-                {
-                    if (cancellationToken.IsCancellationRequested) break;
-
-                    _logger.LogInformation(
-                        "RunUpliftBatch [fallback]: {Caller} in {File}",
-                        callerMethodName, callerFilePath);
-
-                    // Read current state — picks up each preceding individual apply.
-                    string indivSource;
-                    {
-                        var sol = _workspaceManager.CurrentSolution;
-                        var wsDoc = sol?.GetDocumentIdsWithFilePath(callerFilePath)
-                            .Select(id => sol.GetDocument(id)).FirstOrDefault();
-                        indivSource = wsDoc != null
-                            ? (await wsDoc.GetTextAsync(cancellationToken)).ToString()
-                            : File.Exists(callerFilePath)
-                                ? await File.ReadAllTextAsync(callerFilePath, cancellationToken)
-                                : originalSource;
-                    }
-
-                    var (transformed, asyncName, skip) = await TryTransformCallerAsync(
-                        callerFilePath, callerMethodName, bridgedMethodName,
-                        indivSource, propagateCancellationTokens, progress, cancellationToken);
-
-                    if (skip != null) { skipped.Add(skip); continue; }
-
-                    // Idempotency.
-                    if (transformed == indivSource)
-                    {
-                        _ledger.Record(callerFilePath, callerMethodName, "UpliftIdempotentSkip");
-                        skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                            "already uplifted — no change produced", new List<DiagnosticInfo>()));
-                        continue;
-                    }
-
-                    var indivValidation = await _validationEngine.ValidateChangesAsync(
-                        new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
-                        progress, cancellationToken);
-
-                    if (!indivValidation.Success)
-                    {
-                        _logger.LogWarning(
-                            "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
-                            callerMethodName, indivValidation.Diagnostics.Count,
-                            indivValidation.Diagnostics.Count > 0
-                                ? $"[{indivValidation.Diagnostics[0].Id}] {indivValidation.Diagnostics[0].Message}"
-                                : "");
-
-                        try
-                        {
-                            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                                callerFilePath, callerMethodName, "NeedsManualReview",
-                                score: 0,
-                                reason: $"Uplift produced {indivValidation.Diagnostics.Count} compiler error(s){DiagSummary(indivValidation.Diagnostics)}",
-                                progress: progress, cancellationToken: cancellationToken);
-                            await _workspaceManager.ApplyProposedChangesAsync(
-                                flagResult.Changes, progress: progress, cancellationToken: cancellationToken);
-                        }
-                        catch (Exception flagEx)
-                        {
-                            _logger.LogWarning(flagEx,
-                                "Could not flag {Method} as NeedsManualReview", callerMethodName);
-                        }
-
-                        _ledger.Record(callerFilePath, callerMethodName, "UpliftValidationFail",
-                            indivValidation.Diagnostics.Count > 0 ? $"[{indivValidation.Diagnostics[0].Id}] {indivValidation.Diagnostics[0].Message}" : null);
-                        skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                            $"Validation produced {indivValidation.Diagnostics.Count} compiler error(s){DiagSummary(indivValidation.Diagnostics)}; flagged NeedsManualReview",
-                            indivValidation.Diagnostics,
-                            AttemptedSource: transformed));
-                        continue;
-                    }
-
-                    string? beforeSource = File.Exists(callerFilePath)
-                        ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
-
-                    await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
-                        progress: progress, cancellationToken: cancellationToken);
-
-                    uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
-                        { BeforeSource = beforeSource });
-                    _ledger.Record(callerFilePath, callerMethodName, "Uplift");
-                    progress?.Report(new ProgressNotificationValue
-                    {
-                        Progress = (float)uplifted.Count / callerPairs.Count,
-                        Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}",
-                    });
-                }
+                    Progress = (float)uplifted.Count / callerPairs.Count,
+                    Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}",
+                });
             }
         }
 
@@ -1283,8 +1171,9 @@ public class AsyncBatchEngine
         }
         else
         {
-            // Normal path: ConvertToAsyncBridgeAsync reads from the workspace (which the batch
-            // orchestrator keeps in sync via UpdateDocumentsInMemoryAsync between callers).
+            // Normal path: ConvertToAsyncBridgeAsync reads from the workspace, which the batch
+            // orchestrator keeps in sync with disk by writing each caller's change before
+            // moving to the next (see RunUpliftBatchAsync).
             try
             {
                 var result = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
@@ -1428,17 +1317,17 @@ public class AsyncBatchEngine
         string targetMethodName,
         string bridgedMethodName,
         string? cancellationTokenExpression,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
         if (document == null)
             return null;
 
-        var root = await document.GetSyntaxRootAsync(ct);
-        var semanticModel = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
         if (root == null || semanticModel == null)
             return null;
 
@@ -1455,7 +1344,7 @@ public class AsyncBatchEngine
         var bridgeCallNodes = new Dictionary<InvocationExpressionSyntax, bool>(ReferenceEqualityComparer.Instance);
         foreach (var inv in targetMethod.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var sym = semanticModel.GetSymbolInfo(inv, ct).Symbol as IMethodSymbol;
+            var sym = semanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
             if (sym == null || sym.Name != bridgedMethodName)
                 continue;
             var obsoleteMsg = sym.GetAttributes()
@@ -1616,8 +1505,8 @@ public class AsyncBatchEngine
 
             // When the bridge call is chained — Foo().Rows, Foo().AsDataView(), Foo()[i] — the
             // await must be parenthesised so that member/element access binds to the awaited value,
-            // not to the Task:  Foo().Rows → (await FooAsync(ct)).Rows
-            // Without parens, `await FooAsync(ct).Rows` is parsed as `await (FooAsync(ct).Rows)`,
+            // not to the Task:  Foo().Rows → (await FooAsync(cancellationToken)).Rows
+            // Without parens, `await FooAsync(cancellationToken).Rows` is parsed as `await (FooAsync(cancellationToken).Rows)`,
             // which fails to compile because Task<T> has no such member.
             bool needsParens = node.Parent is MemberAccessExpressionSyntax
                             || node.Parent is ElementAccessExpressionSyntax

@@ -20,6 +20,7 @@ public sealed class EngineResultWrapper<T>
     {
         get;
     }
+
     private readonly T? _data;
 
     public bool TryGetData([NotNullWhen(true)] out T? data)
@@ -61,9 +62,22 @@ public enum EngineOutcome
 
 public class EngineError
 {
-    public string Message { get; }
-    public Exception? Exception { get; }
-    public EngineErrorCode? Code { get; }
+    public string Message
+    {
+        get;
+    }
+    public Exception? Exception
+    {
+        get;
+    }
+    public EngineErrorCode? Code
+    {
+        get;
+    }
+    public DataTag? Tag
+    {
+        get;
+    }
 
     public EngineError(string message, Exception? exception = null)
     {
@@ -75,6 +89,7 @@ public class EngineError
     {
         Code = code;
         Message = message;
+        Tag = tag;
     }
 
     public string ToToolResponse()

@@ -148,9 +148,9 @@ public class SymbolNavigationEngine
         string? projectName = null,
         FilePath filePath = default,
         bool exactMatch = true,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -170,12 +170,12 @@ public class SymbolNavigationEngine
             ? symbolName.Split('.').Last()
             : symbolName;
 
-        await Parallel.ForEachAsync(searchProjects, async (project, ct) =>
+        await Parallel.ForEachAsync(searchProjects, async (project, cancellationToken) =>
         {
             Compilation? compilation = null;
             try
             {
-                compilation = await project.GetCompilationAsync(ct);
+                compilation = await project.GetCompilationAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -188,11 +188,11 @@ public class SymbolNavigationEngine
             }
 
             var candidates = exactMatch
-                ? compilation.GetSymbolsWithName(simpleName, filter, ct)
+                ? compilation.GetSymbolsWithName(simpleName, filter, cancellationToken)
                 : compilation.GetSymbolsWithName(
                     n => n.Contains(simpleName, StringComparison.OrdinalIgnoreCase),
                     filter,
-                    ct);
+                    cancellationToken);
 
             foreach (var symbol in candidates)
             {
@@ -246,7 +246,7 @@ public class SymbolNavigationEngine
                     string? contextSnippet = null;
                     try
                     {
-                        var sourceText = location.SourceTree?.GetText(ct);
+                        var sourceText = location.SourceTree?.GetText(cancellationToken);
                         if (sourceText != null && line <= sourceText.Lines.Count)
                         {
                             contextSnippet = sourceText.Lines[line - 1].ToString().Trim();
@@ -311,9 +311,9 @@ public class SymbolNavigationEngine
         };
     }
 
-    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken ct = default)
+    public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -325,7 +325,7 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
         try
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("matched") || ex.Message.Contains("No match"))
         {
@@ -339,7 +339,7 @@ public class SymbolNavigationEngine
         // Fallback: position-based lookup using SymbolFinder (handles usage sites)
         if (symbol == null)
         {
-            var text = await document.GetTextAsync(ct);
+            var text = await document.GetTextAsync(cancellationToken);
             int pos;
             try
             {
@@ -350,20 +350,20 @@ public class SymbolNavigationEngine
                 return ErrorHoverInfo(ex.Message);
             }
 
-            var model = await document.GetSemanticModelAsync(ct);
+            var model = await document.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 return ErrorHoverInfo("Could not obtain semantic model for file.");
             }
 
             // SymbolFinder needs the cursor on an identifier token
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root != null)
             {
                 pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
             }
 
-            symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, ct);
+            symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, cancellationToken);
         }
 
         if (symbol == null)
@@ -384,7 +384,7 @@ public class SymbolNavigationEngine
         string? docSummary = null;
         try
         {
-            var docXml = symbol.GetDocumentationCommentXml(cancellationToken: ct);
+            var docXml = symbol.GetDocumentationCommentXml(cancellationToken: cancellationToken);
             if (!string.IsNullOrWhiteSpace(docXml))
             {
                 var match = System.Text.RegularExpressions.Regex.Match(docXml,
@@ -534,9 +534,9 @@ public class SymbolNavigationEngine
         );
 
     public async Task<List<ImplementationInfo>> FindAllImplementationsAsync(
-        string typeName, string? projectName = null, CancellationToken ct = default)
+        string typeName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -545,14 +545,14 @@ public class SymbolNavigationEngine
         INamedTypeSymbol? targetSymbol = null;
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             targetSymbol = compilation
-                .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
             if (targetSymbol != null)
@@ -570,7 +570,7 @@ public class SymbolNavigationEngine
 
         if (targetSymbol.TypeKind == TypeKind.Interface)
         {
-            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol, solution, null, ct);
+            var implementations = await SymbolFinder.FindImplementationsAsync(targetSymbol, solution, null, cancellationToken);
             foreach (var impl in implementations)
             {
                 var loc = impl.Locations.FirstOrDefault(l => l.IsInSource);
@@ -587,7 +587,7 @@ public class SymbolNavigationEngine
         // Also find derived classes for both abstract and concrete base classes
         if (targetSymbol.TypeKind == TypeKind.Class)
         {
-            var derived = await SymbolFinder.FindDerivedClassesAsync(targetSymbol, solution, null, ct);
+            var derived = await SymbolFinder.FindDerivedClassesAsync(targetSymbol, solution, null, cancellationToken);
             foreach (var d in derived)
             {
                 if (results.Any(r => r.TypeName == d.ToDisplayString()))
@@ -609,9 +609,9 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<TypeMemberDetail>> GetTypeMembersDetailAsync(
-        string typeName, string? projectName = null, bool includeInherited = true, CancellationToken ct = default)
+        string typeName, string? projectName = null, bool includeInherited = true, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -620,14 +620,14 @@ public class SymbolNavigationEngine
         INamedTypeSymbol? typeSymbol = null;
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             typeSymbol = compilation
-                .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
             if (typeSymbol != null)
@@ -699,9 +699,9 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<InterfaceImplementorCoverage>> VerifyInterfaceCompletenessAsync(
-        string interfaceName, string? projectName = null, CancellationToken ct = default)
+        string interfaceName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -710,14 +710,14 @@ public class SymbolNavigationEngine
         INamedTypeSymbol? interfaceSymbol = null;
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             interfaceSymbol = compilation
-                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(interfaceName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault(t => t.TypeKind == TypeKind.Interface);
             if (interfaceSymbol != null)
@@ -735,7 +735,7 @@ public class SymbolNavigationEngine
             .Where(m => !m.IsImplicitlyDeclared)
             .ToList();
 
-        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, solution, null, ct);
+        var implementations = await SymbolFinder.FindImplementationsAsync(interfaceSymbol, solution, null, cancellationToken);
 
         var results = new List<InterfaceImplementorCoverage>();
         foreach (var impl in implementations.OfType<INamedTypeSymbol>())
@@ -763,9 +763,9 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<ExtensionMethodInfo>> FindExtensionMethodsAsync(
-        string targetTypeName, string? projectName = null, CancellationToken ct = default)
+        string targetTypeName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -775,14 +775,14 @@ public class SymbolNavigationEngine
 
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             var typeSymbol = compilation
-                .GetSymbolsWithName(targetTypeName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(targetTypeName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
             if (typeSymbol == null)
@@ -812,7 +812,7 @@ public class SymbolNavigationEngine
         {
             foreach (var document in project.Documents)
             {
-                var root = await document.GetSyntaxRootAsync(ct);
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
                 if (root == null)
                 {
                     continue;
@@ -854,7 +854,7 @@ public class SymbolNavigationEngine
                 }
 
                 // Load semantic model only for documents that have matching extension methods
-                var model = await document.GetSemanticModelAsync(ct);
+                var model = await document.GetSemanticModelAsync(cancellationToken);
                 if (model == null)
                 {
                     continue;
@@ -867,7 +867,7 @@ public class SymbolNavigationEngine
                             && m.ParameterList.Parameters.Count > 0
                             && m.ParameterList.Parameters[0].Modifiers.Any(mod => mod.IsKind(SyntaxKind.ThisKeyword))))
                     {
-                        var methodSymbol = model.GetDeclaredSymbol(method, ct) as IMethodSymbol;
+                        var methodSymbol = model.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
                         if (methodSymbol == null || !methodSymbol.IsExtensionMethod)
                         {
                             continue;
@@ -905,9 +905,9 @@ public class SymbolNavigationEngine
     }
 
     public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidatesAsync(
-        FilePath filePath, CancellationToken ct = default)
+        FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -915,7 +915,7 @@ public class SymbolNavigationEngine
             return new List<ReadonlyFieldCandidate>();
         }
 
-        var root = await document.GetSyntaxRootAsync(ct) as CompilationUnitSyntax;
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
             return new List<ReadonlyFieldCandidate>();
@@ -971,9 +971,9 @@ public class SymbolNavigationEngine
         FilePath filePath,
         string methodName,
         int maxDepth = 3,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -982,13 +982,13 @@ public class SymbolNavigationEngine
             return null;
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return null;
         }
 
-        var model = await document.GetSemanticModelAsync(ct);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
             return null;
@@ -1004,14 +1004,14 @@ public class SymbolNavigationEngine
             return null;
         }
 
-        var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
+        var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
             return null;
         }
 
         var visited = new HashSet<string>();
-        return await BuildCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, ct);
+        return await BuildCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, cancellationToken);
     }
 
     private async Task<CallGraphNode> BuildCallGraphNodeAsync(
@@ -1020,7 +1020,7 @@ public class SymbolNavigationEngine
         int depth,
         int maxDepth,
         HashSet<string> visited,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var loc = method.Locations.FirstOrDefault(l => l.IsInSource);
         var filePath = loc?.SourceTree?.FilePath;
@@ -1048,7 +1048,7 @@ public class SymbolNavigationEngine
             return node;
         }
 
-        var syntax = await syntaxRef.GetSyntaxAsync(ct);
+        var syntax = await syntaxRef.GetSyntaxAsync(cancellationToken);
         SyntaxNode? body = syntax switch
         {
             MethodDeclarationSyntax mds => (SyntaxNode?)mds.Body ?? mds.ExpressionBody,
@@ -1071,7 +1071,7 @@ public class SymbolNavigationEngine
             return node;
         }
 
-        var model = await methodDoc.GetSemanticModelAsync(ct);
+        var model = await methodDoc.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
             return node;
@@ -1080,7 +1080,7 @@ public class SymbolNavigationEngine
         var seenCallees = new HashSet<string>();
         foreach (var invocation in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var si = model.GetSymbolInfo(invocation, ct);
+            var si = model.GetSymbolInfo(invocation, cancellationToken);
             var callee = si.Symbol as IMethodSymbol
                 ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
             if (callee == null)
@@ -1099,7 +1099,7 @@ public class SymbolNavigationEngine
                 continue; // deduplicate at this level
             }
 
-            var calleeNode = await BuildCallGraphNodeAsync(callee, solution, depth + 1, maxDepth, visited, ct);
+            var calleeNode = await BuildCallGraphNodeAsync(callee, solution, depth + 1, maxDepth, visited, cancellationToken);
             node.Callees.Add(calleeNode);
         }
 
@@ -1110,9 +1110,9 @@ public class SymbolNavigationEngine
         FilePath filePath,
         string methodName,
         int maxDepth = 3,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1121,13 +1121,13 @@ public class SymbolNavigationEngine
             return null;
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return null;
         }
 
-        var model = await document.GetSemanticModelAsync(ct);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
             return null;
@@ -1143,14 +1143,14 @@ public class SymbolNavigationEngine
             return null;
         }
 
-        var methodSymbol = model.GetDeclaredSymbol(methodDecl, ct) as IMethodSymbol;
+        var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
             return null;
         }
 
         var visited = new HashSet<string>();
-        return await BuildReverseCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, ct);
+        return await BuildReverseCallGraphNodeAsync(methodSymbol, solution, 0, maxDepth, visited, cancellationToken);
     }
 
     private async Task<ReverseCallGraphNode> BuildReverseCallGraphNodeAsync(
@@ -1159,7 +1159,7 @@ public class SymbolNavigationEngine
         int depth,
         int maxDepth,
         HashSet<string> visited,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var loc = method.Locations.FirstOrDefault(l => l.IsInSource);
         var filePath = loc?.SourceTree?.FilePath;
@@ -1184,7 +1184,7 @@ public class SymbolNavigationEngine
         // Search direct references to this method AND any corresponding interface method declarations.
         // This ensures callers that use the interface type (e.g. IService.Method()) are included.
         var allReferences = new List<ReferencedSymbol>(
-            await SymbolFinder.FindReferencesAsync(method, solution, ct));
+            await SymbolFinder.FindReferencesAsync(method, solution, cancellationToken));
 
         var containingType = method.ContainingType;
         if (containingType != null)
@@ -1196,7 +1196,7 @@ public class SymbolNavigationEngine
                     var impl = containingType.FindImplementationForInterfaceMember(ifaceMethod) as IMethodSymbol;
                     if (impl != null && SymbolEqualityComparer.Default.Equals(impl.OriginalDefinition, method.OriginalDefinition))
                     {
-                        var ifaceRefs = await SymbolFinder.FindReferencesAsync(ifaceMethod, solution, ct);
+                        var ifaceRefs = await SymbolFinder.FindReferencesAsync(ifaceMethod, solution, cancellationToken);
                         allReferences.AddRange(ifaceRefs);
                     }
                 }
@@ -1227,14 +1227,14 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var refModel = await refDoc.GetSemanticModelAsync(ct);
+                var refModel = await refDoc.GetSemanticModelAsync(cancellationToken);
                 if (refModel == null)
                 {
                     continue;
                 }
 
                 var pos = location.Location.SourceSpan.Start;
-                var callerSymbol = refModel.GetEnclosingSymbol(pos, ct) as IMethodSymbol;
+                var callerSymbol = refModel.GetEnclosingSymbol(pos, cancellationToken) as IMethodSymbol;
                 if (callerSymbol == null)
                 {
                     continue;
@@ -1251,7 +1251,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var callerNode = await BuildReverseCallGraphNodeAsync(callerSymbol, solution, depth + 1, maxDepth, visited, ct);
+                var callerNode = await BuildReverseCallGraphNodeAsync(callerSymbol, solution, depth + 1, maxDepth, visited, cancellationToken);
                 node.Callers.Add(callerNode);
             }
         }
@@ -1275,9 +1275,9 @@ public class SymbolNavigationEngine
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         ISymbol? symbol = null;
 
@@ -1291,8 +1291,8 @@ public class SymbolNavigationEngine
                 return new List<CallerInfo>();
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
-            var model = await document.GetSemanticModelAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
             {
                 return new List<CallerInfo>();
@@ -1300,7 +1300,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
             }
             else
             {
@@ -1316,7 +1316,7 @@ public class SymbolNavigationEngine
                     ?? decls.FirstOrDefault();
                 if (decl != null)
                 {
-                    symbol = model.GetDeclaredSymbol(decl, ct);
+                    symbol = model.GetDeclaredSymbol(decl, cancellationToken);
                 }
             }
         }
@@ -1325,7 +1325,7 @@ public class SymbolNavigationEngine
             // Defect-3 fix: no filePath supplied — resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
             // otherwise all matching symbols are searched (union of references).
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, ct);
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
         }
 
         if (symbol == null)
@@ -1333,7 +1333,7 @@ public class SymbolNavigationEngine
             return new List<CallerInfo>();
         }
 
-        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var results = new List<CallerInfo>();
         var seen = new HashSet<string>();
 
@@ -1359,14 +1359,14 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var refModel = await refDoc.GetSemanticModelAsync(ct);
+                var refModel = await refDoc.GetSemanticModelAsync(cancellationToken);
                 if (refModel == null)
                 {
                     continue;
                 }
 
                 var pos = location.Location.SourceSpan.Start;
-                var enclosing = refModel.GetEnclosingSymbol(pos, ct);
+                var enclosing = refModel.GetEnclosingSymbol(pos, cancellationToken);
                 if (enclosing == null)
                 {
                     continue;
@@ -1381,7 +1381,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var sourceText = await refDoc.GetTextAsync(ct);
+                var sourceText = await refDoc.GetTextAsync(cancellationToken);
                 var lineText = line <= sourceText.Lines.Count
                     ? sourceText.Lines[line - 1].ToString().Trim()
                     : string.Empty;
@@ -1414,9 +1414,9 @@ public class SymbolNavigationEngine
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         ISymbol? symbol = null;
 
@@ -1430,8 +1430,8 @@ public class SymbolNavigationEngine
                 return new List<ImplementationInfo>();
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
-            var model = await document.GetSemanticModelAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
             {
                 return new List<ImplementationInfo>();
@@ -1439,7 +1439,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, ct);
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
             }
             else
             {
@@ -1452,14 +1452,14 @@ public class SymbolNavigationEngine
                     });
                 if (decl != null)
                 {
-                    symbol = model.GetDeclaredSymbol(decl, ct);
+                    symbol = model.GetDeclaredSymbol(decl, cancellationToken);
                 }
             }
         }
         else
         {
             // Defect-3 fix: no filePath — resolve by name across the solution.
-            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, ct);
+            symbol = await ResolveSymbolByNameAsync(solution, symbolName, contextSnippet, cancellationToken);
         }
 
         if (symbol == null)
@@ -1467,14 +1467,14 @@ public class SymbolNavigationEngine
             // Fallback: try to find as a named type (e.g., user passed an interface name, not a member name).
             foreach (var project in solution.Projects)
             {
-                var compilation = await project.GetCompilationAsync(ct);
+                var compilation = await project.GetCompilationAsync(cancellationToken);
                 if (compilation == null)
                 {
                     continue;
                 }
 
                 symbol = compilation
-                    .GetSymbolsWithName(symbolName, SymbolFilter.Type, ct)
+                    .GetSymbolsWithName(symbolName, SymbolFilter.Type, cancellationToken)
                     .OfType<INamedTypeSymbol>()
                     .FirstOrDefault();
                 if (symbol != null)
@@ -1489,7 +1489,7 @@ public class SymbolNavigationEngine
             return new List<ImplementationInfo>();
         }
 
-        var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, ct);
+        var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
         var results = new List<ImplementationInfo>();
 
         foreach (var impl in implementations)
@@ -1514,9 +1514,9 @@ public class SymbolNavigationEngine
         FilePath filePath,
         string variableName,
         int lineNumber,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1524,14 +1524,14 @@ public class SymbolNavigationEngine
             return new VariableLifetimeReport { Error = $"File not found: '{filePath}'" };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
-        var semanticModel = await document.GetSemanticModelAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
             return new VariableLifetimeReport { Error = "Could not obtain syntax tree or semantic model." };
         }
 
-        var text = await document.GetTextAsync(ct);
+        var text = await document.GetTextAsync(cancellationToken);
         if (lineNumber < 1 || lineNumber > text.Lines.Count)
         {
             return new VariableLifetimeReport { Error = $"Line {lineNumber} is out of range." };
@@ -1548,7 +1548,7 @@ public class SymbolNavigationEngine
             .FirstOrDefault(v => v.Identifier.Text == variableName);
         if (declarator != null)
         {
-            symbol = semanticModel.GetDeclaredSymbol(declarator, ct);
+            symbol = semanticModel.GetDeclaredSymbol(declarator, cancellationToken);
             declNode = declarator;
         }
 
@@ -1560,7 +1560,7 @@ public class SymbolNavigationEngine
                 .FirstOrDefault(p => p.Identifier.Text == variableName);
             if (param != null)
             {
-                symbol = semanticModel.GetDeclaredSymbol(param, ct);
+                symbol = semanticModel.GetDeclaredSymbol(param, cancellationToken);
                 declNode = param;
             }
         }
@@ -1574,7 +1574,7 @@ public class SymbolNavigationEngine
                 var varLine = varDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 if (Math.Abs(varLine - lineNumber) <= 5)
                 {
-                    symbol = semanticModel.GetDeclaredSymbol(varDecl, ct);
+                    symbol = semanticModel.GetDeclaredSymbol(varDecl, cancellationToken);
                     declNode = varDecl;
                     break;
                 }
@@ -1628,7 +1628,7 @@ public class SymbolNavigationEngine
         }
 
         // Find all references via SymbolFinder (cross-file safe)
-        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct);
+        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var accesses = new List<VariableAccess>();
 
         // Add declaration entry
@@ -1664,7 +1664,7 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var refRoot = await refDoc.GetSyntaxRootAsync(ct);
+                var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
                 if (refRoot == null)
                 {
                     continue;
@@ -1813,14 +1813,14 @@ public class SymbolNavigationEngine
         Solution solution,
         string symbolName,
         string? contextSnippet,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         foreach (var project in solution.Projects)
         {
             Compilation? compilation = null;
             try
             {
-                compilation = await project.GetCompilationAsync(ct);
+                compilation = await project.GetCompilationAsync(cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1833,7 +1833,7 @@ public class SymbolNavigationEngine
             }
 
             var candidates = compilation
-                .GetSymbolsWithName(symbolName, SymbolFilter.Member, ct)
+                .GetSymbolsWithName(symbolName, SymbolFilter.Member)
                 .ToList();
 
             if (candidates.Count == 0)
@@ -1864,7 +1864,7 @@ public class SymbolNavigationEngine
 
                         try
                         {
-                            var found = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, ct);
+                            var found = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
                             if (found != null)
                             {
                                 return found;
@@ -1898,9 +1898,9 @@ public class SymbolNavigationEngine
     public async Task<TypeHierarchyReport> GetTypeHierarchyAsync(
         string typeName,
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -1909,14 +1909,14 @@ public class SymbolNavigationEngine
         INamedTypeSymbol? typeSymbol = null;
         foreach (var project in searchProjects)
         {
-            var compilation = await project.GetCompilationAsync(ct);
+            var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
             {
                 continue;
             }
 
             typeSymbol = compilation
-                .GetSymbolsWithName(typeName, SymbolFilter.Type, ct)
+                .GetSymbolsWithName(typeName, SymbolFilter.Type, cancellationToken)
                 .OfType<INamedTypeSymbol>()
                 .FirstOrDefault();
             if (typeSymbol != null)
@@ -1948,7 +1948,7 @@ public class SymbolNavigationEngine
         var derivedEntries = new List<TypeHierarchyEntry>();
         if (typeSymbol.TypeKind == TypeKind.Class)
         {
-            var derived = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, solution, null, ct);
+            var derived = await SymbolFinder.FindDerivedClassesAsync(typeSymbol, solution, null, cancellationToken);
             foreach (var d in derived)
             {
                 var loc = d.Locations.FirstOrDefault(l => l.IsInSource);
@@ -1965,7 +1965,7 @@ public class SymbolNavigationEngine
         var implementingEntries = new List<TypeHierarchyEntry>();
         if (typeSymbol.TypeKind == TypeKind.Interface)
         {
-            var impls = await SymbolFinder.FindImplementationsAsync(typeSymbol, solution, null, ct);
+            var impls = await SymbolFinder.FindImplementationsAsync(typeSymbol, solution, null, cancellationToken);
             foreach (var impl in impls.OfType<INamedTypeSymbol>())
             {
                 var loc = impl.Locations.FirstOrDefault(l => l.IsInSource);

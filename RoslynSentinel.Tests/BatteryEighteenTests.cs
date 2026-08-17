@@ -3,8 +3,6 @@
 // these tests now exercise MsToolAugmentEngine directly, which is where the behaviour lives.
 
 using Microsoft.Extensions.Logging.Abstractions;
-using NUnit.Framework;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -228,7 +226,7 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetWorkspaceHealth ---
+    // --- GetWorkspaceHealthAsync ---
 
     [Test]
     public async Task GetWorkspaceHealth_WithLoadedSolution_ReturnsReport()

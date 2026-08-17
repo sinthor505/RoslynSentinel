@@ -25,10 +25,6 @@ public partial class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
-    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _stagedChanges = new();
-    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _appliedChanges = new();
-    private readonly ConcurrentDictionary<string, Dictionary<FilePath, string>> _revertedChanges = new();
-    private readonly ConcurrentDictionary<string, string> _stagedDescriptions = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
@@ -40,7 +36,10 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// Defaults to <see cref="AppDomain.CurrentDomain"/>'s base directory when not explicitly set
     /// (e.g. via the server's --base-repo-dir startup argument).
     /// </summary>
-    public string? BaseRepoDirectory { get; set; }
+    public string? BaseRepoDirectory
+    {
+        get; set;
+    }
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
@@ -68,23 +67,25 @@ public partial class PersistentWorkspaceManager : IDisposable
     private int _totalFailures;
     private int _weightedRollbackScore;
 
-    public record StagedChangeSummary(
-        string ChangeId,
+    /// <summary>
+    /// Result summary returned by the write-through refactoring tools (ValidateAndApplyAsync).
+    /// The change is already written to disk (or, when <see cref="DryRun"/> is true, validated
+    /// but deliberately not written) — there is no separate apply step.
+    /// </summary>
+    public record AppliedChangeSummary(
+        string? ChangeId,
         List<FilePath> AffectedFiles,
         string Description,
-        List<string>? ConflictingChangeIds = null
+        bool DryRun,
+        string? Diff = null
     )
     {
-        /// <summary>Machine-parseable staging state — always "staged_in_memory" for a freshly returned summary.</summary>
-        public string Status => "staged_in_memory";
+        /// <summary>Machine-parseable outcome — "applied" once written to disk, "dry_run_ok" when validated but not written.</summary>
+        public string Status => DryRun ? "dry_run_ok" : "applied";
 
-        /// <summary>Machine-parseable hint for what the caller must do next: apply or discard.</summary>
-        public string NextAction => "apply_or_discard";
-
-        /// <summary>Changes are staged in memory — not yet written to disk. Call StagedChange(action: "apply"/"discard") to proceed.</summary>
-        public string Note => ConflictingChangeIds is { Count: > 0 }
-            ? $"Staged — not yet written to disk. WARNING: overlaps with unapplied changeId(s) [{string.Join(", ", ConflictingChangeIds)}] also targeting the same file(s) — apply or discard those first to avoid one silently overwriting the other. Call StagedChange(action: \"apply\", changeId: \"{ChangeId}\") to apply, or StagedChange(action: \"discard\", changeId: \"{ChangeId}\") to drop it."
-            : $"Staged — not yet written to disk. Call StagedChange(action: \"apply\", changeId: \"{ChangeId}\") to apply, or StagedChange(action: \"discard\", changeId: \"{ChangeId}\") to drop it.";
+        public string Note => DryRun
+            ? "Validated — introduces no new compiler errors. Not written to disk (dryRun=true). Re-call with dryRun=false to apply."
+            : $"Written to disk. Call UndoLastApply(changeId: \"{ChangeId}\") to revert if needed.";
     }
 
     public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
@@ -495,9 +496,9 @@ public partial class PersistentWorkspaceManager : IDisposable
 
     public List<string> GetWorkspaceLoadErrors() => _workspaceLoadErrors.Distinct().ToList();
 
-    public async Task<Solution> GetBranchedSolutionAsync()
+    public async Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken)
     {
-        await _solutionLock.WaitAsync();
+        await _solutionLock.WaitAsync(cancellationToken);
         try
         {
             return CurrentSolution ?? throw new InvalidOperationException(
@@ -515,298 +516,6 @@ public partial class PersistentWorkspaceManager : IDisposable
     public void SetTestSolution(Solution solution)
     {
         CurrentSolution = solution;
-    }
-
-    /// <summary>
-    /// Updates documents in the in-memory solution without writing to disk.
-    /// Used by batch uplift to keep the semantic model current across transforms within
-    /// the same file before the combined source is validated and committed.
-    /// </summary>
-    public async Task UpdateDocumentsInMemoryAsync(
-        Dictionary<FilePath, string> changes,
-        CancellationToken cancellationToken = default)
-    {
-        await _solutionLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (CurrentSolution == null) return;
-            var updated = CurrentSolution;
-            foreach (var (path, text) in changes)
-            {
-                foreach (var docId in updated.GetDocumentIdsWithFilePath(path))
-                    updated = updated.WithDocumentText(docId, SourceText.From(text));
-            }
-            CurrentSolution = updated;
-        }
-        finally
-        {
-            _solutionLock.Release();
-        }
-    }
-
-    /// <summary>
-    /// Stores proposed changes in memory and returns a unique ID for later application or inspection.
-    /// </summary>
-    public string StageChanges(Dictionary<FilePath, string> changes, string description)
-    {
-        var id = Guid.NewGuid().ToString("n")[..8];
-        _stagedChanges[id] = changes;
-        _stagedDescriptions[id] = description;
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("Staged change {DocCommentId}: {Description} ({Count} files)", id, description, changes.Count);
-        }
-        return id;
-    }
-
-    /// <summary>
-    /// Returns the changeIds of any other currently-staged (unapplied) change sets that touch at
-    /// least one of the same files as <paramref name="changeId"/>. Used to warn callers before they
-    /// apply/discard one change while a conflicting sibling change on the same file is still pending.
-    /// </summary>
-    public List<string> GetConflictingStagedChangeIds(string changeId)
-    {
-        if (!_stagedChanges.TryGetValue(changeId, out var changes) || changes.Count == 0)
-        {
-            return [];
-        }
-
-        var files = new HashSet<FilePath>(changes.Keys);
-        return _stagedChanges
-            .Where(kvp => kvp.Key != changeId && kvp.Value.Keys.Any(f => files.Contains(f)))
-            .Select(kvp => kvp.Key)
-            .ToList();
-    }
-
-    /// <summary>
-    /// Lists every currently staged (unapplied) change set with its affected files and description.
-    /// Lets a caller recover/enumerate outstanding changeIds instead of having to track them itself
-    /// across a long conversation.
-    /// </summary>
-    public List<StagedChangeSummary> ListStagedChanges()
-    {
-        return _stagedChanges
-            .Select(kvp => new StagedChangeSummary(
-                kvp.Key,
-                kvp.Value.Keys.ToList(),
-                _stagedDescriptions.TryGetValue(kvp.Key, out var desc) ? desc : "(no description)",
-                GetConflictingStagedChangeIds(kvp.Key) is { Count: > 0 } conflicts ? conflicts : null))
-            .ToList();
-    }
-
-    /// <summary>
-    /// Retrieves the content of all applied changes.
-    /// </summary>
-    public Dictionary<FilePath, string> GetAllAppliedChanges()
-    {
-        if (_appliedChanges == null || _appliedChanges.Count == 0)
-        {
-            return new Dictionary<FilePath, string>();
-        }
-
-        var result = new Dictionary<FilePath, string>();
-        foreach (var innerDict in _appliedChanges.Values.Where(d => d != null))
-        {
-            foreach (var kvp in innerDict)
-            {
-                result[kvp.Key] = kvp.Value;
-            }
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// Retrieves the content of applied changes by ID.
-    /// </summary>
-    public Dictionary<FilePath, string> GetAppliedChanges(string changeId)
-    {
-        if (_appliedChanges.TryGetValue(changeId, out var changes))
-        {
-            return changes;
-        }
-
-        throw new KeyNotFoundException($"Applied change ID '{changeId}' not found.");
-    }
-
-    /// <summary>
-    /// Retrieves the content of staged changes by ID.
-    /// </summary>
-    public Dictionary<FilePath, string> GetAllStagedChanges()
-    {
-        if (_stagedChanges == null || _stagedChanges.Count == 0)
-        {
-            return new Dictionary<FilePath, string>();
-        }
-
-        var result = new Dictionary<FilePath, string>();
-        foreach (var innerDict in _stagedChanges.Values.Where(d => d != null))
-        {
-            foreach (var kvp in innerDict)
-            {
-                result[kvp.Key] = kvp.Value;
-            }
-        }
-        return result;
-    }
-
-    /// <summary>
-    /// Retrieves the content of staged changes by ID.
-    /// </summary>
-    public Dictionary<FilePath, string> GetStagedChanges(string changeId)
-    {
-        _stagedChanges.TryGetValue(changeId, out var staged);
-        _appliedChanges.TryGetValue(changeId, out var applied);
-        _revertedChanges.TryGetValue(changeId, out var reverted);
-
-        if (staged != null && staged.Count > 0)
-        {
-            return staged;
-        }
-
-        if (applied != null && applied.Count > 0)
-        {
-            return applied;
-        }
-
-        if (reverted != null && reverted.Count > 0)
-        {
-            return reverted;
-        }
-
-        throw new KeyNotFoundException($"Staged change ID '{changeId}' not found in current staged, applied, or reverted changes. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
-    }
-
-    /// <summary>
-    /// Commits a previously staged set of changes to disk.
-    /// On partial success, only successfully written files are removed from the staged set.
-    /// </summary>
-    public async Task<ApplyChangesResult> ApplyStagedChangesAsync(string changeId, int retryCount = 3, bool validateChanges = false)
-    {
-        var changes = GetStagedChanges(changeId);
-        var result = await ApplyProposedChangesAsync(changes, retryCount, validateChanges);
-
-        if (result.Success)
-        {
-            _appliedChanges.AddOrUpdate(changeId, changes, (key, oldValue) => changes);
-            _stagedChanges.TryRemove(changeId, out _);
-            _stagedDescriptions.TryRemove(changeId, out _);
-        }
-        else if (result.SucceededFiles.Count > 0)
-        {
-            // Partial success: Update the staged set to only include the failures for next time.
-            var remaining = changes
-                .Where(kvp => !result.SucceededFiles.Contains(kvp.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-
-            _stagedChanges[changeId] = remaining;
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Updated staged change '{DocCommentId}' with remaining {Count} failures.", changeId, remaining.Count);
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Result of applying every currently-staged change set, one at a time. Surfaces which
-    /// changeIds succeeded, which failed, and — critically — which changeIds remain staged
-    /// afterward (e.g. because they conflicted with an earlier apply in the same batch and were
-    /// re-queued, or because their apply failed and validateChanges left them untouched).
-    /// </summary>
-    public record ApplyAllResult(
-        bool Success,
-        List<string> AppliedChangeIds,
-        Dictionary<string, string> FailedChangeIds,
-        List<string> RemainingStagedChangeIds,
-        string Summary
-    );
-
-    /// <summary>
-    /// Applies every currently staged (unapplied) change set to disk, one changeId at a time, in an
-    /// order that pushes conflicting (same-file) change sets later so an earlier apply doesn't get
-    /// silently clobbered. When two pending changeIds touch the same file, the first one processed
-    /// (fewest conflicts, in insertion order) is applied; any later changeId still targeting an
-    /// already-applied file is left staged and reported in <see cref="ApplyAllResult.FailedChangeIds"/>
-    /// so the caller can decide how to reconcile it, rather than one silently overwriting the other.
-    /// </summary>
-    public async Task<ApplyAllResult> ApplyAllStagedChangesAsync(int retryCount = 3, bool validateChanges = true)
-    {
-        var appliedIds = new List<string>();
-        var failedIds = new Dictionary<string, string>();
-
-        // Snapshot the ids up front; order changeIds with the fewest same-file conflicts first so
-        // conflict-free changes land before ones sharing a file with something else pending.
-        var pendingIds = _stagedChanges.Keys
-            .OrderBy(id => GetConflictingStagedChangeIds(id).Count)
-            .ToList();
-
-        // Tracks files already claimed by a changeId applied earlier in this same batch, so that
-        // when two pending changeIds conflict, the first one processed wins and later ones are
-        // skipped (rather than both mutually seeing each other as still-staged and skipping).
-        var claimedFiles = new HashSet<FilePath>();
-
-        foreach (var id in pendingIds)
-        {
-            if (!_stagedChanges.TryGetValue(id, out var changes))
-            {
-                // Already applied/removed earlier in this same loop (e.g. discarded concurrently).
-                continue;
-            }
-
-            var overlapWithClaimed = changes.Keys.Where(f => claimedFiles.Contains(f)).ToList();
-            if (overlapWithClaimed.Count > 0)
-            {
-                var conflictingIds = GetConflictingStagedChangeIds(id).Where(c => appliedIds.Contains(c)).ToList();
-                failedIds[id] = $"Skipped: conflicts with already-applied changeId(s) in this batch [{string.Join(", ", conflictingIds)}] touching the same file(s) [{string.Join(", ", overlapWithClaimed)}]. Resolve the conflict (re-stage against the new file content, or apply/discard manually) before retrying.";
-                continue;
-            }
-
-            try
-            {
-                var result = await ApplyStagedChangesAsync(id, retryCount, validateChanges);
-                if (result.Success)
-                {
-                    appliedIds.Add(id);
-                    foreach (var f in changes.Keys)
-                    {
-                        claimedFiles.Add(f);
-                    }
-                }
-                else
-                {
-                    failedIds[id] = result.Summary;
-                }
-            }
-            catch (Exception ex)
-            {
-                failedIds[id] = $"Apply failed unexpectedly ({ex.GetType().Name}): {ex.Message}";
-            }
-        }
-
-        var remaining = _stagedChanges.Keys.ToList();
-        return new ApplyAllResult(
-            Success: failedIds.Count == 0,
-            AppliedChangeIds: appliedIds,
-            FailedChangeIds: failedIds,
-            RemainingStagedChangeIds: remaining,
-            Summary: $"Applied {appliedIds.Count} of {pendingIds.Count} staged change(s); {failedIds.Count} failed/skipped; {remaining.Count} still staged.");
-    }
-
-    /// <summary>
-    /// Manually removes a staged change set without applying it.
-    /// </summary>
-    public bool DiscardStagedChanges(string changeId)
-    {
-        var reverted = _revertedChanges.TryRemove(changeId, out _);
-
-        if (!reverted)
-        {
-            throw new KeyNotFoundException($"Staged change ID '{changeId}' not found in current staged, applied, or reverted changes. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
-        }
-
-        _stagedDescriptions.TryRemove(changeId, out _);
-        return _stagedChanges.TryRemove(changeId, out _);
     }
 
     public HealthComponents GetHealthComponents()
@@ -887,7 +596,8 @@ public partial class PersistentWorkspaceManager : IDisposable
         bool WorkspaceInSync = false,
         int WorkspaceVersion = 0,
         IReadOnlyDictionary<string, string?>? PreImages = null,
-        DiagnosticReport? ValidationResult = null
+        DiagnosticReport? ValidationResult = null,
+        List<string>? RolledBackFiles = null
     );
 
     /// <summary>
@@ -900,6 +610,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         Dictionary<FilePath, string> changes,
         int retryCount = 3,
         bool validateChanges = false,
+        bool rollbackOnPartialFailure = false,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
@@ -1053,6 +764,45 @@ public partial class PersistentWorkspaceManager : IDisposable
                 }
             }
 
+            // ── Rollback on partial failure ─────────────────────────────────────
+            // A multi-file change (e.g. a rename touching 5 files) is not atomic across the
+            // per-file write loop above. If some files failed after others already succeeded,
+            // restore the succeeded files to their pre-images so the change doesn't land
+            // half-applied. Best-effort: a rollback write failure is logged, not thrown — the
+            // caller already sees Success=false and can inspect Summary/FailedFiles.
+            var rolledBack = new List<string>();
+            if (rollbackOnPartialFailure && failed.Count > 0 && succeeded.Count > 0)
+            {
+                foreach (var filePath in succeeded)
+                {
+                    try
+                    {
+                        preImages.TryGetValue(filePath, out var original);
+                        _internalChanges[filePath] = DateTime.UtcNow;
+                        if (original is null)
+                        {
+                            if (File.Exists(filePath))
+                            {
+                                File.Delete(filePath);
+                            }
+                        }
+                        else
+                        {
+                            await File.WriteAllTextAsync(filePath, original, CancellationToken.None);
+                        }
+                        rolledBack.Add(filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(ex, "Rollback failed for {FilePath} after partial-apply failure — file may be left in a partially-applied state.", filePath);
+                        }
+                    }
+                }
+                succeeded.Clear();
+            }
+
             // --- Proactive Workspace Sync ---
             bool workspaceInSync = false;
             if (succeeded.Count > 0)
@@ -1079,9 +829,12 @@ public partial class PersistentWorkspaceManager : IDisposable
                 }
             }
 
-            var summary = $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
+            var summary = rolledBack.Count > 0
+                ? $"Partial write failure — {rolledBack.Count} already-written file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
+                : $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
             return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
-                workspaceInSync, _workspaceVersion, preImages, validationReport);
+                workspaceInSync, _workspaceVersion, preImages, validationReport,
+                rolledBack.Count > 0 ? rolledBack : null);
         }
         finally
         {
@@ -1111,7 +864,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     // Returns true when a structural file (.csproj / .sln) was among the affected files and a
     // full MSBuild reload is needed; the caller fires that reload after releasing the lock.
     // Guards only on CurrentSolution == null so it also works in SetTestSolution test scenarios.
-    private async Task<bool> ApplyInMemoryDocumentUpdatesAsync(List<string> affectedFiles, CancellationToken ct)
+    private async Task<bool> ApplyInMemoryDocumentUpdatesAsync(List<string> affectedFiles, CancellationToken cancellationToken)
     {
         if (CurrentSolution == null)
         {
@@ -1138,7 +891,7 @@ public partial class PersistentWorkspaceManager : IDisposable
             string content;
             try
             {
-                content = await File.ReadAllTextAsync(filePath, ct);
+                content = await File.ReadAllTextAsync(filePath, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1227,7 +980,7 @@ public partial class PersistentWorkspaceManager : IDisposable
 
     // Full MSBuild reload — runs outside the lock, re-acquires it only to swap CurrentSolution.
     // Callers fire this on a background Task.Run after releasing the main lock.
-    private async Task ReloadWorkspaceFromDiskAsync(CancellationToken ct)
+    private async Task ReloadWorkspaceFromDiskAsync(CancellationToken cancellationToken)
     {
         if (_disposed)
         {
@@ -1264,7 +1017,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         Solution newSolution;
         try
         {
-            newSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, ct);
+            newSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -1277,7 +1030,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         }
 
         // Brief re-acquisition of the lock only to swap the workspace and solution.
-        await _solutionLock.WaitAsync(ct);
+        await _solutionLock.WaitAsync(cancellationToken);
         try
         {
             var old = _workspace;
@@ -1330,7 +1083,7 @@ public partial class PersistentWorkspaceManager : IDisposable
 
         if (toRetry.Count == 0)
         {
-            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), $"No matching failed changes found in cache to retry. Valid staged change IDs: [{string.Join(", ", _stagedChanges.Keys)}]; Valid applied change IDs: [{string.Join(", ", _appliedChanges.Keys)}]; Valid reverted change IDs: [{string.Join(", ", _revertedChanges.Keys)}]");
+            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePath, string>(), "No matching failed changes found in cache to retry.");
         }
 
         return await ApplyProposedChangesAsync(toRetry, retryCount);
@@ -1536,21 +1289,21 @@ public partial class PersistentWorkspaceManager : IDisposable
         _trackedSymbols[agentHandle] = handle;
     }
 
-    public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken ct)
+    public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken)
     {
-        var solution = await GetBranchedSolutionAsync();
+        var solution = await GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
-        var compilation = await project.GetCompilationAsync(ct);
+        var compilation = await project.GetCompilationAsync(cancellationToken);
         ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.DocCommentId, compilation);
         return resolved;
     }
-    public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken ct = default)
+    public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await GetBranchedSolutionAsync();
+        var solution = await GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project is null) { return null; }
-        var compilation = await project.GetCompilationAsync(ct);
+        var compilation = await project.GetCompilationAsync(cancellationToken);
         return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
     }
 
@@ -1567,7 +1320,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         string sessionId,
         string projectName,
         string docCommentId,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         if (!this.IsCurrentSession(sessionId))
         {
@@ -1581,7 +1334,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         }
 
         SymbolHandle handle = new SymbolHandle(sessionId, projectName, docCommentId);
-        ISymbol? symbol = await this.ResolveSymbolAsync(handle, ct);
+        ISymbol? symbol = await this.ResolveSymbolAsync(handle, cancellationToken);
 
         if (symbol is null)
         {

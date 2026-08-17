@@ -1,6 +1,5 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
 
@@ -190,7 +189,7 @@ public class DependencyEngineTests
             [("Order.cs", "public class Order { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var report = await _engine.GetProjectDependenciesAsync("OrderService");
+        var report = await _engine.GetProjectDependenciesAsync("OrderService", CancellationToken.None);
 
         Assert.That(report.ProjectReferences, Is.Empty, "In-memory project has no project references");
         Assert.That(report.PackageReferences, Is.Empty, "In-memory project has no .csproj file to parse");
@@ -204,7 +203,7 @@ public class DependencyEngineTests
         _workspaceManager.SetTestSolution(solution);
 
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _engine.GetProjectDependenciesAsync("NonExistent"));
+            await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
     [Test]

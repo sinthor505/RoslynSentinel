@@ -14,8 +14,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
-
 namespace RoslynSentinel.Tests;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -472,7 +470,7 @@ public class RealSolution_SmokeTests_Battery28
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         // Find one document that has at least one class declaration
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         foreach (var project in solution.Projects)
         {
             foreach (var doc in project.Documents)

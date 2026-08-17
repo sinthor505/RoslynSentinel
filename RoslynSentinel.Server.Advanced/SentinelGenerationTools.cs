@@ -39,7 +39,7 @@ public class SentinelGenerationTools
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
         [ExternalInputRequired(DataTag.Namespace)] string @namespace,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -48,7 +48,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName);
+            _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName, cancellationToken);
             return $"GenerateClassesFromJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
         }
     }
@@ -59,7 +59,7 @@ public class SentinelGenerationTools
     public async Task<string> GenerateHttpClient(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -71,7 +71,7 @@ public class SentinelGenerationTools
 
         try
         {
-            var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName);
+            var result = await _apiAutomationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(filePath)}'. " +
@@ -82,7 +82,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath);
+            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath, cancellationToken);
             return $"GenerateHttpClient failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }
@@ -92,7 +92,7 @@ public class SentinelGenerationTools
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
     public async Task<string> GenerateDefaultConfigJson(
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         var projectExists = _workspaceManager.CurrentSolution?.Projects
@@ -108,7 +108,7 @@ public class SentinelGenerationTools
 
         try
         {
-            var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName);
+            var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return $"GenerateDefaultConfigJson: no configuration keys found in project '{projectName}'. " +
@@ -119,7 +119,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName);
+            _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName, cancellationToken);
             return $"GenerateDefaultConfigJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }
@@ -138,7 +138,7 @@ public class SentinelGenerationTools
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Consumes(DataTag.LineBefore)] string? lineBefore = null,
         [Consumes(DataTag.LineAfter)] string? lineAfter = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -150,7 +150,7 @@ public class SentinelGenerationTools
 
         try
         {
-            var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 return $"InterpolateStringSafe: context snippet did not match or target is not a string.Format() call in '{Path.GetFileName(filePath)}'. " +
@@ -161,7 +161,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath);
+            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath, cancellationToken);
             return $"InterpolateStringSafe failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
         }
     }

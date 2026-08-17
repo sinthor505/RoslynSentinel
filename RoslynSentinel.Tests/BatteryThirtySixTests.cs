@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -139,7 +138,7 @@ class C {
 }", "Paths.cs");
 
         // Locate the actual document path from the workspace
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         var docPath = solution.Projects.First().Documents.First().FilePath ?? "Paths.cs";
 
         var results = await _securityEngine.FindHardcodedPathsAsync(filePath: docPath);
@@ -209,7 +208,7 @@ class Repo {
     }
 }", "Repo.cs");
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
         var docPath = solution.Projects.First().Documents.First().FilePath ?? "Repo.cs";
 
         var results = await _securityEngine.CheckForSqlInjectionAsync(filePath: docPath);

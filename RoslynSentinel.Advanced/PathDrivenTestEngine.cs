@@ -29,12 +29,16 @@ public class PathDrivenTestEngine
         string methodName,
         string framework = "NUnit",
         int? disambiguateLine = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
-        var document = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath))
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var normalizedPath = Path.GetFullPath(filePath);
+        var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
             .Select(solution.GetDocument)
-            .FirstOrDefault();
+            .FirstOrDefault()
+            ?? solution.Projects.SelectMany(p => p.Documents)
+                .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
 
         if (document == null)
         {
@@ -42,7 +46,7 @@ public class PathDrivenTestEngine
                 $"// Error: File not found: {filePath}");
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new PathDrivenTestReport(methodName, filePath, "?", 0, [],

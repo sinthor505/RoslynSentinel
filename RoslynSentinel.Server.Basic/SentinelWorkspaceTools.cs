@@ -81,7 +81,7 @@ public class SentinelWorkspaceTools
     }
 
     private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         _config.BatchUpdateFeatureStatus(updates);
@@ -96,14 +96,14 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> ListSolutionItems(
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
             if (kind == SolutionItemsKind.projects)
             {
-                var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
                 return new ToolResult<object>() { Success = true, Data = solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList() };
             }
             if (kind == SolutionItemsKind.files)
@@ -114,7 +114,7 @@ public class SentinelWorkspaceTools
                 }
                 try
                 {
-                    var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                    var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
                     var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
                     if (project == null)
                     {
@@ -134,7 +134,7 @@ public class SentinelWorkspaceTools
                 {
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.") };
                 }
-                var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName);
+                var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
                 return new ToolResult<object>() { Success = true, Data = result };
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.") };
@@ -152,7 +152,7 @@ public class SentinelWorkspaceTools
     [Description("Lists all *.sln and *.slnx files under a directory. Returns absolute paths for use with LoadSolution. Pass your workspace root as workspacePath.")]
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(
         string workspacePath,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(workspacePath))
@@ -188,13 +188,13 @@ public class SentinelWorkspaceTools
     [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, pass baseRepoDir (the directory containing solutionPath) or rely on the server to resolve it")]
     public async Task<ToolResult<object>> LoadSolution(
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
-        [Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call.")] string? baseRepoDir = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call.")] string? baseRepoDir = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken);
+            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
 
             if (_workspaceManager.GetSolutionRoot() != null)
             {
@@ -214,10 +214,10 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Diagnose")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Checks server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Known bug: may report healthy workspaces as unhealthy — prefer GetWorkspaceHealth.")]
+    [Description("Checks server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Known bug: may report healthy workspaces as unhealthy — prefer GetWorkspaceHealthAsync.")]
     public async Task<HealthReport> Diagnose(
         [Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -278,7 +278,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
     public List<string> ListExternalDiskChanges(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         return _workspaceManager.GetExternalDrift();
@@ -288,7 +288,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
     public void ClearExternalDrift(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         _workspaceManager.ClearDrift();
@@ -319,7 +319,7 @@ public class SentinelWorkspaceTools
         [ToolOption(ToolOptionTag.UnifiedDiff)] string? unifiedDiff = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -364,7 +364,7 @@ public class SentinelWorkspaceTools
                 {
                     try
                     {
-                        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+                        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
                         var document = solution.Projects.SelectMany(p => p.Documents)
                             .FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
                         if (document == null)
@@ -409,7 +409,7 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> RetryFailedChanges(
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -423,91 +423,17 @@ public class SentinelWorkspaceTools
         }
     }
 
-    [McpServerTool(Name = "StagedChange")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Manages staged change sets. apply → write one changeId to disk; applyAll → write every currently staged changeId to disk (conflict-aware; skips changeIds that still overlap another pending changeId's files); list → enumerate all outstanding staged changeIds with their files/description/conflicts (no changeId needed); get → return file dict for one changeId; validate → dry-run diagnostics for one changeId; discard → remove one changeId. changeId is required for apply/get/validate/discard, ignored for list/applyAll. retryCount applies to apply/applyAll only (default 3).")]
-    public async Task<ToolResult<object>> StagedChange(
-        [Consumes(DataTag.Action, required: true)] StagedChangeAction action,
-        [Consumes(DataTag.ChangeId, required: false)] string? changeId = null,
-        [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
-        [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (action == StagedChangeAction.list)
-            {
-                return new ToolResult<object>() { Success = true, Data = _workspaceManager.ListStagedChanges() };
-            }
-            if (action == StagedChangeAction.applyAll)
-            {
-                var allResult = await _workspaceManager.ApplyAllStagedChangesAsync(retryCount, validateChanges: validateOnApply);
-                foreach (var appliedId in allResult.AppliedChangeIds)
-                {
-                    // Best-effort forensic blob per applied changeId so undo_last_apply resolves each one.
-                    await WriteBlobForApplyAsync("staged_change", new PersistentWorkspaceManager.ApplyChangesResult(true, [], new Dictionary<FilePath, string>(), allResult.Summary), appliedId);
-                }
-                _logger.LogInformation(allResult.Summary);
-                return new ToolResult<object>() { Success = allResult.Success, Data = allResult, Error = allResult.Success ? null : new ResultError(ToolErrorCode.Exception, allResult.Summary) };
-            }
-            if (string.IsNullOrWhiteSpace(changeId))
-            {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"changeId is required for action '{action}'. Use action: \"list\" to enumerate outstanding staged changeIds.") };
-            }
-            if (action == StagedChangeAction.apply)
-            {
-                var conflicts = _workspaceManager.GetConflictingStagedChangeIds(changeId);
-                var result = await _workspaceManager.ApplyStagedChangesAsync(changeId, retryCount, validateChanges: validateOnApply);
-                if (!result.Success && result.ValidationResult != null)
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
-                // Write blob using the existing staged changeId so undo_last_apply(changeId) resolves it.
-                await WriteBlobForApplyAsync("staged_change", result, changeId);
-                var remaining = _workspaceManager.ListStagedChanges();
-                string resultMessage = result.SucceededFiles.Count > 0
-                    ? $"Staged change '{changeId}' applied successfully with {result.SucceededFiles.Count} files changed."
-                        + (conflicts.Count > 0 ? $" NOTE: this changeId overlapped with still-staged changeId(s) [{string.Join(", ", conflicts)}] — verify those are still intended before applying them." : string.Empty)
-                        + (remaining.Count > 0 ? $" {remaining.Count} other changeId(s) remain staged: [{string.Join(", ", remaining.Select(r => r.ChangeId))}]." : " No other changeIds remain staged.")
-                    : $"Staged change '{changeId}' apply failed: no files were changed.";
-                _logger.LogInformation(resultMessage);
-                return new ToolResult<object>() { Success = true, Data = resultMessage };
-            }
-            if (action == StagedChangeAction.get)
-            {
-                return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetStagedChanges(changeId) };
-            }
-            if (action == StagedChangeAction.validate)
-            {
-                var stagingChanges = _workspaceManager.GetStagedChanges(changeId);
-                return new ToolResult<object>() { Success = true, Data = await _validationEngine.ValidateChangesAsync(stagingChanges) };
-            }
-            if (action == StagedChangeAction.discard)
-            {
-                var success = _workspaceManager.DiscardStagedChanges(changeId);
-                return success ? new ToolResult<object>() { Success = true, Data = $"Staged change '{changeId}' discarded." } : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Staged change '{changeId}' not found.") };
-            }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.") };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "StagedChange ({Action}) failed for '{ChangeId}'", action, changeId);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"StagedChange failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
-        }
-    }
-
-
     /// <summary>
     /// Writes a forensic blob for a completed apply so undo_last_apply can revert it.
     /// Uses pre-images from ApplyChangesResult.PreImages (populated by ApplyProposedChangesAsync).
-    /// blobChangeId: if provided, uses this id for the blob filename (staged_change reuses its
-    /// staged id); if null, mints a fresh id (proposed_change path).
+    /// blobChangeId: if provided, uses this id for the blob filename; if null, mints a fresh id.
     /// Logs a warning but does not throw on blob write failure — apply already succeeded.
     /// </summary>
     private async Task WriteBlobForApplyAsync(
         string toolName,
         PersistentWorkspaceManager.ApplyChangesResult result,
         string? blobChangeId = null,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         if (result.SucceededFiles.Count == 0)
@@ -553,7 +479,7 @@ public class SentinelWorkspaceTools
         bool summarize = false,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -640,7 +566,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine, required: true)] int line,
         [Consumes(DataTag.Offset, required: true)] int column,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -663,7 +589,7 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> CreateProject(
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string projectName,
         [ExternalInputRequired(DataTag.ProjectType)] string projectType = "console",
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -685,7 +611,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.ProjectName, required: true)] string sourceProjectName,
         [ExternalInputRequired(DataTag.ClassName, required: true)] string folderName,
         [ExternalInputRequired(DataTag.ProjectName, required: true)] string targetProjectName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -708,14 +634,14 @@ public class SentinelWorkspaceTools
     public async Task<ToolResult<object>> GetMethodSource(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
 
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
@@ -800,14 +726,14 @@ public class SentinelWorkspaceTools
     [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
 
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
@@ -907,12 +833,12 @@ public class SentinelWorkspaceTools
         [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync();
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
             var results = new List<TextSearchMatch>();
 
             Regex? regex = null;
@@ -1010,7 +936,7 @@ public class SentinelWorkspaceTools
         [Consumes(DataTag.ChangeId, required: true)] string changeId,
         [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -1134,21 +1060,14 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, staged_change, and batch-first tools.")]
+    [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, refactoring-tool writes, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply(
         [Consumes(DataTag.OperationId, required: true)] string changeId,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            if (!_workspaceManager.GetAllAppliedChanges().Any())
-            {
-                var statedChangeIds = _workspaceManager.GetAllStagedChanges();
-
-                return new ToolResult<object>() { Success = false, Error = new ResultError("NoAppliedChanges", $"No applied changes found to undo. Current staged changes: {string.Join(", ", statedChangeIds.Keys)}") };
-            }
-
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var blobPath = OperationBlobWriter.FindBlobPath(changeId, solutionRoot);
 
@@ -1211,7 +1130,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
     public ToolResult<object> ResetBreaker(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         _workspaceManager.ResetBreaker();
@@ -1222,13 +1141,13 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
     public ToolResult<object> GetBreakerStatus(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         return new ToolResult<object>() { Success = true, Data = _workspaceManager.GetBreakerStatus() };
     }
 
-    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
+    // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
     // MS Bug: roslyn-diagnose reports healthy: false even when 86/86 projects load
     // successfully, because the health check tests MSBuild path existence rather
     // than actual workspace state. A fully operational workspace with a loaded
@@ -1240,7 +1159,7 @@ public class SentinelWorkspaceTools
     /// Fixes the false-negative in the standard <c>diagnose</c> tool, which reports
     /// <c>healthy: false</c> even when all projects load successfully.
     /// </summary>
-    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken ct = default)
+    public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
     {
         // Use CurrentSolution (sync, no throw) rather than GetBranchedSolutionAsync
         // to distinguish "no solution loaded" from "workspace error"
@@ -1293,19 +1212,19 @@ public class SentinelWorkspaceTools
                          : "No load errors.")));
     }
 
-    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
+    // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
 
-    [McpServerTool(Name = "GetWorkspaceHealth")]
+    [McpServerTool(Name = "GetWorkspaceHealthAsync")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error.")]
     // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
     public async Task<ToolResult<object>> GetWorkspaceHealth(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("GetWorkspaceHealth called");
+            _logger.LogInformation("GetWorkspaceHealthAsync called");
         }
         try
         {
@@ -1318,11 +1237,11 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetWorkspaceHealth failed");
+            _logger.LogError(ex, "GetWorkspaceHealthAsync failed");
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealthAsync failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
@@ -1331,12 +1250,12 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.Report)]
     [Description("Returns each project's TargetFramework value. No parameters.")]
     public async Task<ToolResult<object>> ListProjectFrameworkTargets(
-        RequestContext<CallToolRequestParams> requestParams = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync();
+            var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,

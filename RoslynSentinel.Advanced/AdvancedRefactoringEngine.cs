@@ -15,7 +15,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -100,7 +100,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -323,7 +323,7 @@ public class AdvancedRefactoringEngine
 
     public async Task<Dictionary<FilePath, string>> ExtractServiceFromControllerAsync(FilePath filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

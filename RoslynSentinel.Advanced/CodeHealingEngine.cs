@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Advanced;
 
 public class CodeHealingEngine
@@ -17,7 +15,7 @@ public class CodeHealingEngine
         _config = config;
     }
 
-    public async Task<DocumentEditResult> FixThreadSleepAsync(FilePath filePath, CancellationToken ct = default)
+    public async Task<DocumentEditResult> FixThreadSleepAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("EPC33"))
         {
@@ -29,7 +27,7 @@ public class CodeHealingEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -41,7 +39,7 @@ public class CodeHealingEngine
             };
         }
 
-        var root = await document.GetSyntaxRootAsync(ct);
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -82,9 +80,9 @@ public class CodeHealingEngine
         }
     }
 
-    public async Task<DocumentEditResult> AddRetryPolicyAsync(string f, int sl, int el, int rc)
+    public async Task<DocumentEditResult> AddRetryPolicyAsync(string f, int sl, int el, int rc, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == f || d.FilePath == f);
         if (document == null)
         {
@@ -169,9 +167,9 @@ public class CodeHealingEngine
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken ct = default)
+    public async Task<Dictionary<FilePath, string>> ModernizeExceptionsAsync(List<ExceptionTarget> targets, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var changes = new Dictionary<FilePath, string>();
 
         foreach (var target in targets)
@@ -182,8 +180,8 @@ public class CodeHealingEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
-            var text = await document.GetTextAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+            var text = await document.GetTextAsync(cancellationToken);
             if (target.Line < 1 || target.Line > text.Lines.Count)
             {
                 continue;

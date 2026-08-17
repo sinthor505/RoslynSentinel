@@ -16,7 +16,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
@@ -57,7 +57,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)

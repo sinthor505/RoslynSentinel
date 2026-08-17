@@ -86,9 +86,9 @@ public class AntiPatternEngine
         string? filePath = null,
         string? projectName = null,
         string[]? patternFilter = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -122,7 +122,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -132,7 +132,7 @@ public class AntiPatternEngine
 
             if (activePatterns.Contains("BlockingTaskWait"))
             {
-                var model = await document.GetSemanticModelAsync(ct);
+                var model = await document.GetSemanticModelAsync(cancellationToken);
                 findings.AddRange(DetectBlockingTaskWait(root, path, model));
             }
 
@@ -1074,9 +1074,9 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindMutablePublicPropertiesAsync(
         string? filePath = null,
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1103,7 +1103,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1172,9 +1172,9 @@ public class AntiPatternEngine
     public async Task<List<AntiPatternFinding>> FindNamingViolationsAsync(
         string? filePath = null,
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1201,7 +1201,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1356,9 +1356,9 @@ public class AntiPatternEngine
         string? filePath = null,
         string? projectName = null,
         int minOccurrences = 3,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1394,7 +1394,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1475,9 +1475,9 @@ public class AntiPatternEngine
     public async Task<List<MissingCancellationTokenFinding>> FindMissingCancellationTokensAsync(
         string? filePath = null,
         string? projectName = null,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -1509,13 +1509,13 @@ public class AntiPatternEngine
 
             var docPath = document.FilePath ?? document.Name;
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
             }
 
-            var model = await document.GetSemanticModelAsync(ct);
+            var model = await document.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -1564,7 +1564,7 @@ public class AntiPatternEngine
 
                 foreach (var invocation in body.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
-                    var si = model.GetSymbolInfo(invocation, ct);
+                    var si = model.GetSymbolInfo(invocation, cancellationToken);
                     var callee = si.Symbol as IMethodSymbol
                         ?? si.CandidateSymbols.OfType<IMethodSymbol>().FirstOrDefault();
                     if (callee == null)
@@ -1589,7 +1589,7 @@ public class AntiPatternEngine
                     continue;
                 }
 
-                var containingType = model.GetDeclaredSymbol(method, ct)?.ContainingType?.Name ?? "";
+                var containingType = model.GetDeclaredSymbol(method, cancellationToken)?.ContainingType?.Name ?? "";
                 var line = method.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
                 findings.Add(new MissingCancellationTokenFinding(
@@ -1609,9 +1609,9 @@ public class AntiPatternEngine
 
     public async Task<List<ExceptionHandlingFinding>> AnalyzeExceptionHandlingAsync(
         FilePath filePath,
-        CancellationToken ct = default)
+        CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var documents = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
         var findings = new List<ExceptionHandlingFinding>();
 
@@ -1622,7 +1622,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await document.GetSyntaxRootAsync(ct);
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -1977,9 +1977,9 @@ public class AntiPatternEngine
     }
 
     public async Task<List<AntiPatternFinding>> FindLongParameterListAsync(
-        string? filePath = null, string? projectName = null, int minParameters = 4, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, int minParameters = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2006,7 +2006,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -2053,14 +2053,22 @@ public class AntiPatternEngine
     }
 
     public async Task<List<AntiPatternFinding>> FindPrimitiveObsessionAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
         {
-            documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
+            var normalizedPath = Path.GetFullPath(filePath);
+            documents = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+            if (!documents.Any(d => d != null))
+            {
+                documents = solution.Projects.SelectMany(p => p.Documents)
+                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                    .Cast<Document?>();
+            }
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -2082,7 +2090,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -2124,9 +2132,9 @@ public class AntiPatternEngine
     }
 
     public async Task<List<AntiPatternFinding>> FindInconsistentAsyncSuffixAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2168,7 +2176,7 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
@@ -2305,9 +2313,9 @@ public class AntiPatternEngine
     // ── Multiple out-parameter methods ────────────────────────────────────────
 
     public async Task<List<OutParamMethodFinding>> FindMultipleOutParameterMethodsAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -2333,13 +2341,13 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
             }
 
-            var model = await doc.GetSemanticModelAsync(ct);
+            var model = await doc.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -2391,14 +2399,22 @@ public class AntiPatternEngine
     // ── Value-type mutation intent warnings ───────────────────────────────────
 
     public async Task<List<AntiPatternFinding>> FindValueTypeMutationIntentAsync(
-        string? filePath = null, string? projectName = null, CancellationToken ct = default)
+        string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
         {
-            documents = solution.GetDocumentIdsWithFilePath(Path.GetFullPath(filePath)).Select(solution.GetDocument);
+            var normalizedPath = Path.GetFullPath(filePath);
+            documents = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument);
+            if (!documents.Any(d => d != null))
+            {
+                documents = solution.Projects.SelectMany(p => p.Documents)
+                    .Where(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))
+                    .Cast<Document?>();
+            }
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
@@ -2419,13 +2435,13 @@ public class AntiPatternEngine
                 continue;
             }
 
-            var root = await doc.GetSyntaxRootAsync(ct);
+            var root = await doc.GetSyntaxRootAsync(cancellationToken);
             if (root == null)
             {
                 continue;
             }
 
-            var model = await doc.GetSemanticModelAsync(ct);
+            var model = await doc.GetSemanticModelAsync(cancellationToken);
             if (model == null)
             {
                 continue;
@@ -2452,7 +2468,7 @@ public class AntiPatternEngine
                         continue;
                     }
 
-                    if (model.GetDeclaredSymbol(p, ct) is not IParameterSymbol sym)
+                    if (model.GetDeclaredSymbol(p, cancellationToken) is not IParameterSymbol sym)
                     {
                         continue;
                     }
@@ -2499,7 +2515,7 @@ public class AntiPatternEngine
                     }
 
                     // Verify via semantic model that it resolves to the parameter, not a local with the same name
-                    var resolvedSym = model.GetSymbolInfo(lhsId, ct).Symbol;
+                    var resolvedSym = model.GetSymbolInfo(lhsId, cancellationToken).Symbol;
                     if (!SymbolEqualityComparer.Default.Equals(resolvedSym, entry.Symbol))
                     {
                         continue;
@@ -2563,7 +2579,7 @@ public class AntiPatternEngine
         string? symbolId = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync();
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ObsoleteCallerFinding>();
 
         // Collect all [Obsolete]-decorated method symbols across the solution.
