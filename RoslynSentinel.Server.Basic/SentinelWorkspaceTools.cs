@@ -920,11 +920,62 @@ public class SentinelWorkspaceTools
         }
     }
 
+    // Globs without a path separator (e.g. "*.cs", "OrderService.cs") are matched against the
+    // bare filename so callers can filter by name without knowing the file's directory. Globs
+    // with a separator (e.g. "**/OrderService.cs", "ContosoOrders.Core/*.cs") are matched against
+    // the path relative to the solution root instead — matching them against Path.GetFileName()
+    // would strip the very directory segment the glob is testing for, so a glob like "**/*.cs"
+    // could never match anything.
     private static bool GlobMatchesFileName([Consumes(DataTag.SourceFilepath, required: true)] FilePath filePath, string glob)
     {
-        var fileName = Path.GetFileName(filePath.Absolute);
-        var regexPattern = "^" + Regex.Escape(glob).Replace("\\*", ".*").Replace("\\?", ".") + "$";
-        return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
+        var normalizedGlob = glob.Replace('\\', '/');
+        var candidate = normalizedGlob.Contains('/')
+            ? filePath.Relative.Replace('\\', '/')
+            : Path.GetFileName(filePath.Absolute);
+
+        var regexPattern = "^" + GlobToRegex(normalizedGlob) + "$";
+        return Regex.IsMatch(candidate, regexPattern, RegexOptions.IgnoreCase);
+    }
+
+    // Translates glob syntax to a regex fragment: "**/" matches any depth (including none),
+    // a lone "**" matches anything, and a single "*"/"?" stay within one path segment so they
+    // don't accidentally cross a "/" boundary.
+    private static string GlobToRegex(string glob)
+    {
+        var sb = new StringBuilder();
+        int i = 0;
+        while (i < glob.Length)
+        {
+            if (glob[i] == '*' && i + 1 < glob.Length && glob[i + 1] == '*')
+            {
+                if (i + 2 < glob.Length && glob[i + 2] == '/')
+                {
+                    sb.Append("(?:.*/)?");
+                    i += 3;
+                }
+                else
+                {
+                    sb.Append(".*");
+                    i += 2;
+                }
+            }
+            else if (glob[i] == '*')
+            {
+                sb.Append("[^/]*");
+                i++;
+            }
+            else if (glob[i] == '?')
+            {
+                sb.Append("[^/]");
+                i++;
+            }
+            else
+            {
+                sb.Append(Regex.Escape(glob[i].ToString()));
+                i++;
+            }
+        }
+        return sb.ToString();
     }
 
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────

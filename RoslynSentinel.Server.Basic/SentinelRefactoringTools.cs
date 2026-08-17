@@ -94,6 +94,28 @@ public class SentinelRefactoringTools
     }
 
     /// <summary>
+    /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
+    /// method can't locate its target (wrong name, wrong attribute/modifier, etc.), it returns
+    /// Outcome != Modified and leaves UpdatedText at its string.Empty default rather than null —
+    /// so skipping this check would silently propose replacing the whole file with nothing.
+    /// Returns null when updated.UpdatedText is safe to use as the new file content.
+    /// </summary>
+    private static ToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePath filePath)
+    {
+        if (!string.IsNullOrEmpty(updated.UpdatedText))
+        {
+            return null;
+        }
+
+        return new ToolResult<object>
+        {
+            Success = false,
+            Error = new ResultError(ToolErrorCode.Exception,
+                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
+        };
+    }
+
+    /// <summary>
     /// Validates proposed changes against the current in-memory solution and, unless
     /// <paramref name="dryRun"/> is set, writes them straight to disk (write-through — no
     /// intermediate staging step). Rolls back any already-written files if a multi-file change
@@ -402,7 +424,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "AddUsingDirective", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Add using {namespaceName}.", "AddUsingDirective", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -438,7 +463,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "AddEnumValue", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Add enum value '{valueName}' to '{enumName}'.", "AddEnumValue", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -453,7 +481,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility modifier of a type or member.")]
+    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. This is the tool for accessibility changes — not ModifyAttribute (which is for [Attribute] syntax) or ModifyModifier (which is for non-accessibility keywords like virtual/static/sealed).")]
     public async Task<ToolResult<object>> ChangeAccessibility(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -473,7 +501,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "ChangeAccessibility", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -508,7 +539,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "AddSummaryComment", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Add summary comment to '{targetName}'.", "AddSummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -544,7 +578,10 @@ public class SentinelRefactoringTools
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "AddConstructorParameter", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Add constructor parameter '{paramName}' to '{className}'.", "AddConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -634,7 +671,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace.")]
+    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace. This tool is for [Attribute] syntax only — do NOT use it for accessibility (private/public/etc., use ChangeAccessibility) or modifier keywords (virtual/static/sealed/etc., use ModifyModifier).")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -671,7 +708,10 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "ModifyAttribute", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -687,7 +727,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyModifier")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile.")]
+    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Does NOT cover accessibility keywords (private, public, internal, protected) — use ChangeAccessibility for those.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -719,7 +759,10 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "ModifyModifier", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -767,7 +810,10 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "ModifyBaseType", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -825,6 +871,9 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
+            if (RequireUpdatedText(updated, "AddMember", filePath) is { } guardResult)
+                return guardResult;
+
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, description, "AddMember", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -883,7 +932,10 @@ public class SentinelRefactoringTools
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+            if (RequireUpdatedText(updated, "AddMemberTyped", filePath) is { } guardResult)
+                return guardResult;
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, description, "AddMemberTyped", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
