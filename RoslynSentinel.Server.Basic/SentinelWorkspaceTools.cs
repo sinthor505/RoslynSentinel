@@ -1214,7 +1214,7 @@ public class SentinelWorkspaceTools
 
     // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
 
-    [McpServerTool(Name = "GetWorkspaceHealthAsync")]
+    [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Targeted workspace health check. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error.")]
     // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
@@ -1224,7 +1224,7 @@ public class SentinelWorkspaceTools
     {
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("GetWorkspaceHealthAsync called");
+            _logger.LogInformation("GetWorkspaceHealth called");
         }
         try
         {
@@ -1237,11 +1237,11 @@ public class SentinelWorkspaceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetWorkspaceHealthAsync failed");
+            _logger.LogError(ex, "GetWorkspaceHealth failed");
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealthAsync failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }
