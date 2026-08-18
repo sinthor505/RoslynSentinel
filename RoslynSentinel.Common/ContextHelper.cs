@@ -13,17 +13,18 @@ namespace RoslynSentinel.Common;
 public static class ContextHelper
 {
     /// <summary>
-    /// Finds the unique character offset of contextSnippet within sourceText.
-    /// Optionally, provide lineBefore/lineAfter (verbatim text from adjacent lines) to disambiguate.
-    /// Throws InvalidOperationException if not found or still ambiguous after disambiguation.
+    /// Non-throwing variant that returns every candidate match instead of resolving to one.
+    /// Empty list = not found. Single-item list = unambiguous (equivalent to FindSnippetPosition's
+    /// success case). Multi-item list = ambiguous; caller decides what to do, including building
+    /// its own hint from the candidates.
     /// </summary>
-    public static int FindSnippetPosition(
+    public static List<int> FindAllSnippetMatches(
         SourceText sourceText, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
-            throw new InvalidOperationException("contextSnippet must not be empty.");
+            return new List<int>();
         }
 
         var source = sourceText.ToString();
@@ -71,70 +72,91 @@ public static class ContextHelper
 
         if (allMatches.Count == 0)
         {
+            return new List<int>();
+        }
+
+        // If lineBefore/lineAfter are supplied, filter all matches (including single matches) against them
+        if (lineBefore != null || lineAfter != null)
+        {
+            var lbTrimmed = lineBefore?.Trim();
+            var laTrimmed = lineAfter?.Trim();
+
+            var filtered = allMatches.Where(offset =>
+            {
+                var linePos = sourceText.Lines.GetLinePosition(offset);
+                var lineIndex = linePos.Line;
+
+                if (lbTrimmed != null)
+                {
+                    if (lineIndex == 0)
+                    {
+                        return false;
+                    }
+
+                    var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
+                    if (!MatchLine(prevLine, lbTrimmed))
+                    {
+                        return false;
+                    }
+                }
+                if (laTrimmed != null)
+                {
+                    if (lineIndex >= sourceText.Lines.Count - 1)
+                    {
+                        return false;
+                    }
+
+                    var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
+                    if (!MatchLine(nextLine, laTrimmed))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }).ToList();
+
+            return filtered;
+        }
+
+        return allMatches;
+    }
+
+    /// <summary>
+    /// Finds the unique character offset of contextSnippet within sourceText.
+    /// Optionally, provide lineBefore/lineAfter (verbatim text from adjacent lines) to disambiguate.
+    /// Throws InvalidOperationException if not found or still ambiguous after disambiguation.
+    /// </summary>
+    public static int FindSnippetPosition(
+        SourceText sourceText, string contextSnippet,
+        string? lineBefore = null, string? lineAfter = null)
+    {
+        if (string.IsNullOrWhiteSpace(contextSnippet))
+        {
+            throw new InvalidOperationException("contextSnippet must not be empty.");
+        }
+
+        var matches = FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+
+        if (matches.Count == 0)
+        {
             throw new InvalidOperationException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
         }
 
-        if (allMatches.Count == 1)
+        if (matches.Count == 1)
         {
-            return allMatches[0];
-        }
-
-        // Multiple matches — try to disambiguate with surrounding lines
-        if (lineBefore == null && lineAfter == null)
-        {
-            throw new InvalidOperationException(
-                $"contextSnippet is ambiguous ({allMatches.Count} matches): \"{contextSnippet.Trim()}\". " +
-                "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate.");
+            return matches[0];
         }
 
         var lbTrimmed = lineBefore?.Trim();
         var laTrimmed = lineAfter?.Trim();
 
-        var filtered = allMatches.Where(offset =>
+        return (lbTrimmed, laTrimmed) switch
         {
-            var linePos = sourceText.Lines.GetLinePosition(offset);
-            var lineIndex = linePos.Line;
-
-            if (lbTrimmed != null)
-            {
-                if (lineIndex == 0)
-                {
-                    return false;
-                }
-
-                var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
-                if (!MatchLine(prevLine, lbTrimmed))
-                {
-                    return false;
-                }
-            }
-            if (laTrimmed != null)
-            {
-                if (lineIndex >= sourceText.Lines.Count - 1)
-                {
-                    return false;
-                }
-
-                var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
-                if (!MatchLine(nextLine, laTrimmed))
-                {
-                    return false;
-                }
-            }
-            return true;
-        }).ToList();
-
-        return filtered.Count switch
-        {
-            0 => throw new InvalidOperationException(
-                $"contextSnippet \"{contextSnippet.Trim()}\" found {allMatches.Count} time(s) " +
-                $"but none match the provided context. " +
-                (lbTrimmed != null ? $"lineBefore=\"{lbTrimmed}\" " : "") +
-                (laTrimmed != null ? $"lineAfter=\"{laTrimmed}\"" : "") +
-                " — check that the surrounding lines are exact."),
-            1 => filtered[0],
+            (null, null) => throw new InvalidOperationException(
+                $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
+                "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate."),
             _ => throw new InvalidOperationException(
-                $"contextSnippet is still ambiguous ({filtered.Count} of {allMatches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
+                $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
                 "Provide more specific lineBefore and/or lineAfter content.")
         };
     }

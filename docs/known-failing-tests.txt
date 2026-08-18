@@ -1,92 +1,84 @@
-# Known pre-existing test failures — RoslynSentinel.Tests
-#
-# Baseline captured 2026-08-17, confirmed identical across four separate builds during
-# this session (before and after unrelated PersistentWorkspaceManager/ContextHelper changes):
-#   Failed: 75, Passed: 1941, Skipped: 92, Total: 2108
-#
-# Purpose: diff a fresh run's failing-test list against this file instead of eyeballing
-# all 75 names every time. A NEW name appearing here (or one of these disappearing without
-# being intentionally fixed) means something regressed/changed — investigate it. Test names
-# alone aren't unique across files; if ambiguous, cross-reference with `dotnet test --filter`.
-#
-# Regenerate and compare with:
-#   dotnet test RoslynSentinel.Tests/RoslynSentinel.Tests.csproj -c Release --no-build \
-#     | grep -E "^  Failed " | sed -E 's/^  Failed //; s/ \[[0-9]+ ms\]//' | sort > /tmp/failed_now.txt
-#   diff docs/known-failing-tests.txt <(grep -v '^#' docs/known-failing-tests.txt) # (sanity check header is stripped)
-#   diff <(grep -v '^#' docs/known-failing-tests.txt) /tmp/failed_now.txt
-
-AddBraces_UnknownFile_ReturnsEmptyString
-AddCancellationTokenToMethod_DoesNotAddIfAlreadyPresent
-AddConfigureAwaitFalse_NonExistentFile_Throws
-AddGuardClauses_UnknownFile_ReturnsEmptyString
-AddRemoveParamsAsync_UnknownFile_ReturnsEmpty
-AddTryCatch_MethodNotFound_ThrowsException
-BUG_47_ExtractionDoesNotCrash
-BUG_61_SyncTypeAndFilename_PicksPrimaryType_UsesStaging
-BUG_61_SyncTypeAndFilename_UsesStagingMechanism
-BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer
-ChangePropertyType_PropertyNotFound_Throws
-ChangePropertyType_ValidProperty_UpdatesPropertyType
-CheckPackageInconsistency_ValidSolution_ReturnsList
-ConvertAbstractClassToInterface_UnknownFile_ReturnsEmptyString
-ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ReturnsErrorString
-ConvertExpressionBody_WithMultiStatementMethod_ReturnsErrorString
-ConvertExpressionBody_WithNonExistentMember_ReturnsErrorString
-ConvertIfToSwitchExpression_UnknownFile_ReturnsEmptyString
-ConvertIfToSwitchStatementAsync_UnknownFile_ReturnsEmpty
-ConvertIndexerToMethodAsync_UnknownFile_ReturnsEmpty
-ConvertMethodToIndexerAsync_UnknownFile_ReturnsEmpty
-ConvertMethodToIndexer_UnknownFile_ReturnsEmpty
-ConvertPropertyToMethods_UnknownFile_ReturnsEmptyString
-ConvertSwitchExpressionToStatementAsync_UnknownFile_ReturnsEmpty
-ConvertToAsyncBridge_OverrideMethod_AsyncOverloadStripsOverride
-ConvertToBackgroundService_ClassNotFound_ThrowsException
-ConvertToNullCoalescing_UnknownFile_ReturnsEmptyString
-ConvertToSourceGeneratedLogging_NoLoggerCalls_ReturnsSourceUnchanged
-ConvertToSourceGeneratedLogging_NonExistentFile_ReturnsNullOrEmpty
-ConvertTupleToClass_MethodDoesNotReturnTuple_Throws
-ConvertTupleToClass_MethodReturnsTuple_GeneratesClassAndUpdatesMethodReturn
-DetectInefficientStringComparisons_Should_Flag_ToLower_Equals
-DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable
-ExtractClass_InternalCallers_BareMethodCallRewritten
-ExtractClass_InternalCallers_NoExtraMembers_NoCrash
-ExtractClass_InternalCallers_ThisMethodCallRewritten
-ExtractLocalVariable_SkipsMethodCallsWithSideEffects
-FindTypesByAttribute_WithMatchingType_ReturnsResult
-FixThreadSleep_UnknownFile_ReturnsEmptyString
-FlagMigrationCandidate_AttributeClassAbsent_NamespaceMatchesTargetFile
-FormatDocument_UnknownFile_ReturnsEmptyString
-GenerateHttpClient_ControllerNotFound_ReturnsEmpty
-GenerateHttpClient_FileNotFound_ReturnsEmpty
-GenerateXmlDocStubs_MethodInsideRegion_ReceivesXmlDoc
-GenerateXmlDocStubs_PrivateMethods_NotDocumented
-GenerateXmlDocStubs_PublicMethodsWithoutDocs_AddsXmlComments
-GetPublicApiSurface_EmptyForUnknownProject
-InlineField_UnknownFile_ReturnsEmptyString
-InlineParameterAsync_UnknownFile_ReturnsEmpty
-IntroduceVariable_WhenExpressionIsAlreadyInitializer_ReturnsNoOpMessage
-InvertBooleanLogic_UnknownFile_ReturnsEmptyDict
-InvertBoolean_AnyInput_ReturnsEmpty
-LoadSolution_NonExistentPath_ReturnsErrorString
-LoadSolution_ShouldReturnSuccess
-MakeClassImmutable_UnknownClassName_ReturnsOriginalCodeNotEmpty
-MakeClassImmutable_UnknownFile_ReturnsEmptyString
-OptimizeTaskWait_DoesNotChange_AlreadyAsyncMethod
-OptimizeToValueTask_NonExistentFile_ReturnsNullOrEmpty
-REG_InterpolateStringSafe_ConstFormatString_CorrectlyInterpolates
-ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat
-RunMicroRefactoringAsync_UnknownFile_ReturnsEmpty
-RunMicroRefactoring_UnknownFile_ReturnsEmpty
-Search_ShouldFindTypesByAttribute(1)
-Search_ShouldFindTypesByAttribute(2)
-Search_ShouldFindTypesByAttribute(3)
-Search_ShouldFindTypesByAttribute(4)
-Search_ShouldFindTypesByAttribute(5)
-SimplifyBooleanExpressions_UnknownFile_ReturnsEmptyString
-SyncTypeAndFilename_WhenFilenameDoesNotMatchType_ReturnsChangeDescriptor
-UpgradeToModernGuards_NoPatterns_ReturnsNoOpMessage
-UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ReturnsEmptyString
-UseIndexFromEndAsync_UnknownFile_ReturnsEmpty
-UseNullPropagation_UnknownFile_ReturnsEmpty
-UseThrowExpressions_UnknownFile_ReturnsEmpty
-ValidateChanges_FileNotFound_ReturnsErrorReport
+  Failed AddBraces_UnknownFile_ReturnsEmptyString [13 ms]
+  Failed AddCancellationTokenToMethod_DoesNotAddIfAlreadyPresent [16 ms]
+  Failed AddConfigureAwaitFalse_NonExistentFile_Throws [14 ms]
+  Failed AddGuardClauses_UnknownFile_ReturnsEmptyString [17 ms]
+  Failed AddRemoveParamsAsync_UnknownFile_ReturnsEmpty [14 ms]
+  Failed AddTryCatch_MethodNotFound_ThrowsException [20 ms]
+  Failed BUG_47_ExtractionDoesNotCrash [15 ms]
+  Failed BUG_61_SyncTypeAndFilename_PicksPrimaryType_UsesStaging [15 ms]
+  Failed BUG_61_SyncTypeAndFilename_UsesStagingMechanism [14 ms]
+  Failed BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer [15 ms]
+  Failed BUG_72_IntroduceField_WithLocalParameter_NoInitializer [16 ms]
+  Failed ChangePropertyType_PropertyNotFound_Throws [19 ms]
+  Failed ChangePropertyType_ValidProperty_UpdatesPropertyType [50 ms]
+  Failed CheckPackageInconsistency_ValidSolution_ReturnsList [16 ms]
+  Failed ConvertAbstractClassToInterface_UnknownFile_ReturnsEmptyString [15 ms]
+  Failed ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ReturnsErrorString [15 ms]
+  Failed ConvertExpressionBody_WithMultiStatementMethod_ReturnsErrorString [15 ms]
+  Failed ConvertExpressionBody_WithNonExistentMember_ReturnsErrorString [14 ms]
+  Failed ConvertIfToSwitchExpression_UnknownFile_ReturnsEmptyString [19 ms]
+  Failed ConvertIfToSwitchStatementAsync_UnknownFile_ReturnsEmpty [45 ms]
+  Failed ConvertIndexerToMethodAsync_UnknownFile_ReturnsEmpty [13 ms]
+  Failed ConvertMethodToIndexerAsync_UnknownFile_ReturnsEmpty [15 ms]
+  Failed ConvertMethodToIndexer_UnknownFile_ReturnsEmpty [14 ms]
+  Failed ConvertPropertyToMethods_UnknownFile_ReturnsEmptyString [14 ms]
+  Failed ConvertSwitchExpressionToStatementAsync_UnknownFile_ReturnsEmpty [18 ms]
+  Failed ConvertToAsyncBridge_OverrideMethod_AsyncOverloadStripsOverride [14 ms]
+  Failed ConvertToBackgroundService_ClassNotFound_ThrowsException [18 ms]
+  Failed ConvertToNullCoalescing_UnknownFile_ReturnsEmptyString [14 ms]
+  Failed ConvertToSourceGeneratedLogging_NoLoggerCalls_ReturnsSourceUnchanged [14 ms]
+  Failed ConvertToSourceGeneratedLogging_NonExistentFile_ReturnsNullOrEmpty [15 ms]
+  Failed ConvertTupleToClass_MethodDoesNotReturnTuple_Throws [17 ms]
+  Failed ConvertTupleToClass_MethodReturnsTuple_GeneratesClassAndUpdatesMethodReturn [22 ms]
+  Failed DetectInefficientStringComparisons_Should_Flag_ToLower_Equals [2 ms]
+  Failed DynamicDiscovery_AllClassesWithToolAttribute_ShouldBeResolvable [4 ms]
+  Failed ExtractClass_InternalCallers_BareMethodCallRewritten [163 ms]
+  Failed ExtractClass_InternalCallers_NoExtraMembers_NoCrash [25 ms]
+  Failed ExtractClass_InternalCallers_ThisMethodCallRewritten [48 ms]
+  Failed ExtractConstant_BooleanLiteral_ExtractsCorrectly [17 ms]
+  Failed ExtractConstant_EmptyString_ExtractsCorrectly [15 ms]
+  Failed ExtractConstant_LargeIntegerLiteral_ExtractsCorrectly [14 ms]
+  Failed ExtractConstant_MultipleOccurrences_ReplacesAll [14 ms]
+  Failed ExtractConstant_PublicVisibility_AppliesCorrectly [13 ms]
+  Failed ExtractConstant_UniqueName_UsesProvidedName [14 ms]
+  Failed ExtractConstant_ZeroLiteral_ExtractsCorrectly [14 ms]
+  Failed ExtractLocalVariable_PropertyAccess_ExtractsCorrectly [15 ms]
+  Failed ExtractLocalVariable_SkipsMethodCallsWithSideEffects [15 ms]
+  Failed FindTypesByAttribute_WithMatchingType_ReturnsResult [25 ms]
+  Failed FixThreadSleep_UnknownFile_ReturnsEmptyString [14 ms]
+  Failed FlagMigrationCandidate_AttributeClassAbsent_NamespaceMatchesTargetFile [21 ms]
+  Failed FormatDocument_UnknownFile_ReturnsEmptyString [20 ms]
+  Failed GenerateHttpClient_ControllerNotFound_ReturnsEmpty [17 ms]
+  Failed GenerateHttpClient_FileNotFound_ReturnsEmpty [14 ms]
+  Failed GenerateXmlDocStubs_MethodInsideRegion_ReceivesXmlDoc [50 ms]
+  Failed GenerateXmlDocStubs_PrivateMethods_NotDocumented [15 ms]
+  Failed GenerateXmlDocStubs_PublicMethodsWithoutDocs_AddsXmlComments [18 ms]
+  Failed GetPublicApiSurface_EmptyForUnknownProject [15 ms]
+  Failed InlineField_UnknownFile_ReturnsEmptyString [14 ms]
+  Failed InlineParameterAsync_UnknownFile_ReturnsEmpty [14 ms]
+  Failed IntroduceVariable_WhenExpressionIsAlreadyInitializer_ReturnsNoOpMessage [14 ms]
+  Failed InvertBooleanLogic_UnknownFile_ReturnsEmptyDict [26 ms]
+  Failed InvertBoolean_AnyInput_ReturnsEmpty [14 ms]
+  Failed LoadSolution_NonExistentPath_ReturnsErrorString [4 ms]
+  Failed LoadSolution_ShouldReturnSuccess [1 ms]
+  Failed MakeClassImmutable_UnknownClassName_ReturnsOriginalCodeNotEmpty [14 ms]
+  Failed MakeClassImmutable_UnknownFile_ReturnsEmptyString [14 ms]
+  Failed OptimizeTaskWait_DoesNotChange_AlreadyAsyncMethod [18 ms]
+  Failed OptimizeToValueTask_NonExistentFile_ReturnsNullOrEmpty [14 ms]
+  Failed REG_InterpolateStringSafe_ConstFormatString_CorrectlyInterpolates [22 ms]
+  Failed ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat [14 ms]
+  Failed RunMicroRefactoringAsync_UnknownFile_ReturnsEmpty [15 ms]
+  Failed RunMicroRefactoring_UnknownFile_ReturnsEmpty [14 ms]
+  Failed Search_ShouldFindTypesByAttribute(1) [26 ms]
+  Failed Search_ShouldFindTypesByAttribute(2) [24 ms]
+  Failed Search_ShouldFindTypesByAttribute(3) [24 ms]
+  Failed Search_ShouldFindTypesByAttribute(4) [23 ms]
+  Failed Search_ShouldFindTypesByAttribute(5) [41 ms]
+  Failed SimplifyBooleanExpressions_UnknownFile_ReturnsEmptyString [15 ms]
+  Failed SyncTypeAndFilename_WhenFilenameDoesNotMatchType_ReturnsChangeDescriptor [14 ms]
+  Failed UpgradeToModernGuards_NoPatterns_ReturnsNoOpMessage [14 ms]
+  Failed UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ReturnsEmptyString [15 ms]
+  Failed UseIndexFromEndAsync_UnknownFile_ReturnsEmpty [14 ms]
+  Failed UseNullPropagation_UnknownFile_ReturnsEmpty [14 ms]
+  Failed UseThrowExpressions_UnknownFile_ReturnsEmpty [14 ms]
+  Failed ValidateChanges_FileNotFound_ReturnsErrorReport [15 ms]
