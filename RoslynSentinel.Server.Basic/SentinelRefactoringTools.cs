@@ -1010,6 +1010,12 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename wrote '{Path.GetFileName(newPath)}' but failed to delete the old file '{filePath}': {ex.Message}. Delete it manually to avoid a duplicate-type compile error.") };
             }
 
+            // The old file is gone from disk, but ApplyProposedChangesAsync only ever added the
+            // new Document — it has no reason to know the old one should be dropped too. Without
+            // this, the old Document stays tracked and the type it declares now exists twice in
+            // the compilation, corrupting symbol resolution for every subsequent call.
+            await _workspaceManager.RemoveDocumentByPathAsync(filePath, cancellationToken);
+
             return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"Renamed '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)

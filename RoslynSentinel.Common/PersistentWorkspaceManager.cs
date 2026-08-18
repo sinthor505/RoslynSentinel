@@ -563,6 +563,31 @@ public partial class PersistentWorkspaceManager : IDisposable
 
     public List<string> GetWorkspaceLoadErrors() => _workspaceLoadErrors.Distinct().ToList();
 
+    /// <summary>
+    /// Removes a document's in-memory tracking from CurrentSolution after its underlying file
+    /// has been deleted from disk directly (e.g. as the old half of a file rename). Without this,
+    /// the deleted file's Document stays tracked — and if a new Document was added at a different
+    /// path with the same type declaration (as SyncTypeAndFilename does), the two coexist as a
+    /// duplicate type in the compilation, corrupting symbol resolution for everything downstream.
+    /// No-op if the path isn't currently tracked.
+    /// </summary>
+    public async Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    {
+        await _solutionLock.WaitAsync(cancellationToken);
+        try
+        {
+            var docId = CurrentSolution?.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+            if (docId != null)
+            {
+                CurrentSolution = CurrentSolution!.RemoveDocument(docId);
+            }
+        }
+        finally
+        {
+            _solutionLock.Release();
+        }
+    }
+
     public async Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken)
     {
         await _solutionLock.WaitAsync(cancellationToken);
