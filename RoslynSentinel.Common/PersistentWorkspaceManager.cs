@@ -723,6 +723,26 @@ public partial class PersistentWorkspaceManager : IDisposable
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
+        // Refuse to write through unacknowledged external drift. A proposed change is always
+        // computed against CurrentSolution's in-memory text; if the target file was touched on
+        // disk after that (a human editing alongside the agent, git, a build step) and the drift
+        // hasn't been acknowledged, the proposed content is stale and writing it would silently
+        // clobber whatever changed it externally. Fail loud instead — same "no silent overwrites"
+        // rule the rest of this write path already follows for no-op/whitespace-only writes.
+        var drift = new HashSet<string>(GetExternalDrift(), StringComparer.OrdinalIgnoreCase);
+        var driftedTargets = changes.Keys.Where(k => drift.Contains(k)).Distinct().ToList();
+        if (driftedTargets.Count > 0)
+        {
+            return new ApplyChangesResult(
+                Success: false,
+                SucceededFiles: [],
+                FailedFiles: driftedTargets.ToDictionary(f => f, _ => "Modified externally since last sync."),
+                Summary: $"Refused to write — {driftedTargets.Count} target file(s) were modified externally since the " +
+                         $"last sync: {string.Join(", ", driftedTargets.Select(f => Path.GetFileName(f)))}. Call " +
+                         "ListExternalDiskChanges to review what changed, then either re-derive the proposed change " +
+                         "against the current content, or call ClearExternalDrift to acknowledge and overwrite anyway.");
+        }
+
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,
         // consistent with the existing external validate-then-apply pattern.
         DiagnosticReport? validationReport = null;
