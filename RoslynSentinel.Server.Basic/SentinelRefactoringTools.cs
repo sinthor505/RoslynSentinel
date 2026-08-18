@@ -670,8 +670,8 @@ public class SentinelRefactoringTools
         }
         try
         {
-            var result = await _msToolAugmentEngine.ExtractConstantSafeAsync(
-                filePath, newMethodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
+                filePath, newMethodName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -981,8 +981,36 @@ public class SentinelRefactoringTools
 
         try
         {
-            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
-            return new ToolResult<object> { Success = true, Data = result };
+            var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath, cancellationToken);
+            if (result.Outcome != EditOutcome.Modified || result.Changes.Count == 0)
+            {
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: no change produced for '{filePath}' ({result.Outcome}). {result.Message}") };
+            }
+
+            var (newPath, content) = result.Changes.First();
+            if (File.Exists(newPath))
+            {
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: target file '{newPath}' already exists — refusing to overwrite.") };
+            }
+
+            var changes = new Dictionary<FilePath, string> { [newPath] = content };
+            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
+
+            // Only remove the old file after the new one is validated and written, so the
+            // two never coexist as a validated on-disk duplicate of the same type.
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SyncTypeAndFilename wrote '{NewPath}' but failed to delete old file '{OldPath}'", newPath, filePath);
+                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename wrote '{Path.GetFileName(newPath)}' but failed to delete the old file '{filePath}': {ex.Message}. Delete it manually to avoid a duplicate-type compile error.") };
+            }
+
+            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"Renamed '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {

@@ -595,8 +595,25 @@ public class SentinelWorkspaceTools
 
         try
         {
-            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column);
-            return new ToolResult<object>() { Success = true, Data = result };
+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column, cancellationToken);
+            if (string.IsNullOrEmpty(result.UpdatedText))
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePath}' ({result.Outcome}). {result.Message}") };
+            }
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+            var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
+            if (!apply.Success)
+            {
+                var reason = apply.ValidationResult is not null
+                    ? $"introduces new compiler errors — change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}"
+                    : $"failed to write to disk: {apply.Summary}";
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}") };
+            }
+
+            var changeId = Guid.NewGuid().ToString("n")[..8];
+            await WriteBlobForApplyAsync("safe_delete_unused_symbol", apply, changeId, cancellationToken);
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false) };
         }
         catch (Exception ex)
         {

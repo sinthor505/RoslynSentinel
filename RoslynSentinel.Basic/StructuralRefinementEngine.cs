@@ -47,14 +47,14 @@ public class StructuralRefinementEngine
 
         if (expectedName != currentName && directory != null)
         {
-            // Use staging mechanism: return change ID instead of direct file write
-            var changeId = Guid.NewGuid().ToString("N").Substring(0, 8);
             var newPath = Path.Combine(directory, expectedName);
+            var sourceText = await document.GetTextAsync(cancellationToken);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = $"CHANGE_{changeId}: {filePath} -> {newPath}"
+                Changes = new Dictionary<FilePath, string> { [newPath] = sourceText.ToString() },
+                Message = $"Renaming '{currentName}' to '{expectedName}' to match primary type '{primaryType.Identifier.Text}'."
             };
         }
 
