@@ -269,6 +269,42 @@ public class BatteryTwentyTests
         Assert.That(match.EnclosingMember, Is.Null);
     }
 
+    [Test]
+    public async Task SearchSolutionText_WorkspaceVersion_IncreasesAcrossAMutation()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"WsVersion_Search_{Guid.NewGuid()}.cs");
+        try
+        {
+            const string initialContent = "namespace TestProj; public class Foo { public int Bar() => 1; }";
+            await File.WriteAllTextAsync(tempFile, initialContent);
+
+            var projectCsproj = Path.Combine(Path.GetTempPath(), "TestProj", "TestProj.csproj");
+            var solution = TestSolutionBuilder.CreateSolutionWithProject(
+                "TestProj", projectCsproj, [("Foo.cs", initialContent, tempFile)]);
+            _workspaceManager.SetTestSolution(solution);
+
+            var before = await _tools.SearchSolutionText("Bar");
+            Assert.That(before.Success, Is.True);
+
+            const string updatedContent = "namespace TestProj; public class Foo { public int Bar() => 2; public int Baz() => 3; }";
+            await File.WriteAllTextAsync(tempFile, updatedContent);
+            var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
+                new Dictionary<FilePath, string> { [tempFile] = updatedContent });
+            Assert.That(applyResult.Success, Is.True);
+
+            var after = await _tools.SearchSolutionText("Baz");
+
+            Assert.That(after.Success, Is.True);
+            Assert.That(after.WorkspaceVersion, Is.Not.Null);
+            Assert.That(after.WorkspaceVersion, Is.GreaterThan(before.WorkspaceVersion),
+                "A read tool's workspaceVersion must increase after a mutation lands, so a caller can tell its earlier response is stale.");
+        }
+        finally
+        {
+            File.Delete(tempFile);
+        }
+    }
+
     // --- LoadSolution ---
 
     [Test]

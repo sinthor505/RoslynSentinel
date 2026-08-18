@@ -105,7 +105,8 @@ public class SentinelSymbolTools
             {
                 Success = true,
                 Data = result,
-                TotalRecords = result.Count
+                TotalRecords = result.Count,
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };
         }
         catch (Exception ex)

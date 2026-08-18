@@ -380,6 +380,23 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task ChangeAccessibility_StampsIncreasingWorkspaceVersion()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
+
+        var first = await _tools.ChangeAccessibility("Order.cs", "OrderId", "internal");
+        var firstSummary = (PersistentWorkspaceManager.AppliedChangeSummary)first.Data!;
+        Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
+        Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
+
+        var second = await _tools.ChangeAccessibility("Order.cs", "CustomerName", "internal");
+        var secondSummary = (PersistentWorkspaceManager.AppliedChangeSummary)second.Data!;
+        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion),
+            "A second mutation must stamp a strictly higher version than the first.");
+    }
+
     // --- AddModifier ---
 
     [Test]

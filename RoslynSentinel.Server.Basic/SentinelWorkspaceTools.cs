@@ -743,6 +743,7 @@ public class SentinelWorkspaceTools
                         message: $"Result is {methodBytes} bytes (threshold: {thresholdBytes}). " +
                                  $"Use get_scan_result(scanId: \"{scanId}\") to page through results."),
                     Data = new { signature, attributes },
+                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
 
@@ -750,6 +751,7 @@ public class SentinelWorkspaceTools
             {
                 Success = true,
                 Data = new MethodSourceResult { Signature = signature, Source = methodSource, Attributes = attributes },
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion,
             };
 
         }
@@ -851,7 +853,7 @@ public class SentinelWorkspaceTools
                     EndLine: span.EndLinePosition.Line + 1));
             }
 
-            return new ToolResult<object>() { Success = true, Data = items };
+            return new ToolResult<object>() { Success = true, Data = items, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
         }
         catch (Exception ex)
         {
@@ -966,7 +968,7 @@ public class SentinelWorkspaceTools
             }
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
 
-            return new ToolResult<object>() { Success = true, Data = results, Warning = warning };
+            return new ToolResult<object>() { Success = true, Data = results, Warning = warning, WorkspaceVersion = _workspaceManager.WorkspaceVersion };
         }
         catch (Exception ex)
         {

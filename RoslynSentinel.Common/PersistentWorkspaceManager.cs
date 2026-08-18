@@ -78,7 +78,8 @@ public partial class PersistentWorkspaceManager : IDisposable
         List<FilePath> AffectedFiles,
         string Description,
         bool DryRun,
-        string? Diff = null
+        string? Diff = null,
+        int? WorkspaceVersion = null
     )
     {
         /// <summary>Machine-parseable outcome — "applied" once written to disk, "dry_run_ok" when validated but not written.</summary>
@@ -436,6 +437,14 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     public int ProjectCount => CurrentSolution?.ProjectIds.Count ?? 0;
+
+    /// <summary>
+    /// Monotonically increasing counter bumped on every successful in-memory workspace update.
+    /// Tools surface this so a caller can tell whether the workspace changed between two calls
+    /// (e.g. a cached line number from an earlier response may no longer be valid) without
+    /// having to diff file contents itself.
+    /// </summary>
+    public int WorkspaceVersion => _workspaceVersion;
 
     public string? SolutionPath
     {
