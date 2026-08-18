@@ -4101,7 +4101,12 @@ public class RefactoringEngine
 
     private enum HintStrategy { NearestSnippet, CorrectedCoordinates, NearMissList }
 
-    // Flip this constant and recompile to switch strategies — Task I decides the final value.
+    // Task I evaluation: NearestSnippet selected as active strategy because it provides:
+    // 1. Concrete candidate info (nearest match with line number for navigation)
+    // 2. Actionable guidance (suggest more specific snippet or use lineBefore/lineAfter)
+    // 3. User-friendly format (readable, concise, shows progress)
+    // NearestSnippet balances information density with clarity better than alternatives.
+    // CorrectedCoordinates and NearMissList remain for future evaluation if needed.
     private const HintStrategy ActiveHintStrategy = HintStrategy.NearestSnippet;
 
     /// <summary>

@@ -583,8 +583,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Preferred: use handle-based resolution (sessionId, projectName, docCommentId). " +
-        "Fallback (if handle not available): line/column (1-based) to identify the symbol at the declaration site.")]
+    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Preferred path: handle-based resolution using sessionId, projectName, and docCommentId (the most reliable and accurate symbol resolution). Fallback path: line/column (1-based) at the declaration site, or contextSnippet with optional lineBefore/lineAfter for snippet-based resolution. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Description("Workspace session ID for handle validation. Required for handle-based resolution.")] string sessionId = "",

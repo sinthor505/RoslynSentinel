@@ -400,7 +400,7 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "InvertAssignments")]
     [Produces(DataTag.ChangeId)]
-    [Description("Swaps left and right sides of all assignment statements within a 1-based line range. When contextSnippet is provided, derives line range from snippet position (lineBefore/lineAfter optional for disambiguation). Validates and writes to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Swaps left and right sides of all assignment statements within a range. Provide either startLine+endLine (1-based, both required) or contextSnippet; if contextSnippet given, lineBefore/lineAfter optional for disambiguation. Returns changeId.")]
     public async Task<ToolResult<object>> InvertAssignments(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine)] int startLine = 0,
@@ -871,7 +871,7 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "WrapRange")]
     [Produces(DataTag.ChangeId)]
-    [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly. When contextSnippet is provided, derives startLine/endLine from snippet position (lineBefore/lineAfter optional for disambiguation).")]
+    [Description("Wraps a line range (1-based) or snippet. Wrapper actions: tryCatch (wrap in try/catch; name=exceptionType, default Exception; catchVariableName optional, default ex; catchBody optional), using (wrap in using; name=disposal var name, required), region (wrap in #region; name=region label, required). Provide either startLine+endLine (1-based, both required) or contextSnippet alone; if contextSnippet given, lineBefore/lineAfter optional for disambiguation. Returns changeId.")]
     public async Task<ToolResult<object>> WrapRange(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.StartLine)] int startLine = 0,
