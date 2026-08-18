@@ -26,16 +26,19 @@ the whole solution compiles cleanly before applying, then apply and give a final
 - `Samples/ContosoOrders/ContosoOrders.Core/OrderProcessor.cs` — contains the `Order` class; most
   edits land here (rename target, accessibility, using directive, dead code, extract method).
 - `Samples/ContosoOrders/ContosoOrders.Core/OrderStatus.cs` — enum needing a new value.
-- `Samples/ContosoOrders/ContosoOrders.Core/OrderService.cs` — needs a new constructor dependency.
+- `Samples/ContosoOrders/ContosoOrders.Core/OrderService.cs` — needs a new constructor dependency
+  (`System.Diagnostics.Stopwatch`).
 - `Samples/ContosoOrders/ContosoOrders.Tests/OrderProcessorTests.cs` — consumes the renamed member;
   do not modify the test method's own name, only the call inside it.
 
 ## Risks & Open Questions
 - Renaming `CalcuateTotal` could be mistaken for also needing to rename the test method
   `CalcuateTotal_SumsLineTotals` — it should not be renamed, only the call site inside it.
-- Adding the `ILogger<OrderService>` constructor parameter introduces a dependency on
-  `Microsoft.Extensions.Logging`, which is not currently referenced in `OrderProcessor.cs`'s using
-  list — verify no new compiler errors after this step.
+- Adding the `System.Diagnostics.Stopwatch` constructor parameter introduces a dependency on the
+  `System.Diagnostics` namespace, which is not currently referenced in `OrderService.cs`'s using
+  list — verify no new compiler errors after this step. Unlike a package-backed type (e.g.
+  `ILogger<T>`), `Stopwatch` is a BCL type with no NuGet package to add, so this step only exercises
+  constructor-parameter addition and using-directive addition — not project-reference management.
 - The accessibility change and the rename both touch `OrderProcessor.cs`; if using a staged-change
   workflow, confirm both edits land together rather than one silently overwriting the other.
 
@@ -49,8 +52,8 @@ the whole solution compiles cleanly before applying, then apply and give a final
 5. Confirm `Order.BuildInternalDebugLabel` has zero usages in the solution, then remove it.
 6. Extract the running-total/unit-count computation block inside `Order.BuildOrderSummary` into a
    new method named `ComputeTotals`.
-7. Add an `ILogger<OrderService>` constructor parameter named `logger` to `OrderService`, with a
-   backing field, and add any missing using directive this introduces.
+7. Add a `System.Diagnostics.Stopwatch` constructor parameter named `stopwatch` to `OrderService`,
+   with a backing field, and add the missing `using System.Diagnostics;` directive this introduces.
 8. Rename the file containing the `Order` class so its filename matches the class name.
 9. Add an XML `<summary>` doc comment to `OrderService.CreateOrder` describing what it does.
 10. Validate the solution has no new compiler errors, then apply all staged changes and confirm
