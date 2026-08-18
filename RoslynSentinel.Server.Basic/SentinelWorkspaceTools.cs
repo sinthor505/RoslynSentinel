@@ -583,11 +583,18 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "SafeDeleteUnusedSymbol")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Requires line and column (1-based) to identify the symbol at the declaration site.")]
+    [Description("Deletes a symbol only if it has zero usages in the entire codebase. Preferred: use handle-based resolution (sessionId, projectName, docCommentId). " +
+        "Fallback (if handle not available): line/column (1-based) to identify the symbol at the declaration site.")]
     public async Task<ToolResult<object>> SafeDeleteUnusedSymbol(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.StartLine, required: true)] int line,
-        [Consumes(DataTag.Offset, required: true)] int column,
+        [Description("Workspace session ID for handle validation. Required for handle-based resolution.")] string sessionId = "",
+        [Description("Project name containing the symbol. Required for handle-based resolution.")] string projectName = "",
+        [Description("Documentation comment ID of the symbol. Required for handle-based resolution.")] string docCommentId = "",
+        [Consumes(DataTag.StartLine, required: false)] int line = 0,
+        [Consumes(DataTag.Offset, required: false)] int column = 0,
+        [Description("Distinctive substring from the target's declaration, used for fallback snippet-based resolution.")] string? contextSnippet = null,
+        [Description("Optional: text from the line immediately before contextSnippet, for additional disambiguation.")] string? lineBefore = null,
+        [Description("Optional: text from the line immediately after contextSnippet, for additional disambiguation.")] string? lineAfter = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -595,29 +602,72 @@ public class SentinelWorkspaceTools
 
         try
         {
-            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
+            // Try primary path: handle-based resolution
+            if (!string.IsNullOrEmpty(docCommentId) && !string.IsNullOrEmpty(projectName))
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePath}' ({result.Outcome}). {result.Message}") };
+                SymbolResolution resolution = await _workspaceManager.ResolveFromWireAsync(
+                    sessionId, projectName, docCommentId, cancellationToken);
+
+                if (!resolution.Resolved)
+                {
+                    return new ToolResult<object>
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
+                    };
+                }
+
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, resolution.Symbol!, cancellationToken);
+                if (string.IsNullOrEmpty(result.UpdatedText))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePath}' ({result.Outcome}). {result.Message}") };
+                }
+
+                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
+                if (!apply.Success)
+                {
+                    var reason = apply.ValidationResult is not null
+                        ? $"introduces new compiler errors — change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}"
+                        : $"failed to write to disk: {apply.Summary}";
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}") };
+                }
+
+                var changeId = Guid.NewGuid().ToString("n")[..8];
+                await WriteBlobForApplyAsync("safe_delete_unused_symbol", apply, changeId, cancellationToken);
+                return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false) };
             }
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
-            if (!apply.Success)
+            // Fallback: line/column-based resolution (legacy path)
+            if (line > 0 && column > 0)
             {
-                var reason = apply.ValidationResult is not null
-                    ? $"introduces new compiler errors — change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}"
-                    : $"failed to write to disk: {apply.Summary}";
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}") };
+                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, line, column, cancellationToken);
+                if (string.IsNullOrEmpty(result.UpdatedText))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePath}' ({result.Outcome}). {result.Message}") };
+                }
+
+                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
+                if (!apply.Success)
+                {
+                    var reason = apply.ValidationResult is not null
+                        ? $"introduces new compiler errors — change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}"
+                        : $"failed to write to disk: {apply.Summary}";
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}") };
+                }
+
+                var changeId = Guid.NewGuid().ToString("n")[..8];
+                await WriteBlobForApplyAsync("safe_delete_unused_symbol", apply, changeId, cancellationToken);
+                return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false) };
             }
 
-            var changeId = Guid.NewGuid().ToString("n")[..8];
-            await WriteBlobForApplyAsync("safe_delete_unused_symbol", apply, changeId, cancellationToken);
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false) };
+            // No valid parameters provided
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires either (sessionId, projectName, docCommentId) for handle-based resolution or (line, column) for legacy line/column-based resolution.") };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePath}' at {Line}:{Column}", filePath, line, column);
+            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePath}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePath, line, column, projectName, docCommentId);
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }

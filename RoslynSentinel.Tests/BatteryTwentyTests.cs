@@ -402,7 +402,7 @@ public class BatteryTwentyTests
     public async Task SafeDelete_ValidPosition_ReturnsString()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", 1, 1);
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", sessionId: "", projectName: "", docCommentId: "", line: 1, column: 1);
         Assert.That(result, Is.Not.Null);
     }
 

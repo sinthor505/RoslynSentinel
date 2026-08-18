@@ -67,7 +67,7 @@ public class StructuralRefinementEngine
     }
 
     /// <summary>
-    /// Safe deletes a symbol only if it has no usages in the entire solution.
+    /// Safe deletes a symbol only if it has no usages in the entire solution (legacy: line/column-based).
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
     {
@@ -113,6 +113,79 @@ public class StructuralRefinementEngine
         }
 
         var newRoot = root!.RemoveNode(node!, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot!.NormalizeWhitespace().ToFullString()
+        };
+    }
+
+    /// <summary>
+    /// Safe deletes a symbol only if it has no usages in the entire solution (handle-based resolution).
+    /// </summary>
+    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, ISymbol symbol, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// File not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not get syntax root."
+            };
+        }
+
+        var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+        if (references.Any(r => r.Locations.Any()))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted."
+            };
+        }
+
+        // Find the node that declares this symbol in the document
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not get semantic model."
+            };
+        }
+
+        var node = root.DescendantNodes().FirstOrDefault(n =>
+            semanticModel.GetDeclaredSymbol(n, cancellationToken) == symbol);
+
+        if (node == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Symbol declaration not found in file."
+            };
+        }
+
+        var newRoot = root.RemoveNode(node, SyntaxRemoveOptions.KeepUnbalancedDirectives);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
