@@ -3551,6 +3551,223 @@ public class RefactoringEngine
         };
     }
 
+    private enum HintStrategy { NearestSnippet, CorrectedCoordinates, NearMissList }
+
+    // Flip this constant and recompile to switch strategies — Task I decides the final value.
+    private const HintStrategy ActiveHintStrategy = HintStrategy.NearestSnippet;
+
+    /// <summary>
+    /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
+    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
+    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
+    /// still-ambiguous contextSnippet, throws with a hint built per ActiveHintStrategy.
+    /// </summary>
+    private MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(
+        SyntaxNode root, SourceText sourceText, string memberName,
+        string? contextSnippet, string? lineBefore, string? lineAfter,
+        Func<MemberDeclarationSyntax, bool>? extraFilter = null)
+    {
+        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax))
+            .Where(m => extraFilter == null || extraFilter(m))
+            .ToList();
+
+        if (contextSnippet == null)
+        {
+            return candidates.FirstOrDefault(); // unchanged default behavior
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedMember != null)
+            {
+                return matchedMember;
+            }
+            // Snippet matched but didn't align to a candidate member — treat as ambiguous
+            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
+        }
+
+        // 2+ matches
+        throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
+    }
+
+    /// <summary>
+    /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
+    /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
+    /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
+    /// still-ambiguous contextSnippet, throws with a hint built per ActiveHintStrategy.
+    /// </summary>
+    private BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(
+        SyntaxNode root, SourceText sourceText, string typeName,
+        string? contextSnippet, string? lineBefore, string? lineAfter,
+        Func<BaseTypeDeclarationSyntax, bool>? extraFilter = null)
+    {
+        var candidates = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == typeName)
+            .Where(t => extraFilter == null || extraFilter(t))
+            .ToList();
+
+        if (contextSnippet == null)
+        {
+            return candidates.FirstOrDefault(); // unchanged default behavior
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedType = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedType != null)
+            {
+                return matchedType;
+            }
+            throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
+        }
+
+        throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
+    }
+
+    private string BuildMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        return ActiveHintStrategy switch
+        {
+            HintStrategy.NearestSnippet => BuildNearestSnippetMemberHint(candidates, matches, failureMode),
+            HintStrategy.CorrectedCoordinates => BuildCorrectedCoordinatesMemberHint(candidates, matches, failureMode),
+            HintStrategy.NearMissList => BuildNearMissListMemberHint(candidates, matches, failureMode),
+            _ => "contextSnippet resolution failed; unable to provide a hint."
+        };
+    }
+
+    private string BuildNearestSnippetMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var nearest = candidates.First();
+        var nearestText = nearest.ToString().Split('\n').First().Trim();
+        if (nearestText.Length > 60) nearestText = nearestText.Substring(0, 57) + "...";
+
+        var line = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition.Line + 1 ?? -1;
+        return $"contextSnippet {failureMode}. Nearest candidate: `{nearestText}` at line {line}. " +
+               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    private string BuildCorrectedCoordinatesMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var nearest = candidates.First();
+        var linePos = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition ?? default;
+        var line = linePos.Line + 1;
+        var column = linePos.Character + 1;
+
+        return $"contextSnippet {failureMode}. Try correcting the contextSnippet or use line {line}, column {column}.";
+    }
+
+    private string BuildNearMissListMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var text = c.ToString().Split('\n').First().Trim();
+            if (text.Length > 50) text = text.Substring(0, 47) + "...";
+            return $"line {line} `{text}`";
+        });
+
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " +
+               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    private string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        return ActiveHintStrategy switch
+        {
+            HintStrategy.NearestSnippet => BuildNearestSnippetTypeHint(candidates, matches, failureMode),
+            HintStrategy.CorrectedCoordinates => BuildCorrectedCoordinatesTypeHint(candidates, matches, failureMode),
+            HintStrategy.NearMissList => BuildNearMissListTypeHint(candidates, matches, failureMode),
+            _ => "contextSnippet resolution failed; unable to provide a hint."
+        };
+    }
+
+    private string BuildNearestSnippetTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var nearest = candidates.First();
+        var nearestText = nearest.ToString().Split('\n').First().Trim();
+        if (nearestText.Length > 60) nearestText = nearestText.Substring(0, 57) + "...";
+
+        var line = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition.Line + 1 ?? -1;
+        return $"contextSnippet {failureMode}. Nearest candidate: `{nearestText}` at line {line}. " +
+               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
+    private string BuildCorrectedCoordinatesTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var nearest = candidates.First();
+        var linePos = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition ?? default;
+        var line = linePos.Line + 1;
+        var column = linePos.Character + 1;
+
+        return $"contextSnippet {failureMode}. Try correcting the contextSnippet or use line {line}, column {column}.";
+    }
+
+    private string BuildNearMissListTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    {
+        if (candidates.Count == 0)
+        {
+            return $"contextSnippet {failureMode}: no candidates found.";
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var text = c.ToString().Split('\n').First().Trim();
+            if (text.Length > 50) text = text.Substring(0, 47) + "...";
+            return $"line {line} `{text}`";
+        });
+
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " +
+               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
+    }
+
     public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
