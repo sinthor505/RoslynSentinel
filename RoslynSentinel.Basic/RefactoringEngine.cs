@@ -1205,7 +1205,10 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(
+        FilePath filePath, string memberName, string newSource,
+        string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
+        IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1220,8 +1223,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
+        }
+
+        MemberDeclarationSyntax? member;
+        try
+        {
+            member = ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (member == null)
         {
             return new DocumentEditResult
@@ -1249,7 +1276,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member replaced.",
-            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, member, newMember, cancellationToken)
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
         };
     }
 
@@ -1307,7 +1334,10 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(
+        FilePath filePath, string memberName,
+        string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
+        IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1322,8 +1352,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var member = root?.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax));
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
+        }
+
+        MemberDeclarationSyntax? member;
+        try
+        {
+            member = ResolveMemberByNameOrSnippet(root, sourceText, memberName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (member == null)
         {
             return new DocumentEditResult
@@ -1361,7 +1415,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await RemoveNodeFormattedAsync(document, root!, member, SyntaxRemoveOptions.KeepNoTrivia, cancellationToken)
+            UpdatedText = await RemoveNodeFormattedAsync(document, root, member, SyntaxRemoveOptions.KeepNoTrivia, cancellationToken)
         };
     }
 

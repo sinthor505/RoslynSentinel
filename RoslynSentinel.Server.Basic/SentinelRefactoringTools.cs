@@ -329,11 +329,17 @@ public class SentinelRefactoringTools
         "This is the tool to use for editing/replacing text within a member's body — there is no separate " +
         "snippet-and-replacement tool; instead, read the member, apply your edit in-place, and pass the full " +
         "result as newSource. newSource must be a complete member declaration including its signature/modifiers " +
-        "and body (e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. Returns changeId.")]
+        "and body (e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. " +
+        "When multiple members share the same name (overloads), provide contextSnippet (a distinctive substring " +
+        "from the target member, e.g. its parameter list) and optionally lineBefore/lineAfter to disambiguate. " +
+        "Returns changeId.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
         [Consumes(DataTag.SourceCode, required: true)] string newSource,
+        [Description("A distinctive substring from the target member (e.g. parameter list or first statement), used to disambiguate when multiple members share the same name. Optional.")] string? contextSnippet = null,
+        [Description("Optional: text from the line immediately before contextSnippet, for additional disambiguation.")] string? lineBefore = null,
+        [Description("Optional: text from the line immediately after contextSnippet, for additional disambiguation.")] string? lineAfter = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams> requestParams = null,
@@ -345,7 +351,7 @@ public class SentinelRefactoringTools
             ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
             IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-            var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource, progress, cancellationToken);
+            var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newSource, contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 string reason = result.Outcome switch
@@ -378,10 +384,14 @@ public class SentinelRefactoringTools
         "By default, first checks for callers and implementations (same as FindReferences(kind: all)) and " +
         "refuses if any are found, listing what was found — pass skipPrecheck: true to remove unconditionally " +
         "(the engine still separately refuses on direct caller usage regardless of skipPrecheck). For the " +
-        "narrower \"only ever remove if truly zero usages\" contract, see SafeDeleteUnusedSymbol.")]
+        "narrower \"only ever remove if truly zero usages\" contract, see SafeDeleteUnusedSymbol. " +
+        "When multiple members share the same name (overloads), provide contextSnippet to disambiguate.")]
     public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
+        [Description("A distinctive substring from the target member (e.g. parameter list), used to disambiguate when multiple members share the same name. Optional.")] string? contextSnippet = null,
+        [Description("Optional: text from the line immediately before contextSnippet, for additional disambiguation.")] string? lineBefore = null,
+        [Description("Optional: text from the line immediately after contextSnippet, for additional disambiguation.")] string? lineAfter = null,
         [Description("When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -393,8 +403,8 @@ public class SentinelRefactoringTools
         {
             if (!skipPrecheck)
             {
-                var callers = await _symbolNavigationEngine.FindCallersAsync(filePath, memberName, cancellationToken: cancellationToken);
-                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, memberName, cancellationToken: cancellationToken);
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePath, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
+                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, memberName, contextSnippet: contextSnippet, lineBefore: lineBefore, lineAfter: lineAfter, cancellationToken: cancellationToken);
                 if (callers.Count > 0 || implementations.Count > 0)
                 {
                     var parts = new List<string>();
@@ -412,7 +422,7 @@ public class SentinelRefactoringTools
                 }
             }
 
-            var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
+            var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName, contextSnippet, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RemoveMember: member '{memberName}' not found in '{filePath}'.") };
 
