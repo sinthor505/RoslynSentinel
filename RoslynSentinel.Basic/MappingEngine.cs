@@ -136,4 +136,94 @@ public class MappingEngine
             UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
         };
     }
+
+    /// <summary>
+    /// Inverts all assignment expressions within a code snippet (identified via contextSnippet, lineBefore/lineAfter).
+    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then inverts assignments near that position.
+    /// </summary>
+    public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Cannot get syntax root or source text."
+            };
+        }
+
+        try
+        {
+            // Find the snippet position
+            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+
+            // Find assignment expressions near/at the snippet position
+            var nodes = root.DescendantNodes()
+                .Where(n => n is AssignmentExpressionSyntax &&
+                           (n.Span.Contains(snippetPos) ||
+                            (n.Span.Start <= snippetPos && n.Span.End >= snippetPos)))
+                .OfType<AssignmentExpressionSyntax>()
+                .ToList();
+
+            if (nodes.Count == 0)
+            {
+                // Fallback: try to find assignments on the same line as the snippet
+                var linePos = sourceText.Lines.GetLinePosition(snippetPos);
+                var lineNumber = linePos.Line;
+                var line = sourceText.Lines[lineNumber];
+                var span = line.Span;
+
+                nodes = root.DescendantNodes(span)
+                    .OfType<AssignmentExpressionSyntax>()
+                    .ToList();
+            }
+
+            if (nodes.Count == 0)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.TargetNotFound,
+                    FilePath = filePath,
+                    Message = $"// No assignment expressions found at the snippet location",
+                    UpdatedText = root.ToFullString() ?? string.Empty
+                };
+            }
+
+            var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
+                newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left));
+
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                Message = $"// Assignment expressions inverted in the snippet",
+                UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ContextSnippet error: {ex.Message}",
+                UpdatedText = root.ToFullString() ?? string.Empty
+            };
+        }
+    }
 }

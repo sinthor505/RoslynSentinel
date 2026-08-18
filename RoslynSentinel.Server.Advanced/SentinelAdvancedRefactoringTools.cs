@@ -400,11 +400,14 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "InvertAssignments")]
     [Produces(DataTag.ChangeId)]
-    [Description("Swaps left and right sides of all assignment statements within a 1-based line range. Validates and writes to disk immediately; dryRun=true to preview without writing.")]
+    [Description("Swaps left and right sides of all assignment statements within a 1-based line range. When contextSnippet is provided, derives line range from snippet position (lineBefore/lineAfter optional for disambiguation). Validates and writes to disk immediately; dryRun=true to preview without writing.")]
     public async Task<ToolResult<object>> InvertAssignments(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.StartLine)] int startLine,
-        [Consumes(DataTag.EndLine)] int endLine,
+        [Consumes(DataTag.StartLine)] int startLine = 0,
+        [Consumes(DataTag.EndLine)] int endLine = 0,
+        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -413,15 +416,35 @@ public class SentinelAdvancedRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var result = await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in lines {startLine}-{endLine} of '{filePath}'.") };
+            // Validate that we have either contextSnippet or both startLine/endLine
+            if (!string.IsNullOrWhiteSpace(contextSnippet))
+            {
+                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                if (string.IsNullOrEmpty(result.UpdatedText))
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in the snippet of '{filePath}'.") };
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in lines {startLine}-{endLine}.", "InvertAssignments", dryRun, returnDiff, cancellationToken);
-            if (apply.Error is not null)
-                return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Inverts assignments in lines {startLine}-{endLine} of {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in snippet.", "InvertAssignments", dryRun, returnDiff, cancellationToken);
+                if (apply.Error is not null)
+                    return new ToolResult<object> { Success = false, Error = apply.Error };
+                return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Inverts assignments in snippet of {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            }
+            else if (startLine > 0 && endLine > 0)
+            {
+                var result = await _mappingEngine.InvertAssignmentsAsync(filePath, startLine, endLine);
+                if (string.IsNullOrEmpty(result.UpdatedText))
+                    return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in lines {startLine}-{endLine} of '{filePath}'.") };
+
+                var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
+                var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in lines {startLine}-{endLine}.", "InvertAssignments", dryRun, returnDiff, cancellationToken);
+                if (apply.Error is not null)
+                    return new ToolResult<object> { Success = false, Error = apply.Error };
+                return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Inverts assignments in lines {startLine}-{endLine} of {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            }
+            else
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Either provide contextSnippet or both startLine and endLine (1-based).") };
+            }
         }
         catch (Exception ex)
         {
@@ -848,15 +871,18 @@ public class SentinelAdvancedRefactoringTools
 
     [McpServerTool(Name = "WrapRange")]
     [Produces(DataTag.ChangeId)]
-    [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly.")]
+    [Description("Wraps a 1-based line range. wrapper values: tryCatch (wrap in try/catch; name = exceptionType, default Exception; catchVariableName defaults to ex; catchBody optional), using (wrap in using statement; name = disposal variable name, required), region (wrap in #region; name = region label, required). autoStage=true → ChangeId for tryCatch/region; using returns content string directly. When contextSnippet is provided, derives startLine/endLine from snippet position (lineBefore/lineAfter optional for disambiguation).")]
     public async Task<ToolResult<object>> WrapRange(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Consumes(DataTag.StartLine)] int startLine,
-        [Consumes(DataTag.EndLine)] int endLine,
-        [ExternalInputRequired(DataTag.Wrapper)] string wrapper,
+        [Consumes(DataTag.StartLine)] int startLine = 0,
+        [Consumes(DataTag.EndLine)] int endLine = 0,
+        [ExternalInputRequired(DataTag.Wrapper)] string wrapper = "",
         [ExternalInputRequired(DataTag.SymbolName)] string? name = null,
         [ExternalInputRequired(DataTag.SymbolName)] string catchVariableName = "ex",
         [ExternalInputRequired(DataTag.SourceCode)] string? catchBody = null,
+        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         [ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -866,58 +892,123 @@ public class SentinelAdvancedRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            if (wrapper == "tryCatch")
+            // Validate that we have either contextSnippet or both startLine/endLine
+            if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
-                var exceptionType = name ?? "Exception";
-                var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
-                if (!autoStage)
+                // Derive startLine/endLine from contextSnippet
+                if (wrapper == "tryCatch")
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    var exceptionType = name ?? "Exception";
+                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in try/catch.", "WrapRange/tryCatch", dryRun, returnDiff, cancellationToken);
+                    if (apply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = apply.Error };
+                    var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped snippet in a try/{exceptionType} block in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = summary };
                 }
-                var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in try/catch.", "WrapRange/tryCatch", dryRun, returnDiff, cancellationToken);
-                if (apply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = apply.Error };
-                var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
-                return new ToolResult<object>() { Success = true, Data = summary };
+                if (wrapper == "using")
+                {
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.") };
+                    }
+                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, contextSnippet, lineBefore, lineAfter, name);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var usingChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap snippet in using ({name}).", "WrapRange/using", dryRun, returnDiff, cancellationToken);
+                    if (usingApply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = usingApply.Error };
+                    var usingSummary = new PersistentWorkspaceManager.AppliedChangeSummary(usingApply.ChangeId, [filePath], $"Wraps snippet in a using ({name}) block in {Path.GetFileName(filePath)}.", usingApply.DryRun, usingApply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = usingSummary };
+                }
+                if (wrapper == "region")
+                {
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.") };
+                    }
+                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, contextSnippet, lineBefore, lineAfter, name);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap snippet in #region '{name}'.", "WrapRange/region", dryRun, returnDiff, cancellationToken);
+                    if (apply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = apply.Error };
+                    var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wraps snippet in #region '{name}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = summary };
+                }
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.") };
             }
-            if (wrapper == "using")
+            else if (startLine > 0 && endLine > 0)
             {
-                if (string.IsNullOrEmpty(name))
+                // Use existing line-based path
+                if (wrapper == "tryCatch")
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.") };
+                    var exceptionType = name ?? "Exception";
+                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in try/catch.", "WrapRange/tryCatch", dryRun, returnDiff, cancellationToken);
+                    if (apply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = apply.Error };
+                    var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = summary };
                 }
-                var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
-                if (!autoStage)
+                if (wrapper == "using")
                 {
-                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.") };
+                    }
+                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var usingChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap lines {startLine}-{endLine} in using ({name}).", "WrapRange/using", dryRun, returnDiff, cancellationToken);
+                    if (usingApply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = usingApply.Error };
+                    var usingSummary = new PersistentWorkspaceManager.AppliedChangeSummary(usingApply.ChangeId, [filePath], $"Wraps lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(filePath)}.", usingApply.DryRun, usingApply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = usingSummary };
                 }
-                var usingChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                var usingApply = await ValidateAndApplyAsync(usingChanges, $"Wrap lines {startLine}-{endLine} in using ({name}).", "WrapRange/using", dryRun, returnDiff, cancellationToken);
-                if (usingApply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = usingApply.Error };
-                var usingSummary = new PersistentWorkspaceManager.AppliedChangeSummary(usingApply.ChangeId, [filePath], $"Wraps lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(filePath)}.", usingApply.DryRun, usingApply.Diff);
-                return new ToolResult<object>() { Success = true, Data = usingSummary };
+                if (wrapper == "region")
+                {
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.") };
+                    }
+                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
+                    if (!autoStage)
+                    {
+                        return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
+                    }
+                    var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
+                    var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.", "WrapRange/region", dryRun, returnDiff, cancellationToken);
+                    if (apply.Error is not null)
+                        return new ToolResult<object> { Success = false, Error = apply.Error };
+                    var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+                    return new ToolResult<object>() { Success = true, Data = summary };
+                }
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.") };
             }
-            if (wrapper == "region")
+            else
             {
-                if (string.IsNullOrEmpty(name))
-                {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.") };
-                }
-                var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
-                if (!autoStage)
-                {
-                    return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
-                }
-                var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
-                var apply = await ValidateAndApplyAsync(changes, $"Wrap lines {startLine}-{endLine} in #region '{name}'.", "WrapRange/region", dryRun, returnDiff, cancellationToken);
-                if (apply.Error is not null)
-                    return new ToolResult<object> { Success = false, Error = apply.Error };
-                var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Wraps lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
-                return new ToolResult<object>() { Success = true, Data = summary };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "Either provide contextSnippet or both startLine and endLine (1-based).") };
             }
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.") };
         }
         catch (Exception ex)
         {

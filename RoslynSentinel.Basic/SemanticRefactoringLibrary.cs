@@ -240,4 +240,81 @@ public class SemanticRefactoringLibrary
 
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
     }
+
+    /// <summary>
+    /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a using statement.
+    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
+    /// </summary>
+    public async Task<DocumentEditResult> WrapInUsingAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// Error: File not found in the loaded solution.", FilePath = filePath };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, Message = "// Cannot edit: syntax root not found.", FilePath = filePath };
+        }
+
+        try
+        {
+            // Find the snippet position
+            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+
+            // Find the statements that contain the snippet position
+            var nodes = root.DescendantNodes()
+                .Where(n => n is StatementSyntax && n.Parent is BlockSyntax && n.Span.Contains(snippetPos))
+                .Cast<StatementSyntax>()
+                .ToList();
+
+            if (nodes.Count == 0)
+            {
+                // Fallback: try to find any statements in a reasonable range around the snippet
+                var span = sourceText.Lines.GetLineFromPosition(snippetPos).Span;
+                nodes = root.DescendantNodes(span)
+                    .Where(n => n is StatementSyntax && n.Parent is BlockSyntax)
+                    .Cast<StatementSyntax>()
+                    .ToList();
+            }
+
+            if (nodes.Count == 0)
+            {
+                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// Error: No statements found at the snippet location.", FilePath = filePath };
+            }
+
+            var firstNode = nodes[0];
+            var parentBlock = (BlockSyntax)firstNode.Parent!;
+
+            var usingStatement = SyntaxFactory.UsingStatement(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
+                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(disposalName))),
+                null,
+                SyntaxFactory.Block(nodes));
+
+            // Rebuild the parent block's statement list: replace the entire selected range
+            // with the single using statement
+            var origStatements = parentBlock.Statements.ToList();
+            int startIdx = origStatements.IndexOf(nodes[0]);
+            int endIdx = origStatements.IndexOf(nodes[^1]);
+            var newStatements = new List<StatementSyntax>();
+            newStatements.AddRange(origStatements.Take(startIdx));
+            newStatements.Add(usingStatement);
+            newStatements.AddRange(origStatements.Skip(endIdx + 1));
+
+            var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
+            var newRoot = root.ReplaceNode(parentBlock, newBlock);
+
+            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", FilePath = filePath };
+        }
+    }
 }

@@ -3710,6 +3710,155 @@ public class RefactoringEngine
         };
     }
 
+    /// <summary>
+    /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a try/catch block.
+    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
+    /// </summary>
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        try
+        {
+            // Find the snippet position
+            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            var tree = root.SyntaxTree;
+
+            // Convert position to line numbers
+            var linePos = sourceText.Lines.GetLinePosition(snippetPos);
+            var startLine = linePos.Line + 1;
+            var endLine = startLine; // Start with the snippet's line
+
+            // Find the enclosing block and targeted statements
+            var block = root.DescendantNodes()
+                .OfType<BlockSyntax>()
+                .Where(b =>
+                {
+                    var ls = tree.GetLineSpan(b.Span, cancellationToken);
+                    return ls.StartLinePosition.Line + 1 <= startLine &&
+                           ls.EndLinePosition.Line + 1 >= endLine;
+                })
+                .OrderBy(b => b.Span.Length)
+                .FirstOrDefault();
+
+            if (block == null)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = "// Could not find a suitable block for the snippet."
+                };
+            }
+
+            int StatementStartLine(StatementSyntax s) =>
+                tree.GetLineSpan(s.FullSpan, cancellationToken).StartLinePosition.Line + 1;
+            int StatementEndLine(StatementSyntax s) =>
+                tree.GetLineSpan(s.FullSpan, cancellationToken).EndLinePosition.Line + 1;
+
+            // Find statements that contain or overlap the snippet
+            var targeted = block.Statements
+                .Where(s => s.Span.Contains(snippetPos))
+                .ToList();
+
+            if (targeted.Count == 0)
+            {
+                // Fallback: try to find statement that contains the snippet position
+                targeted = block.Statements
+                    .Where(s => s.Span.Start <= snippetPos && s.Span.End >= snippetPos)
+                    .ToList();
+            }
+
+            if (targeted.Count == 0)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = "// Could not find any statements containing the snippet."
+                };
+            }
+
+            // Build the try/catch as in the original
+            var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
+            var catchDecl = SyntaxFactory.CatchDeclaration(
+                SyntaxFactory.ParseTypeName(exceptionType),
+                SyntaxFactory.Identifier(catchVariableName));
+
+            StatementSyntax? catchStmt = null;
+            if (catchBody != null)
+            {
+                catchStmt = SyntaxFactory.ParseStatement(catchBody);
+            }
+
+            var catchBlockStmt = catchStmt != null
+                ? SyntaxFactory.Block(catchStmt)
+                : SyntaxFactory.Block();
+
+            var catchClause = SyntaxFactory.CatchClause(catchDecl, null, catchBlockStmt);
+            var tryStatement = SyntaxFactory.TryStatement(tryBlock, SyntaxFactory.List([catchClause]), null);
+
+            var newStatements = block.Statements
+                .Select((s, i) =>
+                {
+                    if (s == targeted[0])
+                    {
+                        return (StatementSyntax)tryStatement;
+                    }
+
+                    if (targeted.Contains(s))
+                    {
+                        return null;
+                    }
+
+                    return s;
+                })
+                .Where(s => s != null)
+                .Select(s => s!)
+                .ToList();
+
+            var newBlock = block.WithStatements(SyntaxFactory.List(newStatements));
+            var newRoot = root.ReplaceNode(block, newBlock).NormalizeWhitespace();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = newRoot.ToFullString()
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ContextSnippet error: {ex.Message}"
+            };
+        }
+    }
+
     public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -3870,6 +4019,70 @@ public class RefactoringEngine
             FilePath = filePath,
             UpdatedText = sb.ToString()
         };
+    }
+
+    /// <summary>
+    /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a #region block.
+    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then derives the line number.
+    /// </summary>
+    public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, string contextSnippet, string? lineBefore, string? lineAfter, string regionName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var text = await document.GetTextAsync(cancellationToken);
+
+        try
+        {
+            // Find the snippet position
+            var snippetPos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+
+            // Convert position to line number
+            var linePos = text.Lines.GetLinePosition(snippetPos);
+            var startLine = linePos.Line + 1;
+            var endLine = startLine; // Start and end at the snippet's line
+
+            var lines = text.Lines;
+            var sb = new System.Text.StringBuilder();
+            for (int i = 0; i < lines.Count; i++)
+            {
+                int lineNumber = i + 1; // 1-based
+                if (lineNumber == startLine)
+                {
+                    sb.AppendLine($"#region {regionName}");
+                }
+
+                sb.AppendLine(lines[i].ToString());
+                if (lineNumber == endLine)
+                {
+                    sb.AppendLine("#endregion");
+                }
+            }
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.Modified,
+                FilePath = filePath,
+                UpdatedText = sb.ToString()
+            };
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ContextSnippet error: {ex.Message}"
+            };
+        }
     }
 
     private string? GetMemberName(MemberDeclarationSyntax member)
