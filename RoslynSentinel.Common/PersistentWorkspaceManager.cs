@@ -23,6 +23,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
+    private volatile bool _watcherOverflowed;
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
     private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
@@ -250,7 +251,26 @@ public partial class PersistentWorkspaceManager : IDisposable
         _watcher.Created += OnFileSystemChanged;
         _watcher.Deleted += OnFileSystemChanged;
         _watcher.Renamed += OnFileSystemChanged;
+        _watcher.Error += OnWatcherError;
         _watcher.EnableRaisingEvents = true;
+    }
+
+    // FileSystemWatcher has a fixed-size internal buffer; a burst of changes arriving faster
+    // than we can drain them (bulk git checkout, a codemod touching hundreds of files, etc.)
+    // overflows it and the OS silently drops the events — Changed/Created/Deleted/Renamed
+    // simply never fire for them. Without this handler that loss was invisible: CurrentSolution
+    // would keep serving whatever it last had, forever, with no drift recorded and nothing to
+    // reconcile. We don't know which files were affected, so — same as a .sln change — force a
+    // full reload rather than silently continuing on stale content.
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        if (_logger.IsEnabled(LogLevel.Error))
+        {
+            _logger.LogError(e.GetException(), "FileSystemWatcher error — file change notifications may have been lost. Forcing a full solution reload.");
+        }
+
+        _watcherOverflowed = true;
+        _debounceTimer.Change(500, Timeout.Infinite);
     }
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
@@ -300,6 +320,8 @@ public partial class PersistentWorkspaceManager : IDisposable
             acquired = true;
             var changes = _pendingChanges.Keys.ToList();
             _pendingChanges.Clear();
+            bool overflowed = _watcherOverflowed;
+            _watcherOverflowed = false;
 
             if (_workspace == null || CurrentSolution == null)
             {
@@ -311,36 +333,39 @@ public partial class PersistentWorkspaceManager : IDisposable
                 _logger.LogInformation("Processing {Count} file system changes and reloading solution if necessary...", changes.Count);
             }
 
-            bool solutionNeedsReload = false;
+            bool solutionNeedsReload = overflowed;
             var projectsToReload = new HashSet<ProjectId>();
 
-            foreach (var path in changes)
+            if (!solutionNeedsReload)
             {
-                var ext = Path.GetExtension(path).ToLowerInvariant();
-                if (ext == ".sln")
+                foreach (var path in changes)
                 {
-                    solutionNeedsReload = true;
-                    break;
-                }
-
-                if (ext == ".csproj")
-                {
-                    var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
-                    if (project != null)
-                    {
-                        projectsToReload.Add(project.Id);
-                    }
-                    else
+                    var ext = Path.GetExtension(path).ToLowerInvariant();
+                    if (ext == ".sln")
                     {
                         solutionNeedsReload = true;
                         break;
+                    }
+
+                    if (ext == ".csproj")
+                    {
+                        var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
+                        if (project != null)
+                        {
+                            projectsToReload.Add(project.Id);
+                        }
+                        else
+                        {
+                            solutionNeedsReload = true;
+                            break;
+                        }
                     }
                 }
             }
 
             if (solutionNeedsReload)
             {
-                _logger.LogInformation("Reloading entire solution...");
+                _logger.LogInformation(overflowed ? "Reloading entire solution (watcher overflow — change set unknown)..." : "Reloading entire solution...");
                 var slnPath = _workspace.CurrentSolution.FilePath;
                 if (!string.IsNullOrEmpty(slnPath))
                 {
