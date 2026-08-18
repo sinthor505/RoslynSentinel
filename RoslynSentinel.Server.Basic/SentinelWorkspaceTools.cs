@@ -15,7 +15,7 @@ namespace RoslynSentinel.Server.Basic;
 public record OutlineItem(string Kind, string Name, string? Container, int StartLine, int EndLine);
 
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
-public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview);
+public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview, string? EnclosingMember = null);
 
 /// <summary>
 /// A file attached to the solution via a .sln Solution Folder (ProjectSection(SolutionItems)),
@@ -866,7 +866,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's compilation (e.g. .cs files) — files attached via the .sln's Solution Folders and other non-project files are never included, no matter the pattern; use ListSolutionItems(kind: solutionItems) to see those, and ProjectDoc to read plan/handoff/documentation files directly. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's compilation (e.g. .cs files) — files attached via the .sln's Solution Folders and other non-project files are never included, no matter the pattern; use ListSolutionItems(kind: solutionItems) to see those, and ProjectDoc to read plan/handoff/documentation files directly. Returns file path, 1-based line and column, a preview, and enclosingMember (the name of the method/property/constructor/field/etc. containing the match, or null if the match isn't inside any member) per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
         [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
@@ -902,8 +902,10 @@ public class SentinelWorkspaceTools
                         continue;
                     }
 
-                    var sourceText = (await document.GetTextAsync()).ToString();
+                    var text = await document.GetTextAsync(cancellationToken);
+                    var sourceText = text.ToString();
                     var lines = sourceText.Split('\n');
+                    var root = await document.GetSyntaxRootAsync(cancellationToken);
 
                     for (int i = 0; i < lines.Length && results.Count < maxResults; i++)
                     {
@@ -938,7 +940,16 @@ public class SentinelWorkspaceTools
                                 preview = preview[..120] + "\u2026";
                             }
 
-                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, col + 1, preview));
+                            string? enclosingMember = null;
+                            if (root != null && i < text.Lines.Count)
+                            {
+                                var lineStart = text.Lines[i].Start;
+                                var lineLength = text.Lines[i].End - lineStart;
+                                var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
+                                enclosingMember = GetEnclosingMemberName(root, position);
+                            }
+
+                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, col + 1, preview, enclosingMember));
                         }
                     }
                 }
@@ -962,6 +973,50 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "SearchSolutionText failed for '{Pattern}'", pattern);
             return new ToolResult<object>() { Success = false, Error = new ResultError("SearchSolutionTextFailed", $"SearchSolutionText failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="position"/> to the nearest named member declaration
+    /// (method, property, constructor, field/event, indexer, or operator) and returns its name.
+    /// Returns null if the position isn't inside any member — e.g. a using directive, a
+    /// namespace-level comment, or a type declaration's own header.
+    /// </summary>
+    private static string? GetEnclosingMemberName(SyntaxNode root, int position)
+    {
+        if (position < root.FullSpan.Start || position > root.FullSpan.End)
+        {
+            return null;
+        }
+
+        var token = root.FindToken(position);
+        foreach (var node in token.Parent?.AncestorsAndSelf() ?? [])
+        {
+            switch (node)
+            {
+                case MethodDeclarationSyntax method:
+                    return method.Identifier.Text;
+                case ConstructorDeclarationSyntax ctor:
+                    return ctor.Identifier.Text;
+                case PropertyDeclarationSyntax prop:
+                    return prop.Identifier.Text;
+                case IndexerDeclarationSyntax:
+                    return "this[]";
+                case OperatorDeclarationSyntax op:
+                    return $"operator {op.OperatorToken.Text}";
+                case EventDeclarationSyntax evt:
+                    return evt.Identifier.Text;
+                case FieldDeclarationSyntax field:
+                    return string.Join(", ", field.Declaration.Variables.Select(v => v.Identifier.Text));
+                case EventFieldDeclarationSyntax eventField:
+                    return string.Join(", ", eventField.Declaration.Variables.Select(v => v.Identifier.Text));
+                case BaseTypeDeclarationSyntax:
+                    // Reached a type declaration without finding a member first — e.g. the match
+                    // was on the class header itself, not inside any member body.
+                    return null;
+            }
+        }
+
+        return null;
     }
 
     // Globs without a path separator (e.g. "*.cs", "OrderService.cs") are matched against the

@@ -222,6 +222,53 @@ public class BatteryTwentyTests
         Assert.That(result.Warning, Does.Contain("ProjectDoc"));
     }
 
+    [Test]
+    public async Task SearchSolutionText_MatchInsideMethod_ReturnsEnclosingMemberName()
+    {
+        SetSource("""
+        using System;
+
+        namespace TestProj;
+
+        public class Calculator
+        {
+            public int Add(int a, int b)
+            {
+                return a + b;
+            }
+        }
+        """, "Test.cs");
+
+        var result = await _tools.SearchSolutionText("return a + b");
+
+        Assert.That(result.Success, Is.True);
+        var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
+        var match = matches.Single();
+        Assert.That(match.EnclosingMember, Is.EqualTo("Add"));
+    }
+
+    [Test]
+    public async Task SearchSolutionText_MatchOutsideAnyMember_ReturnsNullEnclosingMember()
+    {
+        SetSource("""
+        using System;
+
+        namespace TestProj;
+
+        public class Calculator
+        {
+            public int Add(int a, int b) => a + b;
+        }
+        """, "Test.cs");
+
+        var result = await _tools.SearchSolutionText("using System");
+
+        Assert.That(result.Success, Is.True);
+        var matches = (System.Collections.Generic.IEnumerable<TextSearchMatch>)result.Data!;
+        var match = matches.Single();
+        Assert.That(match.EnclosingMember, Is.Null);
+    }
+
     // --- LoadSolution ---
 
     [Test]
