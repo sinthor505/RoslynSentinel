@@ -35,6 +35,25 @@ public static class ContextHelper
             idx++;
         }
 
+        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
+        {
+            // A multi-line snippet failed the exact ordinal search — the likely cause is a
+            // line-ending mismatch (e.g. the caller composed the snippet with \n while the file
+            // on disk is \r\n, or vice versa), not a genuine content difference. Retry treating
+            // any \r\n/\r/\n in the snippet as interchangeable with whatever the source actually
+            // uses, without loosening any other whitespace — a caller building a multi-statement
+            // selection out of literal source lines should not need to know the file's line-ending
+            // convention.
+            var pattern = string.Join(@"\r?\n",
+                contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n')
+                    .Select(System.Text.RegularExpressions.Regex.Escape));
+            foreach (System.Text.RegularExpressions.Match m in
+                     System.Text.RegularExpressions.Regex.Matches(source, pattern))
+            {
+                allMatches.Add(m.Index);
+            }
+        }
+
         if (allMatches.Count == 0)
         {
             // Fallback: try matching with collapsed whitespace
