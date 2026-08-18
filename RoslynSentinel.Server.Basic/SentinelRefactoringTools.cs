@@ -325,14 +325,9 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ReplaceMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Replaces an entire member (method, property, or class) in a file by name with new source code. " +
-        "This is the tool to use for editing/replacing text within a member's body — there is no separate " +
-        "snippet-and-replacement tool; instead, read the member, apply your edit in-place, and pass the full " +
-        "result as newSource. newSource must be a complete member declaration including its signature/modifiers " +
-        "and body (e.g. 'private decimal Foo() { ... }'), not a bare statement or method-body fragment. " +
-        "When multiple members share the same name (overloads), provide contextSnippet (a distinctive substring " +
-        "from the target member, e.g. its parameter list) and optionally lineBefore/lineAfter to disambiguate. " +
-        "Returns changeId.")]
+    [Description("Replaces an entire member (method, property, or field) with new source code. " +
+        "newSource must be a complete member declaration (modifiers, signature, body) not a fragment. " +
+        "For overloaded members, provide contextSnippet (distinctive substring from the target, e.g. parameter list) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
@@ -380,12 +375,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "RemoveMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Removes a specific member from a class or interface by name. Returns changeId. " +
-        "By default, first checks for callers and implementations (same as FindReferences(kind: all)) and " +
-        "refuses if any are found, listing what was found — pass skipPrecheck: true to remove unconditionally " +
-        "(the engine still separately refuses on direct caller usage regardless of skipPrecheck). For the " +
-        "narrower \"only ever remove if truly zero usages\" contract, see SafeDeleteUnusedSymbol. " +
-        "When multiple members share the same name (overloads), provide contextSnippet to disambiguate.")]
+    [Description("Removes a member from a class or interface. By default, checks for callers and implementations (via FindReferences(kind: all)) and refuses if found. Pass skipPrecheck: true to remove unconditionally. For zero-usages-only contract, use SafeDeleteUnusedSymbol instead. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
     public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
@@ -478,17 +468,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
-    [Description("Sets an enum's complete member list in one call — covers add, remove, and reorder together. " +
-        "values is a comma-separated list of member names in the desired final order (e.g. " +
-        "\"Pending,Shipped,Delivered,Cancelled\"); append \"=N\" to set or override an explicit integer value " +
-        "(e.g. \"Archived=99\"). Names not currently present are added; names omitted from values are removed. " +
-        "Members already explicit in the source (had \"= N\") keep that value regardless of position; members " +
-        "that were implicit take the next ordinal from their predecessor in the NEW order — same as retyping " +
-        "the enum body by hand — so a mid-list insert or removal can shift a retained implicit member's " +
-        "underlying value. Pass \"=N\" explicitly for any member whose value must not move. Pass the FULL " +
-        "desired member list every time, not just the delta — an incomplete list will remove members you " +
-        "didn't mean to drop. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. To see the current members and their values first, use GetTypeInfo(typeName, " +
-        "include: \"members\").")]
+    [Description("Replaces an enum's complete member list in one operation. Values is a comma-separated list of member names in desired order (e.g. \"Pending,Shipped,Cancelled\"); append \"=N\" to set explicit value (e.g. \"Archived=99\"). Omitted names are removed; new names are added. Explicit values (\"=N\") are preserved; implicit members take next ordinal from predecessor (as if hand-typed). Pass complete list every time, not delta. For enums with same name, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Use GetTypeInfo(typeName, include:\"members\") to see current values first. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyEnum(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
@@ -533,7 +513,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. This is the tool for accessibility changes — not ModifyAttribute (which is for [Attribute] syntax) or ModifyModifier (which is for non-accessibility keywords like virtual/static/sealed).")]
+    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only — use ChangeAccessibility for modifiers, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords. Returns changeId.")]
     public async Task<ToolResult<object>> ChangeAccessibility(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -574,7 +554,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddSummaryComment")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or replaces a /// <summary> XML doc comment on a type or member. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Replaces existing summary.")]
+    [Description("Adds or replaces a /// <summary> XML doc comment on a type or member. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Replaces any existing summary. Returns changeId.")]
     public async Task<ToolResult<object>> AddSummaryComment(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -615,7 +595,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. fieldName overrides the derived field name (defaults to _camelCase of paramName). contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Creates a constructor if none exists.")]
+    [Description("Adds a DI constructor parameter to a class in one step: creates private readonly field, parameter, and body assignment. fieldName overrides the default derived field name (_camelCase). For classes with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Creates a constructor if none exists. Returns changeId.")]
     public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
         [Consumes(DataTag.SymbolName, required: true)] string paramName,
@@ -739,7 +719,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. This tool is for [Attribute] syntax only — do NOT use it for accessibility (private/public/etc., use ChangeAccessibility) or modifier keywords (virtual/static/sealed/etc., use ModifyModifier).")]
+    [Description("Adds, replaces, or removes an attribute (with [Attribute] syntax) on a type or member. Action: add/replace/remove. existingAttribute name can include or omit brackets. newAttribute required for replace. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool is for [Attribute] syntax only — use ChangeAccessibility for accessibility and ModifyModifier for non-accessibility keywords. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -798,7 +778,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyModifier")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Does NOT cover accessibility keywords (private, public, internal, protected) — use ChangeAccessibility for those.")]
+    [Description("Adds or removes non-accessibility modifier keywords: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) — use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -852,7 +832,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions.")]
+    [Description("Adds or removes a base type or interface from a type declaration. Action: add or remove. For types with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
     public async Task<ToolResult<object>> ModifyBaseType(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
@@ -906,7 +886,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a new member to a type. position: null/\"end\" (append), \"after:MemberName\", or \"before:MemberName\". contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions.")]
+    [Description("Adds a new member to a type. Position: null/\"end\" (append), \"after:MemberName\", or \"before:MemberName\". For target types with the same name, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
     public async Task<ToolResult<object>> AddMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string containerName,
