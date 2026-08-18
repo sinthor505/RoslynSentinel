@@ -487,12 +487,15 @@ public class SentinelRefactoringTools
         "the enum body by hand — so a mid-list insert or removal can shift a retained implicit member's " +
         "underlying value. Pass \"=N\" explicitly for any member whose value must not move. Pass the FULL " +
         "desired member list every time, not just the delta — an incomplete list will remove members you " +
-        "didn't mean to drop. To see the current members and their values first, use GetTypeInfo(typeName, " +
+        "didn't mean to drop. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. To see the current members and their values first, use GetTypeInfo(typeName, " +
         "include: \"members\").")]
     public async Task<ToolResult<object>> ModifyEnum(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -502,7 +505,7 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.ModifyEnumAsync(filePath, enumName, values);
+            var updated = await _refactoringEngine.ModifyEnumAsync(filePath, enumName, values, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -530,11 +533,14 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. This is the tool for accessibility changes — not ModifyAttribute (which is for [Attribute] syntax) or ModifyModifier (which is for non-accessibility keywords like virtual/static/sealed).")]
+    [Description("Changes the accessibility modifier (private, public, internal, protected, protected internal, private protected) of a type or member. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. This is the tool for accessibility changes — not ModifyAttribute (which is for [Attribute] syntax) or ModifyModifier (which is for non-accessibility keywords like virtual/static/sealed).")]
     public async Task<ToolResult<object>> ChangeAccessibility(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: true)] string accessibility,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -544,7 +550,7 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility);
+            var updated = await _refactoringEngine.ChangeAccessibilityAsync(filePath, targetName, accessibility, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -568,11 +574,14 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddSummaryComment")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or replaces a /// <summary> XML doc comment on a type or member. Replaces existing summary.")]
+    [Description("Adds or replaces a /// <summary> XML doc comment on a type or member. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Replaces existing summary.")]
     public async Task<ToolResult<object>> AddSummaryComment(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         string summaryText,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -582,7 +591,7 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText);
+            var updated = await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -606,12 +615,15 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. fieldName overrides the derived field name (defaults to _camelCase of paramName). Creates a constructor if none exists.")]
+    [Description("Adds a DI constructor parameter in one step: private readonly field + parameter + body assignment. fieldName overrides the derived field name (defaults to _camelCase of paramName). contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Creates a constructor if none exists.")]
     public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
         [Consumes(DataTag.SymbolName, required: true)] string paramName,
         [Consumes(DataTag.DataType, required: true)] string paramType,
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -621,7 +633,7 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName);
+            var updated = await _refactoringEngine.AddConstructorParameterAsync(filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -727,13 +739,16 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace. This tool is for [Attribute] syntax only — do NOT use it for accessibility (private/public/etc., use ChangeAccessibility) or modifier keywords (virtual/static/sealed/etc., use ModifyModifier).")]
+    [Description("Adds, replaces, or removes an attribute on a type or member. existingAttribute accepts name with or without brackets (e.g. \"[ApiController]\", \"Required\"). newAttribute required for replace. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. This tool is for [Attribute] syntax only — do NOT use it for accessibility (private/public/etc., use ChangeAccessibility) or modifier keywords (virtual/static/sealed/etc., use ModifyModifier).")]
     public async Task<ToolResult<object>> ModifyAttribute(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [ExternalInputRequired(DataTag.AttributeName, required: true)] string existingAttribute,
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string newAttribute,
         [ExternalInputRequired(DataTag.Action, required: true)] AttributeModifyAction action,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -746,15 +761,15 @@ public class SentinelRefactoringTools
             DocumentEditResult updated;
             if (action == AttributeModifyAction.add)
             {
-                updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, existingAttribute);
+                updated = await _refactoringEngine.AddAttributeAsync(filePath, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AttributeModifyAction.replace)
             {
-                updated = await _refactoringEngine.ReplaceAttributeAsync(filePath, targetName, existingAttribute, newAttribute);
+                updated = await _refactoringEngine.ReplaceAttributeAsync(filePath, targetName, existingAttribute, newAttribute, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AttributeModifyAction.remove)
             {
-                updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, existingAttribute);
+                updated = await _refactoringEngine.RemoveAttributeAsync(filePath, targetName, existingAttribute, contextSnippet, lineBefore, lineAfter);
             }
             else
             {
@@ -783,12 +798,15 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyModifier")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. Does NOT cover accessibility keywords (private, public, internal, protected) — use ChangeAccessibility for those.")]
+    [Description("Adds or removes a modifier keyword on a type or member. modifier: virtual, abstract, sealed, static, readonly, override, partial, async, new, extern, unsafe, volatile. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions. Does NOT cover accessibility keywords (private, public, internal, protected) — use ChangeAccessibility for those.")]
     public async Task<ToolResult<object>> ModifyModifier(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
         [ExternalInputRequired(DataTag.Modifier, required: true)] string modifier,
         [Consumes(DataTag.Action, required: true)] AddRemoveAction action,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -801,11 +819,11 @@ public class SentinelRefactoringTools
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier);
+                updated = await _refactoringEngine.AddModifierAsync(filePath, targetName, modifier, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier);
+                updated = await _refactoringEngine.RemoveModifierAsync(filePath, targetName, modifier, contextSnippet, lineBefore, lineAfter);
             }
             else
             {
@@ -834,12 +852,15 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ModifyBaseType")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a base type or interface from a type declaration.")]
+    [Description("Adds or removes a base type or interface from a type declaration. contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions.")]
     public async Task<ToolResult<object>> ModifyBaseType(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string typeName,
         string baseTypeName,
         AddRemoveAction action,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -852,11 +873,11 @@ public class SentinelRefactoringTools
             DocumentEditResult updated;
             if (action == AddRemoveAction.add)
             {
-                updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName);
+                updated = await _refactoringEngine.AddBaseTypeAsync(filePath, typeName, baseTypeName, contextSnippet, lineBefore, lineAfter);
             }
             else if (action == AddRemoveAction.remove)
             {
-                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName);
+                updated = await _refactoringEngine.RemoveBaseTypeAsync(filePath, typeName, baseTypeName, contextSnippet, lineBefore, lineAfter);
             }
             else
             {
@@ -885,12 +906,15 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a new member to a type. position: null/\"end\" (append), \"after:MemberName\", or \"before:MemberName\".")]
+    [Description("Adds a new member to a type. position: null/\"end\" (append), \"after:MemberName\", or \"before:MemberName\". contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions.")]
     public async Task<ToolResult<object>> AddMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string containerName,
         [ExternalInputRequired(DataTag.ClassName)] string newMemberSource,
         [ExternalInputRequired(DataTag.Position)] string? position = null,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -904,19 +928,19 @@ public class SentinelRefactoringTools
             string description;
             if (string.IsNullOrEmpty(position) || position == "end")
             {
-                updated = await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource);
+                updated = await _refactoringEngine.AddMemberAsync(filePath, containerName, newMemberSource, contextSnippet, lineBefore, lineAfter);
                 description = $"Added new member to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (position.StartsWith("after:", StringComparison.OrdinalIgnoreCase))
             {
                 var afterMemberName = position.Substring("after:".Length);
-                updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource);
+                updated = await _refactoringEngine.InsertMemberAfterAsync(filePath, containerName, afterMemberName, newMemberSource, contextSnippet, lineBefore, lineAfter);
                 description = $"Inserted new member after '{afterMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (position.StartsWith("before:", StringComparison.OrdinalIgnoreCase))
             {
                 var beforeMemberName = position.Substring("before:".Length);
-                updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource);
+                updated = await _refactoringEngine.InsertMemberBeforeAsync(filePath, containerName, beforeMemberName, newMemberSource, contextSnippet, lineBefore, lineAfter);
                 description = $"Inserted new member before '{beforeMemberName}' in '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else
@@ -946,7 +970,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddMemberTyped")]
     [Produces(DataTag.ChangeId)]
-    [Description("Generates a typed member and adds it to a type. property → auto-property (defaults: hasSetter=true, accessibility=public). field → field (defaults: isReadonly=false, isStatic=false, accessibility=private).")]
+    [Description("Generates a typed member and adds it to a type. property → auto-property (defaults: hasSetter=true, accessibility=public). field → field (defaults: isReadonly=false, isStatic=false, accessibility=private). contextSnippet: optional distinctive substring from the target's declaration to disambiguate name collisions.")]
     public async Task<ToolResult<object>> AddMemberTyped(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName, required: true)] string containerName,
@@ -959,6 +983,9 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
         [ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
         [ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
+        [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
+        [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
+        [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOptionAttribute(ToolOptionTag.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -972,12 +999,12 @@ public class SentinelRefactoringTools
             string description;
             if (kind == TypedMemberKind.property)
             {
-                updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit);
+                updated = await _refactoringEngine.AddPropertyAsync(filePath, containerName, name, type, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter);
                 description = $"Added '{type} {name}' property to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else if (kind == TypedMemberKind.field)
             {
-                updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer);
+                updated = await _refactoringEngine.AddFieldAsync(filePath, containerName, name, type, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter);
                 description = $"Added '{type} {name}' field to '{containerName}' in {Path.GetFileName(filePath)}.";
             }
             else

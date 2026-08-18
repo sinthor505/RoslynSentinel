@@ -1280,7 +1280,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1295,7 +1295,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = "// Cannot parse file."
+            };
+        }
+
+        BaseTypeDeclarationSyntax? container = null;
+        try
+        {
+            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (container == null)
         {
             return new DocumentEditResult
@@ -2332,7 +2357,7 @@ public class RefactoringEngine
     /// body — so a mid-list insert or removal can shift a retained implicit member's underlying
     /// value. Pass "=N" explicitly for any member whose numeric value must not move. 
     /// </summary>
-    public async Task<DocumentEditResult> ModifyEnumAsync(FilePath filePath, string enumName, string values, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ModifyEnumAsync(FilePath filePath, string enumName, string values, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2347,8 +2372,33 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var enumNode = root?.DescendantNodes().OfType<EnumDeclarationSyntax>().FirstOrDefault(e => e.Identifier.Text == enumName);
-        if (enumNode == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Cannot edit: cannot parse file."
+            };
+        }
+
+        BaseTypeDeclarationSyntax? enumNode = null;
+        try
+        {
+            enumNode = ResolveTypeByNameOrSnippet(root, sourceText, enumName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (enumNode == null || enumNode is not EnumDeclarationSyntax)
         {
             return new DocumentEditResult
             {
@@ -2357,6 +2407,8 @@ public class RefactoringEngine
                 Message = $"// Cannot edit: enum '{enumName}' not found."
             };
         }
+
+        var enumDecl = (EnumDeclarationSyntax)enumNode;
 
         var requested = new List<(string Name, int? Value)>();
         foreach (var raw in values.Split(',', StringSplitOptions.RemoveEmptyEntries))
@@ -2404,7 +2456,7 @@ public class RefactoringEngine
             };
         }
 
-        var existingMembers = enumNode.Members.ToList();
+        var existingMembers = enumDecl.Members.ToList();
         var existingByName = existingMembers.ToDictionary(m => m.Identifier.Text, m => m, StringComparer.Ordinal);
         var existingNamesInOrder = existingMembers.Select(m => m.Identifier.Text).ToList();
         var requestedNames = requested.Select(r => r.Name).ToList();
@@ -2480,8 +2532,8 @@ public class RefactoringEngine
             };
         }
 
-        var newEnumNode = enumNode.WithMembers(SyntaxFactory.SeparatedList(newMembers));
-        var updatedText = await ReplaceNodeFormattedAsync(document, root!, enumNode, newEnumNode, cancellationToken);
+        var newEnumNode = enumDecl.WithMembers(SyntaxFactory.SeparatedList(newMembers));
+        var updatedText = await ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
 
         var summary = new List<string>();
         if (added.Count > 0) summary.Add($"added {string.Join(", ", added)}");
@@ -2502,7 +2554,7 @@ public class RefactoringEngine
                 : null;
     }
 
-    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2517,7 +2569,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
+        }
+
+        BaseTypeDeclarationSyntax? container = null;
+        try
+        {
+            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (container == null)
         {
             return new DocumentEditResult
@@ -2564,7 +2641,7 @@ public class RefactoringEngine
         }
 
         // Fallback: append
-        return await AddMemberAsync(filePath, containerName, newMemberSource, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, progress, cancellationToken);
     }
 
     public async Task<DocumentEditResult> InsertMemberBeforeAsync(
@@ -2572,6 +2649,9 @@ public class RefactoringEngine
         string containerName,
         string beforeMemberName,
         string newMemberSource,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
@@ -2588,7 +2668,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
+        }
+
+        BaseTypeDeclarationSyntax? container = null;
+        try
+        {
+            container = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (container == null)
         {
             return new DocumentEditResult
@@ -2634,10 +2739,10 @@ public class RefactoringEngine
             };
         }
 
-        return await AddMemberAsync(filePath, containerName, newMemberSource, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, progress, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2662,6 +2767,7 @@ public class RefactoringEngine
             };
         }
 
+        var sourceText = await document.GetTextAsync(cancellationToken);
         var normalizedSource = attributeSource.Trim();
         if (!normalizedSource.StartsWith("["))
         {
@@ -2681,43 +2787,69 @@ public class RefactoringEngine
         }
 
         // Try member first, then type declaration
-        var memberNode = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax);
-        if (memberNode != null)
+        SyntaxNode? targetNode = null;
+        try
         {
-            var newMember = memberNode.AddAttributeLists(attrList);
-            var newRoot = root.ReplaceNode(memberNode, newMember).NormalizeWhitespace();
+            var memberNode = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            if (memberNode != null)
+            {
+                targetNode = memberNode;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.Modified,
+                Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                UpdatedText = newRoot.ToFullString()
+                Message = ex.Message
             };
         }
 
-        var typeNode = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
-            .FirstOrDefault(t => t.Identifier.Text == targetName);
-        if (typeNode != null)
+        if (targetNode == null)
         {
-            var newType = typeNode.AddAttributeLists(attrList);
-            var newRoot = root.ReplaceNode(typeNode, newType).NormalizeWhitespace();
+            try
+            {
+                var typeNode = ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+                if (typeNode != null)
+                {
+                    targetNode = typeNode;
+                }
+            }
+            catch (InvalidOperationException ex)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = ex.Message
+                };
+            }
+        }
+
+        if (targetNode == null)
+        {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.Modified,
+                Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                UpdatedText = newRoot.ToFullString()
+                Message = "// Cannot edit: target not found."
             };
         }
 
+        var newNode = targetNode is MemberDeclarationSyntax memberTarget
+            ? (SyntaxNode)memberTarget.AddAttributeLists(attrList)
+            : ((BaseTypeDeclarationSyntax)targetNode).AddAttributeLists(attrList);
+        var newRoot = root.ReplaceNode(targetNode, newNode).NormalizeWhitespace();
         return new DocumentEditResult
         {
-            Outcome = EditOutcome.CannotEdit,
+            Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Cannot edit: target not found."
+            UpdatedText = newRoot.ToFullString()
         };
     }
 
-    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2732,7 +2864,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        BaseTypeDeclarationSyntax? container = null;
+        try
+        {
+            container = ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (container == null)
         {
             return new DocumentEditResult
@@ -2771,6 +2928,7 @@ public class RefactoringEngine
     string targetName,
     string oldAttributeName,
     string newAttributeSource,
+    string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
     IProgress<ProgressNotificationValue>? progress = default,
     CancellationToken cancellationToken = default)
     {
@@ -2788,7 +2946,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -2820,11 +2979,25 @@ public class RefactoringEngine
         var newAttr = newAttrList.Attributes.First();
 
         // Locate target node (member first, then type)
-        SyntaxNode? targetNode =
-            root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax)
-            ?? (SyntaxNode?)root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
-                .FirstOrDefault(t => t.Identifier.Text == targetName);
+        SyntaxNode? targetNode = null;
+        try
+        {
+            var memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+            targetNode = memberTarget;
+            if (targetNode == null)
+            {
+                targetNode = ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
 
         if (targetNode == null)
         {
@@ -2875,7 +3048,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2890,7 +3063,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -2908,12 +3082,22 @@ public class RefactoringEngine
             return name == attributeName || name == attrCore || name == attrCore + "Attribute";
         }
 
-        SyntaxNode? target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName && m is not BaseTypeDeclarationSyntax);
-        target ??= root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
-            .FirstOrDefault(t => t.Identifier.Text == targetName);
+        MemberDeclarationSyntax? memberTarget = null;
+        try
+        {
+            memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
 
-        if (target is not MemberDeclarationSyntax memberTarget)
+        if (memberTarget == null)
         {
             return new DocumentEditResult
             {
@@ -2938,7 +3122,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2953,7 +3137,32 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        BaseTypeDeclarationSyntax? container = null;
+        try
+        {
+            container = ResolveTypeByNameOrSnippet(root, sourceText, typeName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (container == null)
         {
             return new DocumentEditResult
@@ -2975,7 +3184,7 @@ public class RefactoringEngine
         }
 
         var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(baseTypeName)).ToList();
-        TypeDeclarationSyntax newContainer = remaining.Count == 0
+        var newContainer = remaining.Count == 0
             ? container.WithBaseList(null)
             : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
 
@@ -2988,7 +3197,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3010,6 +3219,32 @@ public class RefactoringEngine
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
                 Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        MemberDeclarationSyntax? target = null;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (target == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
             };
         }
 
@@ -3030,18 +3265,6 @@ public class RefactoringEngine
             SyntaxKind.InternalKeyword, SyntaxKind.ProtectedKeyword
         };
 
-        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName);
-        if (target == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
-        }
-
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
@@ -3054,7 +3277,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3069,7 +3292,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -3079,8 +3303,21 @@ public class RefactoringEngine
             };
         }
 
-        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        MemberDeclarationSyntax? target = null;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (target == null)
         {
             return new DocumentEditResult
@@ -3119,7 +3356,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3134,7 +3371,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -3144,8 +3382,21 @@ public class RefactoringEngine
             };
         }
 
-        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        MemberDeclarationSyntax? target = null;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (target == null)
         {
             return new DocumentEditResult
@@ -3183,7 +3434,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3198,7 +3449,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -3208,8 +3460,21 @@ public class RefactoringEngine
             };
         }
 
-        var target = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-            .FirstOrDefault(m => GetMemberName(m) == targetName);
+        MemberDeclarationSyntax? target = null;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
         if (target == null)
         {
             return new DocumentEditResult
@@ -3240,14 +3505,14 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
-        return await AddMemberAsync(filePath, containerName, source, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
@@ -3268,7 +3533,7 @@ public class RefactoringEngine
         }
 
         parts.Append(';');
-        return await AddMemberAsync(filePath, containerName, parts.ToString(), progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, parts.ToString(), contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
     }
 
     public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
@@ -3445,7 +3710,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3460,7 +3725,8 @@ public class RefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
         {
             return new DocumentEditResult
             {
@@ -3470,9 +3736,22 @@ public class RefactoringEngine
             };
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null)
+        BaseTypeDeclarationSyntax? classNode = null;
+        try
+        {
+            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (classNode == null || classNode is not ClassDeclarationSyntax)
         {
             return new DocumentEditResult
             {
@@ -3481,6 +3760,8 @@ public class RefactoringEngine
                 Message = "// Cannot edit: class not found."
             };
         }
+
+        var classDecl = (ClassDeclarationSyntax)classNode;
 
         var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
 
@@ -3491,7 +3772,7 @@ public class RefactoringEngine
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
             .WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
 
-        var ctor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+        var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
 
         ConstructorDeclarationSyntax newCtor;
         if (ctor != null)
@@ -3525,7 +3806,7 @@ public class RefactoringEngine
         }
 
         var newMembers = new List<MemberDeclarationSyntax> { fieldDecl };
-        foreach (var m in classNode.Members)
+        foreach (var m in classDecl.Members)
         {
             if (ctor != null && m == ctor)
             {
@@ -3541,8 +3822,8 @@ public class RefactoringEngine
             newMembers.Add(newCtor);
         }
 
-        var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers));
-        var newRoot = root.ReplaceNode(classNode, newClassNode).NormalizeWhitespace();
+        var newClassNode = classDecl.WithMembers(SyntaxFactory.List(newMembers));
+        var newRoot = root.ReplaceNode(classDecl, newClassNode).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
