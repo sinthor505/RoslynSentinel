@@ -103,6 +103,43 @@ public class RefactoringEngine
         _config = config;
     }
 
+    /// <summary>
+    /// Replaces <paramref name="oldNode"/> with <paramref name="newNode"/> and formats only the
+    /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
+    /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
+    /// </summary>
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken)
+    {
+        var annotation = new SyntaxAnnotation();
+        var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
+        var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Removes <paramref name="nodeToRemove"/> and formats only its former container (the nearest
+    /// ancestor whose node identity survives the removal), instead of the whole file.
+    /// </summary>
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken)
+    {
+        var container = nodeToRemove.Parent;
+        if (container == null)
+        {
+            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
+            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
+            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+
+        var annotation = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -1212,7 +1249,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member replaced.",
-            UpdatedText = root!.ReplaceNode(member, newMember).NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, member, newMember, cancellationToken)
         };
     }
 
@@ -1266,7 +1303,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member added.",
-            UpdatedText = root!.ReplaceNode(container, newContainer).NormalizeWhitespace().ToFullString()
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -1324,7 +1361,7 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = root!.RemoveNode(member, SyntaxRemoveOptions.KeepNoTrivia)!.NormalizeWhitespace().ToFullString()
+            UpdatedText = await RemoveNodeFormattedAsync(document, root!, member, SyntaxRemoveOptions.KeepNoTrivia, cancellationToken)
         };
     }
 
@@ -2217,12 +2254,14 @@ public class RefactoringEngine
                 .WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
         }
 
-        var newRoot = root.AddUsings(newUsing);
+        var annotation = new SyntaxAnnotation();
+        var newRoot = root.AddUsings(newUsing.WithAdditionalAnnotations(annotation));
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -2388,7 +2427,7 @@ public class RefactoringEngine
         }
 
         var newEnumNode = enumNode.WithMembers(SyntaxFactory.SeparatedList(newMembers));
-        var newRoot = root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace();
+        var updatedText = await ReplaceNodeFormattedAsync(document, root!, enumNode, newEnumNode, cancellationToken);
 
         var summary = new List<string>();
         if (added.Count > 0) summary.Add($"added {string.Join(", ", added)}");
@@ -2399,7 +2438,7 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString(),
+            UpdatedText = updatedText,
             Message = string.Join("; ", summary)
         };
 
@@ -2952,12 +2991,12 @@ public class RefactoringEngine
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
-        var newRoot = root.ReplaceNode(target, target.WithModifiers(newModifiers)).NormalizeWhitespace();
+        var updatedText = await ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = updatedText
         };
     }
 

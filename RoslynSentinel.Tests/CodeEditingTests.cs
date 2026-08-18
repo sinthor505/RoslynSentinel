@@ -575,6 +575,32 @@ public class Base
         Assert.That(result.UpdatedText, Does.Not.Contain("protected internal void Hook"));
     }
 
+    [Test]
+    public async Task ChangeAccessibility_DoesNotReformatUnrelatedMembers()
+    {
+        const string source = """
+
+        public class Calc
+        {
+            public int Add(int a, int b) => a + b;
+
+            public int Subtract(int a, int b) => a - b;
+
+
+            public int Multiply(int a, int b) => a * b;
+        }
+
+        """;
+        SetSource(source, "Calc.cs");
+
+        var result = await _engine.ChangeAccessibilityAsync("Calc.cs", "Add", "private");
+
+        Assert.That(result.UpdatedText, Does.Contain("private int Add"), "Method should now be private.");
+        Assert.That(result.UpdatedText, Does.Contain("public int Subtract(int a, int b) => a - b;\r\n\r\n\r\n    public int Multiply")
+            .Or.Contain("public int Subtract(int a, int b) => a - b;\n\n\n    public int Multiply"),
+            "Blank lines between untouched members below the edit must survive unchanged — a whole-file reformat would collapse them.");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // AddModifierAsync / RemoveModifierAsync
     // ══════════════════════════════════════════════════════════════
