@@ -36,7 +36,7 @@ public enum InspectSymbolAspect { info, blastRadius }
 public enum FindUsagesSearchKind { implementorsOf, attributeUsages, objectCreations, extensionsFor, typesWithAttribute, methodsByReturnType }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum FindReferencesKind { callers, implementations }
+public enum FindReferencesKind { callers, implementations, all }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TypeInfoInclude { hierarchy, members, both }

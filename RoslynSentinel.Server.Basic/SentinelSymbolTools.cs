@@ -185,9 +185,40 @@ public class SentinelSymbolTools
         }
     }
 
+    /// <summary>
+    /// <see cref="FindUsagesSearchKind"/> kinds resolve to symbol-relationship facts that are
+    /// meaningful for a member (method/property/field/event), not just a type — <c>objectCreations</c>
+    /// specifically is the exception: it text-matches "new TypeName(...)" sites and is structurally
+    /// incapable of ever matching a member.
+    /// </summary>
+    private static readonly HashSet<string> MemberSymbolKinds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Method", "Property", "Field", "Event"
+    };
+
+    private async Task<List<object>> RunRelationshipQueryAsync(
+        FindUsagesSearchKind searchKind, string name, string? projectName, FilePath filePath, bool sortByFrequency, CancellationToken cancellationToken)
+    {
+        object result = searchKind switch
+        {
+            FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName),
+            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath),
+            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency),
+            FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName),
+            FindUsagesSearchKind.typesWithAttribute => await _semanticSearchEngine.FindTypesByAttributeAsync(name),
+            FindUsagesSearchKind.methodsByReturnType => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name),
+            _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
+        };
+
+        // Every FindUsagesSearchKind backing method returns some IEnumerable<T> — normalize to
+        // List<object> so broaden-on-empty can report a count and label results uniformly
+        // regardless of which kind produced them.
+        return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
+    }
+
     [McpServerTool(Name = "QuerySymbolRelationships")]
     [Produces(DataTag.Report)]
-    [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites (new TypeName(...)), extension methods, types carrying an attribute, or methods by return type. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only). For call-site/override queries on a method or property (\"who calls this\", \"who overrides this\"), use FindReferences instead — objectCreations only matches 'new TypeName(...)' expressions and will structurally return [] for a method/property name.")]
+    [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites (new TypeName(...)), extension methods, types carrying an attribute, or methods by return type. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only). If the targeted searchKind returns zero results, automatically broadens to all 6 kinds and reports whatever is found, clearly labeled by kind. For call-site/override queries on a method or property (\"who calls this\", \"who overrides this\"), use FindReferences instead — objectCreations only matches 'new TypeName(...)' expressions and will structurally return [] for a method/property name.")]
     public async Task<ToolResult<object>> QuerySymbolRelationships(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
@@ -201,64 +232,72 @@ public class SentinelSymbolTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            if (searchKind == FindUsagesSearchKind.implementorsOf)
-            {
-                var result = await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
-            if (searchKind == FindUsagesSearchKind.attributeUsages)
-            {
-                var result = await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
-            }
             if (searchKind == FindUsagesSearchKind.objectCreations)
             {
-                var result = await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency);
-                return new ToolResult<object>
+                var resolved = await _symbolNavigationEngine.LocateSymbolAsync(name, "any", projectName: projectName, cancellationToken: cancellationToken);
+                if (resolved.Count > 0 && resolved.All(s => MemberSymbolKinds.Contains(s.SymbolKind)))
                 {
-                    Success = true,
-                    Data = result
-                };
+                    var kindsFound = string.Join(", ", resolved.Select(s => s.SymbolKind).Distinct());
+                    return new ToolResult<object>
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument,
+                            $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type — " +
+                            "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " +
+                            $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " +
+                            "to find call sites, or kind: implementations for overrides.")
+                    };
+                }
             }
-            if (searchKind == FindUsagesSearchKind.extensionsFor)
+
+            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePath, sortByFrequency, cancellationToken);
+            if (results.Count > 0)
             {
-                var result = await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = result
-                };
+                return new ToolResult<object> { Success = true, Data = results };
             }
-            if (searchKind == FindUsagesSearchKind.typesWithAttribute)
+
+            // Broaden-on-empty: the targeted kind genuinely ran and came back empty (and, for
+            // objectCreations, the semantic guard above didn't already reject it). Re-run the
+            // other 5 kinds so a real "found under a different relationship kind" doesn't get
+            // silently missed just because the caller guessed the wrong one.
+            var otherKinds = Enum.GetValues<FindUsagesSearchKind>().Where(k => k != searchKind).ToList();
+            var broadened = new Dictionary<string, List<object>>();
+            foreach (var otherKind in otherKinds)
             {
-                var result = await _semanticSearchEngine.FindTypesByAttributeAsync(name);
-                return new ToolResult<object>
+                try
                 {
-                    Success = true,
-                    Data = result
-                };
+                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePath, sortByFrequency, cancellationToken);
+                    if (otherResults.Count > 0)
+                    {
+                        broadened[otherKind.ToString()] = otherResults;
+                    }
+                }
+                catch
+                {
+                    // A kind that doesn't apply to this name (e.g. throws resolving as a type)
+                    // is just another empty result for broaden-on-empty purposes — skip it.
+                }
             }
-            if (searchKind == FindUsagesSearchKind.methodsByReturnType)
+
+            if (broadened.Count == 0)
             {
-                var result = await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name);
                 return new ToolResult<object>
                 {
                     Success = true,
-                    Data = result
+                    Data = results,
+                    Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds — " +
+                        "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
                 };
             }
+
+            var totalFound = broadened.Sum(kv => kv.Value.Count);
+            var summary = string.Join("; ", broadened.Select(kv => $"{kv.Value.Count} under '{kv.Key}'"));
             return new ToolResult<object>
             {
-                Success = false,
-                Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled searchKind '{searchKind}'.")
+                Success = true,
+                Data = broadened,
+                Warning = $"0 results for '{searchKind}'. Broadened search across all relationship kinds — " +
+                    $"found {totalFound} result(s): {summary}."
             };
         }
         catch (Exception ex)
@@ -346,7 +385,7 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "FindReferences")]
     [Produces(DataTag.Report)]
-    [Description("Finds all call sites or implementations for a symbol. filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files.")]
+    [Description("Finds call sites and/or implementations for a symbol. kind: callers (call sites only), implementations (overrides/interface implementations only), or all (both, clearly labeled). filepath optional — omit to search by name; supply to pin resolution when the name is ambiguous across files. For type-relationship queries instead (implementors of an interface, attribute usage, object-creation sites, extension methods, types by attribute, methods by return type), use QuerySymbolRelationships.")]
     public async Task<ToolResult<object>> FindReferences(
         [Consumes(DataTag.SymbolName, required: true)] string symbolName,
         [Consumes(DataTag.SymbolKind)] FindReferencesKind kind,
@@ -377,6 +416,16 @@ public class SentinelSymbolTools
                 {
                     Success = true,
                     Data = result
+                };
+            }
+            if (kind == FindReferencesKind.all)
+            {
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    Data = new { callers, implementations }
                 };
             }
             return new ToolResult<object>

@@ -609,6 +609,21 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- FindReferences(kind: all) ---
+
+    [Test]
+    public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolTools.FindReferences("ProcessAsync", FindReferencesKind.all, filepath: "Test.cs");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Data, Is.Not.Null);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.That(json, Does.Contain("callers"));
+        Assert.That(json, Does.Contain("implementations"));
+    }
+
     // --- QuerySymbolRelationships (renamed from FindUsages) ---
 
     [Test]
@@ -618,5 +633,40 @@ public class OrderService : IOrderService
         var result = await _symbolTools.QuerySymbolRelationships("Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
+    }
+
+    [Test]
+    public async Task QuerySymbolRelationships_ObjectCreationsForMethodName_ReturnsSemanticGuardError()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolTools.QuerySymbolRelationships("ProcessAsync", FindUsagesSearchKind.objectCreations);
+
+        Assert.That(result.Success, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("FindReferences"),
+            "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
+    }
+
+    [Test]
+    public async Task QuerySymbolRelationships_EmptyTargetedKind_BroadensAndFindsUnderAnotherKind()
+    {
+        SetSource(RichSource, "Test.cs");
+        // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) —
+        // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
+        var result = await _symbolTools.QuerySymbolRelationships("IOrderService", FindUsagesSearchKind.attributeUsages);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Is.Not.Null.And.Contains("Broadened"));
+        Assert.That(result.Warning, Does.Contain("implementorsOf"));
+    }
+
+    [Test]
+    public async Task QuerySymbolRelationships_EmptyUnderAllKinds_ReturnsPlainNotFoundSignal()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolTools.QuerySymbolRelationships("ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Does.Contain("nothing found under any kind"));
     }
 }
