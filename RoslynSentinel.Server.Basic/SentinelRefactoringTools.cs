@@ -374,10 +374,15 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "RemoveMember")]
     [Produces(DataTag.ChangeId)]
-    [Description("Removes a specific member from a class or interface by name. Returns changeId.")]
+    [Description("Removes a specific member from a class or interface by name. Returns changeId. " +
+        "By default, first checks for callers and implementations (same as FindReferences(kind: all)) and " +
+        "refuses if any are found, listing what was found — pass skipPrecheck: true to remove unconditionally " +
+        "(the engine still separately refuses on direct caller usage regardless of skipPrecheck). For the " +
+        "narrower \"only ever remove if truly zero usages\" contract, see SafeDeleteUnusedSymbol.")]
     public async Task<ToolResult<object>> RemoveMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string memberName,
+        [Description("When false (default), refuses removal if the member has any callers or implementations (checked the same way as FindReferences(kind: all)). Set true to skip this check and remove unconditionally.")] bool skipPrecheck = false,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -386,6 +391,27 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
+            if (!skipPrecheck)
+            {
+                var callers = await _symbolNavigationEngine.FindCallersAsync(filePath, memberName, cancellationToken: cancellationToken);
+                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePath, memberName, cancellationToken: cancellationToken);
+                if (callers.Count > 0 || implementations.Count > 0)
+                {
+                    var parts = new List<string>();
+                    if (callers.Count > 0) parts.Add($"{callers.Count} caller(s)");
+                    if (implementations.Count > 0) parts.Add($"{implementations.Count} implementation(s)");
+                    return new ToolResult<object>
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument,
+                            $"RemoveMember: '{memberName}' has {string.Join(" and ", parts)} — refusing to remove. " +
+                            "Pass skipPrecheck: true to remove anyway, or resolve the callers/implementations first. " +
+                            $"Callers: {System.Text.Json.JsonSerializer.Serialize(callers)}. " +
+                            $"Implementations: {System.Text.Json.JsonSerializer.Serialize(implementations)}.")
+                    };
+                }
+            }
+
             var result = await _refactoringEngine.RemoveMemberAsync(filePath, memberName);
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"RemoveMember: member '{memberName}' not found in '{filePath}'.") };

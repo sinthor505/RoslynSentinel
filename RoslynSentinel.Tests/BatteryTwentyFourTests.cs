@@ -740,6 +740,126 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _tools.RemoveMember("Order.cs", "GetLabel");
+        Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource — default precheck must let it through.");
+    }
+
+    [Test]
+    public async Task RemoveMember_HasCaller_RefusedByDefault_ListsCaller()
+    {
+        SetSource("""
+        namespace TestProj;
+
+        public class Helper
+        {
+            public string GetName() => "Test";
+
+            public void UseHelper()
+            {
+                var name = GetName();
+            }
+        }
+        """, "Helper.cs");
+
+        var result = await _tools.RemoveMember("Helper.cs", "GetName");
+
+        Assert.That(result.Success, Is.False, "A member with a real caller must be refused by default.");
+        Assert.That(result.Error, Is.Not.Null);
+        Assert.That(result.Error!.Message, Does.Contain("caller"));
+    }
+
+    [Test]
+    public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
+    {
+        // skipPrecheck: true bypasses only the new tool-level (callers+implementations) precheck —
+        // RefactoringEngine.RemoveMemberAsync's own pre-existing, unconditional caller check
+        // (SymbolFinder-based, no bypass) still applies underneath, so a member with a real caller
+        // is never truly force-removable. This matches the existing engine-level contract
+        // (BUG_60_RemoveMember_ErrorsWhenMemberIsUsed) rather than superseding it.
+        SetSource("""
+        namespace TestProj;
+
+        public class Helper
+        {
+            public string GetName() => "Test";
+
+            public void UseHelper()
+            {
+                var name = GetName();
+            }
+        }
+        """, "Helper.cs");
+
+        var result = await _tools.RemoveMember("Helper.cs", "GetName", skipPrecheck: true);
+
+        Assert.That(result.Success, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
+    }
+
+    [Test]
+    public async Task RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck()
+    {
+        // An interface member's implementation isn't caught by the engine's caller-only
+        // SymbolFinder check, so the default (skipPrecheck: false) refusal here can only be coming
+        // from the new tool-level precheck. With skipPrecheck: true that precheck is bypassed —
+        // removal still fails, but for a different reason (the general compile-validation safety
+        // net catching the now-unimplemented interface member), demonstrating skipPrecheck actually
+        // skips the precheck rather than the refusal being a fluke of some other gate.
+        SetSource("""
+        namespace TestProj;
+
+        public interface IGreeter
+        {
+            string Greet();
+        }
+
+        public class Greeter : IGreeter
+        {
+            public string Greet() => "hello";
+        }
+        """, "Greeter.cs");
+
+        var refused = await _tools.RemoveMember("Greeter.cs", "Greet");
+        Assert.That(refused.Success, Is.False, "An interface member's implementation must be caught by the default precheck.");
+        Assert.That(refused.Error!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
+
+        var result = await _tools.RemoveMember("Greeter.cs", "Greet", skipPrecheck: true);
+        Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation — the separate compile-validation safety net catches it.");
+        Assert.That(result.Error!.Message, Does.Contain("does not implement interface member"),
+            "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
+    }
+
+    [Test]
+    public async Task RemoveMember_OverrideWithNoCallersOrImplementations_SucceedsByDefault()
+    {
+        // An override with no callers of its own and nothing further overriding it isn't flagged by
+        // either the tool-level precheck or the engine's caller check — confirms the precheck isn't
+        // over-broad (it doesn't flag every virtual/override method, only ones with real relationships).
+        SetMultiFile(
+            ("AnimalBase.cs", """
+            namespace TestProj;
+
+            public class AnimalBase
+            {
+                public virtual string Speak() => "...";
+            }
+            """),
+            ("Dog.cs", """
+            namespace TestProj;
+
+            public class Dog : AnimalBase
+            {
+                public override string Speak() => "woof";
+            }
+            """));
+
+        var result = await _tools.RemoveMember("Dog.cs", "Speak");
+        Assert.That(result.Success, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
+    }
+
     // --- ReplaceConstructorWithFactory ---
 
     [Test]
