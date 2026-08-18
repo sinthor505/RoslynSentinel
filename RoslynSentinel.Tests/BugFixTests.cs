@@ -66,7 +66,7 @@ public class BugFixTests
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // Bug 1: Diagnose — MSBuildFound should respect MSBuildLocator.IsRegistered
+    // Bug 1: GetHealthComponents — MSBuildFound should respect MSBuildLocator.IsRegistered
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -79,30 +79,6 @@ public class BugFixTests
         // IsRegistered will be true so MsBuildFound must be true.
         Assert.That(components.MsBuildFound, Is.True,
             "MsBuildFound should be true when MSBuildLocator.IsRegistered is true");
-    }
-
-    [Test]
-    public async Task Diagnose_WhenWorkspaceLoaded_ReturnsHealthyTrue()
-    {
-        SetSource("public class Foo { public void Bar() {} }");
-
-        // No solutionPath passed — just uses in-memory test solution
-        var diffEngine = new DiffEngine(_workspaceManager);
-        var report = await new SentinelWorkspaceTools(_workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine),
-            diffEngine,
-            new DiagnosticEngine(_workspaceManager),
-            new SolutionManagementEngine(_workspaceManager),
-            new StructuralRefinementEngine(_workspaceManager),
-            new DependencyEngine(_workspaceManager),
-            new ProjectConsistencyEngine(_workspaceManager),
-            _config,
-            NullLogger<SentinelWorkspaceTools>.Instance).Diagnose();
-
-        Assert.That(report.Healthy, Is.True,
-            $"Healthy should be true on an SDK-only system. Errors: {string.Join(", ", report.Errors.Select(e => e.Message))}");
-        Assert.That(report.Errors.Any(e => e.Code.Contains("5001")), Is.False,
-            "MSBuild-not-found should not be an error (moved to warning)");
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -11,4 +11,7 @@ public record WorkspaceHealthReport(
     int ProjectCount,
     int DocumentCount,
     List<string> LoadErrors,
-    string Summary);
+    string Summary,
+    int StaleDocumentCount = 0,
+    bool RequiresReload = false,
+    List<string>? SampleStaleFiles = null);

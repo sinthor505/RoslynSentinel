@@ -982,8 +982,6 @@ RoslynSentinel provides 320 specialized tools organized across:
 
 305. `CreateProject`
 
-306. `Diagnose`
-
 307. `GetExternalChanges`
 
 308. `GetFileDiagnostics`
@@ -7988,8 +7986,6 @@ public async Task<string> WrapInUsing(string filePath, int startLine, int endLin
 
 - CreateProject
 
-- Diagnose
-
 - GetExternalChanges
 
 - GetFileDiagnostics
@@ -8084,23 +8080,6 @@ Code analysis and refactoring tool
 
 ```csharp
 public async Task<string> CreateProject(string projectName, string projectType = "console")
-```
-
-
----
-
-
-### Diagnose
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<HealthReport> Diagnose(string? solutionPath = null, bool verbose = false)
 ```
 
 

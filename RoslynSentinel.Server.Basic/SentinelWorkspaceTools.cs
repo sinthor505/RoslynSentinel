@@ -290,68 +290,6 @@ public class SentinelWorkspaceTools
         return parts.Count > 0 ? " " + string.Join(" ", parts) : "";
     }
 
-    [McpServerTool(Name = "Diagnose")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Checks server environment and workspace status. solutionPath re-checks a specific path. verbose=true → extended output. Known bug: may report healthy workspaces as unhealthy — prefer GetWorkspaceHealthAsync.")]
-    public async Task<HealthReport> Diagnose(
-        [Consumes(DataTag.SolutionFilepath)] string? solutionPath = null, bool verbose = false,
-        // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (!string.IsNullOrEmpty(solutionPath))
-            {
-                await _workspaceManager.LoadSolutionAsync(solutionPath);
-            }
-
-            var components = _workspaceManager.GetHealthComponents();
-            var workspace = _workspaceManager.GetWorkspaceStatus();
-            var errors = new List<HealthIssue>();
-            var warnings = new List<HealthIssue>();
-
-            if (!components.MsBuildFound)
-            {
-                warnings.Add(new HealthIssue("W5001", "MSBuild not found. If the workspace loaded successfully, this can be ignored.", null, "Install Visual Studio, Build Tools, or .NET SDK for full MSBuild support."));
-            }
-
-            if (workspace.SolutionLoaded && workspace.ProjectCount == 0)
-            {
-                var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
-                foreach (var error in loadErrors)
-                {
-                    errors.Add(new HealthIssue("5005", "Workspace load error", error, "Check project file for syntax errors, missing NuGet packages, or SDK version mismatches."));
-                }
-
-                if (loadErrors.Count == 0)
-                {
-                    warnings.Add(new HealthIssue("4001", "Solution loaded but no projects found. Check for unsupported project types."));
-                }
-            }
-
-            return new HealthReport(
-                Healthy: errors.Count == 0,
-                Components: components,
-                Workspace: workspace,
-                Capabilities: new List<string> { "diagnose", "load_solution", "refactor", "intelligence" },
-                Errors: errors,
-                Warnings: warnings
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Diagnose unexpected exception");
-            return new HealthReport(
-                Healthy: false,
-                Components: new HealthComponents(false, "", false, null, false, null),
-                Workspace: new WorkspaceStatus(0, false, null, 0, 0),
-                Capabilities: new List<string>(),
-                Errors: new List<HealthIssue> { new HealthIssue("E9000", "Diagnose failed", $"{ex.GetType().Name}: {ex.Message}") },
-                Warnings: new List<HealthIssue>()
-            );
-        }
-    }
-
     [McpServerTool(Name = "ListExternalDiskChanges")]
     [Produces(DataTag.FileList)]
     [Description("Returns files modified on disk since the AI last synced. No parameters.")]
@@ -1280,16 +1218,13 @@ public class SentinelWorkspaceTools
     }
 
     // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
-    // MS Bug: roslyn-diagnose reports healthy: false even when 86/86 projects load
-    // successfully, because the health check tests MSBuild path existence rather
-    // than actual workspace state. A fully operational workspace with a loaded
-    // solution is falsely reported as unhealthy.
-    // Fix: targeted health check that reads actual workspace state.
+    // Reads actual workspace/solution state directly rather than inferring health from
+    // environment probes (e.g. MSBuild path existence), which can false-negative a fully
+    // operational workspace with a loaded solution.
 
     /// <summary>
-    /// Returns a targeted workspace health report based on actual solution state.
-    /// Fixes the false-negative in the standard <c>diagnose</c> tool, which reports
-    /// <c>healthy: false</c> even when all projects load successfully.
+    /// Returns a targeted workspace health report based on actual solution state — the sole
+    /// health-check tool now that the older, less reliable <c>Diagnose</c> tool has been removed.
     /// </summary>
     public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
     {
@@ -1314,7 +1249,13 @@ public class SentinelWorkspaceTools
 
         if (currentSolution == null)
         {
-            // No solution is loaded — but the workspace itself is operational
+            // No solution is loaded — but the workspace itself is operational. Surface an
+            // MSBuild-missing note here (and only here): once a solution has loaded
+            // successfully, MSBuildFound is moot and flagging it would just reintroduce the
+            // false-negative behavior this tool replaced Diagnose to fix.
+            var msbuildNote = _workspaceManager.GetHealthComponents().MsBuildFound
+                ? ""
+                : " No MSBuild installation was detected — LoadSolution may fail; install Visual Studio, Build Tools, or the .NET SDK.";
             return Task.FromResult(new WorkspaceHealthReport(
                 IsOperational: true,
                 HasLoadedSolution: false,
@@ -1323,12 +1264,13 @@ public class SentinelWorkspaceTools
                 DocumentCount: 0,
                 LoadErrors: loadErrors,
                 Summary: "Workspace is operational. No solution is currently loaded. " +
-                         "Call load_solution to load a .sln or .csproj file."));
+                         "Call load_solution to load a .sln or .csproj file." + msbuildNote));
         }
 
         var projectCount = currentSolution.ProjectIds.Count;
         var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
         var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
+        var status = _workspaceManager.GetWorkspaceStatus();
 
         return Task.FromResult(new WorkspaceHealthReport(
             IsOperational: true,
@@ -1341,15 +1283,20 @@ public class SentinelWorkspaceTools
                      $"{documentCount} document(s). " +
                      (loadErrors.Count > 0
                          ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)."
-                         : "No load errors.")));
+                         : "No load errors.") +
+                     (status.RequiresReload
+                         ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load — call LoadSolution to refresh."
+                         : ""),
+            StaleDocumentCount: status.StaleDocumentCount,
+            RequiresReload: status.RequiresReload,
+            SampleStaleFiles: status.SampleStaleFiles));
     }
 
-    // ── 8. GetWorkspaceHealthAsync ─────────────────────────────────────────────────
+    // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
 
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Targeted workspace health check. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error.")]
-    // FIXES MS BUG: the standard diagnose tool reports healthy:false even when all projects load successfully, because it tests MSBuild path existence rather than actual workspace state. This tool reads workspace state directly.
+    [Description("Targeted workspace health check — reads actual workspace/solution state directly rather than environment probes. Returns IsOperational, HasLoadedSolution, LoadedSolutionPath, ProjectCount, DocumentCount, LoadErrors, Summary, StaleDocumentCount, RequiresReload, SampleStaleFiles. IsOperational=true + HasLoadedSolution=false means no solution loaded yet — not an error. RequiresReload=true means files changed on disk since the last LoadSolution call.")]
     public async Task<ToolResult<object>> GetWorkspaceHealth(
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

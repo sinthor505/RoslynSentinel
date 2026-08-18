@@ -233,21 +233,6 @@ public class BatteryTwentyTests
 
     // --- Diagnose ---
 
-    [Test]
-    public async Task Diagnose_NoArguments_ReturnsHealthReport()
-    {
-        var result = await _tools.Diagnose();
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task Diagnose_WithLoadedSolution_ReturnsHealthReport()
-    {
-        SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.Diagnose();
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- GetExternalChanges (sync) ---
 
     [Test]

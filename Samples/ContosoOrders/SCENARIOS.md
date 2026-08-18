@@ -37,7 +37,7 @@ Samples/ContosoOrders/
 | 7 | `OrderService` needs a new `ILogger<OrderService>` constructor dependency | `OrderService.cs` | `AddConstructorParameter` |
 | 8 | Class `Order` lives in a file named `OrderProcessor.cs` | `OrderProcessor.cs` | `SyncTypeAndFilename` |
 | 9 | Missing XML doc summary on public `OrderService.CreateOrder` | `OrderService.cs` | `AddSummaryComment` |
-|10 | Verify solution compiles / no orphaned diagnostics after all changes | whole solution | `GetDiagnostics`, `Diagnose` or `GetWorkspaceHealth` |
+|10 | Verify solution compiles / no orphaned diagnostics after all changes | whole solution | `GetDiagnostics`, `GetWorkspaceHealth` |
 
 ## Scenario spec format
 Each scenario below has:
@@ -55,12 +55,11 @@ if it's healthy."
 
 **Expected tool sequence:**
 1. `LoadSolution(solutionPath: "Samples/ContosoOrders/ContosoOrders.sln")`
-2. `GetWorkspaceHealth()` (preferred) or `Diagnose()`
+2. `GetWorkspaceHealth()`
 
 **Expected outcome:** Success=true, 2 projects loaded, 0 load errors.
 
-**Grading notes:** Confirms the agent knows to load before doing anything else, and prefers
-`GetWorkspaceHealth` over the documented-buggy `Diagnose` when both are available.
+**Grading notes:** Confirms the agent knows to load before doing anything else.
 
 ---
 

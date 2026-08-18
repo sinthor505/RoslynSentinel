@@ -210,13 +210,6 @@ public class ComprehensiveToolTests
     }
 
     [Test]
-    public async Task Diagnose_ShouldReturnReport()
-    {
-        var report = await _workspaceTools.Diagnose();
-        Assert.That(report, Is.Not.Null);
-    }
-
-    [Test]
     public async Task GetBlastRadius_ShouldReturnReport()
     {
         var source = "public class C { public void M() {} }";
