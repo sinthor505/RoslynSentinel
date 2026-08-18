@@ -1399,29 +1399,60 @@ public class MsToolAugmentEngine
             }
         }
 
-        // Find variables that flow into the Selection — these become parameters
+        // Find variables that flow into the Selection — these become parameters. Locals that
+        // ALSO flow out (mutated inside the Selection, then read afterward) need their final
+        // value reported back to the caller too — tracked in outVarNames and handled below.
         var parameters = new List<(string Name, string TypeStr)>();
+        var outVarNames = new HashSet<string>();
         try
         {
             var df = model.AnalyzeDataFlow(firstStmt, lastStmt);
             if (df?.Succeeded == true)
             {
+                var flowsOut = new HashSet<ISymbol>(df.DataFlowsOut, SymbolEqualityComparer.Default);
+
                 foreach (var sym in df.DataFlowsIn)
                 {
                     if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local)
                     {
                         parameters.Add((local.Name,
                             local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        if (flowsOut.Contains(local))
+                        {
+                            outVarNames.Add(local.Name);
+                        }
                     }
-                    else if (sym.Kind == SymbolKind.Parameter && sym is IParameterSymbol param)
+                    else if (sym.Kind == SymbolKind.Parameter && sym is IParameterSymbol param && !param.IsThis)
                     {
+                        // IsThis excludes the implicit 'this' — DataFlowsIn reports it whenever
+                        // the Selection touches an instance member (e.g. a field), but it is
+                        // already implicitly available to a non-static extracted method and is
+                        // not valid syntax as an explicit parameter.
                         parameters.Add((param.Name,
                             param.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        if (flowsOut.Contains(param))
+                        {
+                            outVarNames.Add(param.Name);
+                        }
                     }
                 }
             }
         }
         catch { /* best-effort — proceed without parameters if analysis fails */ }
+
+        var outVars = parameters.Where(p => outVarNames.Contains(p.Name)).ToList();
+
+        // No explicit return statement in the Selection, but pre-existing locals are mutated
+        // and read afterward — return their final value(s) so the caller sees the update.
+        // Parameters are passed by value; without this the extraction would silently drop it.
+        bool returnsOutVars = false;
+        if (!returnsValue && outVars.Count > 0)
+        {
+            returnsOutVars = true;
+            returnTypeStr = outVars.Count == 1
+                ? outVars[0].TypeStr
+                : $"({string.Join(", ", outVars.Select(v => $"{v.TypeStr} {v.Name}"))})";
+        }
 
         // Preserve static-ness from the containing method
         var containingMethod = block.Ancestors()
@@ -1457,6 +1488,14 @@ public class MsToolAugmentEngine
             sb.AppendLine($"    {stmt.WithoutLeadingTrivia().ToFullString().TrimEnd()}");
         }
 
+        if (returnsOutVars)
+        {
+            var returnExpr = outVars.Count == 1
+                ? outVars[0].Name
+                : $"({string.Join(", ", outVars.Select(v => v.Name))})";
+            sb.AppendLine($"    return {returnExpr};");
+        }
+
         sb.Append('}');
 
         var newMethodDecl = SyntaxFactory.ParseMemberDeclaration(sb.ToString());
@@ -1467,9 +1506,22 @@ public class MsToolAugmentEngine
 
         // Build the call-site replacement statement
         var argsStr = string.Join(", ", parameters.Select(p => p.Name));
-        string callText = returnsValue
-            ? $"return {newMethodName}({argsStr});"
-            : $"{newMethodName}({argsStr});";
+        string callText;
+        if (returnsValue)
+        {
+            callText = $"return {newMethodName}({argsStr});";
+        }
+        else if (returnsOutVars)
+        {
+            var targetExpr = outVars.Count == 1
+                ? outVars[0].Name
+                : $"({string.Join(", ", outVars.Select(v => v.Name))})";
+            callText = $"{targetExpr} = {newMethodName}({argsStr});";
+        }
+        else
+        {
+            callText = $"{newMethodName}({argsStr});";
+        }
 
         var callStmt = SyntaxFactory.ParseStatement(callText)
             .WithLeadingTrivia(firstStmt.GetLeadingTrivia())

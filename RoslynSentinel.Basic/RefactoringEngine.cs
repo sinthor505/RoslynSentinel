@@ -2322,7 +2322,12 @@ public class RefactoringEngine
         var retainedNewOrder = requestedNames.Where(existingByName.ContainsKey).ToList();
         bool reordered = !retainedOldOrder.SequenceEqual(retainedNewOrder);
 
-        if (added.Count == 0 && removed.Count == 0 && !reordered)
+        bool valueChanged = requested.Any(r =>
+            r.Value.HasValue &&
+            existingByName.TryGetValue(r.Name, out var existingMember) &&
+            GetExistingExplicitValue(existingMember) != r.Value);
+
+        if (added.Count == 0 && removed.Count == 0 && !reordered && !valueChanged)
         {
             return new DocumentEditResult
             {
@@ -2351,6 +2356,37 @@ public class RefactoringEngine
             newMembers.Add(member);
         }
 
+        // Detect duplicate effective values — e.g. inserting a new implicit member ahead of an
+        // already-explicit one shifts the implicit member's auto-numbered value into a collision
+        // that C# permits silently. Fail loudly instead of producing a duplicate-valued enum.
+        var effectiveValues = new List<(string Name, int Value)>();
+        int nextImplicit = 0;
+        foreach (var member in newMembers)
+        {
+            int value = member.EqualsValue?.Value is LiteralExpressionSyntax { Token.Value: int explicitVal }
+                ? explicitVal
+                : nextImplicit;
+            effectiveValues.Add((member.Identifier.Text, value));
+            nextImplicit = value + 1;
+        }
+
+        var valueCollisions = effectiveValues
+            .GroupBy(v => v.Value)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{string.Join(" and ", g.Select(m => m.Name))} both = {g.Key}")
+            .ToList();
+
+        if (valueCollisions.Count > 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: this would produce duplicate enum values ({string.Join("; ", valueCollisions)}). " +
+                    "Pass an explicit '=N' for the member(s) whose value must change to avoid the collision."
+            };
+        }
+
         var newEnumNode = enumNode.WithMembers(SyntaxFactory.SeparatedList(newMembers));
         var newRoot = root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace();
 
@@ -2366,6 +2402,11 @@ public class RefactoringEngine
             UpdatedText = newRoot.ToFullString(),
             Message = string.Join("; ", summary)
         };
+
+        static int? GetExistingExplicitValue(EnumMemberDeclarationSyntax member) =>
+            member.EqualsValue?.Value is LiteralExpressionSyntax { Token.Value: int existingValue }
+                ? existingValue
+                : null;
     }
 
     public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
