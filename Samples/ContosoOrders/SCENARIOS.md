@@ -32,7 +32,7 @@ Samples/ContosoOrders/
 | 2 | `ApplyDiscount` is `private` but is intended to be called externally by `OrderService` | `OrderProcessor.cs` | `ChangeAccessibility` |
 | 3 | Missing `Delivered` enum value | `OrderStatus.cs` | `ModifyEnum` |
 | 4 | Fully-qualified `ContosoOrders.Core.Discounts.DiscountCalculator` used instead of a `using` directive | `OrderProcessor.cs` | `AddUsingDirective` |
-| 5 | Unused private method `BuildInternalDebugLabel` | `OrderProcessor.cs` | `FindReferences`/`FindUsages` (to confirm zero call sites) → `SafeDeleteUnusedSymbol` |
+| 5 | Unused private method `BuildInternalDebugLabel` | `OrderProcessor.cs` | `FindReferences`/`QuerySymbolRelationships` (to confirm zero call sites) → `SafeDeleteUnusedSymbol` |
 | 6 | Inline totals-computation block inside `BuildOrderSummary` should become its own method | `OrderProcessor.cs` | `ExtractMethodSafe` |
 | 7 | `OrderService` needs a new `ILogger<OrderService>` constructor dependency | `OrderService.cs` | `AddConstructorParameter` |
 | 8 | Class `Order` lives in a file named `OrderProcessor.cs` | `OrderProcessor.cs` | `SyncTypeAndFilename` |
@@ -143,7 +143,7 @@ failure mode.
 **Task:** "Is `Order.BuildInternalDebugLabel` used anywhere? If not, remove it."
 
 **Expected tool sequence:**
-1. `LocateSymbol(symbolName: "BuildInternalDebugLabel")` or `FindReferences`/`FindUsages` to confirm
+1. `LocateSymbol(symbolName: "BuildInternalDebugLabel")` or `FindReferences`/`QuerySymbolRelationships` to confirm
    zero call sites.
 2. `SafeDeleteUnusedSymbol(filepath: ".../OrderProcessor.cs", line: <decl line>, column: <decl column>)`
 

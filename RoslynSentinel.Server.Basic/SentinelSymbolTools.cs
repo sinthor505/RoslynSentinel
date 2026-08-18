@@ -185,10 +185,10 @@ public class SentinelSymbolTools
         }
     }
 
-    [McpServerTool(Name = "FindUsages")]
+    [McpServerTool(Name = "QuerySymbolRelationships")]
     [Produces(DataTag.Report)]
-    [Description("Queries symbol relationships by name. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only).")]
-    public async Task<ToolResult<object>> FindUsages(
+    [Description("Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites (new TypeName(...)), extension methods, types carrying an attribute, or methods by return type. projectName/filepath narrow scope. sortByFrequency=true ranks by count (objectCreations only). For call-site/override queries on a method or property (\"who calls this\", \"who overrides this\"), use FindReferences instead — objectCreations only matches 'new TypeName(...)' expressions and will structurally return [] for a method/property name.")]
+    public async Task<ToolResult<object>> QuerySymbolRelationships(
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string name,
         [ExternalInputRequired(DataTag.SymbolKind)] FindUsagesSearchKind searchKind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
@@ -263,11 +263,11 @@ public class SentinelSymbolTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "FindUsages ({Kind}) failed for '{Name}'", searchKind, name);
+            _logger.LogError(ex, "QuerySymbolRelationships ({Kind}) failed for '{Name}'", searchKind, name);
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"FindUsages failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = new ResultError(ToolErrorCode.Exception, $"QuerySymbolRelationships failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
             };
         }
     }

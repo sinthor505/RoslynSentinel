@@ -608,4 +608,15 @@ public class OrderService : IOrderService
         var result = await _symbolTools.FindReferences("IOrderService", FindReferencesKind.implementations, filepath: "Test.cs");
         Assert.That(result, Is.Not.Null);
     }
+
+    // --- QuerySymbolRelationships (renamed from FindUsages) ---
+
+    [Test]
+    public async Task QuerySymbolRelationships_ObjectCreationsForRealType_ReturnsResult()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolTools.QuerySymbolRelationships("Order", FindUsagesSearchKind.objectCreations);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.True);
+    }
 }
