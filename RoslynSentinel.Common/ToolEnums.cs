@@ -16,7 +16,7 @@ public enum ToolScope { file, project, solution }
 public enum FeaturesAction { list, get, update }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum SolutionItemsKind { projects, files, dependencies }
+public enum SolutionItemsKind { projects, files, dependencies, solutionItems }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ProposedChangeAction { apply, validate }

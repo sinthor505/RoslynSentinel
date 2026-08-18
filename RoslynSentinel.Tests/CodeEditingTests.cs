@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests;
 
 /// <summary>
 /// Tests for the new code-editing engine methods in RefactoringEngine:
-/// AddMemberAsync (record/struct support), AddUsingDirectiveAsync, AddEnumValueAsync,
+/// AddMemberAsync (record/struct support), AddUsingDirectiveAsync, ModifyEnumAsync,
 /// InsertMemberAfterAsync, InsertMemberBeforeAsync, AddAttributeAsync, AddBaseTypeAsync.
 /// </summary>
 [TestFixture]
@@ -129,11 +129,11 @@ public class Calc { }
     }
 
     // ══════════════════════════════════════════════════════════════
-    // AddEnumValueAsync
+    // ModifyEnumAsync
     // ══════════════════════════════════════════════════════════════
 
     [Test]
-    public async Task AddEnumValue_AppendsValueToEnum()
+    public async Task ModifyEnum_AppendsValueToEnum()
     {
         SetSource(@"
 public enum Color
@@ -143,14 +143,14 @@ public enum Color
 }
 ", "Color.cs");
 
-        var result = await _engine.AddEnumValueAsync("Color.cs", "Color", "Blue");
+        var result = await _engine.ModifyEnumAsync("Color.cs", "Color", "Red,Green,Blue");
 
         Assert.That(result.UpdatedText, Does.Contain("Blue"), "New enum value should be present.");
         Assert.That(result.UpdatedText, Does.Contain("Red"), "Existing values should remain.");
     }
 
     [Test]
-    public async Task AddEnumValue_WithExplicitValue()
+    public async Task ModifyEnum_WithExplicitValue()
     {
         SetSource(@"
 public enum Status
@@ -160,23 +160,44 @@ public enum Status
 }
 ", "Status.cs");
 
-        var result = await _engine.AddEnumValueAsync("Status.cs", "Status", "Archived", explicitValue: 99);
+        var result = await _engine.ModifyEnumAsync("Status.cs", "Status", "Active,Inactive,Archived=99");
 
         Assert.That(result.UpdatedText, Does.Contain("Archived"), "New value should be present.");
         Assert.That(result.UpdatedText, Does.Contain("99"), "Explicit integer value should be present.");
     }
 
     [Test]
-    public async Task AddEnumValue_GracefulFallback_WhenEnumNotFound()
+    public async Task ModifyEnum_RemovesAndReordersValues()
+    {
+        SetSource(@"
+public enum Color
+{
+    Red,
+    Green,
+    Blue
+}
+", "Color.cs");
+
+        var result = await _engine.ModifyEnumAsync("Color.cs", "Color", "Blue,Red");
+
+        Assert.That(result.UpdatedText, Does.Contain("Blue"));
+        Assert.That(result.UpdatedText, Does.Contain("Red"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Green"), "Omitted value should be removed.");
+        Assert.That(result.Message, Does.Contain("removed Green"));
+        Assert.That(result.Message, Does.Contain("reordered"));
+    }
+
+    [Test]
+    public async Task ModifyEnum_GracefulFallback_WhenEnumNotFound()
     {
         SetSource(@"
 public class Foo { }
 ", "Foo.cs");
 
-        var result = await _engine.AddEnumValueAsync("Foo.cs", "NonExistentEnum", "SomeValue");
+        var result = await _engine.ModifyEnumAsync("Foo.cs", "NonExistentEnum", "SomeValue");
 
-        Assert.That(result.UpdatedText, Does.Contain("class Foo"), "Original source should be returned unchanged.");
-        Assert.That(result, Does.Not.Contain("SomeValue"), "Value should not be injected into wrong place.");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No text should be produced when the target enum doesn't exist.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -618,7 +639,7 @@ public class Helper
         var result = await _engine.RemoveModifierAsync("Helper.cs", "Go", "static");
 
         Assert.That(result.UpdatedText, Does.Contain("public void Go"));
-        Assert.That(result, Does.Not.Contain("static"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("static"));
     }
 
     // ══════════════════════════════════════════════════════════════

@@ -411,6 +411,73 @@ public partial class PersistentWorkspaceManager : IDisposable
     }
 
     /// <summary>
+    /// Relative paths of files attached via the .sln's Solution Folders (i.e. lines inside a
+    /// <c>ProjectSection(SolutionItems)</c> block), paired with the enclosing folder's name.
+    /// MSBuildWorkspace never represents these as Roslyn Projects/Documents — <c>Solution.Projects</c>
+    /// only contains real buildable projects — so tools built on top of it (SearchSolutionText,
+    /// ListSolutionItems(kind: files)) can never see them. This reads the raw .sln text directly
+    /// to surface them instead. Classic .sln format only; .slnx (XML) solutions and in-memory/test
+    /// solutions (no real .sln backing) return an empty list.
+    /// </summary>
+    public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems()
+    {
+        var slnPath = CurrentSolution?.FilePath ?? SolutionPath;
+        if (string.IsNullOrEmpty(slnPath) || !slnPath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) || !File.Exists(slnPath))
+        {
+            return [];
+        }
+
+        var items = new List<(string, string)>();
+        var currentFolderName = "";
+        var inSolutionItemsSection = false;
+
+        foreach (var rawLine in File.ReadLines(slnPath))
+        {
+            var line = rawLine.Trim();
+
+            if (line.StartsWith("Project(", StringComparison.Ordinal))
+            {
+                // Project("{TYPE-GUID}") = "Name", "Path-or-Name", "{PROJECT-GUID}"
+                var eq = line.IndexOf('=');
+                if (eq >= 0)
+                {
+                    var firstField = line[(eq + 1)..].Split(',').FirstOrDefault();
+                    currentFolderName = firstField?.Trim().Trim('"') ?? "";
+                }
+                continue;
+            }
+
+            if (line.StartsWith("ProjectSection(SolutionItems)", StringComparison.OrdinalIgnoreCase))
+            {
+                inSolutionItemsSection = true;
+                continue;
+            }
+
+            if (line.StartsWith("EndProjectSection", StringComparison.OrdinalIgnoreCase))
+            {
+                inSolutionItemsSection = false;
+                continue;
+            }
+
+            if (inSolutionItemsSection)
+            {
+                // Each line is "relative\path = relative\path" (the two sides are always identical).
+                var eq = line.IndexOf('=');
+                if (eq > 0)
+                {
+                    var relativePath = line[..eq].Trim();
+                    if (!string.IsNullOrEmpty(relativePath))
+                    {
+                        items.Add((relativePath, currentFolderName));
+                    }
+                }
+            }
+        }
+
+        return items;
+    }
+
+    /// <summary>
     /// Sliding-window rate limiter for MCP tool calls.
     /// Returns <c>null</c> if the call is within the allowed rate, or a diagnostic error
     /// message if the limit is exceeded. The caller should return that message as an error.

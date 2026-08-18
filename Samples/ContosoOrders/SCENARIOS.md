@@ -30,7 +30,7 @@ Samples/ContosoOrders/
 |---|-------|----------|------------------|
 | 1 | Typo'd method name `CalcuateTotal` (missing "l") used across 2 projects | `Order.CalcuateTotal()` in `OrderProcessor.cs`, referenced in `OrderService.cs` and `OrderProcessorTests.cs` | `LocateSymbol` → `PreviewRenameImpact` → `RenameSymbol` |
 | 2 | `ApplyDiscount` is `private` but is intended to be called externally by `OrderService` | `OrderProcessor.cs` | `ChangeAccessibility` |
-| 3 | Missing `Delivered` enum value | `OrderStatus.cs` | `AddEnumValue` |
+| 3 | Missing `Delivered` enum value | `OrderStatus.cs` | `ModifyEnum` |
 | 4 | Fully-qualified `ContosoOrders.Core.Discounts.DiscountCalculator` used instead of a `using` directive | `OrderProcessor.cs` | `AddUsingDirective` |
 | 5 | Unused private method `BuildInternalDebugLabel` | `OrderProcessor.cs` | `FindReferences`/`FindUsages` (to confirm zero call sites) → `SafeDeleteUnusedSymbol` |
 | 6 | Inline totals-computation block inside `BuildOrderSummary` should become its own method | `OrderProcessor.cs` | `ExtractMethodSafe` |
@@ -103,13 +103,20 @@ the enclosing test method's own name.
 **Task:** "Add a `Delivered` status to `OrderStatus`, after `Shipped`."
 
 **Expected tool sequence:**
-1. `AddEnumValue(filepath: ".../OrderStatus.cs", enumName: "OrderStatus", valueName: "Delivered")`
+1. `GetTypeInfo(typeName: "OrderStatus", include: "members")` (optional — confirms current members
+   and values before rewriting)
+2. `ModifyEnum(filepath: ".../OrderStatus.cs", enumName: "OrderStatus", values: "Pending,Shipped,Delivered,Cancelled")`
 
-**Expected outcome:** `OrderStatus` enum gains `Delivered = 3` (or next implicit value) after
-`Shipped`.
+**Expected outcome:** `OrderStatus` gains `Delivered` positioned between `Shipped` and `Cancelled`.
+Because `Pending`/`Shipped`/`Cancelled` were implicitly numbered in the original source, inserting
+`Delivered` between them shifts `Cancelled`'s underlying value from `2` to `3` — this is expected
+(same as a hand-edit would produce), not a bug. An agent that needs `Cancelled` to keep exactly `2`
+would have to pin every retained member explicitly (e.g. `"Pending=0,Shipped=1,Delivered=4,Cancelled=2"`),
+but the task as stated doesn't require that.
 
 **Grading notes:** Verify the agent does not attempt a manual `ReplaceMember`/full-file rewrite when
-a purpose-built tool exists.
+a purpose-built tool exists, and passes the full member list (not just `"Delivered"`) since
+`ModifyEnum` replaces the whole set.
 
 ---
 
@@ -221,7 +228,7 @@ changes."
 **Expected tool sequence:**
 1. `LocateSymbol` + `RenameSymbol` (stages change A)
 2. `ChangeAccessibility` (stages change B)
-3. `AddEnumValue` (stages change C)
+3. `ModifyEnum` (stages change C)
 4. `GetDiagnostics` or `StagedChange(action: validate, changeId: ...)` per staged change
 5. `StagedChange(action: apply, changeId: ...)` for each, in any order that doesn't conflict
    (A and B touch the same file — the agent should notice this and either apply sequentially or

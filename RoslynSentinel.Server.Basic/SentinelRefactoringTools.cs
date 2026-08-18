@@ -440,14 +440,23 @@ public class SentinelRefactoringTools
         }
     }
 
-    [McpServerTool(Name = "AddEnumValue")]
+    [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a new value to an existing enum. explicitValue sets an explicit integer value (e.g. 99 → Archived = 99). Returns unchanged if enum not found.")]
-    public async Task<ToolResult<object>> AddEnumValue(
+    [Description("Sets an enum's complete member list in one call — covers add, remove, and reorder together. " +
+        "values is a comma-separated list of member names in the desired final order (e.g. " +
+        "\"Pending,Shipped,Delivered,Cancelled\"); append \"=N\" to set or override an explicit integer value " +
+        "(e.g. \"Archived=99\"). Names not currently present are added; names omitted from values are removed. " +
+        "Members already explicit in the source (had \"= N\") keep that value regardless of position; members " +
+        "that were implicit take the next ordinal from their predecessor in the NEW order — same as retyping " +
+        "the enum body by hand — so a mid-list insert or removal can shift a retained implicit member's " +
+        "underlying value. Pass \"=N\" explicitly for any member whose value must not move. Pass the FULL " +
+        "desired member list every time, not just the delta — an incomplete list will remove members you " +
+        "didn't mean to drop. To see the current members and their values first, use GetTypeInfo(typeName, " +
+        "include: \"members\").")]
+    public async Task<ToolResult<object>> ModifyEnum(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
-        [Consumes(DataTag.SymbolName, required: true)] string valueName,
-        [Consumes(DataTag.DataType, required: false)] int? explicitValue = null,
+        [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -457,25 +466,29 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var updated = await _refactoringEngine.AddEnumValueAsync(filePath, enumName, valueName, explicitValue);
+            var updated = await _refactoringEngine.ModifyEnumAsync(filePath, enumName, values);
             if (!autoStage)
             {
                 return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
             }
 
-            if (RequireUpdatedText(updated, "AddEnumValue", filePath) is { } guardResult)
+            if (RequireUpdatedText(updated, "ModifyEnum", filePath) is { } guardResult)
                 return guardResult;
 
+            var description = string.IsNullOrEmpty(updated.Message)
+                ? $"Sets '{enumName}' members in {Path.GetFileName(filePath)} to match the requested list."
+                : $"'{enumName}' in {Path.GetFileName(filePath)}: {updated.Message}.";
+
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Add enum value '{valueName}' to '{enumName}'.", "AddEnumValue", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Adds '{valueName}' to enum '{enumName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AddEnumValue failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"AddEnumValue failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            _logger.LogError(ex, "ModifyEnum failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyEnum failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -614,7 +627,14 @@ public class SentinelRefactoringTools
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed for variable '{variableName}' in '{filePath}': file not found in workspace or context snippet did not match any expression. Ensure the solution is loaded.") };
+                string reason = result.Outcome switch
+                {
+                    EditOutcome.DocumentNotFound => $"ExtractLocalVariable: document '{filePath}' not found in the workspace.",
+                    EditOutcome.SourceInvalid => $"ExtractLocalVariable: contextSnippet not found in '{filePath}'. {result.Message}",
+                    EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePath}'. {result.Message}",
+                    _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePath}' ({result.Outcome}). {result.Message}"
+                };
+                return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, reason) };
             }
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };

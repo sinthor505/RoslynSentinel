@@ -2197,7 +2197,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
-                Message = "// Using directive already exists."
+                Message = "// Using directive already exists.",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -2225,7 +2226,20 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddEnumValueAsync(FilePath filePath, string enumName, string valueName, int? explicitValue = null, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Sets an enum's complete member list in one pass — covers add, remove, and reorder.
+    /// <paramref name="values"/> is a comma-separated "Name[=IntValue]" list in the desired final
+    /// order. Members whose name is retained keep their existing explicit value unless the caller
+    /// supplies an override; members omitted from <paramref name="values"/> are removed; names not
+    /// currently present are added (in the position given). The returned DocumentEditResult.Message
+    /// summarizes what was added/removed/reordered so callers can verify the diff matched intent.
+    /// Members that were already explicit in the source keep their literal value regardless of new
+    /// position (same as a hand-edit would); members that were implicit take the next ordinal from
+    /// their predecessor in the NEW order — same renumbering behavior as manually retyping the enum
+    /// body — so a mid-list insert or removal can shift a retained implicit member's underlying
+    /// value. Pass "=N" explicitly for any member whose numeric value must not move. 
+    /// </summary>
+    public async Task<DocumentEditResult> ModifyEnumAsync(FilePath filePath, string enumName, string values, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2247,28 +2261,110 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Enum not found.",
-                UpdatedText = root?.ToFullString() ?? string.Empty
+                Message = $"// Cannot edit: enum '{enumName}' not found."
             };
         }
 
-        var newMember = SyntaxFactory.EnumMemberDeclaration(valueName);
-        if (explicitValue.HasValue)
+        var requested = new List<(string Name, int? Value)>();
+        foreach (var raw in values.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
-            newMember = newMember.WithEqualsValue(
-                SyntaxFactory.EqualsValueClause(
-                    SyntaxFactory.LiteralExpression(
-                        SyntaxKind.NumericLiteralExpression,
-                        SyntaxFactory.Literal(explicitValue.Value))));
+            var token = raw.Trim();
+            var eq = token.IndexOf('=');
+            if (eq < 0)
+            {
+                requested.Add((token, null));
+                continue;
+            }
+
+            var name = token[..eq].Trim();
+            var valueText = token[(eq + 1)..].Trim();
+            if (!int.TryParse(valueText, out var explicitValue))
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = $"// Cannot edit: '{valueText}' in '{token}' is not a valid integer explicit value."
+                };
+            }
+            requested.Add((name, explicitValue));
         }
 
-        var newEnumNode = enumNode.AddMembers(newMember);
+        if (requested.Count == 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: values must contain at least one member name."
+            };
+        }
+
+        var duplicates = requested.GroupBy(r => r.Name, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (duplicates.Count > 0)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Cannot edit: duplicate member name(s) in values: {string.Join(", ", duplicates)}."
+            };
+        }
+
+        var existingMembers = enumNode.Members.ToList();
+        var existingByName = existingMembers.ToDictionary(m => m.Identifier.Text, m => m, StringComparer.Ordinal);
+        var existingNamesInOrder = existingMembers.Select(m => m.Identifier.Text).ToList();
+        var requestedNames = requested.Select(r => r.Name).ToList();
+
+        var added = requestedNames.Where(n => !existingByName.ContainsKey(n)).ToList();
+        var removed = existingNamesInOrder.Where(n => !requestedNames.Contains(n)).ToList();
+        var retainedOldOrder = existingNamesInOrder.Where(requestedNames.Contains).ToList();
+        var retainedNewOrder = requestedNames.Where(existingByName.ContainsKey).ToList();
+        bool reordered = !retainedOldOrder.SequenceEqual(retainedNewOrder);
+
+        if (added.Count == 0 && removed.Count == 0 && !reordered)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// No change: requested values already match the current member list and order."
+            };
+        }
+
+        var newMembers = new List<EnumMemberDeclarationSyntax>();
+        foreach (var (name, explicitValue) in requested)
+        {
+            EnumMemberDeclarationSyntax member = existingByName.TryGetValue(name, out var existingMember)
+                ? existingMember
+                : SyntaxFactory.EnumMemberDeclaration(name);
+
+            if (explicitValue.HasValue)
+            {
+                member = member.WithEqualsValue(
+                    SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.LiteralExpression(
+                            SyntaxKind.NumericLiteralExpression,
+                            SyntaxFactory.Literal(explicitValue.Value))));
+            }
+
+            newMembers.Add(member);
+        }
+
+        var newEnumNode = enumNode.WithMembers(SyntaxFactory.SeparatedList(newMembers));
         var newRoot = root!.ReplaceNode(enumNode, newEnumNode).NormalizeWhitespace();
+
+        var summary = new List<string>();
+        if (added.Count > 0) summary.Add($"added {string.Join(", ", added)}");
+        if (removed.Count > 0) summary.Add($"removed {string.Join(", ", removed)}");
+        if (reordered) summary.Add("reordered");
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = newRoot.ToFullString(),
+            Message = string.Join("; ", summary)
         };
     }
 
@@ -2520,7 +2616,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Cannot edit: base type already exists."
+                Message = "// Cannot edit: base type already exists.",
+                UpdatedText = root!.ToFullString()
             };
         }
 
@@ -2872,7 +2969,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Cannot edit: modifier already exists."
+                Message = "// Cannot edit: modifier already exists.",
+                UpdatedText = root.ToFullString()
             };
         }
 

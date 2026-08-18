@@ -644,8 +644,13 @@ public class SymbolNavigationEngine
         var results = new List<TypeMemberDetail>();
         var seen = new HashSet<string>();
 
+        // Enums never benefit from the inherited chain — it's always System.Enum/System.ValueType
+        // boilerplate (Parse, GetValues, ToString, ...) that drowns out the handful of values
+        // callers actually asked about, so it's excluded regardless of includeInherited.
+        var isEnum = typeSymbol.TypeKind == TypeKind.Enum;
+
         var typeChain = new List<(INamedTypeSymbol Type, bool IsTarget)> { (typeSymbol, true) };
-        if (includeInherited)
+        if (includeInherited && !isEnum)
         {
             var t = typeSymbol.BaseType;
             while (t != null && t.SpecialType != SpecialType.System_Object)
@@ -664,7 +669,11 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
-                var sig = member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                // Enum members are IFieldSymbols whose default signature (just "Type.Name") hides
+                // the one thing callers usually want — the ordinal/explicit value — so surface it.
+                var sig = isEnum && member is IFieldSymbol { HasConstantValue: true } enumField
+                    ? $"{type.Name}.{member.Name} = {enumField.ConstantValue}"
+                    : member.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
                 if (!seen.Add(member.Name + sig))
                 {
                     continue;

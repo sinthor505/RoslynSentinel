@@ -129,6 +129,57 @@ public class BatteryTwentyTests
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task List_SolutionItems_NoSolutionLoaded_ReturnsStructuredError()
+    {
+        var result = await _tools.ListSolutionItems(SolutionItemsKind.solutionItems);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task List_SolutionItems_ParsesSolutionFolderFiles()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var slnPath = Path.Combine(tempDir, "Test.sln");
+        File.WriteAllText(slnPath, "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+            "Project(\"{2150E333-8FDC-42A3-9474-1A3956D46DE8}\") = \"Solution Items\", \"Solution Items\", \"{856FAB21-F17B-44B2-8638-072C8D796F07}\"\n" +
+            "\tProjectSection(SolutionItems) = preProject\n" +
+            "\t\tdocs\\plans\\PLAN.md = docs\\plans\\PLAN.md\n" +
+            "\tEndProjectSection\n" +
+            "EndProject\n" +
+            "Global\n" +
+            "EndGlobal\n");
+
+        try
+        {
+            _workspaceManager.SolutionPath = slnPath;
+
+            var result = await _tools.ListSolutionItems(SolutionItemsKind.solutionItems);
+
+            Assert.That(result.Success, Is.True);
+            var items = result.Data as List<SolutionItemFile>;
+            Assert.That(items, Is.Not.Null);
+            Assert.That(items!.Count, Is.EqualTo(1));
+            Assert.That(items[0].FilePath.Relative.Replace('/', '\\'), Is.EqualTo(@"docs\plans\PLAN.md"));
+            Assert.That(items[0].SolutionFolder, Is.EqualTo("Solution Items"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public void GetSolutionFolderItems_InMemorySolution_ReturnsEmpty()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var items = _workspaceManager.GetSolutionFolderItems();
+        Assert.That(items, Is.Empty);
+    }
+
     // --- SearchSolutionText ---
 
     [Test]
@@ -155,10 +206,20 @@ public class BatteryTwentyTests
     public async Task SearchSolutionText_RegexLikePatternWithIsRegex_ReturnsNoWarning()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SearchSolutionText(@"^\s*public class Order", isRegex: true);
+        var result = await _tools.SearchSolutionText(@"^namespace TestProj", isRegex: true);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Warning, Is.Null);
+    }
+
+    [Test]
+    public async Task SearchSolutionText_NoMatches_ReturnsScopeWarning()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.SearchSolutionText("ThisPatternDoesNotAppearAnywhere");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Warning, Does.Contain("ProjectDoc"));
     }
 
     // --- LoadSolution ---

@@ -138,11 +138,20 @@ public class SentinelSymbolTools
             if (aspect == InspectSymbolAspect.info)
             {
                 var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
-                if (symbolInfo == null) return new ToolResult<object>
+                if (symbolInfo == null)
                 {
-                    Success = false,
-                    Error = new ResultError(ToolErrorCode.Exception, "Symbol info not found.")
-                };
+                    var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "…" : contextSnippet;
+                    return new ToolResult<object>
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.Exception,
+                            $"Could not resolve a symbol in '{filePath}' for contextSnippet \"{snippetPreview}\". " +
+                            "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
+                            "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
+                            "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
+                            "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match.")
+                    };
+                }
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -388,7 +397,7 @@ public class SentinelSymbolTools
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
-    [Description("Returns type information. hierarchy → TypeHierarchyReport (base class chain, interfaces, derived types); members → List<TypeMemberDetail> (all public/protected members); both → object with Hierarchy and Members (default). includeInherited=false excludes inherited members (members and both only).")]
+    [Description("Returns type information. hierarchy → TypeHierarchyReport (base class chain, interfaces, derived types); members → List<TypeMemberDetail> (all public/protected members); both → object with Hierarchy and Members (default). includeInherited=false excludes inherited members (members and both only). For enums, this is also the tool to view current values: each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise (Parse, GetValues, ToString, ...) is excluded automatically regardless of includeInherited. To change an enum's values (add/remove/reorder), use ModifyEnum.")]
     public async Task<ToolResult<object>> GetTypeInfo(
         [Consumes(DataTag.DataType)] string typeName,
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
@@ -404,6 +413,17 @@ public class SentinelSymbolTools
             if (include == TypeInfoInclude.hierarchy || include == TypeInfoInclude.both)
             {
                 hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
+                if (hierarchy.Error is not null)
+                {
+                    // GetTypeMembersDetailAsync silently returns an empty list for the same
+                    // "type not found" condition, so surface the hierarchy lookup's explicit
+                    // error here rather than letting either include mode return a bare Success=true.
+                    return new ToolResult<object>
+                    {
+                        Success = false,
+                        Error = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
+                    };
+                }
             }
             if (include == TypeInfoInclude.members || include == TypeInfoInclude.both)
             {
@@ -419,10 +439,14 @@ public class SentinelSymbolTools
             }
             if (include == TypeInfoInclude.members)
             {
+                var warning = members!.Count == 0
+                    ? $"No members found for '{typeName}'. This can mean the type doesn't exist in the solution — retry with include=hierarchy or include=both to confirm — or that it genuinely has no members."
+                    : null;
                 return new ToolResult<object>
                 {
                     Success = true,
-                    Data = members!
+                    Data = members!,
+                    Warning = warning
                 };
             }
             if (include == TypeInfoInclude.both)

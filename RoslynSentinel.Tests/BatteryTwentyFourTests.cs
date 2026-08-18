@@ -290,13 +290,13 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- AddEnumValue ---
+    // --- ModifyEnum ---
 
     [Test]
-    public async Task AddEnumValue_AutoStageTrue_ReturnsNotNull()
+    public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddEnumValue("Order.cs", "Status", "Cancelled");
+        var result = await _tools.ModifyEnum("Order.cs", "Status", "Active,Pending,Cancelled");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -611,10 +611,15 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(
             ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"),
             ("Owner.cs", "namespace App; public class Owner {}"));
-        var result = await _advTools.InlineClass("Helper.cs", "Owner.cs", "Helper");
-        Assert.That(result.Data, Does.ContainKey("Owner.cs"));
-        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Value"));
-        Assert.That(((Dictionary<string, string>)result.Data)["Owner.cs"], Does.Contain("Go"));
+        // dryRun avoids writing to disk under a bare relative filename (resolves against the test
+        // runner's CWD) — without it, a stray file left by a prior run makes the diff spuriously
+        // empty since the on-disk "before" already matches the freshly-computed "after".
+        var result = await _advTools.InlineClass("Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+        var summary = (PersistentWorkspaceManager.AppliedChangeSummary)result.Data!;
+        Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Has.Some.Contains("Owner.cs"));
+        Assert.That(summary.Diff, Does.Contain("Value"));
+        Assert.That(summary.Diff, Does.Contain("Go"));
     }
 
     // --- IntroduceVariable ---

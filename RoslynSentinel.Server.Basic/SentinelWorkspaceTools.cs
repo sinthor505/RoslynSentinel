@@ -17,6 +17,13 @@ public record OutlineItem(string Kind, string Name, string? Container, int Start
 /// <summary>Single text-search hit returned by search_solution_text.</summary>
 public record TextSearchMatch(FilePath filePath, int Line, int Column, string Preview);
 
+/// <summary>
+/// A file attached to the solution via a .sln Solution Folder (ProjectSection(SolutionItems)),
+/// returned by ListSolutionItems(kind: solutionItems). SolutionFolder is the enclosing folder's
+/// display name (e.g. "Solution Items").
+/// </summary>
+public record SolutionItemFile(FilePath FilePath, string SolutionFolder);
+
 [McpServerToolType]
 public class SentinelWorkspaceTools
 {
@@ -70,13 +77,13 @@ public class SentinelWorkspaceTools
                 FeaturesAction.list => (object)_config.GetFeatureStatuses(),
                 FeaturesAction.get => _config.GetFeatureStatuses(names),
                 FeaturesAction.update => (object)UpdateFeaturesInternal(enabled ?? []),
-                _ => (object)$"Unknown action '{action}'."
+                _ => new { Success = false, Error = $"Unknown action '{action}'. Valid values: list, get, update." }
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Features ({Action}) failed", action);
-            return $"Features failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
+            return new { Success = false, Error = $"Features failed unexpectedly ({ex.GetType().Name}): {ex.Message}" };
         }
     }
 
@@ -92,7 +99,7 @@ public class SentinelWorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
     [Produces(DataTag.DependencyList)]
-    [Description("Lists projects, files, or dependencies. files and dependencies require projectName.")]
+    [Description("Lists projects, files, dependencies, or solution-folder items. files and dependencies require projectName. solutionItems (no projectName needed) returns files attached via the .sln's Solution Folders — e.g. plan/handoff docs referenced there for discoverability in an IDE. These are never part of any project's compiled Documents, so SearchSolutionText and kind=files will never find them; read their content with ProjectDoc.")]
     public async Task<ToolResult<object>> ListSolutionItems(
         [ExternalInputRequired(DataTag.Scope)] SolutionItemsKind kind,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
@@ -105,6 +112,22 @@ public class SentinelWorkspaceTools
             {
                 var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
                 return new ToolResult<object>() { Success = true, Data = solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList() };
+            }
+            if (kind == SolutionItemsKind.solutionItems)
+            {
+                var solutionRoot = _workspaceManager.GetSolutionRoot();
+                if (solutionRoot is null)
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.") };
+                }
+
+                var items = _workspaceManager.GetSolutionFolderItems()
+                    .Select(i => new SolutionItemFile(
+                        new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot),
+                        i.SolutionFolder))
+                    .ToList();
+
+                return new ToolResult<object>() { Success = true, Data = items, TotalRecords = items.Count };
             }
             if (kind == SolutionItemsKind.files)
             {
@@ -164,20 +187,32 @@ public class SentinelWorkspaceTools
             };
         }
 
-        var files = Directory.EnumerateFiles(workspacePath, "*.sln", SearchOption.AllDirectories)
-            .Concat(Directory.EnumerateFiles(workspacePath, "*.slnx", SearchOption.AllDirectories))
-            .OrderBy(p => p)
-            .Select(p => new SolutionFileInfo(
-                Path: p,
-                Format: Path.GetExtension(p).TrimStart('.').ToLowerInvariant()))
-            .ToList();
-
-        return new ToolResult<List<SolutionFileInfo>>
+        try
         {
-            Success = true,
-            Data = files,
-            TotalRecords = files.Count
-        };
+            var files = Directory.EnumerateFiles(workspacePath, "*.sln", SearchOption.AllDirectories)
+                .Concat(Directory.EnumerateFiles(workspacePath, "*.slnx", SearchOption.AllDirectories))
+                .OrderBy(p => p)
+                .Select(p => new SolutionFileInfo(
+                    Path: p,
+                    Format: Path.GetExtension(p).TrimStart('.').ToLowerInvariant()))
+                .ToList();
+
+            return new ToolResult<List<SolutionFileInfo>>
+            {
+                Success = true,
+                Data = files,
+                TotalRecords = files.Count
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ListWorkspaceSolutions failed for '{WorkspacePath}'", workspacePath);
+            return new ToolResult<List<SolutionFileInfo>>
+            {
+                Success = false,
+                Error = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Details: {ex.Message}")
+            };
+        }
     }
 
     public sealed record SolutionFileInfo(string Path, string Format);
@@ -196,9 +231,10 @@ public class SentinelWorkspaceTools
         {
             await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
 
-            if (_workspaceManager.GetSolutionRoot() != null)
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            if (solutionRoot != null)
             {
-                return new ToolResult<object>() { Success = true, Data = $"Solution loaded: {solutionPath}" };
+                return new ToolResult<object>() { Success = true, Data = $"Solution loaded: {solutionPath}{BuildPostLoadHint(solutionRoot)}" };
             }
             else
             {
@@ -210,6 +246,48 @@ public class SentinelWorkspaceTools
             _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
+    }
+
+    // Subdirectories ProjectDoc reads/writes under docs/, paired with the docType value that
+    // maps to each — see DocumentationTools.ProjectDoc.
+    private static readonly (string Dir, string DocType)[] ProjectDocSubdirs =
+    [
+        ("plans", "plan"),
+        ("handoffs", "handoff"),
+        ("completed", "completed_work"),
+        ("documentation", "documentation"),
+    ];
+
+    // Surfaces docs/ and Solution-Folder content right after a solution loads, so an agent
+    // doesn't have to burn a round of (fruitless) SearchSolutionText calls to discover a plan,
+    // handoff, or other doc file the solution already has waiting for it.
+    private string BuildPostLoadHint(string solutionRoot)
+    {
+        var parts = new List<string>();
+
+        var solutionItems = _workspaceManager.GetSolutionFolderItems();
+        if (solutionItems.Count > 0)
+        {
+            parts.Add($"{solutionItems.Count} file(s) attached via Solution Folders in the .sln (not visible to SearchSolutionText — list them with ListSolutionItems(kind: solutionItems)).");
+        }
+
+        var docsRoot = Path.Combine(solutionRoot, "docs");
+        foreach (var (dir, docType) in ProjectDocSubdirs)
+        {
+            var fullDir = Path.Combine(docsRoot, dir);
+            if (!Directory.Exists(fullDir))
+            {
+                continue;
+            }
+
+            var count = Directory.GetFiles(fullDir).Length;
+            if (count > 0)
+            {
+                parts.Add($"docs/{dir}/ has {count} file(s) — read with ProjectDoc(action: read, docType: {docType}, name: \"<filename>\").");
+            }
+        }
+
+        return parts.Count > 0 ? " " + string.Join(" ", parts) : "";
     }
 
     [McpServerTool(Name = "Diagnose")]
@@ -287,11 +365,13 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ClearExternalDrift")]
     [Produces(DataTag.ResultOnly)]
     [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
-    public void ClearExternalDrift(
+    public string ClearExternalDrift(
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        var count = _workspaceManager.GetExternalDrift().Count;
         _workspaceManager.ClearDrift();
+        return $"Cleared {count} tracked external change(s).";
     }
 
     private static string PreviewFileContent(string content)
@@ -330,7 +410,7 @@ public class SentinelWorkspaceTools
             {
                 if (changes == null)
                 {
-                    return new ToolResult<object>() { Success = false, Data = "changes is required when changesetFormat=files." };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "changes is required when changesetFormat=files.") };
                 }
                 if (action == ProposedChangeAction.apply)
                 {
@@ -345,7 +425,9 @@ public class SentinelWorkspaceTools
                     try
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(changes);
-                        return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {validationResult.Diagnostics}") };
+                        return validationResult.Success
+                            ? new ToolResult<object>() { Success = true, Data = validationResult }
+                            : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {validationResult.Diagnostics}") };
                     }
                     catch (Exception ex)
                     {
@@ -391,7 +473,9 @@ public class SentinelWorkspaceTools
                 if (action == ProposedChangeAction.validate)
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
-                    return new ToolResult<object>() { Success = validationResult.Success, Data = validationResult, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validationResult}") };
+                    return validationResult.Success
+                        ? new ToolResult<object>() { Success = true, Data = validationResult }
+                        : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validationResult}") };
                 }
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.") };
@@ -827,7 +911,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches all source files in the loaded solution for a text pattern or regex. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
+    [Description("Searches all source files in the loaded solution for a text pattern or regex. Only searches documents that are part of a loaded project's compilation (e.g. .cs files) — files attached via the .sln's Solution Folders and other non-project files are never included, no matter the pattern; use ListSolutionItems(kind: solutionItems) to see those, and ProjectDoc to read plan/handoff/documentation files directly. Returns file path, 1-based line and column, and a preview per match. isRegex=true treats pattern as a regular expression (default false, literal substring match); if pattern contains regex metacharacters (e.g. ^ $ . * + ? ( ) [ ] { } | \\) but isRegex is false, the result includes a Warning suggesting isRegex=true. fileGlob restricts to matching file paths. maxResults caps total matches (default 200).")]
     public async Task<ToolResult<object>> SearchSolutionText(
         [ToolOption(ToolOptionTag.Pattern, required: true)] string pattern,
         [ToolOption(ToolOptionTag.IsRegex)] bool isRegex = false,
@@ -905,11 +989,16 @@ public class SentinelWorkspaceTools
                 }
             }
 
-            string? warning = null;
+            var warnings = new List<string>();
             if (!isRegex && LikelyRegexPattern.IsMatch(pattern))
             {
-                warning = $"Pattern '{pattern}' contains regex metacharacters but isRegex is false, so it was matched as a literal substring. If you intended a regex, retry with isRegex=true.";
+                warnings.Add($"Pattern '{pattern}' contains regex metacharacters but isRegex is false, so it was matched as a literal substring. If you intended a regex, retry with isRegex=true.");
             }
+            if (results.Count == 0)
+            {
+                warnings.Add("No matches. SearchSolutionText only searches documents that are part of a loaded project's compilation (e.g. .cs files) — it does not see files attached via the .sln's Solution Folders, docs/ files, or other non-project files. Use ListSolutionItems(kind: solutionItems) to list files attached via Solution Folders, or ProjectDoc to read plan/handoff/documentation files directly.");
+            }
+            string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
 
             return new ToolResult<object>() { Success = true, Data = results, Warning = warning };
         }
@@ -999,16 +1088,8 @@ public class SentinelWorkspaceTools
             {
                 return new ToolResult<object>()
                 {
-                    Success = true,
-                    Data = new OperationDetailResult
-                    {
-                        ChangeId = changeId,
-                        BlobName = "",
-                        TotalItems = 0,
-                        ReturnedItems = 0,
-                        Filter = filter,
-                        Items = new List<OperationItemRecord>(),
-                    }
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"No operation blob found for changeId '{changeId}'. Verify the changeId, or check that a solution is loaded.")
                 };
             }
 
