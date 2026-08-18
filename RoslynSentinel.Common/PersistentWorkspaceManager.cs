@@ -167,6 +167,49 @@ public partial class PersistentWorkspaceManager : IDisposable
         while (_externalChanges.TryTake(out _)) { }
     }
 
+    /// <summary>
+    /// Compares every tracked document's in-memory text against the bytes currently on disk.
+    /// Unlike <see cref="GetExternalDrift"/> (which relies on the FileSystemWatcher and can miss
+    /// events under overflow), this reads disk directly, so it also catches drift the watcher
+    /// never reported.
+    /// </summary>
+    public async Task<List<string>> GetContentDriftAsync(CancellationToken cancellationToken = default)
+    {
+        var solution = CurrentSolution;
+        if (solution is null)
+        {
+            return [];
+        }
+
+        var driftedFiles = new List<string>();
+        foreach (var document in solution.Projects.SelectMany(p => p.Documents))
+        {
+            if (document.FilePath is null || !File.Exists(document.FilePath))
+            {
+                continue;
+            }
+
+            string onDiskText;
+            try
+            {
+                onDiskText = await File.ReadAllTextAsync(document.FilePath, cancellationToken);
+            }
+            catch (IOException)
+            {
+                // File locked/being written concurrently — skip rather than false-positive.
+                continue;
+            }
+
+            var inMemoryText = (await document.GetTextAsync(cancellationToken)).ToString();
+            if (!string.Equals(inMemoryText, onDiskText, StringComparison.Ordinal))
+            {
+                driftedFiles.Add(document.FilePath);
+            }
+        }
+
+        return driftedFiles;
+    }
+
     public async Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default)
         => await LoadSolutionAsync(solutionPath, baseRepoDir: null, cancellationToken);
 

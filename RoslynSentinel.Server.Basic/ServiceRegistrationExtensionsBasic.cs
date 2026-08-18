@@ -177,6 +177,40 @@ public static class RoslynSentinelServiceExtensionsBasic
                         };
                     }
                 }));
+
+            // Diagnostic drift check: after every tool call, compare each tracked document's
+            // in-memory text against the bytes on disk and log any mismatch. This is a content-level
+            // check (unlike GetExternalDrift, which depends on the FileSystemWatcher and can miss
+            // events under overflow), so it also catches drift the watcher never reported.
+            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+                ModelContextProtocol.Protocol.CallToolRequestParams,
+                ModelContextProtocol.Protocol.CallToolResult>(
+                async (context, cancellationToken) =>
+                {
+                    var result = await next(context, cancellationToken);
+
+                    try
+                    {
+                        var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                        if (workspaceManager is not null)
+                        {
+                            var drift = await workspaceManager.GetContentDriftAsync(cancellationToken);
+                            if (drift.Count > 0)
+                            {
+                                var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
+                                logger?.LogWarning(
+                                    "Content drift detected after tool '{Tool}': {Count} file(s) differ from in-memory workspace state: {Files}",
+                                    context.Params?.Name, drift.Count, string.Join(", ", drift));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Drift check filter failed: {ex}");
+                    }
+
+                    return result;
+                }));
         });
 
         return mcpBuilder;
