@@ -1404,12 +1404,18 @@ public class MsToolAugmentEngine
         // value reported back to the caller too — tracked in outVarNames and handled below.
         var parameters = new List<(string Name, string TypeStr)>();
         var outVarNames = new HashSet<string>();
+        // Locals declared FRESH inside the Selection (so they never appear in DataFlowsIn —
+        // nothing flows in, there's no pre-existing value) but read afterward. These must also
+        // be reported back to the caller, but as an additional return value only — NOT as a
+        // parameter, since there's nothing for the caller to pass in.
+        var declaredOutVars = new List<(string Name, string TypeStr)>();
         try
         {
             var df = model.AnalyzeDataFlow(firstStmt, lastStmt);
             if (df?.Succeeded == true)
             {
                 var flowsOut = new HashSet<ISymbol>(df.DataFlowsOut, SymbolEqualityComparer.Default);
+                var flowsIn = new HashSet<ISymbol>(df.DataFlowsIn, SymbolEqualityComparer.Default);
 
                 foreach (var sym in df.DataFlowsIn)
                 {
@@ -1436,11 +1442,20 @@ public class MsToolAugmentEngine
                         }
                     }
                 }
+
+                foreach (var sym in df.DataFlowsOut)
+                {
+                    if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local && !flowsIn.Contains(local))
+                    {
+                        declaredOutVars.Add((local.Name,
+                            local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                    }
+                }
             }
         }
         catch { /* best-effort — proceed without parameters if analysis fails */ }
 
-        var outVars = parameters.Where(p => outVarNames.Contains(p.Name)).ToList();
+        var outVars = parameters.Where(p => outVarNames.Contains(p.Name)).Concat(declaredOutVars).ToList();
 
         // No explicit return statement in the Selection, but pre-existing locals are mutated
         // and read afterward — return their final value(s) so the caller sees the update.
@@ -1513,9 +1528,15 @@ public class MsToolAugmentEngine
         }
         else if (returnsOutVars)
         {
+            // outVars declared fresh inside the Selection (declaredOutVars) have no counterpart
+            // in the caller's scope — the call site must declare them (`var name`), not assign to
+            // them. outVars that already existed before the Selection (flowed in AND out) must be
+            // assigned, not re-declared. Per-element `var` correctly expresses a mix of both in a
+            // single deconstruction (e.g. `(existing, var fresh) = Method();`).
+            var declaredOutNames = new HashSet<string>(declaredOutVars.Select(v => v.Name));
             var targetExpr = outVars.Count == 1
-                ? outVars[0].Name
-                : $"({string.Join(", ", outVars.Select(v => v.Name))})";
+                ? (declaredOutNames.Contains(outVars[0].Name) ? $"var {outVars[0].Name}" : outVars[0].Name)
+                : $"({string.Join(", ", outVars.Select(v => declaredOutNames.Contains(v.Name) ? $"var {v.Name}" : v.Name))})";
             callText = $"{targetExpr} = {newMethodName}({argsStr});";
         }
         else
