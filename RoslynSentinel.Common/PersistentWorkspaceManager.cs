@@ -365,7 +365,24 @@ public partial class PersistentWorkspaceManager : IDisposable
             }
             else
             {
-                CurrentSolution = _workspace.CurrentSolution;
+                // No .csproj/.sln involved — resetting to the workspace's own CurrentSolution
+                // here would discard every edit accumulated in-memory since the last full
+                // load/reload (WithDocumentText/AddDocument only ever update the branched
+                // CurrentSolution property, never the underlying _workspace). Fold just the
+                // changed .cs files into the existing CurrentSolution instead.
+                bool needsReloadAfterAll = await ApplyInMemoryDocumentUpdatesAsync(changes, CancellationToken.None);
+                if (needsReloadAfterAll)
+                {
+                    var slnPath = _workspace.CurrentSolution.FilePath;
+                    if (!string.IsNullOrEmpty(slnPath))
+                    {
+                        CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
+                    }
+                }
+                else
+                {
+                    Interlocked.Increment(ref _workspaceVersion);
+                }
             }
         }
         catch (ObjectDisposedException)
@@ -977,6 +994,18 @@ public partial class PersistentWorkspaceManager : IDisposable
 
             if (ext != ".cs")
             {
+                continue;
+            }
+
+            if (!File.Exists(filePath))
+            {
+                // File is gone (e.g. the old half of a rename) — drop its tracked Document so
+                // the type it declared doesn't keep existing twice in the compilation.
+                var deletedDocId = CurrentSolution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
+                if (deletedDocId != null)
+                {
+                    CurrentSolution = CurrentSolution.RemoveDocument(deletedDocId);
+                }
                 continue;
             }
 
