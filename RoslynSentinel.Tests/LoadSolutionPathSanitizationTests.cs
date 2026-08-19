@@ -77,6 +77,29 @@ public class LoadSolutionPathSanitizationTests
     }
 
     [Test]
+    [Description("Regression (ContosoOrders live agent run, attempt 6): an agent fabricated a "
+                 + "plausible-looking but nonexistent baseRepoDir (a macOS-style "
+                 + "/Users/.../workspaces/... path on a Windows host) instead of omitting the "
+                 + "argument as the tool description recommends for relative paths. The prior "
+                 + "behavior silently dropped that candidate and fell through to the server-wide "
+                 + "BaseRepoDirectory default, which happened to also resolve the same relative "
+                 + "solutionPath — but to an unintended sibling directory, with no error raised to "
+                 + "signal the mismatch. A nonexistent baseRepoDir must fail fast and say so, not "
+                 + "be silently discarded.")]
+    public async Task LoadSolutionAsync_BaseRepoDirDoesNotExist_ThrowsArgumentExceptionInsteadOfSilentlyFallingThroughAsync()
+    {
+        var nonexistentBaseRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid());
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            async () => await _workspaceManager.LoadSolutionAsync("Samples/Foo/Foo.sln", nonexistentBaseRepoDir));
+
+        Assert.That(ex!.Message, Does.Contain(nonexistentBaseRepoDir),
+            "Error must name the specific nonexistent baseRepoDir that was rejected.");
+        Assert.That(ex.Message, Does.Contain("omit baseRepoDir").IgnoreCase.Or.Contain("do not guess").IgnoreCase,
+            "Error must steer the caller toward omitting baseRepoDir rather than guessing another value.");
+    }
+
+    [Test]
     public async Task LoadSolutionAsync_AbsolutePathWrappedInQuotes_ResolvesPastFileCheck()
     {
         // An absolute path wrapped in quotes/whitespace must still resolve to the real file

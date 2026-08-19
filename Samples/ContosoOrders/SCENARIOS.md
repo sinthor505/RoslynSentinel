@@ -72,6 +72,20 @@ if it's healthy."
 
 **Grading notes:** Confirms the agent knows to load before doing anything else.
 
+**Known model behavior — fabricating `baseRepoDir` for a relative `solutionPath`.** A relative,
+forward-slash path like `Samples/ContosoOrders/ContosoOrders.sln` reads as POSIX-flavored to a
+model even on a Windows host (forward slashes and bare relative paths dominate the training-data
+distribution for coding-agent examples), and a live agent run (attempt 6) responded by inventing a
+plausible-looking absolute `baseRepoDir` (a macOS-style `/Users/.../workspaces/...` path) instead of
+simply omitting the argument, as `LoadSolution`'s own description already recommends for relative
+paths. As of 2026-08-19, a `baseRepoDir` that doesn't exist on the host is now rejected with an
+explicit error telling the caller to omit it rather than guess — previously it was silently dropped
+and resolution fell through to the server's configured `--base-repo-dir` default, which (in that
+run) happened to also contain a same-named `Samples/ContosoOrders` sibling directory, so the load
+"succeeded" against the wrong solution entirely, with no error to signal the mismatch. If evaluating
+this specific failure mode is a goal, prefer giving the agent an absolute `solutionPath` in the
+prompt — it removes the ambiguity that invites the fabrication in the first place.
+
 ---
 
 ### Scenario 1 — Rename a typo'd method (Tier 1 → Tier 2)
@@ -438,6 +452,14 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   `symbolName`/`contextSnippet` fallback work below, which stayed scoped to the reachable engine.
 
 ### Fixed
+- **(2026-08-19) `LoadSolution` silently dropping a nonexistent `baseRepoDir` instead of failing
+  fast.** A caller-supplied `baseRepoDir` that doesn't exist on the host used to be silently
+  discarded, falling through to other resolution candidates (server-wide `--base-repo-dir` default,
+  then the app base directory) with no signal that the supplied value was ignored — meaning a
+  fabricated/guessed `baseRepoDir` combined with a relative `solutionPath` could silently resolve to
+  an unintended sibling directory that happens to share the same relative path, rather than erroring.
+  Now throws immediately, naming the specific nonexistent directory and steering the caller toward
+  omitting `baseRepoDir` rather than guessing another value. See Scenario 0.
 - **(2026-08-19) `ExtractMethodSafe` synthesizing a spuriously nullable parameter.** A selection
   that used a reference-typed local/parameter declared earlier in the same method (e.g. an
   unconditionally-constructed `StringBuilder`, never reassigned) got a generated parameter typed

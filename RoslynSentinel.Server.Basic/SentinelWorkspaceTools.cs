@@ -223,10 +223,10 @@ public class SentinelWorkspaceTools
     // current directory, --base-repo-dir (if set), or the server's install directory.
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, pass baseRepoDir (the directory containing solutionPath) or rely on the server to resolve it")]
+    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory — only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored.")]
     public async Task<ToolResult<object>> LoadSolution(
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
-        [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call.")] string? baseRepoDir = null,
+        [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host — omit this entirely rather than guessing a value.")] string? baseRepoDir = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {

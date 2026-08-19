@@ -117,6 +117,15 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// (if supplied for this call), <see cref="BaseRepoDirectory"/> (the server-wide default set
     /// via --base-repo-dir, if any), and the server's <see cref="AppDomain.CurrentDomain"/> base directory.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="baseRepoDirOverride"/> is supplied but does not exist as a
+    /// directory on this host. A caller-supplied override that doesn't exist is treated as a
+    /// fabricated/guessed value (e.g. an agent inventing a plausible-looking path instead of
+    /// omitting the argument as the tool description recommends for relative paths) rather than
+    /// silently discarded — discarding it would fall through to other candidates and could
+    /// resolve to an unintended solution that happens to share the same relative path under a
+    /// different base directory, with no error to signal the mismatch.
+    /// </exception>
     /// <exception cref="FileNotFoundException">
     /// Thrown when a relative <paramref name="solutionPath"/> does not exist under any of the
     /// candidate directories. Lists every candidate tried so the caller can diagnose a missing
@@ -130,6 +139,15 @@ public partial class PersistentWorkspaceManager : IDisposable
         if (string.IsNullOrWhiteSpace(solutionPath) || Path.IsPathRooted(solutionPath))
         {
             return solutionPath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(baseRepoDirOverride) && !Directory.Exists(baseRepoDirOverride))
+        {
+            throw new ArgumentException(
+                $"baseRepoDir '{baseRepoDirOverride}' does not exist on this host. If you don't know " +
+                "the exact repo root, omit baseRepoDir entirely — LoadSolution resolves a relative " +
+                "solutionPath against the server's configured base directory automatically. Do not " +
+                "guess or fabricate a path.", nameof(baseRepoDirOverride));
         }
 
         var candidates = new List<string> { Path.GetFullPath(solutionPath) };
