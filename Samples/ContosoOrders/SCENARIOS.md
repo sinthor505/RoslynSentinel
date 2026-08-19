@@ -244,6 +244,20 @@ produces a nullable-annotated parameter for an obviously-non-null variable, that
 verify with a real build (`dotnet build`), not just `GetDiagnostics`' summary count, since a single
 new warning is easy to miss if only checking for `errors: 0`.
 
+**Fixed regression — single-statement-before-a-loop ambiguity (attempt 4):** a live agent run passed
+`contextSnippet: "decimal runningTotal = 0m;"` — matching only the accumulator's *initialization*
+statement, not the `foreach` two statements later that actually accumulates into it. The tool
+extracted just that one statement into `ComputeTotals`, which then unconditionally `return
+runningTotal;` (always `0m`), silently stranding the `foreach`/`totalUnits` logic in the caller —
+while still reporting success. This is the same ambiguity class as the inside-the-loop accumulator
+case below, but the pre-existing guard for that case only checked whether the matched statement's
+*enclosing block* was itself a loop body; it never fired here because the statement sits in the
+*method* body, one level up from the loop. Generalized the guard to also scan forward within the
+same block for a later loop that reads or mutates a variable the matched statement declares/assigns,
+and refuse extraction in that case too. If a selection naming only an accumulator's initializer (with
+its consuming loop appearing later in the same block, possibly with other statements in between)
+still gets silently extracted alone, that is a regression.
+
 ---
 
 ### Scenario 7 — Add a DI constructor parameter (Tier 2)
@@ -271,6 +285,20 @@ can influence via its arguments — do not grade the agent down for the resultin
 2026-08-19, both the new backing field and (when synthesized) the new constructor carry a leading
 `// Added by AddConstructorParameter` comment specifically so this placement is easy to spot in a
 diff/review rather than needing to scroll to the bottom of the class to notice it landed there.
+
+**Fixed regression — `fieldName` colliding with `paramName` (attempt 4):** a live agent run called
+`AddConstructorParameter(..., paramName: "stopwatch", fieldName: "stopwatch")` — passing the same
+name for both. The tool generated `private readonly Stopwatch stopwatch;` and, in the constructor,
+the assignment statement `stopwatch = stopwatch;` — a no-op self-assignment of the parameter to
+itself, since nothing distinguished the field from the parameter. The field was left permanently
+uninitialized (default `null`/`0`), which `GetDiagnostics` correctly flagged (CS8618/CS1717/CS0169)
+but the agent dismissed as expected/benign. Fixed: a caller-supplied `fieldName` equal to `paramName`
+(with or without a leading underscore, e.g. `foo` or `_foo`) is now treated the same as omitting
+`fieldName` — it resolves to the default `_camelCase(paramName)` derivation, which always differs
+from `paramName`, so a self-assignment can no longer be generated. The tool's response description
+now also reports both the resolved `paramName` and `fieldName` explicitly, so a caller (or grader)
+never has to infer the actual field name from the diff. If a `fieldName`/`paramName` collision still
+produces a self-assignment, that is a regression.
 
 **Out of scope — stale doc comments:** `OrderService`'s class-level XML doc in this sample says
 "Target for AddConstructorParameter scenario (add an ILogger dependency)" regardless of which
@@ -393,6 +421,22 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   verbatim into the synthesized signature — producing a live `CS8602` warning that didn't exist
   before extraction. Fixed by stripping a flow-state-only nullable annotation before rendering the
   parameter/return type. See Scenario 6.
+- **(2026-08-19) `ExtractMethodSafe` silently stranding a loop when the matched statement sits
+  before it, not inside it.** A single-statement `contextSnippet` naming only an accumulator's
+  initializer (e.g. `decimal runningTotal = 0m;`), with the loop that actually accumulates into it
+  appearing later in the same block, was extracted alone — producing a method that always returns
+  the initializer's value and silently stranding the loop in the caller, while still reporting
+  success. The existing inside-the-loop accumulator guard didn't cover this shape because it only
+  checked whether the matched statement's enclosing block was itself a loop body. Generalized to
+  also scan forward for a later loop in the same block that consumes a variable the statement
+  declares/assigns, and refuse in that case too. See Scenario 6.
+- **(2026-08-19) `AddConstructorParameter` self-assignment when `fieldName` collides with
+  `paramName`.** Passing `fieldName` equal to `paramName` (or to its underscore-prefixed form)
+  produced a no-op self-assignment (`stopwatch = stopwatch;`) instead of assigning the parameter into
+  a distinct field, leaving the field permanently uninitialized. A colliding `fieldName` is now
+  treated the same as omitting it, falling back to the default `_camelCase(paramName)` derivation,
+  which always differs from `paramName`. The tool's response now also states the resolved
+  `paramName`/`fieldName` pair explicitly. See Scenario 7.
 - **(2026-08-19) `ProposedChange` renamed to `ApplyDiff`, and its diff path made line-tolerant.**
   The tool no longer trusts a hunk's declared line number unconditionally — if the hunk's content
   isn't found there, it searches a window of nearby lines and re-anchors to the real match, so

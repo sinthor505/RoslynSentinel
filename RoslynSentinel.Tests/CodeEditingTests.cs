@@ -986,6 +986,67 @@ public class NotifyService { }
         Assert.That(result.UpdatedText, Does.Contain("_emailSender = sender"));
     }
 
+    [Test]
+    public async Task AddConstructorParameter_FieldNameEqualsParamName_DisambiguatesWithUnderscore()
+    {
+        SetSource(@"
+public class OrderService
+{
+    public void Place() { }
+}
+", "OrderService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("OrderService.cs", "OrderService",
+            "stopwatch", "System.Diagnostics.Stopwatch", fieldName: "stopwatch");
+
+        Assert.That(result.UpdatedText, Does.Contain("private readonly System.Diagnostics.Stopwatch _stopwatch"),
+            "Colliding fieldName should be disambiguated to _stopwatch, not left as a bare collision.");
+        Assert.That(result.UpdatedText, Does.Contain("_stopwatch = stopwatch"),
+            "Assignment must target the disambiguated field, never a self-assignment like 'stopwatch = stopwatch;'.");
+        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"\bstopwatch\s*=\s*stopwatch;");
+        Assert.That(assignmentStatements, Is.Empty,
+            "Must not degenerate into a no-op self-assignment of the parameter to itself.");
+        Assert.That(result.Message, Does.Contain("paramName='stopwatch'"));
+        Assert.That(result.Message, Does.Contain("fieldName='_stopwatch'"));
+    }
+
+    [Test]
+    public async Task AddConstructorParameter_FieldNameAlreadyUnderscorePrefixedAndEqualsParam_DisambiguatesWithUnderscore()
+    {
+        SetSource(@"
+public class OrderService
+{
+    public void Place() { }
+}
+", "OrderService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("OrderService.cs", "OrderService",
+            "stopwatch", "System.Diagnostics.Stopwatch", fieldName: "_stopwatch");
+
+        Assert.That(result.UpdatedText, Does.Contain("private readonly System.Diagnostics.Stopwatch _stopwatch"));
+        Assert.That(result.UpdatedText, Does.Contain("_stopwatch = stopwatch"));
+    }
+
+    [Test]
+    public async Task AddConstructorParameter_ParamNameAlreadyUnderscorePrefixed_StillDisambiguatesViaDoubleUnderscore()
+    {
+        SetSource(@"
+public class OrderService
+{
+    public void Place() { }
+}
+", "OrderService.cs");
+
+        var result = await _engine.AddConstructorParameterAsync("OrderService.cs", "OrderService",
+            "_stopwatch", "System.Diagnostics.Stopwatch", fieldName: "_stopwatch");
+
+        Assert.That(result.UpdatedText, Does.Contain("private readonly System.Diagnostics.Stopwatch __stopwatch"));
+        Assert.That(result.UpdatedText, Does.Contain("__stopwatch = _stopwatch"));
+        var assignmentStatements = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"(?<!_)_stopwatch\s*=\s*_stopwatch;");
+        Assert.That(assignmentStatements, Is.Empty,
+            "Must not degenerate into a no-op self-assignment of the parameter to itself.");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // WrapInRegionAsync
     // ══════════════════════════════════════════════════════════════

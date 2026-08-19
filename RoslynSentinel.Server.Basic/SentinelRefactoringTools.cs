@@ -601,7 +601,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "AddConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds a DI constructor parameter to a class in one step: creates private readonly field, parameter, and body assignment. fieldName overrides the default derived field name (_camelCase). For classes with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Creates a constructor if none exists. Returns changeId.")]
+    [Description("Adds a DI constructor parameter to a class in one step: creates private readonly field, parameter, and body assignment. fieldName overrides the default derived field name (_camelCase). Passing fieldName equal to paramName (e.g. 'foo') or to its underscore-prefixed form (e.g. '_foo') is treated the same way: both resolve to field name '_foo', never to a bare 'foo' that would collide with the parameter. The response description reports both the resolved paramName and fieldName. For classes with the same name in the same file, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Creates a constructor if none exists. Returns changeId.")]
     public async Task<ToolResult<object>> AddConstructorParameter([Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.ClassName, required: true)] string className,
         [Consumes(DataTag.SymbolName, required: true)] string paramName,
@@ -628,11 +628,19 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "AddConstructorParameter", filePath) is { } guardResult)
                 return guardResult;
 
+            // updated.Message carries "// paramName='x', fieldName='_x'" on success — surface the
+            // resolved field name explicitly since it may differ from what the caller passed
+            // (see fieldName/paramName collision disambiguation in AddConstructorParameterAsync).
+            var resolvedFieldName = updated.Message is { Length: > 0 } msg
+                && System.Text.RegularExpressions.Regex.Match(msg, "fieldName='([^']*)'") is { Success: true } m
+                ? m.Groups[1].Value
+                : $"_{char.ToLower(paramName[0])}{paramName[1..]}";
+
             var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Add constructor parameter '{paramName}' to '{className}'.", "AddConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Added '{paramType} {paramName}' DI parameter to '{className}' in {Path.GetFileName(filePath)}, backed by field '{resolvedFieldName}'.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {

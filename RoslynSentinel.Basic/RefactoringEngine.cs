@@ -3933,7 +3933,17 @@ public class RefactoringEngine
 
         var classDecl = (ClassDeclarationSyntax)classNode;
 
-        var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
+        // Derive the backing field name, disambiguating from paramName so the generated
+        // assignment can never degenerate into a no-op self-assignment (e.g. `stopwatch = stopwatch;`
+        // instead of assigning the parameter into a distinct field — confirmed regression:
+        // ContosoOrders OrderService, caller passed fieldName == paramName == "stopwatch"). A
+        // caller-supplied fieldName that collides with paramName, with or without a leading
+        // underscore, is treated the same as omitting fieldName: it falls back to the default
+        // "_camelCase(paramName)" derivation, which always differs from paramName.
+        var defaultFieldName = $"_{char.ToLower(paramName[0])}{paramName[1..]}";
+        string derivedFieldName = fieldName == null || fieldName == paramName || fieldName == $"_{paramName}"
+            ? defaultFieldName
+            : fieldName;
 
         var fieldDecl = ((FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(
             $"private readonly {paramType} {derivedFieldName};")!)
@@ -4000,7 +4010,8 @@ public class RefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = newRoot.ToFullString(),
+            Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
     }
 

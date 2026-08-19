@@ -1448,6 +1448,60 @@ public class MsToolAugmentEngine
                         "naming its immediate neighbors to confirm the narrower selection.");
                 }
             }
+
+            // Same ambiguity, different shape: a single matched statement that sits BEFORE a loop
+            // later in the same block (not inside it — possibly with other non-loop statements
+            // in between, e.g. another unrelated declaration), where the statement declares/assigns
+            // a local that the loop then reads or mutates. Extracting just this statement strands
+            // the loop and produces a method whose only job — initializing state the loop depends
+            // on — looks complete but silently detaches from the accumulation that follows
+            // (confirmed regression: ContosoOrders BuildOrderSummary/ComputeTotals, where
+            // `decimal runningTotal = 0m;` alone was matched and extracted, leaving the `foreach`
+            // that actually accumulates into `runningTotal` — two statements later in the same
+            // block — behind in the caller).
+            if (stmtsInSelection.Count == 1
+                && block.Statements.Count > 1
+                && block.Parent is not (ForEachStatementSyntax or ForStatementSyntax
+                    or WhileStatementSyntax or DoStatementSyntax))
+            {
+                var single = stmtsInSelection[0];
+                var singleIndex = block.Statements.IndexOf(single);
+                var laterLoop = singleIndex >= 0
+                    ? block.Statements.Skip(singleIndex + 1)
+                        .FirstOrDefault(s => s is ForEachStatementSyntax or ForStatementSyntax
+                            or WhileStatementSyntax or DoStatementSyntax)
+                    : null;
+
+                if (laterLoop != null)
+                {
+                    var singleDf = model.AnalyzeDataFlow(single);
+                    var declaredOrWrittenBySingle = singleDf?.Succeeded == true
+                        ? new HashSet<string>(
+                            singleDf.VariablesDeclared.Select(s => s.Name)
+                                .Concat(singleDf.WrittenInside.Select(s => s.Name)))
+                        : [];
+
+                    var loopDf = model.AnalyzeDataFlow(laterLoop);
+                    bool loopConsumesIt = loopDf?.Succeeded == true &&
+                        (loopDf.DataFlowsIn.Any(s => declaredOrWrittenBySingle.Contains(s.Name))
+                            || loopDf.ReadInside.Any(s => declaredOrWrittenBySingle.Contains(s.Name))
+                            || loopDf.WrittenInside.Any(s => declaredOrWrittenBySingle.Contains(s.Name)));
+
+                    if (loopConsumesIt)
+                    {
+                        return MsAugmentResult.Fail(
+                            $"contextSnippet matched only one statement (\"{single.ToString().Trim()}\") " +
+                            "in a block that later contains a loop reading or mutating the same variable " +
+                            "it declares/assigns. Extracting just this statement would strand the loop, " +
+                            "leaving a method that looks complete but no longer connects to the " +
+                            "accumulation that follows. If you meant to extract the initialization " +
+                            "together with the loop (and anything else around it), widen contextSnippet " +
+                            "to cover that whole span verbatim. If you really do mean just this one " +
+                            "statement, use lineBefore/lineAfter naming its immediate neighbors to " +
+                            "confirm the narrower selection.");
+                    }
+                }
+            }
         }
 
         var firstStmt = stmtsInSelection.First();

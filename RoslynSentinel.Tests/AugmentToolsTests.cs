@@ -874,6 +874,29 @@ public class OrderLine
             "Error should name the sibling statement that would be left behind");
     }
 
+    [Test]
+    [Description("Regression (ContosoOrders live agent run, attempt 4): a contextSnippet matching "
+                 + "only the accumulator's INITIALIZATION statement, sitting immediately BEFORE the "
+                 + "foreach that actually accumulates into it (not inside the loop body), must be "
+                 + "refused the same way the inside-the-loop variant is. The prior guard only fired "
+                 + "when block.Parent was itself a loop construct, so this shape slipped through: "
+                 + "the tool extracted just 'decimal runningTotal = 0m;' into a method that always "
+                 + "returns 0, silently stranding the foreach and totalUnits in the caller while "
+                 + "still reporting Success=true.")]
+    public async Task ExtractMethodSafe_SingleStatementSnippetImmediatelyBeforeAccumulatorLoop_RefusesAmbiguousExtraction()
+    {
+        SetSource(ContosoOrdersLikeSource, "Order.cs");
+
+        var snippet = "decimal runningTotal = 0m;";
+
+        var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
+
+        Assert.That(result.Success, Is.False,
+            "Must refuse rather than silently produce a method that always returns 0 and strands the foreach");
+        Assert.That(result.Error, Does.Contain("loop"),
+            "Error should explain the followed-by-a-loop ambiguity");
+    }
+
     private const string StringBuilderFlowsIntoSelectionSource = @"
 public class Order
 {
