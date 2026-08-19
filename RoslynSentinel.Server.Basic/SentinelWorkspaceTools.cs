@@ -179,6 +179,8 @@ public class SentinelWorkspaceTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        workspacePath = FilePath.NormalizeWirePath(workspacePath);
+
         if (!Directory.Exists(workspacePath))
         {
             return new ToolResult<List<SolutionFileInfo>>

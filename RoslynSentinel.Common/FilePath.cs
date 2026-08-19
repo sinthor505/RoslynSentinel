@@ -47,13 +47,28 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
         return new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, clean)), solutionRoot, validated: true);
     }
 
-    // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo → c:\foo).
-    // Preserves the leading \\ of UNC paths.
+    // Agents sometimes pass path arguments wrapped in stray quotes (straight or smart) or
+    // whitespace picked up from shell-quoted examples or markdown, e.g. "'./Foo/Foo.sln'".
+    // Strip those iteratively so the literal wrapping characters don't end up baked into a
+    // resolved path (and cause File.Exists/Directory.Exists to fail on an otherwise-valid path).
+    private static readonly char[] PathWrapChars = ['\'', '"', '‘', '’', '“', '”', ' ', '\t', '\r', '\n'];
+
+    // Collapse repeated backslashes introduced by JSON double-encoding (e.g. c:\\\\foo → c:\foo),
+    // and strip stray wrapping quotes/whitespace. Preserves the leading \\ of UNC paths.
     public static string NormalizeWirePath(string path)
     {
         if (string.IsNullOrWhiteSpace(path)) return path;
-        bool isUnc = path.StartsWith(@"\\", StringComparison.Ordinal);
-        string body = isUnc ? path.Substring(2) : path;
+
+        var trimmed = path;
+        string previous;
+        do
+        {
+            previous = trimmed;
+            trimmed = trimmed.Trim(PathWrapChars);
+        } while (trimmed.Length != previous.Length);
+
+        bool isUnc = trimmed.StartsWith(@"\\", StringComparison.Ordinal);
+        string body = isUnc ? trimmed.Substring(2) : trimmed;
         body = body.Replace(@"\\", @"\");
         return isUnc ? @"\\" + body : body;
     }

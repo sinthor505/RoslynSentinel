@@ -314,6 +314,40 @@ public class BatteryTwentyTests
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
+    // --- ListWorkspaceSolutions ---
+
+    [Test]
+    public void ListWorkspaceSolutions_PathWrappedInQuotes_StillResolvesDirectory()
+    {
+        // Regression: workspacePath used to go straight to Directory.Exists with no
+        // sanitization, so a path wrapped in stray quotes (e.g. copied from a shell example)
+        // failed even though the underlying directory existed.
+        var tempDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var wrappedPath = $"  \"{tempDir}\"  ";
+
+            var result = _tools.ListWorkspaceSolutions(wrappedPath);
+
+            Assert.That(result.Success, Is.True,
+                "A workspacePath wrapped in quotes/whitespace must still resolve to the real directory.");
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ListWorkspaceSolutions_UnknownPath_ReturnsInvalidArgument()
+    {
+        var result = _tools.ListWorkspaceSolutions(Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_DoesNotExist_" + Guid.NewGuid()));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error?.ErrorCode, Is.EqualTo("InvalidArgument"));
+    }
+
     // --- Diagnose ---
 
     // --- GetExternalChanges (sync) ---

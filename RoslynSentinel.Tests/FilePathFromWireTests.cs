@@ -61,4 +61,51 @@ public class FilePathFromWireTests
 
         Assert.That(result.Absolute, Is.Empty);
     }
+
+    // Regression coverage for the LoadSolution "stray quotes baked into the path" bug — the same
+    // sanitization now lives in NormalizeWirePath so every FromWire caller gets it for free.
+    [Test]
+    public void FromWire_PathWrappedInSingleQuotes_QuotesAreStripped()
+    {
+        var result = FilePath.FromWire("'Test.cs'", null);
+
+        Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
+            "Stray wrapping single quotes must be stripped before the path is used.");
+    }
+
+    [Test]
+    public void FromWire_PathWrappedInDoubleQuotes_QuotesAreStripped()
+    {
+        var result = FilePath.FromWire("\"Test.cs\"", null);
+
+        Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
+            "Stray wrapping double quotes must be stripped before the path is used.");
+    }
+
+    [Test]
+    public void FromWire_PathWithSurroundingWhitespace_IsTrimmed()
+    {
+        var result = FilePath.FromWire("  Test.cs\n", null);
+
+        Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
+            "Leading/trailing whitespace must be trimmed before the path is used.");
+    }
+
+    [Test]
+    public void FromWire_PathWithSmartQuotes_QuotesAreStripped()
+    {
+        var result = FilePath.FromWire("\u2018Test.cs\u2019", null);
+
+        Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
+            "Smart/curly quotes must be stripped just like straight quotes.");
+    }
+
+    [Test]
+    public void NormalizeWirePath_UncPathWrappedInQuotes_PreservesLeadingSlashes()
+    {
+        var result = FilePath.NormalizeWirePath("\"\\\\server\\share\\Test.cs\"");
+
+        Assert.That(result, Is.EqualTo(@"\\server\share\Test.cs"),
+            "Quote-stripping must not consume the UNC path's leading double backslash.");
+    }
 }
