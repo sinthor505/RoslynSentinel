@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
@@ -718,7 +719,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetMethodSource")]
     [Produces(DataTag.SourceCode)]
-    [Description("Returns the full source text of a named method plus a structured list of its attributes. Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
+    [Description("Returns the full source text of a named method or constructor, plus a structured list of its attributes. For a constructor, pass the containing class's name (e.g. methodName: \"OrderService\" for `public OrderService(...)`). Case-sensitive match with case-insensitive fallback. Returns the first match for overloaded names.")]
     public async Task<ToolResult<object>> GetMethodSource(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
@@ -752,14 +753,17 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>() { Success = false, Error = new ResultError("SyntaxRootNotFound", "Syntax root not found.") };
             }
 
-            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                             .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.Ordinal))
-                      ?? root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                             .FirstOrDefault(m => m.Identifier.Text.Equals(methodName, StringComparison.OrdinalIgnoreCase));
+            // Constructors are ConstructorDeclarationSyntax, not MethodDeclarationSyntax, but callers
+            // naturally pass the class name for "give me the source of its constructor" — resolve
+            // both node kinds under the shared BaseMethodDeclarationSyntax base.
+            var method = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+                             .FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal))
+                      ?? root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+                             .FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase));
 
             if (method == null)
             {
-                return new ToolResult<object>() { Success = false, Error = new ResultError("MethodNotFound", $"Method '{methodName}' not found in '{filePath}'.") };
+                return new ToolResult<object>() { Success = false, Error = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePath}'.") };
             }
 
             var methodSource = method.ToFullString();
@@ -808,6 +812,105 @@ public class SentinelWorkspaceTools
         {
             _logger.LogError(ex, "GetMethodSource failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
             return new ToolResult<object>() { Success = false, Error = new ResultError("GetMethodSourceFailed", $"GetMethodSource failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+        }
+    }
+
+    [McpServerTool(Name = "ReadFile")]
+    [Produces(DataTag.SourceCode)]
+    [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file — useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/scans and returned as a scanId (see GetMethodSource) instead of inline text.")]
+    public async Task<ToolResult<object>> ReadFile(
+        [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
+        [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null,
+        // RequestContext<CallToolRequestParams> requestParams = null,
+        CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+
+        try
+        {
+            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var normalizedPath = Path.GetFullPath(filePath);
+
+            var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
+                                   .Select(solution.GetDocument)
+                                   .FirstOrDefault()
+                ?? solution.Projects
+                           .SelectMany(p => p.Documents)
+                           .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
+                                                string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
+                                                              StringComparison.OrdinalIgnoreCase));
+
+            if (document == null)
+            {
+                return new ToolResult<object>() { Success = false, Error = new ResultError("FileNotFound", $"File not found in solution: {normalizedPath} (existsOnDisk={File.Exists(normalizedPath)}, projectsLoaded={solution.Projects.Count()}).") };
+            }
+
+            var sourceText = await document.GetTextAsync(cancellationToken);
+            var totalLines = sourceText.Lines.Count;
+
+            if (startLine.HasValue || endLine.HasValue)
+            {
+                int from = Math.Max(1, startLine ?? 1);
+                int to = Math.Min(totalLines, endLine ?? totalLines);
+                if (from > totalLines || from > to)
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.") };
+                }
+
+                var start = sourceText.Lines[from - 1].Start;
+                var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
+                var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
+
+                return new ToolResult<object>()
+                {
+                    Success = true,
+                    Data = new { filePath = (string)filePath, startLine = from, endLine = to, totalLines, source = slice },
+                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                };
+            }
+
+            var fullText = sourceText.ToString();
+            var textBytes = System.Text.Encoding.UTF8.GetByteCount(fullText);
+
+            const int thresholdBytes = 8 * 1024;
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
+            if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
+            {
+                var scanId = Guid.NewGuid().ToString("N");
+                var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
+                Directory.CreateDirectory(dir);
+                var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
+                var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
+                await File.WriteAllTextAsync(fp, fullText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                return new ToolResult<object>
+                {
+                    Success = true,
+                    LargeResult = new LargeResultInfo(
+                        resultType: "FileSource",
+                        writtenToFile: true,
+                        filePath: fp,
+                        scanId: scanId,
+                        sizeBytes: textBytes,
+                        totalRecords: 1,
+                        message: $"Result is {textBytes} bytes (threshold: {thresholdBytes}). " +
+                                 $"Use get_scan_result(scanId: \"{scanId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need."),
+                    Data = new { totalLines },
+                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                };
+            }
+
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = new { filePath = (string)filePath, startLine = 1, endLine = totalLines, totalLines, source = fullText },
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReadFile failed for '{FilePath}'", filePath);
+            return new ToolResult<object>() { Success = false, Error = new ResultError("ReadFileFailed", $"ReadFile failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1229,19 +1332,34 @@ public class SentinelWorkspaceTools
         return null;
     }
 
-    private static string BuildSignature(MethodDeclarationSyntax method)
+    private static string GetMethodOrCtorName(BaseMethodDeclarationSyntax member) => member switch
+    {
+        MethodDeclarationSyntax m => m.Identifier.Text,
+        ConstructorDeclarationSyntax c => c.Identifier.Text,
+        _ => ""
+    };
+
+    private static string BuildSignature(BaseMethodDeclarationSyntax method)
     {
         var modifiers = method.Modifiers.ToString();
-        var returnType = method.ReturnType.ToString();
-        var name = method.Identifier.Text;
-        var typeParams = method.TypeParameterList?.ToString() ?? "";
+        var name = GetMethodOrCtorName(method);
         var parameters = method.ParameterList.ToString();
+
+        if (method is MethodDeclarationSyntax m)
+        {
+            var returnType = m.ReturnType.ToString();
+            var typeParams = m.TypeParameterList?.ToString() ?? "";
+            return string.IsNullOrEmpty(modifiers)
+                ? $"{returnType} {name}{typeParams}{parameters}"
+                : $"{modifiers} {returnType} {name}{typeParams}{parameters}";
+        }
+
         return string.IsNullOrEmpty(modifiers)
-            ? $"{returnType} {name}{typeParams}{parameters}"
-            : $"{modifiers} {returnType} {name}{typeParams}{parameters}";
+            ? $"{name}{parameters}"
+            : $"{modifiers} {name}{parameters}";
     }
 
-    private static List<MethodAttributeInfo> ExtractAttributes(MethodDeclarationSyntax method) =>
+    private static List<MethodAttributeInfo> ExtractAttributes(BaseMethodDeclarationSyntax method) =>
         method.AttributeLists
               .SelectMany(al => al.Attributes)
               .Select(a => new MethodAttributeInfo
