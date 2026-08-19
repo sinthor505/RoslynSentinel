@@ -4125,6 +4125,19 @@ public class RefactoringEngine
             .Where(m => extraFilter == null || extraFilter(m))
             .ToList();
 
+        // A type's own name and its constructor's name are identical (both read from
+        // ClassDeclarationSyntax/StructDeclarationSyntax.Identifier and
+        // ConstructorDeclarationSyntax.Identifier), so "OrderService" matches both the class
+        // declaration and its constructor here. None of these tools operate on whole type
+        // declarations (ReplaceMember/ChangeAccessibility/etc. target "a method, property, or
+        // field"), so when a constructor shares the name, prefer it over the enclosing type —
+        // otherwise the type declaration (found first, being the ancestor node) silently wins
+        // and callers asking for "the OrderService member" get the whole class back.
+        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
         if (contextSnippet == null)
         {
             return candidates.FirstOrDefault(); // unchanged default behavior
