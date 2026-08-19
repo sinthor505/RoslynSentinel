@@ -1,7 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -13,7 +12,6 @@ public class OrchestrationTests
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _structureEngine;
     private AnalysisEngine _analysisEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
 
     [SetUp]
     public void Setup()
@@ -22,8 +20,7 @@ public class OrchestrationTests
         var config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
-        _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, _analysisEngine, _asyncSafetyEngine, config);
+        _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, _analysisEngine, config);
     }
 
     [TearDown]

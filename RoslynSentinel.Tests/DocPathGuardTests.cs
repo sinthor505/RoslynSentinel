@@ -1,6 +1,6 @@
 using System.IO;
 
-using RoslynSentinel.Server;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests;
 

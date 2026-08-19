@@ -1,7 +1,6 @@
 #pragma warning disable CS8618
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
 
@@ -12,7 +11,6 @@ public class SolutionWideFunctionalTests
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _projectStructureEngine;
     private AnalysisEngine _analysisEngine;
-    private AsyncSafetyEngine _asyncSafetyEngine;
 
     [SetUp]
     public void Setup()
@@ -21,18 +19,16 @@ public class SolutionWideFunctionalTests
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
-        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
-        
+
         _healthEngine = new HealthOrchestrationEngine(
-            _workspaceManager, 
-            _projectStructureEngine, 
-            _analysisEngine, 
-            _asyncSafetyEngine,
+            _workspaceManager,
+            _projectStructureEngine,
+            _analysisEngine,
             config);
 
         // Build a mock solution with 3 projects to test paging
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjA", new[] { ("F1.cs", "class A {}") });
-        
+
         var idB = ProjectId.CreateNewId();
         solution = solution.AddProject(idB, "ProjB", "ProjB", LanguageNames.CSharp);
         solution = solution.AddDocument(DocumentId.CreateNewId(idB), "F2.cs", "class B {}");

@@ -2,7 +2,7 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests;
 

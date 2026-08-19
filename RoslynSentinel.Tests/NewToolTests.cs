@@ -1,7 +1,5 @@
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using RoslynSentinel.Server;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -95,7 +93,7 @@ public class NewToolTests
             public class Foo { public int X { get; set; } }
             """);
 
-        var ex = Assert.ThrowsAsync<ArgumentException>(
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
             () => _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "X", "BadDirection"));
         Assert.That(ex?.Message, Does.Contain("direction").IgnoreCase.Or.Contain("BadDirection"));
     }
@@ -134,7 +132,7 @@ public class NewToolTests
             """);
 
         DocumentEditResult? result = null;
-        Assert.DoesNotThrowAsync(async () =>
+        await Assert.DoesNotThrowAsync(async () =>
             result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
         Assert.That(result!.Message, Does.Contain("Error:"));
     }

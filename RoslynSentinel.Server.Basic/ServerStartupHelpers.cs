@@ -5,12 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Server.Basic;
-
 using Serilog;
 using Serilog.Extensions.Logging;
 
-namespace RoslynSentinel.Server;
+namespace RoslynSentinel.Server.Basic;
 
 /// <summary>
 /// Shared startup utilities used by all four server entry points
@@ -41,7 +39,7 @@ public static class ServerStartupHelpers
     /// <param name="modeArg">The raw --mode value (or "all").</param>
     /// <param name="activeModes">Resolved, expanded set of active modes.</param>
     /// <param name="solutionPath">Value of --solution=, or null. May be absolute or relative;
-    /// relative paths are resolved via <see cref="RoslynSentinel.Common.PersistentWorkspaceManager"/>
+    /// relative paths are resolved via <see cref="PersistentWorkspaceManager"/>
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
     /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
     public static void ParseArgs(

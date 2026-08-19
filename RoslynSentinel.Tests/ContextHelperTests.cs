@@ -1,6 +1,4 @@
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using RoslynSentinel.Server;
 
 namespace RoslynSentinel.Tests;
 

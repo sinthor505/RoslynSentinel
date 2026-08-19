@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Server;
+using RoslynSentinel.Common;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;

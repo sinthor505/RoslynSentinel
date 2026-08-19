@@ -24,13 +24,13 @@ public class LoadSolutionPathSanitizationTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public void LoadSolutionAsync_RelativePathWrappedInQuotes_CandidatesHaveNoQuotes()
+    public async Task LoadSolutionAsync_RelativePathWrappedInQuotes_CandidatesHaveNoQuotes()
     {
         // Reproduces the reported bug: solutionPath arrives as "'./Samples/Foo/Foo.sln'"
         // (single quotes baked into the string itself, not a shell artifact).
         const string quotedPath = "'./Samples/DoesNotExist/DoesNotExist.sln'";
 
-        var ex = Assert.ThrowsAsync<FileNotFoundException>(
+        var ex = await Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(quotedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -43,11 +43,11 @@ public class LoadSolutionPathSanitizationTests
     }
 
     [Test]
-    public void LoadSolutionAsync_PathWithSurroundingWhitespace_IsTrimmedBeforeResolution()
+    public async Task LoadSolutionAsync_PathWithSurroundingWhitespace_IsTrimmedBeforeResolutionAsync()
     {
         const string paddedPath = "  ./Samples/DoesNotExist/DoesNotExist.sln  \n";
 
-        var ex = Assert.ThrowsAsync<FileNotFoundException>(
+        var ex = await Assert.ThrowsAsync<FileNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(paddedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -56,7 +56,7 @@ public class LoadSolutionPathSanitizationTests
     }
 
     [Test]
-    public void LoadSolutionAsync_BaseRepoDirWrappedInQuotes_IsSanitizedBeforeCombine()
+    public async Task LoadSolutionAsync_BaseRepoDirWrappedInQuotes_IsSanitizedBeforeCombineAsync()
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_" + Guid.NewGuid());
         Directory.CreateDirectory(tempDir);
@@ -64,7 +64,7 @@ public class LoadSolutionPathSanitizationTests
         {
             var quotedBaseRepoDir = $"\"{tempDir}\"";
 
-            var ex = Assert.ThrowsAsync<FileNotFoundException>(
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
                 async () => await _workspaceManager.LoadSolutionAsync("Missing.sln", quotedBaseRepoDir));
 
             Assert.That(ex!.Message, Does.Contain(Path.Combine(tempDir, "Missing.sln")),
@@ -90,7 +90,7 @@ public class LoadSolutionPathSanitizationTests
 
             // Must not throw FileNotFoundException from ResolveSolutionPath; any failure past
             // that point (e.g. MSBuild parse errors) is swallowed internally by LoadSolutionAsync.
-            Assert.DoesNotThrowAsync(async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
+            await Assert.DoesNotThrowAsync(async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
         }
         finally
         {
