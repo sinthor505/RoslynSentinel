@@ -326,7 +326,13 @@ public class SentinelRefactoringTools
     [McpServerTool(Name = "ReplaceMember")]
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an entire member (method, property, or field) with new source code. " +
-        "newSource must be a complete member declaration (modifiers, signature, body) not a fragment. " +
+        "This is the right tool even for a one-line change inside a member (e.g. simplifying a single " +
+        "fully-qualified call, fixing one statement) — don't avoid it just because the edit is small. " +
+        "Do NOT attempt a unified diff/patch (e.g. via ProposedChange) to edit part of a member instead: " +
+        "hand-built diffs need exact current line numbers and drift out of sync after any prior edit to " +
+        "the file, which reliably produces parse errors. Read the member's current source first (e.g. " +
+        "via GetMethodSource/ReadFile), copy it verbatim, make your small edit in that copy, and pass the " +
+        "WHOLE resulting member as newSource — modifiers, signature, and body, not a fragment. " +
         "For overloaded members, provide contextSnippet (distinctive substring from the target, e.g. parameter list) and optionally lineBefore/lineAfter to disambiguate. Returns changeId.")]
     public async Task<ToolResult<object>> ReplaceMember(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,

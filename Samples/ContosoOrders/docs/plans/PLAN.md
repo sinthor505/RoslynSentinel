@@ -15,12 +15,18 @@ new files or structural redesign.
 - `ContosoOrders.Tests` references `ContosoOrders.Core` and must still compile after all changes.
 - Renames must propagate to every reference, including test code.
 - Changes should be validated (no new compiler errors) before being treated as done.
+- **Every RoslynSentinel edit tool writes directly to disk and returns `"status": "applied"` /
+  `"note": "Written to disk."` on success — there is no separate stage/apply lifecycle to manage.**
+  Each `changeId` is a completed edit, not a pending one; `UndoLastApply(changeId: ...)` reverts it
+  if needed. Do not expect or look for a bulk "apply all staged changes" step — one does not exist,
+  and none is required.
 
 ## Approach
 Work through the issues in dependency order: start with the rename (since other steps reference
 the renamed member), then independent single-file fixes, then the riskier multi-file/DI change,
-then structural (file rename) and documentation cleanup last. After all edits are staged, validate
-the whole solution compiles cleanly before applying, then apply and give a final health check.
+then structural (file rename) and documentation cleanup last. Since every edit writes to disk
+immediately, there is no staging/apply phase to sequence — validate as you go (or in one pass at
+the end) and give a final health check.
 
 ## Key Files
 - `Samples/ContosoOrders/ContosoOrders.Core/OrderProcessor.cs` — contains the `Order` class; most
@@ -39,8 +45,11 @@ the whole solution compiles cleanly before applying, then apply and give a final
   list — verify no new compiler errors after this step. Unlike a package-backed type (e.g.
   `ILogger<T>`), `Stopwatch` is a BCL type with no NuGet package to add, so this step only exercises
   constructor-parameter addition and using-directive addition — not project-reference management.
-- The accessibility change and the rename both touch `OrderProcessor.cs`; if using a staged-change
-  workflow, confirm both edits land together rather than one silently overwriting the other.
+- The accessibility change and the rename both touch `OrderProcessor.cs`. Since each tool call
+  writes to disk and re-reads the current document on its next call, this is no longer a staging
+  conflict — just confirm the second edit's tool call resolves its target against the file's
+  post-first-edit state (e.g. re-locate the symbol/snippet after the rename lands) rather than
+  assuming stale line numbers or pre-rename text still apply.
 
 ## Steps
 1. Rename the misspelled method `Order.CalcuateTotal` to `Order.CalculateTotal` across the whole
@@ -56,5 +65,6 @@ the whole solution compiles cleanly before applying, then apply and give a final
    with a backing field, and add the missing `using System.Diagnostics;` directive this introduces.
 8. Rename the file containing the `Order` class so its filename matches the class name.
 9. Add an XML `<summary>` doc comment to `OrderService.CreateOrder` describing what it does.
-10. Validate the solution has no new compiler errors, then apply all staged changes and confirm
-	the workspace is healthy.
+10. Validate the solution has no new compiler errors and confirm the workspace is healthy. (No
+	separate "apply" action is needed — every prior step already wrote its change to disk; this
+	step is verification only.)
