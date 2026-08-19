@@ -57,13 +57,43 @@ public static class ContextHelper
 
         if (allMatches.Count == 0)
         {
-            // Fallback: try matching with collapsed whitespace
+            // Fallback: try matching with collapsed whitespace. This handles a single-line
+            // snippet whose indentation doesn't match the source (common when an AI caller
+            // retypes a line from memory instead of copying it verbatim character-for-character —
+            // models reliably reproduce tokens but not incidental indentation).
             var snippetNorm = System.Text.RegularExpressions.Regex.Replace(contextSnippet.Trim(), @"\s+", " ");
             var lines = sourceText.Lines;
             for (int i = 0; i < lines.Count; i++)
             {
                 var lineNorm = System.Text.RegularExpressions.Regex.Replace(lines[i].ToString().Trim(), @"\s+", " ");
                 if (lineNorm.Contains(snippetNorm, StringComparison.OrdinalIgnoreCase))
+                {
+                    allMatches.Add(lines[i].Start);
+                }
+            }
+        }
+
+        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
+        {
+            // Fallback: same whitespace-collapse tolerance as above, but for a snippet spanning
+            // multiple statements/lines. The single-line fallback can never match this shape —
+            // it only ever tests one source line against the whole (newline-collapsed) snippet.
+            // Instead, slide a window of N consecutive source lines (N = the snippet's own line
+            // count), collapse whitespace runs on both sides identically, and compare — this
+            // preserves line-by-line structure (so it won't match reordered statements) while
+            // being indifferent to indentation depth, which carries no compiler meaning in C#.
+            var snippetLineTexts = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            var snippetWindowNorm = System.Text.RegularExpressions.Regex.Replace(
+                string.Join("\n", snippetLineTexts.Select(l => l.Trim())).Trim(), @"\s+", " ");
+            var lines = sourceText.Lines;
+            int windowSize = snippetLineTexts.Length;
+
+            for (int i = 0; i + windowSize <= lines.Count; i++)
+            {
+                var windowText = string.Join(
+                    "\n", Enumerable.Range(i, windowSize).Select(j => lines[j].ToString().Trim()));
+                var windowNorm = System.Text.RegularExpressions.Regex.Replace(windowText, @"\s+", " ");
+                if (windowNorm.Equals(snippetWindowNorm, StringComparison.OrdinalIgnoreCase))
                 {
                     allMatches.Add(lines[i].Start);
                 }
