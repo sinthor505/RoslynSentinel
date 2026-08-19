@@ -1286,6 +1286,68 @@ public class MsToolAugmentEngine
     // because the extracancellationTokened method has the wrong (void) return type.
     // Fix: use SemanticModel.GetTypeInfo() on the return expression, and
     // DataFlowAnalysis.DataFlowsIn to determine the correct parameter list.
+    //
+    // ── Known issue / fix history — read this before touching anything below ──
+    // This tool has repeatedly shipped "technically succeeded, semantically wrong"
+    // bugs: it returns Success=true, compiles clean, and passes existing tests,
+    // while quietly producing the wrong extraction. Every case so far was found by
+    // a live agent run, not by the existing test suite, because the sample/test
+    // code never exercised the exact resulting shape. Treat a green build/test run
+    // as necessary, not sufficient, when changing this method — re-derive expected
+    // output by hand for any new contextSnippet shape you touch.
+    //
+    // 1. (fixed) Nullable over-annotation on synthesized parameters/return types.
+    //    Roslyn's DataFlowAnalysis reports DataFlowsIn/DataFlowsOut symbols with a
+    //    flow-state-conservative NullableAnnotation (e.g. `StringBuilder?` for a
+    //    local that is unconditionally constructed and never reassigned). Copying
+    //    that annotation verbatim into the generated signature produced a live
+    //    CS8602 warning that did not exist before extraction. Fixed via
+    //    DisplayTypeForExtractedSignature(), which strips NullableAnnotation.Annotated
+    //    before calling ToDisplayString(). If a new nullable-looking parameter shows
+    //    up in generated output, check whether it's flow-state noise vs. a genuine
+    //    (correctly) nullable declared type before "fixing" it again.
+    //
+    // 2. (fixed) Single-statement selection INSIDE a loop body, sibling statement(s)
+    //    silently dropped. contextSnippet matching only one statement inside a loop
+    //    whose body has other statements (e.g. `runningTotal += x;` inside
+    //    `foreach { runningTotal += x; totalUnits += y; }`) used to extract just
+    //    that one statement into a method called once per iteration, silently
+    //    dropping the sibling statement and the loop itself from the extraction.
+    //    Guarded below: when stmtsInSelection.Count == 1 and block.Parent is a loop
+    //    construct with block.Statements.Count > 1, AnalyzeDataFlow on the single
+    //    statement checks DataFlowsIn for a local not declared by the loop itself;
+    //    if found, refuse rather than guess.
+    //
+    // 3. (fixed) Single-statement selection BEFORE a loop in the same block —
+    //    same ambiguity, different shape, and the guard from #2 did NOT catch it.
+    //    contextSnippet matching only an accumulator's *initializer* (e.g.
+    //    `decimal runningTotal = 0m;`), with the loop that actually accumulates
+    //    into it appearing later in the *enclosing method body* block (not inside
+    //    the loop), was extracted alone. The result: a method that always returns
+    //    the initializer's value (e.g. `return 0m;`), with the foreach/its other
+    //    local (`totalUnits`) silently stranded in the caller. #2's guard never
+    //    fired because it only checks `block.Parent is <LoopType>` — here
+    //    block.Parent is the method declaration, not a loop. Guarded below by
+    //    scanning forward from the matched statement's index, within the SAME
+    //    block, for a later loop statement; if found, AnalyzeDataFlow on both the
+    //    matched statement (VariablesDeclared ∪ WrittenInside) and the loop
+    //    (DataFlowsIn ∪ ReadInside ∪ WrittenInside) checks for a shared name.
+    //    ⚠ This still only looks one block deep and only forward in the same
+    //    block's direct statement list — a variant where the loop is nested inside
+    //    an intervening `if`/`using`/nested block rather than a direct sibling
+    //    statement would NOT be caught by either guard. If you find that shape
+    //    failing silently, it's the same bug class, not a new one — generalize the
+    //    forward-scan to walk into intervening non-loop block-containing
+    //    statements' descendants, not just block.Statements directly.
+    //
+    // General lesson from all three: this tool's failure mode is never a thrown
+    // exception or a compile error — it's a *plausible-looking, compiling, silently
+    // incomplete* extraction. When adding new heuristics/guards, prefer refusing
+    // with a specific, actionable error (naming the ambiguity and what a wider
+    // contextSnippet should cover) over guessing a narrower scope than the caller
+    // likely intended. When diagnosing a NEW report of "ExtractMethodSafe did
+    // something weird," reproduce with a real dotnet build first — GetDiagnostics'
+    // error *count* is not enough, and neither is the tool's own Success flag.
 
     /// <summary>
     /// Extract a block of statements into a new private method using semantic
