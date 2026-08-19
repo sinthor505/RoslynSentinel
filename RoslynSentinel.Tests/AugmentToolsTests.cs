@@ -797,4 +797,80 @@ public class AuthResult
         Assert.That(result.UpdatedContent, Does.Contain("AuthResult CreateAuthResult("),
             "Must have AuthResult return type");
     }
+
+    private const string ContosoOrdersLikeSource = @"
+public class Order
+{
+    private readonly System.Collections.Generic.List<OrderLine> _lines = new();
+
+    public string BuildOrderSummary()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(""header"");
+
+        decimal runningTotal = 0m;
+        int totalUnits = 0;
+        foreach (var line in _lines)
+        {
+            runningTotal += line.Quantity * line.UnitPrice;
+            totalUnits += line.Quantity;
+        }
+        sb.AppendLine(""footer"");
+
+        return sb.ToString();
+    }
+}
+
+public class OrderLine
+{
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+}";
+
+    [Test]
+    [Description("Regression (ContosoOrders live agent run): a contextSnippet naming a whole "
+                 + "multi-statement block (declarations + the foreach that consumes them) must "
+                 + "extract that entire block, including the loop itself, as a single call — not "
+                 + "a per-iteration call.")]
+    public async Task ExtractMethodSafe_WholeBlockSnippetSpanningForeach_ExtractsEntireBlockAsOneCall()
+    {
+        SetSource(ContosoOrdersLikeSource, "Order.cs");
+
+        var snippet = "decimal runningTotal = 0m;\n        int totalUnits = 0;\n        foreach (var line in _lines)\n        {\n            runningTotal += line.Quantity * line.UnitPrice;\n            totalUnits += line.Quantity;\n        }";
+
+        var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Contain("foreach"),
+            "ComputeTotals must contain the foreach loop, not just its first statement");
+        Assert.That(result.UpdatedContent, Does.Contain("totalUnits"),
+            "ComputeTotals must account for totalUnits, not silently drop it");
+        Assert.That(result.UpdatedContent, Does.Not.Contain("ComputeTotals(runningTotal, line)"),
+            "Must not degrade into a per-line call inside the original loop — the whole block " +
+            "including the loop itself must move into the new method");
+    }
+
+    [Test]
+    [Description("Regression (ContosoOrders live agent run): a contextSnippet that matches only "
+                 + "ONE statement inside a loop body — while a sibling statement in that same body "
+                 + "is left out, and the statement depends on state declared outside the loop (an "
+                 + "accumulator pattern) — must be refused rather than silently extracted. The prior "
+                 + "behavior extracted just that one statement into a method called once per "
+                 + "iteration, silently dropping the sibling statement and the loop from the "
+                 + "extraction while still reporting Success=true.")]
+    public async Task ExtractMethodSafe_SingleStatementSnippetInsideAccumulatorLoop_RefusesAmbiguousExtraction()
+    {
+        SetSource(ContosoOrdersLikeSource, "Order.cs");
+
+        var snippet = "runningTotal += line.Quantity * line.UnitPrice;";
+
+        var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
+
+        Assert.That(result.Success, Is.False,
+            "Must refuse rather than silently produce a per-iteration call that drops totalUnits");
+        Assert.That(result.Error, Does.Contain("loop"),
+            "Error should explain the loop-body ambiguity");
+        Assert.That(result.Error, Does.Contain("totalUnits"),
+            "Error should name the sibling statement that would be left behind");
+    }
 }

@@ -1377,6 +1377,53 @@ public class MsToolAugmentEngine
                         "No statements found at the contextSnippet location. Try a broader snippet.");
                 }
             }
+
+            // A selection that resolves to exactly one statement, inside a loop body that has
+            // sibling statements left out of the selection, is a red flag when that statement
+            // depends on state declared outside the loop — e.g. an accumulator pattern like
+            // `runningTotal += x` inside `foreach { runningTotal += x; totalUnits += y; }`.
+            // Extracting just that one statement produces a method called once per iteration
+            // that silently drops the sibling statement and the loop itself from the extraction —
+            // exactly the kind of "technically did something, semantically wrong" result a caller
+            // has no way to detect from a success response. Refuse and point at the ambiguity
+            // instead of guessing a narrower scope than the caller likely intended (confirmed
+            // regression: ContosoOrders BuildOrderSummary/ComputeTotals).
+            if (stmtsInSelection.Count == 1
+                && block.Statements.Count > 1
+                && block.Parent is ForEachStatementSyntax or ForStatementSyntax
+                    or WhileStatementSyntax or DoStatementSyntax)
+            {
+                var single = stmtsInSelection[0];
+                var loopLocalNames = new HashSet<string>(
+                    block.Parent switch
+                    {
+                        ForEachStatementSyntax fe => [fe.Identifier.Text],
+                        ForStatementSyntax f => f.Declaration?.Variables.Select(v => v.Identifier.Text) ?? [],
+                        _ => []
+                    });
+
+                var singleDf = model.AnalyzeDataFlow(single);
+                bool touchesOuterState = singleDf?.Succeeded == true &&
+                    singleDf.DataFlowsIn.Any(s => s.Kind == SymbolKind.Local && !loopLocalNames.Contains(s.Name));
+
+                if (touchesOuterState)
+                {
+                    var siblingPreview = string.Join(" / ",
+                        block.Statements.Where(s => s != single)
+                                        .Select(s => s.ToString().Trim())
+                                        .Where(t => t.Length > 0)
+                                        .Take(3));
+                    return MsAugmentResult.Fail(
+                        $"contextSnippet matched only one statement inside a loop body that has other " +
+                        $"statement(s) ({siblingPreview}) and uses state declared outside the loop. " +
+                        "Extracting just this statement would run the new method once per iteration and " +
+                        "silently leave the sibling statement(s) behind. If you meant to extract the whole " +
+                        "loop (and anything around it), widen contextSnippet to cover that whole span " +
+                        "verbatim — e.g. from the first line before the loop through the loop's closing " +
+                        "brace. If you really do mean just this one statement, use lineBefore/lineAfter " +
+                        "naming its immediate neighbors to confirm the narrower selection.");
+                }
+            }
         }
 
         var firstStmt = stmtsInSelection.First();
