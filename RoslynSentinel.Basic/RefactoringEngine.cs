@@ -4172,9 +4172,18 @@ public class RefactoringEngine
             candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
         }
 
-        if (contextSnippet == null)
+        if (contextSnippet == null || candidates.Count <= 1)
         {
-            return candidates.FirstOrDefault(); // unchanged default behavior
+            // memberName alone already resolves unambiguously (zero or one candidate) — a
+            // contextSnippet exists only to disambiguate between multiple same-named candidates,
+            // so there's nothing for it to do here. A caller that includes one defensively (or
+            // whose snippet has a whitespace/formatting mismatch against the file, unrelated to
+            // *which* member is meant) should not have the whole call fail over a match that was
+            // never actually needed — confirmed regression: ContosoOrders ApplyDiscount (a single,
+            // non-overloaded method) failed ReplaceMember twice on contextSnippet mismatches that
+            // had no bearing on which member was targeted, before the caller gave up and switched
+            // tools entirely.
+            return candidates.FirstOrDefault();
         }
 
         var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
@@ -4216,9 +4225,11 @@ public class RefactoringEngine
             .Where(t => extraFilter == null || extraFilter(t))
             .ToList();
 
-        if (contextSnippet == null)
+        if (contextSnippet == null || candidates.Count <= 1)
         {
-            return candidates.FirstOrDefault(); // unchanged default behavior
+            // typeName alone already resolves unambiguously — see the identical guard and
+            // rationale in ResolveMemberByNameOrSnippet above.
+            return candidates.FirstOrDefault();
         }
 
         var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);

@@ -159,8 +159,10 @@ public class StructuralRefinementEngine
             .ToList();
 
         SyntaxNode? target;
-        if (contextSnippet == null)
+        if (contextSnippet == null || candidates.Count <= 1)
         {
+            // symbolName alone already resolves unambiguously — see the identical guard and
+            // rationale in RefactoringEngine.ResolveMemberByNameOrSnippet.
             target = candidates.FirstOrDefault();
         }
         else

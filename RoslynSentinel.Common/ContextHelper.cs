@@ -82,7 +82,23 @@ public static class ContextHelper
             // count), collapse whitespace runs on both sides identically, and compare — this
             // preserves line-by-line structure (so it won't match reordered statements) while
             // being indifferent to indentation depth, which carries no compiler meaning in C#.
-            var snippetLineTexts = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+            //
+            // A caller-supplied snippet very commonly ends (and sometimes starts) with a blank
+            // line — e.g. "return foo;\n}\n" from copying a whole statement plus its closing brace
+            // with a trailing newline. Split('\n') on that produces a trailing empty-string
+            // element, which would otherwise inflate windowSize by one and force the window to
+            // swallow one real, unrelated source line that was never meant to be part of the
+            // match. Trim blank leading/trailing lines before computing windowSize so the window
+            // reflects only the snippet's actual content lines.
+            var normalizedSnippet = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n");
+            var snippetLineTexts = normalizedSnippet.Split('\n')
+                .SkipWhile(string.IsNullOrWhiteSpace)
+                .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()
+                .ToArray();
+            if (snippetLineTexts.Length == 0)
+            {
+                snippetLineTexts = normalizedSnippet.Split('\n');
+            }
             var snippetWindowNorm = System.Text.RegularExpressions.Regex.Replace(
                 string.Join("\n", snippetLineTexts.Select(l => l.Trim())).Trim(), @"\s+", " ");
             var lines = sourceText.Lines;

@@ -188,6 +188,29 @@ so it remains the better choice for this scenario. Do not penalize the agent for
 `ReplaceMember` correctly after a diff attempt, successful or not; do note it as an example of the
 persistent tool-selection friction (see "Tool gaps observed").
 
+**Fixed regression — `ReplaceMember` failing on a defensive/mismatched `contextSnippet` for a
+non-overloaded member (attempt 7):** `ApplyDiscount` is a single, non-overloaded method — `memberName`
+alone already resolves it unambiguously. A live agent passed `contextSnippet` anyway (habitually, not
+because anything needed disambiguating), and a whitespace/formatting mismatch in that snippet (missing
+indentation from copy-pasting without preserving the file's leading whitespace) made the call fail
+twice with "contextSnippet not found," even though nothing about *which* member was targeted was ever
+in question. The agent then abandoned `ReplaceMember` entirely for `ApplyDiff` rather than retrying
+without the unnecessary snippet. Root cause: the resolution helper required a supplied `contextSnippet`
+to match whenever it was non-null, with no check for whether there was more than one candidate to
+disambiguate between in the first place. Fixed: when `memberName` (or `typeName`/`symbolName`, for the
+analogous helpers used by other tools) resolves to zero or one candidates, a supplied `contextSnippet`
+is now ignored rather than required to match — it's only ever consulted when there's real ambiguity
+(2+ same-named candidates) to resolve. A genuinely ambiguous name with a non-matching `contextSnippet`
+still correctly fails. Separately, a distinct bug in the whitespace-tolerant multi-line matching
+fallback was found and fixed while investigating this: a `contextSnippet` ending in a trailing newline
+(e.g. copying a statement plus its closing brace with a trailing `\n`, as one such agent snippet did)
+produced a phantom empty line via `Split('\n')`, inflating the sliding window's size by one and forcing
+it to compare against an extra, unrelated real source line — so a snippet that should have matched via
+the whitespace-tolerant fallback silently didn't. Trailing/leading blank lines in a `contextSnippet` no
+longer affect the window size. If a `contextSnippet` that is either (a) unnecessary for a
+non-overloaded member, or (b) has a trailing/leading blank line, still fails to resolve, that is a
+regression.
+
 ---
 
 ### Scenario 5 — Safe-delete dead code (Tier 2, multi-step verification)
@@ -450,8 +473,32 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   `SafeDeleteUnusedSymbol` MCP tool — dead code, only exercised by one test. See `docs/TODO.md` for
   the full writeup and remediation options; not fixed as part of the 2026-08-19
   `symbolName`/`contextSnippet` fallback work below, which stayed scoped to the reachable engine.
+- **`contextSnippet` wording across tool descriptions invites a "fragment" mental model that the
+  implementations don't fully support.** Every tool's description calls it "a distinctive substring"
+  without clarifying that the substring still needs to match the file's actual text (modulo the
+  whitespace/indentation tolerance the matcher now has) — agents across multiple attempts have
+  variously passed a signature-only fragment, a comment-only fragment, a full member body, or a
+  reconstructed-from-memory approximation, with no consistent signal from the wording about which is
+  expected or safest. This needs a dedicated audit across all `contextSnippet`-accepting tools'
+  `[Description]` text, not a per-tool patch — deferred, see `docs/TODO.md`.
+- **`ConvertExpressionBodyAsync` (and possibly other, not-yet-audited tools) has the same
+  single-candidate `contextSnippet`-required bug class as `ReplaceMember` did, but with a different
+  code shape** (branches to position-based resolution entirely when `contextSnippet` is supplied,
+  rather than computing name-based candidates first and only consulting the snippet when there's
+  real ambiguity) — not fixed as part of the `ReplaceMember` fix below, since it requires restructuring
+  that method's resolution logic rather than the same one-line guard. See `docs/TODO.md`.
 
 ### Fixed
+- **(2026-08-19) `ReplaceMember` (and the shared member/type resolution helpers behind
+  `RemoveMember`, `ChangeAccessibility`, `ModifyModifier`, `ModifyAttribute`, `ModifyBaseType`,
+  `ModifyEnum`, `AddSummaryComment`, `SafeDeleteUnusedSymbol`, and others) requiring a supplied
+  `contextSnippet` to match even when the name alone already resolved unambiguously.** See Scenario 4
+  for the full writeup — fixed by skipping `contextSnippet` matching entirely when there are zero or
+  one name-matched candidates, since a snippet only has a job when there's real ambiguity to resolve.
+  Also fixed a related, independently-discovered bug in the whitespace-tolerant multi-line matching
+  fallback: a `contextSnippet` ending in a trailing newline inflated the sliding window's size by one
+  via a phantom empty line from `Split('\n')`, causing snippets that should have matched via that
+  fallback to silently fail instead.
 - **(2026-08-19) `LoadSolution` silently dropping a nonexistent `baseRepoDir` instead of failing
   fast.** A caller-supplied `baseRepoDir` that doesn't exist on the host used to be silently
   discarded, falling through to other resolution candidates (server-wide `--base-repo-dir` default,

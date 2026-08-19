@@ -44,3 +44,55 @@ undetected on the tool that's actually wired up.
 
 Not fixed as part of the `symbolName`/`contextSnippet` fallback work (2026-08-19) — that work stayed
 scoped to `StructuralRefinementEngine`, the class actually reachable from the MCP tool surface.
+
+## `contextSnippet` wording audit across tool descriptions
+
+**Found:** 2026-08-19, while fixing `ReplaceMember`'s single-candidate `contextSnippet` bug (see
+SCENARIOS.md Scenario 4 / "Fixed" list).
+
+**What:** every `contextSnippet`-accepting tool's `[Description]` calls it "a distinctive substring
+from the target member" (or near-identical wording) without clarifying what "distinctive" actually
+requires — that it still needs to match the file's real text (now tolerant of whitespace/indentation
+differences, but not genuine content differences). Across the 7 recorded ContosoOrders agent runs,
+real agents have passed, for the exact same kind of call: a full member body, a signature-only
+one-liner, a comment-only fragment, and a from-memory reconstruction that introduced a genuine content
+difference (see `ContextHelperTests.FindSnippetPosition_SafeDelete_AgentFabricatedInterpolation_StillFailsToMatch`).
+Nothing in the current wording steers an agent toward the safest choice (shortest unique substring
+that's still copied verbatim) or away from the riskiest one (reconstructing a whole member from
+memory).
+
+**Why this matters:** with the 2026-08-19 fix, `contextSnippet` is now genuinely optional for any
+non-overloaded target — but agents don't know that from the description alone, and will likely keep
+supplying one defensively "just in case," reintroducing exactly the kind of avoidable mismatch this
+session fixed for `ReplaceMember` specifically, on some other tool or some other snippet shape not yet
+seen in a live run.
+
+**Suggested approach:** a single pass across every `[Description]` mentioning `contextSnippet` (grep
+for `ToolParams.ContextSnippet` and inline duplicated wording — some tools use the shared constant,
+others still inline their own text) to state consistently: (1) only needed when the name is ambiguous
+(2+ same-named declarations); (2) prefer the shortest substring that's still unique — a signature line
+is usually enough, a full body is rarely necessary and is more failure-prone to reproduce verbatim; (3)
+copy it verbatim from a prior tool result rather than retyping from memory. Not done as part of the
+`ReplaceMember` fix, which addressed the resolution *logic* but not the *wording* that leads callers to
+over-supply a snippet in the first place.
+
+## `ConvertExpressionBodyAsync` has the same contextSnippet bug class as `ReplaceMember`, different code shape
+
+**Found:** 2026-08-19, while fixing `ReplaceMember`'s `ResolveMemberByNameOrSnippet`/
+`ResolveTypeByNameOrSnippet` single-candidate bug (see SCENARIOS.md Scenario 4 / "Fixed" list).
+
+**What:** `RefactoringEngine.ConvertExpressionBodyAsync` (`RoslynSentinel.Basic/RefactoringEngine.cs`,
+~line 1643) resolves its target with an `if (contextSnippet != null) { position-based } else {
+name-based candidates }` branch — structurally different from `ResolveMemberByNameOrSnippet`'s
+"compute name-based candidates first, only consult the snippet if 2+" shape. This means a supplied
+`contextSnippet` bypasses name-based candidate computation entirely rather than being ignored when
+unnecessary, so the same failure mode (a defensive/mismatched snippet blocking an otherwise-unambiguous
+resolution) is still possible here, just via a different code path.
+
+**Why not fixed alongside `ReplaceMember`:** the one-line "skip if `candidates.Count <= 1`" guard used
+for the two shared helpers doesn't directly apply — this method would need restructuring to compute
+name-based candidates unconditionally first, then decide whether to also honor a snippet-based
+position, which is a larger, more careful change than the guards applied elsewhere. Worth checking
+whether any other `RefactoringEngine`/`StructuralRefinementEngine` methods share this same
+`if (contextSnippet != null) { position } else { name }` shape (not yet audited) before fixing, so all
+affected methods get the same treatment in one pass rather than one at a time as each is found live.

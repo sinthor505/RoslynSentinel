@@ -192,6 +192,62 @@ public class C {
         Assert.That(result.UpdatedText!, Does.Not.Contain("public void Old()"));
     }
 
+    private const string ApplyDiscountLikeSource = @"
+namespace ContosoOrders.Core;
+public class Order
+{
+    public decimal ApplyDiscount(decimal percentage)
+    {
+        // NOTE: this method uses DiscountCalculator, but the using directive for
+        // ContosoOrders.Core.Discounts is intentionally missing from this file (fully qualified below
+        // as a workaround) to create a scenario for AddUsingDirective.
+        return ContosoOrders.Core.Discounts.DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);
+    }
+}";
+
+    [Test]
+    [Description("Regression (ContosoOrders live agent run, attempt 7): ApplyDiscount is a single, "
+                 + "non-overloaded method — memberName alone already resolves it unambiguously. The "
+                 + "agent nonetheless passed a defensive contextSnippet that didn't match the file "
+                 + "(a formatting/indentation mismatch unrelated to which member was targeted), and "
+                 + "the call failed twice with 'contextSnippet not found' even though there was "
+                 + "nothing to disambiguate. A contextSnippet that doesn't match must not block "
+                 + "resolution when the name alone is already unambiguous.")]
+    public async Task ReplaceMember_SingleNonOverloadedMember_MismatchedContextSnippetIsIgnored()
+    {
+        SetSource(ApplyDiscountLikeSource, "Order.cs");
+        var newSource = "public decimal ApplyDiscount(decimal percentage)\n{\n    return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);\n}";
+
+        var result = await _refactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
+            contextSnippet: "this text does not appear anywhere in the file");
+
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.UpdatedText, Does.Contain("DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("ContosoOrders.Core.Discounts.DiscountCalculator"));
+    }
+
+    [Test]
+    public async Task ReplaceMember_OverloadedMembers_StillRequireContextSnippetToDisambiguate()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+}", "C.cs");
+
+        var noSnippetResult = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
+        Assert.That(noSnippetResult.UpdatedText, Is.Not.Null.And.Not.Empty,
+            "With 2+ overloads and no contextSnippet, existing first-match behavior should still apply.");
+
+        var mismatchedSnippetResult = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }",
+            contextSnippet: "this text does not appear anywhere in the file");
+        Assert.That(mismatchedSnippetResult.UpdatedText, Is.Null.Or.Empty,
+            "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail — " +
+            "the single-candidate bypass must not apply when there IS real ambiguity to resolve.");
+        Assert.That(mismatchedSnippetResult.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+    }
+
     [Test]
     public async Task AddMember_ShouldAppendToClass()
     {
