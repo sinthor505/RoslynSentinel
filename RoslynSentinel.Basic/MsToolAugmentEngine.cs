@@ -636,6 +636,28 @@ public class MsToolAugmentEngine
     private static string EscapeForInterpolated(string s) =>
         s.Replace("{", "{{").Replace("}", "}}");
 
+    /// <summary>
+    /// Renders a type for use in a freshly synthesized parameter/return signature, ignoring any
+    /// nullable annotation that came from flow-state analysis rather than the variable's actual
+    /// declared nullability. <c>ILocalSymbol.Type</c> obtained via <c>SemanticModel.AnalyzeDataFlow</c>
+    /// can carry <see cref="NullableAnnotation.Annotated"/> purely because the compiler's flow
+    /// analysis is conservative at the region boundary (e.g. after a loop or multiple branches) —
+    /// not because the variable was ever actually assignable to null. A generated parameter that
+    /// blindly copies that annotation ends up typed <c>Foo?</c> for a variable that's really always
+    /// non-null (e.g. <c>var sb = new StringBuilder();</c>, never reassigned), and the generated
+    /// method body then dereferences it without a null check — producing a live CS8602 warning
+    /// that didn't exist before extraction. Only a type explicitly declared/initialized as nullable
+    /// (value types' <c>Nullable&lt;T&gt;</c>, or a reference type whose declared type is itself
+    /// nullable) should keep the <c>?</c> here; this strips a flow-state-only annotation.
+    /// </summary>
+    private static string DisplayTypeForExtractedSignature(ITypeSymbol type)
+    {
+        var normalized = type.NullableAnnotation == NullableAnnotation.Annotated
+            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            : type;
+        return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+    }
+
     // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
     // MS Bug: roslyn-format_document always applies changes immediately.
     // There is NO preview mode — preview: true is not even a parameter in the MS tool.
@@ -1085,7 +1107,8 @@ public class MsToolAugmentEngine
                 SyntaxFactory.Token(SyntaxKind.PrivateKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                 SyntaxFactory.Token(SyntaxKind.ConstKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
+            .WithAddedByComment("ExtractConstantSafe");
 
         var updatedType = newContainingType.WithMembers(
             newContainingType.Members.Insert(0, constDecl));
@@ -1249,7 +1272,8 @@ public class MsToolAugmentEngine
                     .WithTrailingTrivia(SyntaxFactory.Space)))
             .WithParameterList(SyntaxFactory.ParameterList())
             .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(interpolated))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            .WithAddedByComment("Generate(kind: generate_to_string_safe)");
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
@@ -1468,8 +1492,7 @@ public class MsToolAugmentEngine
                 {
                     if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local)
                     {
-                        parameters.Add((local.Name,
-                            local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        parameters.Add((local.Name, DisplayTypeForExtractedSignature(local.Type)));
                         if (flowsOut.Contains(local))
                         {
                             outVarNames.Add(local.Name);
@@ -1481,8 +1504,7 @@ public class MsToolAugmentEngine
                         // the Selection touches an instance member (e.g. a field), but it is
                         // already implicitly available to a non-static extracted method and is
                         // not valid syntax as an explicit parameter.
-                        parameters.Add((param.Name,
-                            param.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        parameters.Add((param.Name, DisplayTypeForExtractedSignature(param.Type)));
                         if (flowsOut.Contains(param))
                         {
                             outVarNames.Add(param.Name);
@@ -1494,8 +1516,7 @@ public class MsToolAugmentEngine
                 {
                     if (sym.Kind == SymbolKind.Local && sym is ILocalSymbol local && !flowsIn.Contains(local))
                     {
-                        declaredOutVars.Add((local.Name,
-                            local.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        declaredOutVars.Add((local.Name, DisplayTypeForExtractedSignature(local.Type)));
                     }
                 }
             }
@@ -1622,7 +1643,8 @@ public class MsToolAugmentEngine
 
         var methodWithTrivia = newMethodDecl
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
-            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
+            .WithAddedByComment("ExtractMethodSafe");
 
         var updatedType = newContainingType.AddMembers(methodWithTrivia);
         var finalRoot = newRoot1.ReplaceNode(newContainingType, updatedType);

@@ -873,4 +873,58 @@ public class OrderLine
         Assert.That(result.Error, Does.Contain("totalUnits"),
             "Error should name the sibling statement that would be left behind");
     }
+
+    private const string StringBuilderFlowsIntoSelectionSource = @"
+public class Order
+{
+    private readonly System.Collections.Generic.List<OrderLine> _lines = new();
+
+    public string BuildOrderSummary()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(""header"");
+
+        decimal runningTotal = 0m;
+        int totalUnits = 0;
+        foreach (var line in _lines)
+        {
+            runningTotal += line.Quantity * line.UnitPrice;
+            totalUnits += line.Quantity;
+        }
+        sb.AppendLine($""Total units: {totalUnits}"");
+
+        return sb.ToString();
+    }
+}
+
+public class OrderLine
+{
+    public int Quantity { get; set; }
+    public decimal UnitPrice { get; set; }
+}";
+
+    [Test]
+    [Description("Regression (ContosoOrders live agent run, attempt 3): when the selected block "
+                 + "itself calls a method on a variable declared earlier in the same method (e.g. "
+                 + "sb.AppendLine(...) on a StringBuilder that flows in via DataFlowsIn), the "
+                 + "generated parameter must NOT be nullable. The prior bug copied Roslyn's "
+                 + "flow-state NullableAnnotation verbatim into the synthesized parameter type, "
+                 + "producing 'StringBuilder? sb' for a variable that is unconditionally constructed "
+                 + "and never reassigned — and the generated body dereferenced it with no null check, "
+                 + "producing a live CS8602 warning that did not exist before extraction.")]
+    public async Task ExtractMethodSafe_SelectionUsesEarlierDeclaredReferenceType_ParameterIsNotNullable()
+    {
+        SetSource(StringBuilderFlowsIntoSelectionSource, "Order.cs");
+
+        var snippet = "decimal runningTotal = 0m;\n        int totalUnits = 0;\n        foreach (var line in _lines)\n        {\n            runningTotal += line.Quantity * line.UnitPrice;\n            totalUnits += line.Quantity;\n        }\n        sb.AppendLine($\"Total units: {totalUnits}\");";
+
+        var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
+
+        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(result.UpdatedContent, Does.Not.Contain("StringBuilder? sb"),
+            "The synthesized 'sb' parameter must not be nullable — 'sb' is never null at this point, " +
+            "the '?' came from flow-state analysis, not the variable's real declared nullability");
+        Assert.That(result.UpdatedContent, Does.Contain("StringBuilder sb"),
+            "The synthesized parameter should still be typed StringBuilder, just not nullable");
+    }
 }

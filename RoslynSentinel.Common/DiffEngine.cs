@@ -17,8 +17,23 @@ public class DiffEngine
     }
 
     /// <summary>
+    /// How far (in lines, either direction) a hunk's declared line number may drift from its
+    /// actual position before <see cref="ApplyDiff"/> gives up re-anchoring it. Line numbers in a
+    /// caller-authored diff routinely go stale after any earlier edit to the same file — the
+    /// window trades a bounded amount of false-positive risk for tolerating that drift instead of
+    /// failing (or silently corrupting the file) on every offset mismatch.
+    /// </summary>
+    private const int HunkReanchorWindow = 60;
+
+    /// <summary>
     /// Applies a standard Unified Diff to a SourceText object and returns the updated text.
-    /// Supports multiple hunks and validates context lines.
+    /// Supports multiple hunks. Each hunk's declared line number is treated as a starting guess,
+    /// not ground truth: if the hunk's own content (its first context/removal line) isn't found
+    /// there, this searches a window around the declared position and re-anchors to the real
+    /// match. This is what makes the tool tolerant of stale line numbers from an earlier edit to
+    /// the same file — the single largest cause of diff-apply failures in practice. If no anchor
+    /// can be found within the window, this throws rather than guessing and silently corrupting
+    /// unrelated lines.
     /// </summary>
     public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
     {
@@ -36,7 +51,10 @@ public class DiffEngine
             if (match.Success)
             {
                 int oldStart = int.Parse(match.Groups[1].Value) - 1;
-                int currentLine = oldStart + offset;
+                int declaredLine = oldStart + offset;
+
+                var hunkBody = ReadHunkBody(diffLines, i + 1);
+                int currentLine = ReanchorHunk(lines, hunkBody, declaredLine, match.Value);
 
                 // Process hunk lines
                 i++;
@@ -60,7 +78,17 @@ public class DiffEngine
                         {
                             throw new InvalidOperationException($"Diff application failed: Line {currentLine + 1} out of bounds.");
                         }
-                        // Optional: Validate context here if we wanted to be strict
+                        var expected = diffLine.Substring(1).Trim();
+                        var actual = lines[currentLine].Trim();
+                        if (expected != actual)
+                        {
+                            throw new InvalidOperationException(
+                                $"Diff application failed: hunk '{match.Value}' expected to remove \"{expected}\" " +
+                                $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
+                                "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
+                                "against the file's current content, or use a whole-member/whole-file replacement " +
+                                "tool instead.");
+                        }
                         lines.RemoveAt(currentLine);
                         offset--;
                     }
@@ -76,8 +104,12 @@ public class DiffEngine
                         var actual = lines[currentLine].Trim();
                         if (expected != actual)
                         {
-                            // In a real patch tool, we might try fuzzy matching. Here we'll just log a warning or be strict.
-                            // For now, let's just proceed to be more tolerant of whitespace differences
+                            throw new InvalidOperationException(
+                                $"Diff application failed: hunk '{match.Value}' expected context \"{expected}\" " +
+                                $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
+                                "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
+                                "against the file's current content, or use a whole-member/whole-file replacement " +
+                                "tool instead.");
                         }
                         currentLine++;
                     }
@@ -90,6 +122,83 @@ public class DiffEngine
         var originalText = sourceText.ToString();
         var separator = originalText.Contains("\r\n") ? "\r\n" : "\n";
         return SourceText.From(string.Join(separator, lines), sourceText.Encoding);
+    }
+
+    /// <summary>Collects a hunk's raw lines (context/+/-) up to the next hunk header or diff end.</summary>
+    private static List<string> ReadHunkBody(string[] diffLines, int start)
+    {
+        var body = new List<string>();
+        var hunkHeaderRegex = new Regex(@"^@@\s+\-(\d+),?(\d*)\s+\+(\d+),?(\d*)\s+@@");
+        for (int i = start; i < diffLines.Length && !hunkHeaderRegex.IsMatch(diffLines[i]); i++)
+        {
+            if (string.IsNullOrEmpty(diffLines[i]) && i + 1 < diffLines.Length && hunkHeaderRegex.IsMatch(diffLines[i + 1]))
+            {
+                break;
+            }
+            body.Add(diffLines[i]);
+        }
+        return body;
+    }
+
+    /// <summary>
+    /// Finds where a hunk actually belongs by matching its leading run of context/removal lines
+    /// (the only lines guaranteed to already exist in <paramref name="lines"/>) against the file,
+    /// searching outward from <paramref name="declaredLine"/> within <see cref="HunkReanchorWindow"/>.
+    /// Returns <paramref name="declaredLine"/> unchanged if it already matches (the common case) or
+    /// if the hunk has no context/removal lines to anchor on (a pure insertion at file start/end).
+    /// Throws if the declared position doesn't match and no nearby match can be found either.
+    /// </summary>
+    private static int ReanchorHunk(List<string> lines, List<string> hunkBody, int declaredLine, string hunkHeader)
+    {
+        var anchorLines = hunkBody
+            .Where(l => l.StartsWith(" ") || l.StartsWith("-"))
+            .Select(l => l.Substring(1).Trim())
+            .ToList();
+
+        if (anchorLines.Count == 0)
+        {
+            return declaredLine; // Nothing to anchor on (pure insertion) — trust the declared offset.
+        }
+
+        if (MatchesAt(lines, anchorLines, declaredLine))
+        {
+            return declaredLine;
+        }
+
+        for (int delta = 1; delta <= HunkReanchorWindow; delta++)
+        {
+            if (MatchesAt(lines, anchorLines, declaredLine - delta))
+            {
+                return declaredLine - delta;
+            }
+            if (MatchesAt(lines, anchorLines, declaredLine + delta))
+            {
+                return declaredLine + delta;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Diff application failed: hunk '{hunkHeader}' declares line {declaredLine + 1}, but its content " +
+            $"wasn't found there or within {HunkReanchorWindow} lines in either direction. First expected line: " +
+            $"\"{anchorLines[0]}\". Regenerate the diff against the file's current content, or use a " +
+            "whole-member/whole-file replacement tool instead.");
+    }
+
+    /// <summary>True if every line in <paramref name="anchorLines"/> matches the file starting at <paramref name="start"/>.</summary>
+    private static bool MatchesAt(List<string> lines, List<string> anchorLines, int start)
+    {
+        if (start < 0 || start + anchorLines.Count > lines.Count)
+        {
+            return false;
+        }
+        for (int j = 0; j < anchorLines.Count; j++)
+        {
+            if (lines[start + j].Trim() != anchorLines[j])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>

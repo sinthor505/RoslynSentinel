@@ -367,34 +367,34 @@ public class BatteryTwentyTests
         Assert.DoesNotThrow(() => _tools.ClearExternalDrift());
     }
 
-    // --- ProposedChange (consolidated: format × action) ---
+    // --- ApplyDiff (consolidated: format × action; formerly named ProposedChange) ---
 
     [Test]
-    public async Task ProposedChange_Diff_Validate_ReturnsDiagnosticReport()
+    public async Task ApplyDiff_Diff_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
-        var result = await _tools.ProposedChange(ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
+        var result = await _tools.ApplyDiff(ChangesetFormat.diff, ProposedChangeAction.validate, filepath: "Test.cs", unifiedDiff: diff);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public async Task ProposedChange_Files_Validate_ReturnsDiagnosticReport()
+    public async Task ApplyDiff_Files_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
         var changes = new Dictionary<FilePath, string>
         {
             [new FilePath("Test.cs")] = SimpleSource + " // changed"
         };
-        var result = await _tools.ProposedChange(ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
+        var result = await _tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public async Task ProposedChange_Diff_Apply_NonExistentFile_ReturnsStructuredError()
+    public async Task ApplyDiff_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ProposedChange(
+        var result = await _tools.ApplyDiff(
             ChangesetFormat.diff, ProposedChangeAction.apply,
             filepath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
@@ -403,10 +403,10 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public async Task ProposedChange_Files_Apply_EmptyChanges_ReturnsResult()
+    public async Task ApplyDiff_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.ProposedChange(ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<FilePath, string>());
+        var result = await _tools.ApplyDiff(ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<FilePath, string>());
         Assert.That(result, Is.Not.Null);
     }
 

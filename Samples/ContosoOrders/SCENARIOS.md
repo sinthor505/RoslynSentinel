@@ -162,13 +162,17 @@ when only half the described task was actually accomplished by the tool it calle
 failure mode. It also tests a known tool-selection friction point: agents are frequently reluctant to
 call `ReplaceMember` for what looks like a one-line change, because it requires the full member body
 rather than a diff/patch — most models are trained heavily on diff-style edits and hesitate to emit a
-"whole file/member" replacement for a small change. Watch for the agent instead reaching for
-`ProposedChange` with a hand-built unified diff (fragile — line numbers drift after any prior edit in
-the same file and this consistently produces `CS1519`/parse errors when the diff's line offsets don't
-match the file's current state) before eventually falling back to `ReplaceMember`. Do not penalize the
-agent for eventually using `ReplaceMember` correctly after a failed diff attempt — that recovery is the
-correct behavior; the tool-selection friction itself is a known gap in `ReplaceMember`'s description,
-not an agent failure (see "Tool gaps observed" at the end of this document).
+"whole file/member" replacement for a small change, even after `ReplaceMember`'s tool description was
+strengthened to explicitly recommend it for small in-member edits (2026-08-18) — that description
+change alone did not reliably change this behavior in a live run. Watch for the agent instead reaching
+for `ApplyDiff` (`changesetFormat: diff` — the tool formerly named `ProposedChange`) with a hand-built
+unified diff before eventually falling back to `ReplaceMember`. As of 2026-08-19, `ApplyDiff`'s diff
+path re-anchors a hunk to its actual content within a 60-line search window when the declared line
+number doesn't match, so modest staleness no longer produces a parse error the way it used to — but a
+whole-member `ReplaceMember` call still can't drift out of sync the way a diff hunk theoretically can,
+so it remains the better choice for this scenario. Do not penalize the agent for eventually using
+`ReplaceMember` correctly after a diff attempt, successful or not; do note it as an example of the
+persistent tool-selection friction (see "Tool gaps observed").
 
 ---
 
@@ -222,7 +226,23 @@ differently-indented-but-otherwise-verbatim `contextSnippet` against the agent. 
 agent never re-reads the file/method afterward to confirm the generated signature and call site
 actually look correct — declaring the step done purely because the tool call returned success,
 without checking the result, is a real (if lower-severity) gap even when the outcome happens to be
-right.
+right. As of 2026-08-19, generated members from `ExtractMethodSafe` carry a leading
+`// Added by ExtractMethodSafe` comment — use this to quickly locate the extracted method in a diff
+without cross-referencing the tool-call log.
+
+**Fixed regression — nullable parameter over-annotation:** a live agent run (attempt 3) selected a
+block that also called a method on a variable declared earlier in the same method (an `sb` of type
+`System.Text.StringBuilder`, used via `sb.AppendLine(...)` both before and inside the selection).
+The tool generated a parameter typed `StringBuilder? sb` — nullable — even though `sb` is
+unconditionally constructed and never reassigned, and the generated body dereferenced it with no
+null check, producing a live `CS8602` warning that did not exist before extraction. Root cause:
+Roslyn's flow-analysis-derived `NullableAnnotation` on the incoming symbol's type is conservative at
+region boundaries and was being copied verbatim into the synthesized signature. Fixed by stripping a
+flow-state-only nullable annotation before rendering the type string. If a similarly-shaped selection
+(a block that uses a reference-typed local/parameter declared before it) still
+produces a nullable-annotated parameter for an obviously-non-null variable, that is a regression —
+verify with a real build (`dotnet build`), not just `GetDiagnostics`' summary count, since a single
+new warning is easy to miss if only checking for `errors: 0`.
 
 ---
 
@@ -247,7 +267,10 @@ weaker models.
 constructor (true for `OrderService` in this sample), `AddConstructorParameterAsync` appends the new
 constructor after every existing member rather than placing it in a more idiomatic position (e.g.
 first member, or immediately after fields). This is tool-controlled, not something the calling agent
-can influence via its arguments — do not grade the agent down for the resulting placement.
+can influence via its arguments — do not grade the agent down for the resulting placement. As of
+2026-08-19, both the new backing field and (when synthesized) the new constructor carry a leading
+`// Added by AddConstructorParameter` comment specifically so this placement is easy to spot in a
+diff/review rather than needing to scroll to the bottom of the class to notice it landed there.
 
 **Out of scope — stale doc comments:** `OrderService`'s class-level XML doc in this sample says
 "Target for AddConstructorParameter scenario (add an ILogger dependency)" regardless of which
@@ -337,34 +360,51 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
 - **Manual**: scenario 10's final-summary accuracy (step count, validation results reported), and
   scenario 9's doc-comment wording quality.
 
-## Tool gaps observed (from live agent runs, not yet fixed)
-- **`ReplaceMember` requires the full member body, and its tool description doesn't make this loud
-  enough.** Agents consistently hesitate to call it for what looks like a small, localized edit
-  (e.g. simplifying one fully-qualified call site inside an otherwise-unchanged method), because
-  most models are trained heavily on diff/patch-style edits and are reluctant to emit a "replace
-  the whole member" call when only one line actually changed. Observed failure mode: an agent
-  reaches for `ProposedChange` with a hand-built unified diff instead, which is fragile in practice
-  (its line numbers must match the file's *current* state exactly, and drift after any earlier edit
-  in the same file, producing parse errors like `CS1519`/`CS1061` that look like content errors but
-  are actually stale-offset errors) before eventually falling back to `ReplaceMember` successfully.
-  Action item: strengthen `ReplaceMember`'s tool description to explicitly say it's the right choice
-  for small in-member edits too, not just full-member rewrites, and that the caller should pass the
-  member's complete new source (copied/adjusted from what it already read) rather than avoiding the
-  tool because the edit is small. Possibly also worth asking whether this reflects a broader
-  json-building weakness (large multi-line string tool-call arguments are harder for smaller models
-  to construct reliably) independent of the "diff vs. full-replace" framing — worth a dedicated
-  investigation rather than assuming either cause in isolation.
-- **`AddConstructorParameterAsync` appends the new constructor after all existing members when the
-  target class has no pre-existing constructor**, rather than a more idiomatic position (e.g. first
-  member or immediately after fields). Not agent-controllable; see Scenario 7.
+## Tool gaps observed (from live agent runs)
+
+### Still open
+- **`ReplaceMember` requires the full member body, and strengthening its description alone did not
+  reliably fix the underlying reluctance.** Agents consistently hesitate to call it for what looks
+  like a small, localized edit, because most models are trained heavily on diff/patch-style edits.
+  The tool description was rewritten on 2026-08-18 to explicitly recommend `ReplaceMember` for small
+  in-member edits and warn against a hand-built diff — but a live run afterward (attempt 3, Step 4)
+  still went straight to `ApplyDiff`'s diff path (twice, both failing) before falling back to a
+  whole-file `ApplyDiff(changesetFormat: files)` overwrite, never trying `ReplaceMember` at all. This
+  suggests the friction may be a broader json-building weakness (composing a large multi-line string
+  tool-call argument is harder for smaller models than composing a compact diff) rather than purely a
+  tool-selection/description problem — worth a dedicated investigation rather than assuming either
+  cause in isolation, and worth re-testing again now that `ApplyDiff` is also more line-tolerant (see
+  "Fixed" below), since that may shift which path agents settle on even further away from
+  `ReplaceMember`.
 - **Fabricated `contextSnippet`/reconstructed source text on tool-call retries** is a recurring
   small-model behavior across multiple tools (`SafeDeleteUnusedSymbol`, `ExtractMethodSafe` in
   earlier attempts) — the agent reconstructs what it believes the target code looks like instead of
   copying the verbatim text it already received from an earlier `ReadFile`/`GetMethodSource` call.
-  `ExtractMethodSafe`'s snippet matching was hardened against indentation-only differences, but a
-  snippet with genuinely different *content* (not just whitespace) will still and should still fail
-  to match. This is a model-behavior risk to keep watching for across scenarios, not something a
-  single tool fix resolves.
+  Snippet matching was hardened against indentation-only differences, but a snippet with genuinely
+  different *content* (not just whitespace) will still and should still fail to match. This is a
+  model-behavior risk to keep watching for across scenarios, not something a single tool fix
+  resolves.
+
+### Fixed
+- **(2026-08-19) `ExtractMethodSafe` synthesizing a spuriously nullable parameter.** A selection
+  that used a reference-typed local/parameter declared earlier in the same method (e.g. an
+  unconditionally-constructed `StringBuilder`, never reassigned) got a generated parameter typed
+  `Foo?` instead of `Foo`, because a flow-analysis-conservative `NullableAnnotation` was copied
+  verbatim into the synthesized signature — producing a live `CS8602` warning that didn't exist
+  before extraction. Fixed by stripping a flow-state-only nullable annotation before rendering the
+  parameter/return type. See Scenario 6.
+- **(2026-08-19) `ProposedChange` renamed to `ApplyDiff`, and its diff path made line-tolerant.**
+  The tool no longer trusts a hunk's declared line number unconditionally — if the hunk's content
+  isn't found there, it searches a window of nearby lines and re-anchors to the real match, so
+  modest line-number drift from an earlier edit no longer produces a parse error. See Scenario 4.
+- **(2026-08-19) "Added by \<Tool\>" comments** on newly-synthesized members from `ExtractMethodSafe`,
+  `ExtractConstantSafe`, `Generate(kind: generate_to_string_safe)`, `AddMember`
+  (`AddMemberTyped`/`InsertMemberAfter`/`InsertMemberBefore` included via delegation), and
+  `AddConstructorParameter` — directly mitigates the constructor-placement surprise in Scenario 7 and
+  should make it faster to attribute any newly-added member in a diff to the tool call that produced
+  it during grading, without cross-referencing the tool-call log.
+- **(2026-08-19) `RemoveMember(skipPrecheck: true)` fallback for `SafeDeleteUnusedSymbol` failures**
+  — already reflected in Scenario 5.
 
 ## Suggested next batches
 - Batch 2: `Git` tool scenarios (commit a written-to-disk change), `GenerateMapping` between two

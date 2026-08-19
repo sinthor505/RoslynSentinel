@@ -140,6 +140,24 @@ public class RefactoringEngine
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
+    /// <summary>
+    /// Renders a type for use in a freshly synthesized parameter/return signature, ignoring any
+    /// nullable annotation that came from flow-state analysis rather than the variable's actual
+    /// declared nullability. A type obtained from a data-flow-analysis symbol (e.g. via
+    /// <c>SemanticModel.AnalyzeDataFlow</c>) can carry <see cref="NullableAnnotation.Annotated"/>
+    /// purely because the compiler's flow analysis is conservative at the region boundary — not
+    /// because the variable was ever actually assignable to null. Blindly copying that annotation
+    /// into a generated signature produces a spurious <c>?</c> and a live CS8602 warning on every
+    /// unguarded use inside the generated body, for a variable that's really always non-null.
+    /// </summary>
+    private static string DisplayTypeForExtractedSignature(ITypeSymbol type)
+    {
+        var normalized = type.NullableAnnotation == NullableAnnotation.Annotated
+            ? type.WithNullableAnnotation(NullableAnnotation.NotAnnotated)
+            : type;
+        return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+    }
+
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -419,8 +437,8 @@ public class RefactoringEngine
         // Build return type syntax
         TypeSyntax returnType = (returnVar, isAsync) switch
         {
-            ({ } rv, true) => SyntaxFactory.ParseTypeName($"Task<{rv.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}>"),
-            ({ } rv, false) => SyntaxFactory.ParseTypeName(rv.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)),
+            ({ } rv, true) => SyntaxFactory.ParseTypeName($"Task<{DisplayTypeForExtractedSignature(rv.Type)}>"),
+            ({ } rv, false) => SyntaxFactory.ParseTypeName(DisplayTypeForExtractedSignature(rv.Type)),
             (null, true) => SyntaxFactory.ParseTypeName("Task"),
             _ => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
         };
@@ -432,12 +450,12 @@ public class RefactoringEngine
             RefKind refKind = RefKind.None;
             if (sym is ILocalSymbol loc)
             {
-                typeName = loc.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                typeName = DisplayTypeForExtractedSignature(loc.Type);
             }
             else
             {
                 var p = (IParameterSymbol)sym;
-                typeName = p.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
+                typeName = DisplayTypeForExtractedSignature(p.Type);
                 refKind = p.RefKind;
             }
             var param = SyntaxFactory.Parameter(SyntaxFactory.Identifier(sym.Name))
@@ -1341,6 +1359,7 @@ public class RefactoringEngine
                 Message = "// Failed to parse new member."
             };
         }
+        newMember = newMember.WithAddedByComment("AddMember");
 
         var newContainer = container switch
         {
@@ -2615,6 +2634,7 @@ public class RefactoringEngine
                 Message = "// Cannot edit: invalid member source."
             };
         }
+        newMember = newMember.WithAddedByComment("InsertMemberAfter");
 
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -2714,6 +2734,7 @@ public class RefactoringEngine
                 Message = "// Cannot edit: invalid member source."
             };
         }
+        newMember = newMember.WithAddedByComment("InsertMemberBefore");
 
         if (container is TypeDeclarationSyntax typeDecl)
         {
@@ -3914,8 +3935,9 @@ public class RefactoringEngine
 
         var derivedFieldName = fieldName ?? $"_{char.ToLower(paramName[0])}{paramName[1..]}";
 
-        var fieldDecl = (FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(
-            $"private readonly {paramType} {derivedFieldName};")!;
+        var fieldDecl = ((FieldDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(
+            $"private readonly {paramType} {derivedFieldName};")!)
+            .WithAddedByComment("AddConstructorParameter");
 
         var assignmentStatement = SyntaxFactory.ParseStatement($"{derivedFieldName} = {paramName};");
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName))
@@ -3951,7 +3973,8 @@ public class RefactoringEngine
             newCtor = SyntaxFactory.ConstructorDeclaration(className)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
                 .WithParameterList(paramList)
-                .WithBody(body);
+                .WithBody(body)
+                .WithAddedByComment("AddConstructorParameter");
         }
 
         var newMembers = new List<MemberDeclarationSyntax> { fieldDecl };

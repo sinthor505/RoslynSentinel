@@ -244,6 +244,24 @@ public static class ContextHelper
     }
 
     /// <summary>
+    /// Prepends a <c>// Added by &lt;toolName&gt;</c> leading-trivia comment to a freshly synthesized
+    /// member declaration, on its own line above any trivia the member already carries (e.g. a
+    /// blank-line separator). Intended for tools that insert a brand-new member — a constructor,
+    /// method, property, or field — so the addition is easy to spot in a diff or code review
+    /// without cross-referencing which MCP tool call produced it. Not for tools that edit an
+    /// existing member in place (e.g. AddSummaryComment, ChangeAccessibility) — only for genuinely
+    /// new members.
+    /// </summary>
+    public static T WithAddedByComment<T>(this T member, string toolName) where T : MemberDeclarationSyntax
+    {
+        var comment = SyntaxFactory.Comment($"// Added by {toolName}");
+        var newLeadingTrivia = member.GetLeadingTrivia()
+            .Insert(0, comment)
+            .Insert(1, SyntaxFactory.CarriageReturnLineFeed);
+        return (T)member.WithLeadingTrivia(newLeadingTrivia);
+    }
+
+    /// <summary>
     /// After <see cref="FindSnippetPosition"/> returns a position, that position may land on a
     /// modifier keyword (e.g., "public") rather than the declared identifier.
     /// This helper scans the snippet span for identifier tokens and returns the position of the

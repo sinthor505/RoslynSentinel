@@ -2,9 +2,21 @@
 
 Comprehensive reference for all 321+ refactoring, modernization, analysis, and code generation tools available in RoslynSentinel.
 
-**Generated:** 2026-05-12  
-**Total Sources:** 51 (44 engines + 7 tool classes)  
+**Generated:** 2026-05-12
+**Total Sources:** 51 (44 engines + 7 tool classes)
 **Total Tools:** 321
+
+> **This file is stale and has NOT been regenerated since 2026-05-12.** On 2026-08-19, the
+> `SentinelWorkspaceTools` section was hand-patched (see the note there) to remove 6 tool entries
+> that were consolidated/removed before this session even started (`ApplyProposedChanges`,
+> `ApplyProposedDiff`, `ApplyStagedChanges`, `GetStagedChanges`, `ValidateProposedChanges`,
+> `ValidateProposedDiff`, `ValidateStagedChanges` → all now `ApplyDiff`), and one corrupted entry
+> (`RenameSymbol`'s signature block) was flagged in place. The counts above (321 tools / 51
+> sources) were NOT recalculated and are known to be at least 6 too high — they reflect the
+> pre-patch, already-stale state. The rest of this document beyond the patched section has not
+> been audited for the same kind of drift. Treat every entry here as "as of 2026-05-12" and verify
+> against current source before relying on a specific tool name or signature. A full regeneration
+> is a separate, larger task, not done as part of this patch.
 
 ---
 
@@ -972,13 +984,21 @@ RoslynSentinel provides 320 specialized tools organized across:
 
 
 
-**SentinelWorkspaceTools** (19 tools):
+**SentinelWorkspaceTools** (10 tools):
 
-302. `ApplyProposedChanges`
+> **STALE ENTRY — PATCHED 2026-08-19:** `ApplyProposedChanges`, `ApplyProposedDiff`,
+> `ValidateProposedChanges`, and `ValidateProposedDiff` were consolidated into a single tool,
+> `ApplyDiff` (itself renamed from an intermediate name `ProposedChange`), before this patch.
+> `ApplyStagedChanges`, `GetStagedChanges`, and `ValidateStagedChanges` no longer exist at all —
+> every edit tool in the current server writes directly to disk on success; there is no
+> stage/validate/apply lifecycle to manage. This file predates all of that (generated 2026-05-12)
+> and has not been regenerated since. The item numbers below (302, 305, 307...) already had gaps
+> before this patch (e.g. 306 and 311 were missing pre-patch) — this patch did not attempt to
+> renumber the list, only to remove/consolidate the 7 dead entries and correct this count. The rest
+> of this 320-tool reference has not been audited for similar drift and should not be trusted
+> without verifying against current source.
 
-303. `ApplyProposedDiff`
-
-304. `ApplyStagedChanges`
+302. `ApplyDiff`
 
 305. `CreateProject`
 
@@ -989,8 +1009,6 @@ RoslynSentinel provides 320 specialized tools organized across:
 309. `GetProjectDiagnostics`
 
 310. `GetSolutionDiagnostics`
-
-311. `GetStagedChanges`
 
 312. `ListDependencies`
 
@@ -1003,12 +1021,6 @@ RoslynSentinel provides 320 specialized tools organized across:
 316. `SplitProjectByFolder`
 
 317. `SyncTypeAndFilename`
-
-318. `ValidateProposedChanges`
-
-319. `ValidateProposedDiff`
-
-320. `ValidateStagedChanges`
 
 
 
@@ -2333,11 +2345,18 @@ public async Task<DiagnosticSummary> GetSolutionDiagnosticsAsync(CancellationTok
 ---
 
 
-### ApplyDiff
+### ApplyDiff (DiffEngine — internal, not MCP-exposed)
 
+> Not to be confused with the MCP-exposed `SentinelWorkspaceTools.ApplyDiff` tool documented under
+> **SentinelWorkspaceTools** below, which calls into this method for `changesetFormat: diff`.
 
 **Purpose:**
-/// Applies a standard Unified Diff to a SourceText object and returns the updated text. /// Supports multiple hunks and validates context lines. ///
+Applies a standard unified diff to a `SourceText` and returns the updated text. Supports multiple
+hunks. Each hunk's declared line number is treated as a starting guess, not ground truth — if the
+hunk's own content isn't found there, this searches a window around the declared position and
+re-anchors to the real match, tolerating stale line numbers from an earlier edit to the same file.
+Throws with an actionable message if no anchor can be found, or if a context/removal line doesn't
+match at the resolved position, rather than silently corrupting unrelated lines.
 
 
 **Signature:**
@@ -7356,6 +7375,14 @@ Code analysis and refactoring tool
 
 **Signature:**
 
+> **NOT PATCHED — flagged, out of scope for the 2026-08-19 pass:** this block is corrupted in the
+> source generation, not just stale. It splices leaked `[Description(...)]` attribute prose into
+> what should be a plain method signature, mentions the removed `ApplyStagedChanges` tool, and the
+> parameter list (`bool autoStage`, etc.) does not match `RenameSymbol`'s actual current signature
+> (`projectName`, `docCommentId`, `newName`, `dryRun`, `returnDiff`, `sessionId`). This is evidence
+> the doc-generation tooling itself has a scraping bug beyond simple staleness — needs its own
+> investigation, not a hand-patch here.
+
 ```csharp
 public async Task<Product?> GetById(\". " +
                  "Provide lineBefore and/or lineAfter (verbatim text from the line above/below the target) when the snippet could match multiple locations. " +
@@ -7978,11 +8005,7 @@ public async Task<string> WrapInUsing(string filePath, int startLine, int endLin
 **Tools in this source:**
 
 
-- ApplyProposedChanges
-
-- ApplyProposedDiff
-
-- ApplyStagedChanges
+- ApplyDiff
 
 - CreateProject
 
@@ -7993,8 +8016,6 @@ public async Task<string> WrapInUsing(string filePath, int startLine, int endLin
 - GetProjectDiagnostics
 
 - GetSolutionDiagnostics
-
-- GetStagedChanges
 
 - ListDependencies
 
@@ -8008,61 +8029,42 @@ public async Task<string> WrapInUsing(string filePath, int startLine, int endLin
 
 - SyncTypeAndFilename
 
-- ValidateProposedChanges
-
-- ValidateProposedDiff
-
-- ValidateStagedChanges
-
 
 ---
 
 
-### ApplyProposedChanges
+### ApplyDiff (SentinelWorkspaceTools — MCP tool)
 
 
 **Purpose:**
-Code analysis and refactoring tool
+Applies or validates a change set against the workspace and writes it directly to disk on
+success — there is no separate stage/apply step. `changesetFormat: files` takes a
+`filePath → newContent` dictionary; `changesetFormat: diff` takes a `filepath` + `unifiedDiff`.
+`action: apply` or `action: validate` selects the operation. For diffs, hunk line numbers are
+treated as a starting guess — if a hunk's declared position doesn't match the file's current
+content, the tool searches nearby lines and re-anchors automatically, tolerating modest
+line-number drift from an earlier edit to the same file. Returns `ApplyChangesResult` with an
+`UndoChangeId` on successful apply.
+
+*(Consolidates three former separate tools — `ApplyProposedChanges`, `ApplyProposedDiff`,
+`ValidateProposedChanges`, `ValidateProposedDiff` — into one, and was itself later renamed from an
+intermediate name, `ProposedChange`. `ApplyStagedChanges`/`GetStagedChanges`/`ValidateStagedChanges`,
+documented below in earlier versions of this file, no longer exist: there is no staged-change
+lifecycle in the current tool set.)*
 
 
 **Signature:**
 
 ```csharp
-public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyProposedChanges(Dictionary<string, string> changes, int retryCount = 3)
-```
-
-
----
-
-
-### ApplyProposedDiff
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<string> ApplyProposedDiff(string filePath, string unifiedDiff)
-```
-
-
----
-
-
-### ApplyStagedChanges
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<PersistentWorkspaceManager.ApplyChangesResult> ApplyStagedChanges(string changeId, int retryCount = 3)
+public async Task<ToolResult<object>> ApplyDiff(
+    ChangesetFormat changesetFormat,
+    ProposedChangeAction action,
+    Dictionary<FilePath, string>? changes = null,
+    string? filepath = null,
+    string? unifiedDiff = null,
+    int retryCount = 3,
+    bool validateOnApply = true,
+    CancellationToken cancellationToken = default)
 ```
 
 
@@ -8148,23 +8150,6 @@ Code analysis and refactoring tool
 
 ```csharp
 public async Task<DiagnosticSummary> GetSolutionDiagnostics()
-```
-
-
----
-
-
-### GetStagedChanges
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public Dictionary<string, string> GetStagedChanges(string changeId)
 ```
 
 
@@ -8273,53 +8258,8 @@ public async Task<string> SyncTypeAndFilename(string filePath)
 ---
 
 
-### ValidateProposedChanges
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<DiagnosticReport> ValidateProposedChanges(Dictionary<string, string> changes)
-```
-
-
----
-
-
-### ValidateProposedDiff
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<DiagnosticReport> ValidateProposedDiff(string filePath, string unifiedDiff)
-```
-
-
----
-
-
-### ValidateStagedChanges
-
-
-**Purpose:**
-Code analysis and refactoring tool
-
-
-**Signature:**
-
-```csharp
-public async Task<DiagnosticReport> ValidateStagedChanges(string changeId)
-```
-
-
----
+> `ValidateProposedChanges`, `ValidateProposedDiff`, and `ValidateStagedChanges` — previously
+> documented here as three separate tools — are now covered by `ApplyDiff(action: validate)`,
+> documented above under **SentinelWorkspaceTools**. See the stale-entry note near the top of the
+> SentinelWorkspaceTools index.
 

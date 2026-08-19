@@ -80,4 +80,76 @@ public class DiffEngineTests
         Assert.That(report.Success, Is.False);
         Assert.That(report.Diagnostics.Any(d => d.Severity == "Error"), Is.True);
     }
+
+    // ── Regression: line-number drift tolerance (formerly ProposedChange, now ApplyDiff) ──────
+    // A caller-authored diff's line numbers routinely go stale after an earlier edit to the same
+    // file (e.g. a prior hunk in the same diff shifted everything below it, or the caller composed
+    // the diff against a slightly-earlier read of the file). The old behavior trusted the declared
+    // line number unconditionally and either silently corrupted unrelated lines or threw a generic
+    // out-of-bounds error with no indication of why. These tests confirm the tool now re-anchors a
+    // hunk by its own content when the declared position doesn't match.
+
+    [Test]
+    [Description("A hunk whose declared line number is stale (content has shifted down by 2 lines "
+                 + "due to an earlier insertion elsewhere in the file) must still apply correctly by "
+                 + "re-anchoring to where its context/removal lines actually are.")]
+    public void ApplyDiff_HunkLineNumberStale_ReanchorsToActualContent()
+    {
+        var nl = Environment.NewLine;
+        // Real file has 2 extra lines at the top compared to what the diff's author assumed.
+        var oldText = SourceText.From(string.Join(nl,
+            "// unexpected extra line 1", "// unexpected extra line 2", "line1", "line2", "line3"));
+
+        // Diff was authored believing "line2" was at line 2; it's actually at line 4.
+        var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo(string.Join(nl,
+            "// unexpected extra line 1", "// unexpected extra line 2", "line1", "line2", "added", "line3")));
+    }
+
+    [Test]
+    [Description("A hunk whose declared line number is stale in the other direction (content moved "
+                 + "UP relative to the diff's assumption) must also re-anchor correctly.")]
+    public void ApplyDiff_HunkLineNumberStaleUpward_ReanchorsToActualContent()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From(string.Join(nl, "line1", "line2", "line3"));
+
+        // Diff was authored believing "line2" was at line 5; it's actually at line 2.
+        var diff = "@@ -5,1 +5,2 @@\n line2\n+added\n line3";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo(string.Join(nl, "line1", "line2", "added", "line3")));
+    }
+
+    [Test]
+    [Description("A hunk whose content genuinely does not exist anywhere near its declared position "
+                 + "must fail with a clear, actionable message — not silently corrupt an unrelated "
+                 + "line, and not a bare out-of-bounds exception with no context.")]
+    public void ApplyDiff_HunkContentNotFoundAnywhereNearby_ThrowsWithActionableMessage()
+    {
+        var oldText = SourceText.From(string.Join(Environment.NewLine, "line1", "line2", "line3"));
+        var diff = "@@ -1,1 +1,1 @@\n-this text does not exist in the file\n+replacement";
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _diffEngine.ApplyDiff(oldText, diff));
+        Assert.That(ex!.Message, Does.Contain("this text does not exist in the file"));
+        Assert.That(ex.Message, Does.Contain("Regenerate the diff"));
+    }
+
+    [Test]
+    [Description("Exact, non-stale line numbers (the common case) must continue to apply without any "
+                 + "re-anchoring search overhead changing the result.")]
+    public void ApplyDiff_ExactLineNumbers_StillAppliesUnchanged()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From("line1" + nl + "line2" + nl + "line3");
+        var diff = "@@ -1,3 +1,4 @@\n line1\n+added\n line2\n line3";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo("line1" + nl + "added" + nl + "line2" + nl + "line3"));
+    }
 }

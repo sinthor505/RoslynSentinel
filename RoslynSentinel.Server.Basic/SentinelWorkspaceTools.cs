@@ -328,10 +328,10 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    [McpServerTool(Name = "ProposedChange")]
+    [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat files → changes dict filePath→newContent; diff → filepath + unifiedDiff. Returns ApplyChangesResult with UndoChangeId on successful apply.")]
-    public async Task<ToolResult<object>> ProposedChange(
+    [Description("Applies or validates a change set. changesetFormat files → changes dict filePath→newContent; diff → filepath + unifiedDiff. For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply.")]
+    public async Task<ToolResult<object>> ApplyDiff(
         [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [ExternalInputRequired(DataTag.OperationId)] Dictionary<FilePath, string>?
@@ -357,8 +357,8 @@ public class SentinelWorkspaceTools
                 {
                     var result = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
-                    await WriteBlobForApplyAsync("proposed_change", result);
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
+                    await WriteBlobForApplyAsync("apply_diff", result);
                     return new ToolResult<object>() { Success = true, Data = result };
                 }
                 if (action == ProposedChangeAction.validate)
@@ -368,12 +368,12 @@ public class SentinelWorkspaceTools
                         var validationResult = await _validationEngine.ValidateChangesAsync(changes);
                         return validationResult.Success
                             ? new ToolResult<object>() { Success = true, Data = validationResult }
-                            : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed: {validationResult.Diagnostics}") };
+                            : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed: {validationResult.Diagnostics}") };
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "ProposedChange validate unexpected exception");
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                        _logger.LogError(ex, "ApplyDiff validate unexpected exception");
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
                 }
             }
@@ -401,14 +401,14 @@ public class SentinelWorkspaceTools
 
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
                         if (!result.Success && result.ValidationResult != null)
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
-                        await WriteBlobForApplyAsync("proposed_change", result);
+                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {result.ValidationResult.Diagnostics.ToJson()}") };
+                        await WriteBlobForApplyAsync("apply_diff", result);
                         return new ToolResult<object>() { Success = true, Data = result };
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "ProposedChange diff apply unexpected exception for '{FilePath}'", filePath);
-                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff apply for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                        _logger.LogError(ex, "ApplyDiff diff apply unexpected exception for '{FilePath}'", filePath);
+                        return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff apply for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
                     }
                 }
                 if (action == ProposedChangeAction.validate)
@@ -416,15 +416,15 @@ public class SentinelWorkspaceTools
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePath.Absolute, unifiedDiff);
                     return validationResult.Success
                         ? new ToolResult<object>() { Success = true, Data = validationResult }
-                        : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange diff validate failed: {validationResult}") };
+                        : new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff validate failed: {validationResult}") };
                 }
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unhandled changesetFormat '{changesetFormat}' / action '{action}'.") };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ProposedChange ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ProposedChange failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            _logger.LogError(ex, "ApplyDiff ({ChangesetFormat}/{Action}) failed", changesetFormat, action);
+            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
         }
     }
 
@@ -1373,7 +1373,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: proposed_change, refactoring-tool writes, and batch-first tools.")]
+    [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: apply_diff, refactoring-tool writes, and batch-first tools.")]
     public async Task<ToolResult<object>> UndoLastApply(
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         // RequestContext<CallToolRequestParams> requestParams = null,
