@@ -1961,13 +1961,24 @@ public class RefactoringEngine
             };
         }
 
-        // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync
-        var trimmedSnippet = contextSnippet.Trim();
-        var expression = root.DescendantNodes()
+        // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync.
+        // Comparison is whitespace-collapsed (not raw-trimmed) so a caller who reproduces the exact
+        // expression but with different internal spacing (e.g. around operators) still hits this exact
+        // path instead of silently falling through to the ambiguous nearest-enclosing-expression guess
+        // below — that fallback exists for a genuinely partial contextSnippet, not a whitespace variant
+        // of a complete one.
+        var normalizedSnippet = System.Text.RegularExpressions.Regex.Replace(contextSnippet.Trim(), @"\s+", " ");
+        var exactMatch = root.DescendantNodes()
             .OfType<ExpressionSyntax>()
-            .Where(e => e.SpanStart == pos && e.ToString().Trim() == trimmedSnippet)
-            .FirstOrDefault()
-            // Fallback: walk from the token at the position up to the first expression
+            .Where(e => e.SpanStart == pos &&
+                System.Text.RegularExpressions.Regex.Replace(e.ToString().Trim(), @"\s+", " ") == normalizedSnippet)
+            .FirstOrDefault();
+
+        // Fallback: contextSnippet didn't match a whole expression's text at this position — walk from
+        // the token at the position up to the nearest enclosing expression instead. This is inherently
+        // ambiguous (a partial/short contextSnippet can resolve to a larger expression than the caller
+        // intended), so it only ever kicks in when the exact match above fails, and never overrides it.
+        var expression = exactMatch
             ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
 
         if (expression == null)

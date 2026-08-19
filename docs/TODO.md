@@ -4,6 +4,72 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## CRITICAL: `FindReferences`/`FindCallersAsync`/`FindImplementationsForMemberAsync` silently return
+## "zero results" instead of an error when `contextSnippet` fails to resolve
+
+**Found:** 2026-08-19, during the `contextSnippet` tool-description audit (see SCENARIOS.md /
+"Still open" and the ExtractMethodSafe/ReplaceMember/ExtractLocalVariable fixes from the same day).
+
+**What:** `SymbolNavigationEngine.FindCallersAsync` (`RoslynSentinel.Basic/SymbolNavigationEngine.cs:1281`)
+has two resolution paths depending on whether `filePath` is supplied: if it is, `symbolName` is
+**silently ignored** and the target is resolved purely from `contextSnippet` via
+`ContextHelper.FindSymbolAtSnippetAsync`. If that fails to resolve (`symbol == null`, line 1340), the
+method returns `new List<CallerInfo>()` — an **empty list**, not an error. The `FindReferences` MCP
+tool wrapper (`RoslynSentinel.Server.Basic/SentinelSymbolTools.cs:389`) then returns
+`Success: true, Data: []` — indistinguishable from "confirmed zero callers." Same shape in
+`FindImplementationsForMemberAsync`.
+
+**Why this is CRITICAL, not just a wording issue:** `SafeDeleteUnusedSymbol`'s and `RemoveMember`'s
+entire safety contract is "confirm zero usages, then delete." An agent that calls
+`FindReferences(filepath: ..., symbolName: "Foo", contextSnippet: <typo or stale text>, kind: callers)`
+and gets back `{"success": true, "data": []}` has every reason to believe the symbol is genuinely
+unused — it looks identical to a real zero-callers answer. If it then proceeds to delete a symbol
+that's actually heavily referenced, this silent failure is the direct cause, and nothing about the
+tool's response signals that anything went wrong.
+
+**Suggested fix:** when `filePath` is supplied but `contextSnippet` (or the fallback name-based lookup)
+fails to resolve to a symbol, return a distinct, actionable error (matching the pattern already used by
+`ResolveMemberByNameOrSnippet`'s `BuildMemberHint`) instead of an empty list — e.g. "symbolName '{name}'
+could not be resolved in {filePath} via contextSnippet; a request for its usages was NOT performed, do
+not treat this as a confirmed-zero-usages result." Separately, fix `filePath`-supplied calls to also
+check `symbolName` (currently silently discarded on that path) so the intended target and the actually-
+resolved one can be cross-checked, not just trusted.
+
+**Not fixed as part of the 2026-08-19 `contextSnippet` wording audit** — that work covered parameter
+naming/description clarity; this is a distinct correctness/safety bug in the resolution logic itself.
+
+## `contextSnippet`'s line-level whitespace-tolerant fallback returns a line-START position, not a
+## precise in-line position — fine for member/type disambiguation, wrong for expression-level tools
+
+**Found:** 2026-08-19, while adding a regression test for `ExtractLocalVariableAsync`'s exact-match
+whitespace tolerance (see SCENARIOS.md "Fixed" list for that same-day fix).
+
+**What:** `ContextHelper.FindAllSnippetMatches`'s single-line collapsed-whitespace fallback
+(`RoslynSentinel.Common/ContextHelper.cs:58-74`) resolves a match to `lines[i].Start` — the start of
+the *entire source line* — whenever the snippet's whitespace-collapsed text is found anywhere within
+that line. This is the right granularity for `ResolveMemberByNameOrSnippet`/`ResolveTypeByNameOrSnippet`
+(the position only needs to fall inside the right *member's* span), but it is NOT precise enough for
+`ExtractLocalVariableAsync`, which needs the position to land exactly at an `ExpressionSyntax`'s
+`SpanStart` — e.g. a snippet `"a + b"` (spaced) against real source `"return a+b;"` (unspaced,
+same line) resolves via this fallback to the position of `r` in `return`, not `a`, so
+`ExtractLocalVariableAsync`'s exact-match check (`e.SpanStart == pos && ...`) never finds a candidate
+and it falls through to the ambiguous nearest-enclosing-expression guess instead — for a case that
+should have been an unambiguous exact match.
+
+**Not fixed as part of the 2026-08-19 `ExtractLocalVariableAsync` whitespace-tolerance fix** — that fix
+only addressed exact-vs-fallback ordering for snippets that already resolve to the correct position
+(e.g. multi-line differences reached via the exact-ordinal/line-ending-tolerant path, which does
+preserve real in-source position). A same-line, inter-token whitespace difference still doesn't reach
+`ExtractLocalVariableAsync`'s own exact-match branch at all — it's mis-resolved one layer earlier, in
+`ContextHelper` itself.
+
+**Suggested fix:** either (a) add a position-precise variant of the whitespace-collapse fallback that
+returns the actual sub-line offset where the normalized snippet starts (mapping back through the
+whitespace-collapse transform to the real, pre-collapse character offset), for callers that need
+expression-level precision, or (b) have `ExtractLocalVariableAsync` request/require this more precise
+resolution explicitly rather than sharing the same line-start-granularity path every member/type
+resolver uses.
+
 ## Duplicate/dead `SafeDeleteSymbolAsync` on `RefactoringEngine`
 
 **Found:** 2026-08-19, while adding a `symbolName`/`contextSnippet` fallback path to the

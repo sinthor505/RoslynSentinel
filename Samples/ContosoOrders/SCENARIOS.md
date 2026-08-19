@@ -265,7 +265,10 @@ declaration, that is a regression.
 units into its own method called `ComputeTotals`."
 
 **Expected tool sequence:**
-1. `ExtractMethodSafe(filepath: ".../OrderProcessor.cs", newMethodName: "ComputeTotals", contextSnippet: <the block>, lineBefore/lineAfter as anchors)`
+1. `ExtractMethodSafe(filepath: ".../OrderProcessor.cs", newMethodName: "ComputeTotals", exactSourceBlock: <the block>, lineBefore/lineAfter as anchors)`
+   — the parameter was renamed from `contextSnippet` to `exactSourceBlock` on 2026-08-19 (see
+   "Fixed" list) specifically because it does NOT behave like `contextSnippet` on every other tool: it
+   is not a search fragment, the whole extraction range must appear verbatim.
 
 **Expected outcome:** New private method `ComputeTotals` returning the computed values (likely a
 tuple `(decimal runningTotal, int totalUnits)` given Roslyn's inferred-return-type behavior),
@@ -473,22 +476,42 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   `SafeDeleteUnusedSymbol` MCP tool — dead code, only exercised by one test. See `docs/TODO.md` for
   the full writeup and remediation options; not fixed as part of the 2026-08-19
   `symbolName`/`contextSnippet` fallback work below, which stayed scoped to the reachable engine.
-- **`contextSnippet` wording across tool descriptions invites a "fragment" mental model that the
-  implementations don't fully support.** Every tool's description calls it "a distinctive substring"
-  without clarifying that the substring still needs to match the file's actual text (modulo the
-  whitespace/indentation tolerance the matcher now has) — agents across multiple attempts have
-  variously passed a signature-only fragment, a comment-only fragment, a full member body, or a
-  reconstructed-from-memory approximation, with no consistent signal from the wording about which is
-  expected or safest. This needs a dedicated audit across all `contextSnippet`-accepting tools'
-  `[Description]` text, not a per-tool patch — deferred, see `docs/TODO.md`.
 - **`ConvertExpressionBodyAsync` (and possibly other, not-yet-audited tools) has the same
   single-candidate `contextSnippet`-required bug class as `ReplaceMember` did, but with a different
   code shape** (branches to position-based resolution entirely when `contextSnippet` is supplied,
   rather than computing name-based candidates first and only consulting the snippet when there's
   real ambiguity) — not fixed as part of the `ReplaceMember` fix below, since it requires restructuring
   that method's resolution logic rather than the same one-line guard. See `docs/TODO.md`.
+- **CRITICAL — `FindReferences`/`FindCallersAsync`/`FindImplementationsForMemberAsync` silently
+  return an empty (`Success: true, Data: []`) result, indistinguishable from "confirmed zero
+  references," when `contextSnippet` fails to resolve a target** (found during the 2026-08-19
+  `contextSnippet` audit). This is a safety-relevant correctness bug, not just a wording gap:
+  `SafeDeleteUnusedSymbol`'s and `RemoveMember`'s zero-usage safety contract both depend on this call
+  being trustworthy. See `docs/TODO.md` for the full writeup — flagged as critical, not yet fixed.
+- **`ContextHelper`'s single-line whitespace-tolerant fallback resolves to a line-START position, not
+  a precise in-line position** — correct granularity for member/type disambiguation, but not precise
+  enough for `ExtractLocalVariableAsync`'s expression-boundary matching, so a same-line (not
+  multi-line) whitespace difference in an otherwise-complete expression can still fall through to the
+  ambiguous nearest-enclosing-expression guess instead of the exact-match path. See `docs/TODO.md`.
 
 ### Fixed
+- **(2026-08-19) `contextSnippet` wording and naming audit across all tools.** Surveyed every
+  MCP tool accepting `contextSnippet` and classified each by verified engine behavior (not just its
+  description) into two categories: `FRAGMENT_ANCHOR` (≈18 of 20 tools — a short, unique substring is
+  sufficient and preferred; the code searches for it as a position anchor and walks outward to the
+  enclosing member/type) vs. `EXACT_BLOCK` (`ExtractMethodSafe` fully, `ExtractLocalVariable` partially
+  — the snippet's matched span directly becomes the operation's boundary, so it must verbatim-cover
+  the whole intended range). The shared description text ("Verbatim substring... **Must match
+  exactly**...") was ambiguous between these two meanings and, being reused by ~18 of 20 tools, trained
+  agents toward shrinking `contextSnippet` to a unique fragment — the opposite of what `ExtractMethodSafe`
+  and `ExtractLocalVariable` need. Fixed: rewrote the shared `ToolParams.ContextSnippet` text to
+  explicitly state "short, unique fragment... do NOT paste the whole member" for the 18
+  `FRAGMENT_ANCHOR` tools, and renamed the parameter itself on the 2 `EXACT_BLOCK` tools —
+  `ExtractMethodSafe`'s to `exactSourceBlock`, `ExtractLocalVariable`'s to `exactExpressionText` — each
+  with its own tool-specific description making clear it is NOT a search fragment. Also hardened
+  `ExtractLocalVariableAsync`'s exact-match check to tolerate internal whitespace differences (not just
+  raw-trim) so more real callers hit the precise exact-match path instead of the ambiguous
+  nearest-enclosing-expression fallback. See Scenario 6.
 - **(2026-08-19) `ReplaceMember` (and the shared member/type resolution helpers behind
   `RemoveMember`, `ChangeAccessibility`, `ModifyModifier`, `ModifyAttribute`, `ModifyBaseType`,
   `ModifyEnum`, `AddSummaryComment`, `SafeDeleteUnusedSymbol`, and others) requiring a supplied

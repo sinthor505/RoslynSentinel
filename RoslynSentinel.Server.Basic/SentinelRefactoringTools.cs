@@ -651,10 +651,11 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ExtractLocalVariable")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts an inline expression into a named local variable declaration.")]
+    [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText is NOT a search fragment (unlike contextSnippet on other tools) — it must be the WHOLE expression to extract, copied verbatim.")]
     public async Task<ToolResult<object>> ExtractLocalVariable(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
-        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description("The exact expression to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result — the whole expression, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: it must match the target expression's full text exactly (whitespace differences are tolerated, but the expression itself must be complete). A partial expression may still resolve to the nearest enclosing expression rather than the one you intended, silently extracting the wrong span — if in doubt, include the whole expression, not less.")]
+        [Consumes(DataTag.ContextSnippet, required: true)] string exactExpressionText,
         [Consumes(DataTag.SymbolName)] string variableName,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
@@ -666,13 +667,13 @@ public class SentinelRefactoringTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, contextSnippet, variableName, lineBefore, lineAfter);
+            var result = await _refactoringEngine.ExtractLocalVariableAsync(filePath, exactExpressionText, variableName, lineBefore, lineAfter);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
                 string reason = result.Outcome switch
                 {
                     EditOutcome.DocumentNotFound => $"ExtractLocalVariable: document '{filePath}' not found in the workspace.",
-                    EditOutcome.SourceInvalid => $"ExtractLocalVariable: contextSnippet not found in '{filePath}'. {result.Message}",
+                    EditOutcome.SourceInvalid => $"ExtractLocalVariable: exactExpressionText not found in '{filePath}'. {result.Message}",
                     EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePath}'. {result.Message}",
                     _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePath}' ({result.Outcome}). {result.Message}"
                 };
@@ -694,12 +695,13 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "ExtractMethodSafe")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. Written to disk (or staged, per autoStage) like other refactoring tools — not preview-only. Returns changeId.")]
+    [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. exactSourceBlock is NOT a search fragment (unlike contextSnippet on other tools) — the entire range you want extracted must appear in it verbatim, since its matched span IS the extraction boundary; a too-short excerpt silently extracts only that narrower range, not the whole intended block. Written to disk (or staged, per autoStage) like other refactoring tools — not preview-only. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
     public async Task<ToolResult<object>> ExtractMethodSafe(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
-        [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
+        [Description("The exact statements to extract, copied VERBATIM character-for-character from a prior ReadFile/GetMethodSource result — not retyped from memory, not a shortened/unique fragment. This is NOT a search anchor like contextSnippet on other tools: the whole extracted range (every statement, including blank lines/comments within it, exactly as they appear in the file) must be present here, because the matched span directly becomes the extraction boundary. Passing only part of the intended range (e.g. just the first statement) will silently extract only that part, stranding the rest — some ambiguous narrow selections are refused with an error, but do not rely on that guard catching every case; when in doubt, include more of the surrounding block, not less.")]
+        [Consumes(DataTag.ContextSnippet, required: true)] string exactSourceBlock,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
@@ -716,7 +718,7 @@ public class SentinelRefactoringTools
         try
         {
             var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
-                filePath, newMethodName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                filePath, newMethodName, exactSourceBlock, lineBefore, lineAfter, cancellationToken: cancellationToken);
 
             if (!result.Success)
             {

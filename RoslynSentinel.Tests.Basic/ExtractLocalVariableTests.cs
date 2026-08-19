@@ -355,4 +355,46 @@ public class Printer
         Assert.That(result.UpdatedText, Does.Contain("var product"), "Should declare variable");
         Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(product)"), "Should use variable as argument");
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Test 13: Whitespace-Different-But-Complete Expression Hits The Exact Path,
+    // Not The Ambiguous Nearest-Enclosing-Expression Fallback
+    // ══════════════════════════════════════════════════════════════════════════
+    [Test]
+    [Description("A caller-supplied expression that is the WHOLE target expression but with different "
+                 + "internal spacing (e.g. around an operator) must still resolve via the exact-match "
+                 + "path, not silently fall through to the ambiguous 'nearest enclosing expression at "
+                 + "this position' guess — which could resolve to a larger expression than intended if "
+                 + "the position happens to fall inside one. Whitespace tolerance and exactness are not "
+                 + "in conflict here: the expression is complete, just differently formatted. Uses a "
+                 + "multi-line spacing difference (extra blank line inside the expression) rather than "
+                 + "inter-token spacing, since ContextHelper's single-line collapsed-whitespace fallback "
+                 + "resolves to the containing LINE's start (correct for member-level disambiguation, "
+                 + "not precise enough for expression-level positioning) — a same-line-but-differently-"
+                 + "spaced snippet doesn't reach this method's own exact-vs-fallback branch at all, it's "
+                 + "resolved (or not) one layer earlier. See docs/TODO.md for that separate, deeper gap.")]
+    public async Task ExtractLocalVariable_WholeExpressionWithDifferentInternalSpacing_ResolvesExactly()
+    {
+        const string source =
+            "public class Calculator\n" +
+            "{\n" +
+            "    public int Add(int a, int b)\n" +
+            "    {\n" +
+            "        return a +\n" +
+            "            b;\n" +
+            "    }\n" +
+            "}";
+        SetSource(source, "Test.cs");
+
+        // Caller's snippet spans the same two lines but re-wraps them onto one line — same
+        // expression text once whitespace is collapsed, reached via the exact-ordinal-with-
+        // line-ending-tolerance path (ContextHelper.cs:39-56), which preserves the real
+        // in-source position rather than snapping to a line start.
+        var result = await _refactoringEngine.ExtractLocalVariableAsync(
+            "Test.cs", "a +\n            b", "sum");
+
+        Assert.That(result.UpdatedText, Does.Contain("sum"), "Variable name must appear");
+        Assert.That(result.UpdatedText, Does.Contain("var sum"), "Should declare with the whole expression");
+        Assert.That(result.UpdatedText, Does.Contain("return sum"), "Should replace the whole expression, not a sub-part of it");
+    }
 }

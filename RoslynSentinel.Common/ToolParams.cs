@@ -35,8 +35,14 @@ public static class ToolParams
 
     // Context disambiguation
     public const string ContextSnippet =
-        "Verbatim substring from the source line containing the target. " +
-        "Must match exactly. Use lineBefore/lineAfter when the snippet is not unique.";
+        "Optional. Only needed when the target's name alone is ambiguous (2+ declarations share it). " +
+        "A SHORT, UNIQUE fragment is best — a single distinctive line (e.g. the signature or one " +
+        "statement) is usually enough. Do NOT paste the whole member/type body: a longer excerpt is " +
+        "MORE likely to fail (any formatting difference from the real file breaks the match) for no " +
+        "added benefit, since only uniqueness among same-named candidates is required, not an exact " +
+        "reproduction of the target. Must be copied verbatim from a prior tool result (ReadFile/" +
+        "GetMethodSource/etc.), not retyped from memory. Use lineBefore/lineAfter if a short fragment " +
+        "still isn't unique.";
 
     public const string LineBefore =
         "Line immediately before contextSnippet. Used to disambiguate when the snippet appears multiple times.";
