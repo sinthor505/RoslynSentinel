@@ -104,6 +104,29 @@ public partial class PersistentWorkspaceManager : IDisposable
         }
     }
 
+    // Agents sometimes pass path arguments wrapped in quotes (straight or smart) picked up from
+    // shell-quoted examples or markdown, e.g. "'./Samples/Foo.sln'". Strip those plus surrounding
+    // whitespace so the literal quote characters don't end up baked into the resolved path.
+    private static readonly char[] PathWrapChars = ['\'', '"', '‘', '’', '“', '”', ' ', '\t', '\r', '\n'];
+
+    private static string? SanitizePathArgument(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return path;
+        }
+
+        var trimmed = path.Trim();
+        var previous = trimmed;
+        do
+        {
+            previous = trimmed;
+            trimmed = trimmed.Trim(PathWrapChars);
+        } while (trimmed.Length != previous.Length);
+
+        return trimmed;
+    }
+
     /// <summary>
     /// Resolves a solution path that may be absolute or relative. Relative paths are checked,
     /// in order, against: the current working directory, <paramref name="baseRepoDirOverride"/>
@@ -117,6 +140,9 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// </exception>
     private string ResolveSolutionPath(string solutionPath, string? baseRepoDirOverride = null)
     {
+        solutionPath = SanitizePathArgument(solutionPath) ?? solutionPath;
+        baseRepoDirOverride = SanitizePathArgument(baseRepoDirOverride);
+
         if (string.IsNullOrWhiteSpace(solutionPath) || Path.IsPathRooted(solutionPath))
         {
             return solutionPath;
