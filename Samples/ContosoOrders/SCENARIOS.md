@@ -182,12 +182,15 @@ persistent tool-selection friction (see "Tool gaps observed").
 **Expected tool sequence:**
 1. `LocateSymbol(symbolName: "BuildInternalDebugLabel")` or `FindReferences`/`QuerySymbolRelationships` to confirm
    zero call sites.
-2. `SafeDeleteUnusedSymbol(filepath: ".../OrderProcessor.cs", line: <decl line>, column: <decl column>)`
-   — or, if that call fails to resolve the symbol (observed in practice: it can reject a correct
-   target with `CannotEdit`/"Symbol not found" depending on how the caller identifies the method),
-   falling back to `RemoveMember(filepath: ..., memberName: "BuildInternalDebugLabel", skipPrecheck: true)`
-   is an acceptable recovery — `skipPrecheck: true` is appropriate specifically because the zero-usage
-   check already happened in step 1.
+2. `SafeDeleteUnusedSymbol(filepath: ".../OrderProcessor.cs", symbolName: "BuildInternalDebugLabel")`
+   — as of 2026-08-19 this is the recommended path: `symbolName` alone resolves the target when
+   there's only one declaration with that name, with `contextSnippet`/`lineBefore`/`lineAfter`
+   available to disambiguate an overload. The `docCommentId` + `projectName` handle-based path (from
+   an earlier `LocateSymbol`/`FindReferences` call) and the legacy `line`/`column` path both still
+   work too. Falling back to `RemoveMember(filepath: ..., memberName: "BuildInternalDebugLabel",
+   skipPrecheck: true)` if `SafeDeleteUnusedSymbol` still fails for any reason is an acceptable
+   recovery — `skipPrecheck: true` is appropriate specifically because the zero-usage check already
+   happened in step 1.
 
 **Expected outcome:** Success with a report confirming zero usages found and the method removed;
 if the agent skips step 1 and calls `SafeDeleteUnusedSymbol` directly, that's acceptable too since
@@ -202,6 +205,21 @@ instead of the verbatim text it already saw via an earlier `ReadFile`/`GetMethod
 masquerade as a tool bug (the error may report `CannotEdit` or "Symbol not found" rather than
 "content doesn't match") when the actual defect is the caller inventing text instead of copying it.
 Flag this even when the agent successfully recovers via a fallback tool afterward.
+
+**Fixed regression — `SafeDeleteUnusedSymbol`'s documented `contextSnippet` fallback didn't exist
+(attempt 5):** a live agent run had only a line number (from `SearchSolutionText`) and no column —
+no tool surfaces a column, so the legacy `line`/`column` path was effectively unobtainable — and
+tried the tool's own documented `contextSnippet` fallback, which the implementation silently ignored
+entirely (the parameters were accepted but never wired to any resolution logic). The agent hit a
+generic "requires either (sessionId, projectName, docCommentId) or (line, column)" error and had to
+fall back to `RemoveMember(skipPrecheck: true)` instead — a correct recovery, but one it shouldn't
+have needed. Separately, `sessionId` — part of that same error message — was never actually the
+blocking factor (an empty `sessionId` already passes the internal staleness check) and is not
+obtainable from any tool's output, so it has been removed from this tool's exposed parameters
+entirely. Added a `symbolName` parameter (paired with the existing `contextSnippet`/`lineBefore`/
+`lineAfter`) that now does what the description always claimed. If `SafeDeleteUnusedSymbol` rejects a
+`symbolName`+`contextSnippet` call that correctly names and disambiguates a real, zero-usage
+declaration, that is a regression.
 
 ---
 
@@ -412,6 +430,12 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   different *content* (not just whitespace) will still and should still fail to match. This is a
   model-behavior risk to keep watching for across scenarios, not something a single tool fix
   resolves.
+- **Duplicate, unreachable `SafeDeleteSymbolAsync` implementation on `RefactoringEngine`.** A second,
+  more thorough implementation (includes reflection/string-literal usage detection that the actually-
+  wired `StructuralRefinementEngine` path lacks) exists but is never called by the
+  `SafeDeleteUnusedSymbol` MCP tool — dead code, only exercised by one test. See `docs/TODO.md` for
+  the full writeup and remediation options; not fixed as part of the 2026-08-19
+  `symbolName`/`contextSnippet` fallback work below, which stayed scoped to the reachable engine.
 
 ### Fixed
 - **(2026-08-19) `ExtractMethodSafe` synthesizing a spuriously nullable parameter.** A selection
@@ -430,6 +454,18 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   checked whether the matched statement's enclosing block was itself a loop body. Generalized to
   also scan forward for a later loop in the same block that consumes a variable the statement
   declares/assigns, and refuse in that case too. See Scenario 6.
+- **(2026-08-19) `SafeDeleteUnusedSymbol`'s documented `contextSnippet` fallback didn't exist, and
+  `sessionId` was a dead, unobtainable parameter.** The tool's own description promised a
+  `contextSnippet`/`lineBefore`/`lineAfter` resolution path, but the implementation never wired those
+  parameters to any lookup logic — only the handle-based (`docCommentId`+`projectName`) and legacy
+  `line`/`column` paths actually worked, and no tool surfaces a column, only a line, making the latter
+  effectively unusable for a caller who only has `SearchSolutionText`/`FindReferences` output.
+  `sessionId` — named first in the resulting error message — was never actually the blocking factor
+  (an empty `sessionId` already passes the internal staleness check) and has been removed from the
+  tool's exposed parameters entirely. Added a `symbolName` parameter (paired with the existing
+  `contextSnippet`/`lineBefore`/`lineAfter`) that now resolves a target by name, optionally
+  disambiguated by snippet — reusing the same name-then-snippet pattern every other RoslynSentinel
+  tool already follows. See Scenario 5.
 - **(2026-08-19) `AddConstructorParameter` self-assignment when `fieldName` collides with
   `paramName`.** Passing `fieldName` equal to `paramName` (or to its underscore-prefixed form)
   produced a no-op self-assignment (`stopwatch = stopwatch;`) instead of assigning the parameter into

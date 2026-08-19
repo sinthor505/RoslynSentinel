@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Text;
 
 using RoslynSentinel.Common;
 
@@ -120,6 +121,99 @@ public class StructuralRefinementEngine
             UpdatedText = newRoot!.NormalizeWhitespace().ToFullString()
         };
     }
+
+    /// <summary>
+    /// Safe deletes a symbol only if it has no usages in the entire solution (contextSnippet-based
+    /// resolution — an agent-friendly alternative to the line/column overload above, which requires
+    /// a column that a caller who only knows a line number has no cheap way to obtain).
+    /// </summary>
+    public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// File not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (root == null || sourceText == null || semanticModel == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Could not parse file."
+            };
+        }
+
+        var candidates = root.DescendantNodes()
+            .Where(n => GetDeclaredNodeName(n) == symbolName)
+            .ToList();
+
+        SyntaxNode? target;
+        if (contextSnippet == null)
+        {
+            target = candidates.FirstOrDefault();
+        }
+        else
+        {
+            int snippetPos;
+            try { snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+            catch (InvalidOperationException ex)
+            {
+                return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message };
+            }
+
+            target = candidates.FirstOrDefault(c => c.Span.Contains(snippetPos))
+                ?? candidates.FirstOrDefault(c => new TextSpan(snippetPos, contextSnippet.Length).OverlapsWith(c.Span));
+        }
+
+        if (target == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = candidates.Count == 0
+                    ? $"// No symbol named '{symbolName}' found in {filePath}."
+                    : $"// '{symbolName}' has {candidates.Count} declaration(s) in {filePath}, and contextSnippet did not match any of them. " +
+                      "Provide a contextSnippet that is a verbatim substring of the intended declaration."
+            };
+        }
+
+        var symbol = semanticModel.GetDeclaredSymbol(target, cancellationToken);
+        if (symbol == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = $"// Could not resolve a symbol for '{symbolName}' at the matched location."
+            };
+        }
+
+        return await SafeDeleteSymbolAsync(filePath, symbol, cancellationToken);
+    }
+
+    private static string? GetDeclaredNodeName(SyntaxNode node) => node switch
+    {
+        MethodDeclarationSyntax m => m.Identifier.Text,
+        PropertyDeclarationSyntax p => p.Identifier.Text,
+        FieldDeclarationSyntax f => f.Declaration.Variables.Count == 1 ? f.Declaration.Variables[0].Identifier.Text : null,
+        VariableDeclaratorSyntax v => v.Identifier.Text,
+        BaseTypeDeclarationSyntax t => t.Identifier.Text,
+        ConstructorDeclarationSyntax c => c.Identifier.Text,
+        EventDeclarationSyntax e => e.Identifier.Text,
+        _ => null
+    };
 
     /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (handle-based resolution).

@@ -436,8 +436,74 @@ public class BatteryTwentyTests
     public async Task SafeDelete_ValidPosition_ReturnsString()
     {
         SetSource(SimpleSource, "Test.cs");
-        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", sessionId: "", projectName: "", docCommentId: "", line: 1, column: 1);
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
         Assert.That(result, Is.Not.Null);
+    }
+
+    private const string DeadMethodSource = @"
+namespace TestProj;
+public class Order
+{
+    public int Id { get; set; }
+
+    private string BuildInternalDebugLabel()
+    {
+        return ""debug"";
+    }
+}";
+
+    [Test]
+    [Description("Regression (ContosoOrders live agent run, attempt 5): the contextSnippet/lineBefore/"
+                 + "lineAfter fallback path was documented on SafeDeleteUnusedSymbol's own [Description] "
+                 + "but never wired to any resolution logic, leaving an agent with only a raw line/column "
+                 + "pair to identify a target — and no other tool exposes a column, only a line, making "
+                 + "that pair effectively unobtainable too. A live agent hit exactly this: it had a line "
+                 + "number from SearchSolutionText but no column, called the tool with line-only, and got "
+                 + "a generic 'requires either (sessionId, projectName, docCommentId) or (line, column)' "
+                 + "error before falling back to RemoveMember(skipPrecheck: true) instead.")]
+    public async Task SafeDeleteUnusedSymbol_SymbolNameOnly_DeletesZeroUsageMethod()
+    {
+        SetSource(DeadMethodSource, "Test.cs");
+
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "BuildInternalDebugLabel");
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task SafeDeleteUnusedSymbol_SymbolNameWithContextSnippet_DisambiguatesAndDeletes()
+    {
+        SetSource(DeadMethodSource, "Test.cs");
+
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "BuildInternalDebugLabel",
+            contextSnippet: "private string BuildInternalDebugLabel()");
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
+    }
+
+    [Test]
+    public async Task SafeDeleteUnusedSymbol_SymbolNameNotFound_ReturnsActionableError()
+    {
+        SetSource(DeadMethodSource, "Test.cs");
+
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", symbolName: "NoSuchMethod");
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Error!.Message, Does.Contain("NoSuchMethod"));
+    }
+
+    [Test]
+    [Description("sessionId is no longer an exposed parameter: docCommentId + projectName alone "
+                 + "(as returned by LocateSymbol/FindReferences) must be sufficient, since no tool "
+                 + "ever surfaces a sessionId for a caller to pass back in.")]
+    public async Task SafeDeleteUnusedSymbol_DocCommentIdAndProjectNameOnly_NoLongerRequiresSessionId()
+    {
+        SetSource(DeadMethodSource, "Test.cs");
+
+        var docCommentId = "M:TestProj.Order.BuildInternalDebugLabel";
+        var result = await _tools.SafeDeleteUnusedSymbol("Test.cs", projectName: "TestProj", docCommentId: docCommentId);
+
+        Assert.That(result.Success, Is.True, result.Error?.Message);
     }
 
     // --- CreateProject ---
