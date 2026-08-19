@@ -41,4 +41,11 @@
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
   </ItemGroup>
 
+	<PropertyGroup>
+		<!-- Prevents static code analysis rules from running on this project -->
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<!-- If using specific .NET code analysis metrics tools -->
+		<IsCodeAnalysisAnalyzersExecuted>false</IsCodeAnalysisAnalyzersExecuted>
+	</PropertyGroup>
+
 </Project>

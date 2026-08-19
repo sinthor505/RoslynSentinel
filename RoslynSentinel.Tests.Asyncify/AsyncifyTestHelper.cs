@@ -1,9 +1,14 @@
+using System.CodeDom.Compiler;
+using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Tests.Asyncify;
 
+[ExcludeFromCodeCoverage]
+[GeneratedCode("RoslynSentinel", "1.0.0.0")]
 public static class AsyncifyTestHelper
 {
     public static Solution CreateSolutionWithProject(string projectName, (string name, string content)[] documents)

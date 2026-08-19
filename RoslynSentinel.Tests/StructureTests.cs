@@ -1,11 +1,15 @@
+using System.CodeDom.Compiler;
+using System.Diagnostics.CodeAnalysis;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Server;
 using Microsoft.Extensions.Logging.Abstractions;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
 
+[ExcludeFromCodeCoverage]
+[GeneratedCode("RoslynSentinel", "1.0.0.0")]
 public class StructureTests
 {
     private PersistentWorkspaceManager _workspaceManager;
@@ -31,9 +35,9 @@ public class StructureTests
         using var adhocWorkspace = new AdhocWorkspace();
         var solution = adhocWorkspace.CurrentSolution;
         var projectId = ProjectId.CreateNewId();
-        
+
         solution = solution.AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp);
-        
+
         // 2. Add a document with TWO classes (the smell)
         var sourceCode = @"
             public class ClassOne {}
