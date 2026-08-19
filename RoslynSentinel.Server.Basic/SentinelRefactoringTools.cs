@@ -679,8 +679,8 @@ public class SentinelRefactoringTools
     }
 
     [McpServerTool(Name = "ExtractMethodSafe")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. Returns MsAugmentResult.")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Extracts selected statements into a new method with the correct return type inferred from the selection. newMethodName must be a valid C# identifier. Written to disk (or staged, per autoStage) like other refactoring tools — not preview-only. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
     public async Task<ToolResult<object>> ExtractMethodSafe(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
@@ -688,6 +688,9 @@ public class SentinelRefactoringTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -700,10 +703,38 @@ public class SentinelRefactoringTools
         {
             var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
                 filePath, newMethodName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+
+            if (!result.Success)
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
+                };
+            }
+
+            if (!autoStage)
+            {
+                return new ToolResult<object> { Success = true, Data = result };
+            }
+
+            if (string.IsNullOrEmpty(result.UpdatedContent))
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: no change produced for '{filePath}'.")
+                };
+            }
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedContent };
+            var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePath}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+                return new ToolResult<object> { Success = false, Error = apply.Error };
             return new ToolResult<object>
             {
                 Success = true,
-                Data = result
+                Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{newMethodName}' into a new method in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion)
             };
         }
         catch (Exception ex)
