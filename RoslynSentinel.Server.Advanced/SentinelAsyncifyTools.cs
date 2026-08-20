@@ -227,8 +227,7 @@ public class SentinelAsyncifyTools
                 MinScore: CandidateScoreAnalyzer.ComputeMin(aggregateFindings.Select(f => f.Score)),
                 FlagPhase: flagPhaseResult);
 
-            // B1 Fix 4: 10 KB overflow safety net — should be unreachable with slim types + caps.
-            const int SummaryThresholdBytes = 10 * 1024;
+            // B1 Fix 4: overflow safety net — should be unreachable with slim types + caps.
             var summaryJson = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(summary, _jsonOptions);
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -236,45 +235,20 @@ public class SentinelAsyncifyTools
                 _logger.LogInformation("Summary JSON size: {SizeBytes} bytes", summaryJson.Length);
             }
 
-            if (summaryJson.Length > SummaryThresholdBytes)
+            if (summaryJson.Length > ScanResultHelper.ThresholdBytes)
             {
                 _logger.LogWarning("Summary JSON size {SizeBytes} bytes exceeds expected limits. " +
                                    "This may indicate an issue with the summarization logic or unusually large data. " +
                                    "Consider reviewing the summary generation and applying stricter caps if necessary.",
                                    summaryJson.Length);
-
-                var scanId = Guid.NewGuid().ToString("N");
-                var solutionRoot = _workspaceManager.GetSolutionRoot();
-                if (!string.IsNullOrEmpty(solutionRoot))
-                {
-                    var dir = System.IO.Path.Combine(solutionRoot, ".roslynsentinel", "scans");
-                    Directory.CreateDirectory(dir);
-                    var ts = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-                    var fp = System.IO.Path.Combine(dir, $"scan_{ts}_{scanId}.json");
-                    await File.WriteAllTextAsync(fp,
-                        System.Text.Json.JsonSerializer.Serialize(summary, _jsonOptions),
-                        new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                    return new ToolResult<object>
-                    {
-                        Success = true,
-                        LargeResult = new LargeResultInfo(
-                            resultType: typeof(MigrationScanSummary).Name,
-                            writtenToFile: true,
-                            filePath: fp,
-                            scanId: scanId,
-                            sizeBytes: summaryJson.Length,
-                            totalRecords: aggregateFindings.Count,
-                            message: $"Summary exceeded {SummaryThresholdBytes} bytes ({summaryJson.Length} bytes). " +
-                                           $"Use get_scan_result(scanId: \"{scanId}\") to page through results.")
-                    };
-                }
             }
 
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = summary
-            };
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                summary,
+                _workspaceManager.GetSolutionRoot(),
+                nameof(MigrationScanSummary),
+                ScanWrapperType.MigrationScanSummary,
+                totalRecords: aggregateFindings.Count);
         }
         else
         {

@@ -69,7 +69,8 @@ public enum ScanWrapperType
     ApiSurfaceEntryList,
     CodeInventoryReport,
     MethodSource,
-    FileSource
+    FileSource,
+    MigrationScanSummary
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>

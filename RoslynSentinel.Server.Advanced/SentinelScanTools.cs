@@ -687,6 +687,18 @@ public class SentinelScanTools
                         };
                         break;
                     }
+                case ScanWrapperType.MigrationScanSummary:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // returned inline when the summary is small enough not to offload.
+                        var migrationScanSummary = JsonSerializer.Deserialize<MigrationScanSummary>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = migrationScanSummary
+                        };
+                        break;
+                    }
                 case ScanWrapperType.FileSource:
                     {
                         // Single object, not a list - limit/offset don't apply, matching the shape
@@ -711,13 +723,13 @@ public class SentinelScanTools
             }
             ;
 
-            // MethodSource/FileSource wrap a single object, not a list - the array-shaped
+            // MethodSource/FileSource/MigrationScanSummary wrap a single object, not a list - the array-shaped
             // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
             // single-object payload's first property, e.g. a string Signature, throws rather than
             // returning null, since it's the wrong node kind rather than a missing one).
             int totalRecords;
             bool hasMorePages;
-            if (all.Type is ScanWrapperType.MethodSource or ScanWrapperType.FileSource)
+            if (all.Type is ScanWrapperType.MethodSource or ScanWrapperType.FileSource or ScanWrapperType.MigrationScanSummary)
             {
                 totalRecords = 1;
                 hasMorePages = false;

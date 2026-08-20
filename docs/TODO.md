@@ -4,32 +4,6 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
-## `SentinelAsyncifyTools`'s `MigrationScanSummary` overflow writer is unreadable by `GetScanResult`
-
-**Found:** 2026-08-20/21, via the offload-mechanism survey done while fixing the `ToolResult<T>.Data`
-stub and `ApplyDiff`'s response-size issue (see `docs/TODO.md`'s now-removed entries on those, and
-the updated `project_offload_helper_partial_wiring` memory).
-
-**What:** `SentinelAsyncifyTools.cs` (~line 220-277, comment "B1 Fix 4: 10 KB overflow safety net —
-should be unreachable with slim types + caps") hand-writes the raw serialized `MigrationScanSummary`
-directly to `.roslynsentinel/scans/scan_{timestamp}_{scanId}.json` when it exceeds 10KB
-(`SummaryThresholdBytes`) — the same class of bug `GetMethodSource`/`ReadFile` had (and which was
-fixed 2026-08-20/21): the file is **not** wrapped in a `ScanWapper { Type, Data }` envelope, and
-there is no `ScanWrapperType.MigrationScanSummary` case, so `GetScanResult`'s
-`JsonSerializer.Deserialize<ScanWapper>` will fail to parse it correctly. Its own `LargeResultInfo`
-message still tells the caller to call `get_scan_result(scanId: ...)`, which will not work.
-
-**Why this matters:** the code comment suggests this path is expected to be rare ("should be
-unreachable with slim types + caps"), which is likely why it's gone unnoticed — but if it ever does
-trigger, the caller gets an opaque `"Failed to read scan file."` error instead of the summary,
-with no indication that the fallback path itself is broken.
-
-**Suggested approach:** same fix as `GetMethodSource`/`ReadFile` — add
-`ScanWrapperType.MigrationScanSummary`, add a matching case to `GetScanResult`'s switch (a single
-object, not a list, so `TotalRecords`/`HasMorePages` should short-circuit to `1`/`false` the same
-way the `MethodSource`/`FileSource` cases do), and replace the hand-written
-`File.WriteAllTextAsync` block with a call to `ScanResultHelper.StoreScanResultAsync`.
-
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 
 **Found:** 2026-08-19, while reviewing whether `UsingDirective` needed a `simplifySingleFile`/
