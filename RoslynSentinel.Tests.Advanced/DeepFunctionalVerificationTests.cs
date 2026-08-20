@@ -246,6 +246,68 @@ public class C
             "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail — " +
             "the single-candidate bypass must not apply when there IS real ambiguity to resolve.");
         Assert.That(mismatchedSnippetResult.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+
+        // Task I (docs/plan-tool-disambiguation-remediation-v1.md) picked NearMissList as the
+        // winning hint strategy: it's the only one of the 3 evaluated that lists every real
+        // candidate (up to 3) instead of just the nearest one, so assert its specific shape here
+        // now that there's a real answer, per the plan's Risks-section instruction to tighten
+        // loosely-asserting tests once a strategy is chosen.
+        Assert.That(mismatchedSnippetResult.Message, Does.Contain("contextSnippet not found (2 candidates):"));
+        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
+        Assert.That(mismatchedSnippetResult.Message, Does.Contain("Provide a more specific contextSnippet or use lineBefore/lineAfter."));
+    }
+
+    [Test]
+    [Description("NearMissList must surface every real candidate a snippet actually matched, not "
+                 + "just the first one — the losing NearestSnippet/CorrectedCoordinates strategies "
+                 + "only ever showed candidate #1 here, which would mislead an agent into thinking "
+                 + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
+    public async Task ReplaceMember_ThreeOverloads_AmbiguousSnippetListsUpToThreeCandidates()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+    public void Foo(bool x) { }
+}", "C.cs");
+
+        var result = await _refactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
+            contextSnippet: "this text does not appear anywhere in the file");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.Message, Does.Contain("contextSnippet not found (3 candidates):"));
+        Assert.That(result.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(result.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
+        Assert.That(result.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
+    }
+
+    [Test]
+    [Description("Type-level ambiguity (ResolveTypeByNameOrSnippet) via ModifyBaseType's AddBaseType "
+                 + "action: 2 same-named nested types in sibling containers (a genuinely compilable "
+                 + "collision per the plan's Task D test guidance — plain top-level name collisions "
+                 + "don't compile). Confirms the NearMissList hint also covers the type-level helper, "
+                 + "not just the member-level one.")]
+    public async Task AddBaseType_TwoNestedTypesSameName_AmbiguousSnippetListsBothCandidates()
+    {
+        SetSource(@"
+public class Outer1
+{
+    public class Nested { public int A; }
+}
+public class Outer2
+{
+    public class Nested { public int B; }
+}", "C.cs");
+
+        var result = await _refactoringEngine.AddBaseTypeAsync("C.cs", "Nested", "IFoo",
+            contextSnippet: "this text does not appear anywhere in the file");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.Message, Does.Contain("contextSnippet not found (2 candidates):"));
+        Assert.That(result.Message, Does.Contain("line 4 `public class Nested { public int A; }`"));
+        Assert.That(result.Message, Does.Contain("line 8 `public class Nested { public int B; }`"));
     }
 
     [Test]

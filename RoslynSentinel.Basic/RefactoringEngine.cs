@@ -1953,11 +1953,19 @@ public class RefactoringEngine
         var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
         if (pos < 0)
         {
+            // ContextHelper's message ("contextSnippet not found"/"ambiguous (N matches)") is
+            // necessarily generic — ContextHelper only sees raw text offsets, it has no symbolName
+            // or declaration list to enumerate the way ResolveMemberByNameOrSnippet's NearMissList
+            // hint does, and this tool has no name argument at all (it targets an expression by its
+            // literal text, not a named declaration) — so there is no candidate set to report here
+            // the way there is for the member/type resolvers. Point the caller at the tools that
+            // would show it real file content instead of leaving a bare message with nothing to act on.
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = $"// Error: {snippetError}"
+                Message = $"// Error: {snippetError} Re-check the snippet against GetMethodSource/GetFileOutline " +
+                    "output, or add lineBefore/lineAfter (verbatim text from the surrounding lines) to disambiguate."
             };
         }
 
@@ -1983,11 +1991,20 @@ public class RefactoringEngine
 
         if (expression == null)
         {
+            // The snippet DID resolve to a text position (pos, above) — the failure is that no
+            // ExpressionSyntax boundary aligns with it (e.g. the snippet spans a statement, a
+            // keyword, or crosses an expression boundary). Report where it landed instead of a
+            // bare "not found", since that position is real, already-available information — a
+            // caller reading only "expression not found" has no way to tell its snippet was even
+            // located at all versus silently mismatched.
+            var landedLine = text.Lines.GetLineFromPosition(pos).LineNumber + 1;
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotConvert,
                 FilePath = filePath,
-                Message = "// Cannot convert: expression not found."
+                Message = $"// Cannot convert: contextSnippet was found at line {landedLine}, but it does not " +
+                    "align to a single, whole extractable expression there (it may span a statement, a keyword, " +
+                    "or cross an expression boundary). Narrow the snippet to exactly one expression's text."
             };
         }
 
@@ -4144,21 +4161,20 @@ public class RefactoringEngine
         };
     }
 
-    private enum HintStrategy { NearestSnippet, CorrectedCoordinates, NearMissList }
-
-    // Task I evaluation: NearestSnippet selected as active strategy because it provides:
-    // 1. Concrete candidate info (nearest match with line number for navigation)
-    // 2. Actionable guidance (suggest more specific snippet or use lineBefore/lineAfter)
-    // 3. User-friendly format (readable, concise, shows progress)
-    // NearestSnippet balances information density with clarity better than alternatives.
-    // CorrectedCoordinates and NearMissList remain for future evaluation if needed.
-    private const HintStrategy ActiveHintStrategy = HintStrategy.NearestSnippet;
+    // Task I evaluation (docs/plan-tool-disambiguation-remediation-v1.md, addendum under Task I):
+    // NearMissList won over NearestSnippet/CorrectedCoordinates because it's the only strategy that
+    // shows an agent every real candidate instead of just the first one — on a genuinely ambiguous
+    // snippet (2+ real matches), the other two strategies only ever surfaced candidate #1, which is
+    // actively misleading (an agent can't tell there were other matches worth choosing between, let
+    // alone which one it meant). NearMissList's per-candidate line + declaration preview is also the
+    // only shape that gives an agent enough to construct a corrected contextSnippet in one try. The
+    // other 2 strategies' dead code was deleted here per the plan's own Task I instruction.
 
     /// <summary>
     /// Resolves a member by name, optionally disambiguating with a contextSnippet when the name
     /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
     /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a hint built per ActiveHintStrategy.
+    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildMemberHint).
     /// </summary>
     private MemberDeclarationSyntax? ResolveMemberByNameOrSnippet(
         SyntaxNode root, SourceText sourceText, string memberName,
@@ -4224,7 +4240,7 @@ public class RefactoringEngine
     /// Resolves a type by name, optionally disambiguating with a contextSnippet when the name
     /// matches more than one declaration. Falls back to first-match-by-name when contextSnippet is
     /// null, preserving existing behavior for callers that don't supply one. On an unresolvable or
-    /// still-ambiguous contextSnippet, throws with a hint built per ActiveHintStrategy.
+    /// still-ambiguous contextSnippet, throws with a NearMissList-style hint (see BuildTypeHint).
     /// </summary>
     private BaseTypeDeclarationSyntax? ResolveTypeByNameOrSnippet(
         SyntaxNode root, SourceText sourceText, string typeName,
@@ -4266,48 +4282,6 @@ public class RefactoringEngine
 
     private string BuildMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
     {
-        return ActiveHintStrategy switch
-        {
-            HintStrategy.NearestSnippet => BuildNearestSnippetMemberHint(candidates, matches, failureMode),
-            HintStrategy.CorrectedCoordinates => BuildCorrectedCoordinatesMemberHint(candidates, matches, failureMode),
-            HintStrategy.NearMissList => BuildNearMissListMemberHint(candidates, matches, failureMode),
-            _ => "contextSnippet resolution failed; unable to provide a hint."
-        };
-    }
-
-    private string BuildNearestSnippetMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var nearest = candidates.First();
-        var nearestText = nearest.ToString().Split('\n').First().Trim();
-        if (nearestText.Length > 60) nearestText = nearestText.Substring(0, 57) + "...";
-
-        var line = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition.Line + 1 ?? -1;
-        return $"contextSnippet {failureMode}. Nearest candidate: `{nearestText}` at line {line}. " +
-               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    private string BuildCorrectedCoordinatesMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var nearest = candidates.First();
-        var linePos = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition ?? default;
-        var line = linePos.Line + 1;
-        var column = linePos.Character + 1;
-
-        return $"contextSnippet {failureMode}. Try correcting the contextSnippet or use line {line}, column {column}.";
-    }
-
-    private string BuildNearMissListMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
         if (candidates.Count == 0)
         {
             return $"contextSnippet {failureMode}: no candidates found.";
@@ -4328,48 +4302,6 @@ public class RefactoringEngine
     }
 
     private string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        return ActiveHintStrategy switch
-        {
-            HintStrategy.NearestSnippet => BuildNearestSnippetTypeHint(candidates, matches, failureMode),
-            HintStrategy.CorrectedCoordinates => BuildCorrectedCoordinatesTypeHint(candidates, matches, failureMode),
-            HintStrategy.NearMissList => BuildNearMissListTypeHint(candidates, matches, failureMode),
-            _ => "contextSnippet resolution failed; unable to provide a hint."
-        };
-    }
-
-    private string BuildNearestSnippetTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var nearest = candidates.First();
-        var nearestText = nearest.ToString().Split('\n').First().Trim();
-        if (nearestText.Length > 60) nearestText = nearestText.Substring(0, 57) + "...";
-
-        var line = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition.Line + 1 ?? -1;
-        return $"contextSnippet {failureMode}. Nearest candidate: `{nearestText}` at line {line}. " +
-               "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    private string BuildCorrectedCoordinatesTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var nearest = candidates.First();
-        var linePos = nearest.SyntaxTree?.GetLineSpan(nearest.Span).StartLinePosition ?? default;
-        var line = linePos.Line + 1;
-        var column = linePos.Character + 1;
-
-        return $"contextSnippet {failureMode}. Try correcting the contextSnippet or use line {line}, column {column}.";
-    }
-
-    private string BuildNearMissListTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
     {
         if (candidates.Count == 0)
         {

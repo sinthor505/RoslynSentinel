@@ -76,6 +76,28 @@ copy it verbatim from a prior tool result rather than retyping from memory. Not 
 `ReplaceMember` fix, which addressed the resolution *logic* but not the *wording* that leads callers to
 over-supply a snippet in the first place.
 
+## Deferred: `contextSnippet` deprecation tracking, and `NearMissList`'s 3-candidate cap
+
+**Found:** 2026-08-19, closing out `docs/plan-tool-disambiguation-remediation-v1.md` Task I/J
+(hint-strategy evaluation + raw-`ContextHelper` error-message enrichment).
+
+**What (two related, deliberately-unresolved questions):**
+1. Every tool touched by that plan keeps `contextSnippet` fully optional, silently first-matching
+   by name when omitted — including when the name is genuinely ambiguous. Whether to eventually
+   require `contextSnippet` (or `symbolName`+`contextSnippet`) once ambiguity is detected, or at
+   least emit a non-fatal warning on a silent first-match against 2+ candidates, was explicitly
+   raised as a Risks-section question in that plan and never decided — it's a product/reliability
+   trade-off (breaking today's default-argument-free call shape vs. catching silent wrong-guesses
+   proactively), not something to decide unilaterally while fixing the hint text.
+2. The `NearMissList` hint strategy (now the sole implementation in `RefactoringEngine.BuildMemberHint`/
+   `BuildTypeHint`) caps its candidate list at 3, with a "+N more" suffix beyond that. No fixture in
+   the current test suite has more than 3 real same-named candidates, so this was left at the plan's
+   originally-specified cap rather than speculatively widened or made configurable.
+
+**Why not resolved now:** both are explicitly flagged in the plan doc's Task J addendum as
+recommendations for the user to decide, not gaps this session's work left broken — the additive,
+non-breaking behavior is working as designed today.
+
 ## `ConvertExpressionBodyAsync` has the same contextSnippet bug class as `ReplaceMember`, different code shape
 
 **Found:** 2026-08-19, while fixing `ReplaceMember`'s `ResolveMemberByNameOrSnippet`/

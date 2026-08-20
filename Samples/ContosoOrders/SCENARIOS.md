@@ -493,6 +493,41 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   that method's resolution logic rather than the same one-line guard. See `docs/TODO.md`.
 
 ### Fixed
+- **(2026-08-19) `ReplaceMember`/`RemoveMember`/`ChangeAccessibility`/`ModifyBaseType`/
+  `ModifyAttribute`/`ModifyModifier`/`AddSummaryComment`/`ModifyEnum`/`AddMember`-family/
+  `AddConstructorParameter` disambiguation failures gave a bare "contextSnippet not found"/
+  "ambiguous" message with no candidate info, even though the resolution helper already had the
+  full list of same-named candidates on hand.** `docs/plan-tool-disambiguation-remediation-v1.md`
+  had built 3 switchable hint strategies for exactly this but never finished evaluating them (an
+  earlier pass set one active by inline code comment without ever running it against real fixtures
+  or recording the plan's required evaluation addendum, and left the 2 losing strategies as dead
+  code). Evaluated all 3 against fixtures covering not-found, genuine multi-candidate ambiguity
+  (a snippet that matches 2+ real candidates, not just 0), and both the member-level and type-level
+  resolution helpers. The two rejected strategies (`NearestSnippet`, `CorrectedCoordinates`) both
+  only ever surfaced the first candidate — on the genuine-ambiguity fixture this made an ambiguous
+  match look identical in shape to a plain not-found miss, giving no signal that 2+ real targets
+  existed to choose between. `NearMissList` — up to 3 candidates, each with its line number and a
+  declaration preview, e.g. `contextSnippet ambiguous (2 candidates): line 4
+  \`public void Foo(int x) { }\`, line 5 \`public void Foo(string x) { }\`. Provide a more specific
+  contextSnippet or use lineBefore/lineAfter.` — won outright and is now the only implementation;
+  the dead strategy code was removed. If any of the above tools' contextSnippet-ambiguity error
+  reverts to a message that doesn't name every real candidate's line and signature, that's a
+  regression in this fix.
+- **(2026-08-19) `ExtractLocalVariable` and `FindReferences`/`FindCallersAsync`/
+  `FindImplementationsForMemberAsync` had the same "no candidate info on failure" gap as above, in
+  tools that resolve via raw `ContextHelper` calls rather than the shared resolution helpers (so the
+  `NearMissList` fix above didn't reach them automatically).** `ExtractLocalVariableAsync`'s two
+  failure messages (snippet not found at all; snippet found but doesn't align to an extractable
+  expression) now state what's actually known — for the second case, the exact line the snippet
+  landed on, information that was already computed but previously discarded. `FindCallersAsync`'s
+  contextSnippet-resolution failure now reports `symbolName '{name}' WAS found declared at: line N
+  \`...\`` when a name-only match exists nearby, using the same up-to-3-candidates preview shape as
+  `NearMissList`, via a new `SymbolNavigationEngine.DescribeNameOnlyCandidates` helper shared with
+  `FindImplementationsForMemberAsync`'s equivalent case. Also fixed an unrelated copy/paste bug
+  found while touching this code: both methods' thrown messages were incorrectly prefixed
+  `"FindReferences: ..."` regardless of which method actually threw — now `"FindCallers: ..."` /
+  `"FindImplementations: ..."` respectively. None of these changes altered resolution/matching
+  logic, only the message built on an already-existing failure path.
 - **(2026-08-19) CRITICAL — `FindReferences`/`FindCallersAsync`/`FindImplementationsForMemberAsync`
   silently returned an empty (`Success: true, Data: []`) result, indistinguishable from "confirmed
   zero references," whenever resolution of the target itself failed.** Two distinct bugs, found

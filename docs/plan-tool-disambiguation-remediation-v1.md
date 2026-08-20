@@ -482,6 +482,90 @@ specific expected hint shape now that there's a real answer.
 correctness (behavior for `contextSnippet == null` never touched the hint path at all), but confirm
 every ambiguity-path test still passes with the now-fixed strategy. Build, test, diff, commit.
 
+#### Addendum (2026-08-19) — Task I actually executed
+
+A prior pass at this task (commit `fa6e5e5`, "Task I: Evaluate and finalize hint strategy
+selection") set `ActiveHintStrategy` to `NearestSnippet` and left an inline code comment claiming
+an evaluation had been done, but recorded no addendum here as this section requires, and explicitly
+left the other 2 strategies' dead code in place "for future evaluation if needed" — directly against
+this task's own closing instruction to delete the losing strategies once a winner is picked. This
+addendum replaces that prior attempt with an actual evaluation and completes the collapse.
+
+**Fixture-availability check (first finding):** the plan's premise — that Tasks C–G would leave
+behind a rich set of real ambiguity fixtures to evaluate against — did not hold. A repo-wide search
+found exactly **one** test exercising the 2+-candidate path of `ResolveMemberByNameOrSnippet`/
+`ResolveTypeByNameOrSnippet` (`ReplaceMember_OverloadedMembers_StillRequireContextSnippetToDisambiguate`,
+`RoslynSentinel.Tests.Advanced/DeepFunctionalVerificationTests.cs`), and it asserted only on
+`Outcome`/`UpdatedText`, never on `Message` — so it provided a fixture shape but no evaluation
+signal on hint *text*. No fixture anywhere exercised 3+-candidate ambiguity, type-level collisions,
+or an ambiguous snippet that matches 2+ real candidates (as opposed to 0). Rather than declare the
+evaluation blocked, 4 minimal fixtures were added directly against `RefactoringEngine` (no new test
+seam/`InternalsVisibleTo` — flipping the `ActiveHintStrategy` const and rebuilding 3× was cheap
+enough not to justify that infrastructure, especially since it becomes dead weight the moment a
+winner is chosen) to cover the shapes the plan actually asked Task I to compare:
+
+1. `Probe_TwoOverloads_NotFound` — 2 overloads, `contextSnippet` matches neither (0 matches).
+2. `Probe_ThreeOverloads_NotFound` — 3 overloads, `contextSnippet` matches none (0 matches).
+3. `Probe_TwoOverloads_AmbiguousSnippetMatchesBoth` — 2 overloads, both carrying a shared marker
+   comment, `contextSnippet` set to that marker so it genuinely matches both bodies (2 matches,
+   the "ambiguous" branch, not "not found").
+4. `Probe_TypeLevel_TwoNestedTypesSameName_NotFound` — 2 nested types named `Nested` in sibling
+   outer classes (a genuinely compilable collision, per Task D's own test guidance), exercising
+   `ResolveTypeByNameOrSnippet` rather than the member-level helper.
+
+Each was run three times (flip `ActiveHintStrategy`, rebuild `RoslynSentinel.Tests.Advanced`, run
+filtered by test name, read `result.Message` via `Console.WriteLine`). Actual recorded output:
+
+| Fixture | `NearestSnippet` | `CorrectedCoordinates` | `NearMissList` |
+|---|---|---|---|
+| 2 overloads, not found | `contextSnippet not found. Nearest candidate: \`public void Foo(int x) { }\` at line 4. Provide a more specific contextSnippet or use lineBefore/lineAfter.` | `contextSnippet not found. Try correcting the contextSnippet or use line 4, column 5.` | `contextSnippet not found (2 candidates): line 4 \`public void Foo(int x) { }\`, line 5 \`public void Foo(string x) { }\`. Provide a more specific contextSnippet or use lineBefore/lineAfter.` |
+| 3 overloads, not found | same shape, still only shows line 4 (`Foo(int x)`) | same shape, still only line 4/column 5 | lists all 3: line 4/5/6 with each signature |
+| 2 overloads, snippet matches **both** (genuine ambiguity) | `contextSnippet ambiguous. Nearest candidate: \`public void Foo(int x) { }\` at line 4. ...` — **identical shape to the not-found case**, gives no indication 2 real matches were found | same coordinate-only shape, same blindness to the 2 real matches | `contextSnippet ambiguous (2 candidates): line 4 ..., line 5 .... Provide...` — shows both actual matches |
+| Type-level, 2 nested `Nested`, not found | Nearest candidate `public class Nested { public int A; }` at line 4 only | line 4, column 5 only | both: line 4 `... int A ...`, line 8 `... int B ...` |
+
+**Judgment against the plan's actual test** ("would an agent reading this hint alone construct a
+corrected call that succeeds next try?"):
+- **`CorrectedCoordinates` loses outright.** Its line/column pair isn't even valid input to any of
+  these tools' own parameter surface (`ReplaceMember`/`ChangeAccessibility`/etc. take `memberName`
+  + `contextSnippet`, never `line`/`column`) — an agent would have to go read the file at that
+  position and manually derive a snippet anyway, which is exactly the re-read the plan's evaluation
+  question says a good hint should avoid.
+- **`NearestSnippet` is actively misleading on genuine ambiguity.** In the 2-overloads/snippet-
+  matches-both fixture, its output is byte-for-byte the same *shape* as a plain not-found failure —
+  an agent has no way to tell "your snippet hit 2 real targets, pick one" apart from "your snippet
+  hit nothing, here's the nearest thing." It also never shows more than 1 candidate regardless of
+  how many exist (3-overload and 2-nested-type cases both only ever surface candidate #1), so an
+  agent can't even discover that a second/third option exists to disambiguate toward.
+- **`NearMissList` wins.** It's the only strategy where every recorded output gives an agent (a)
+  confirmation of exactly how many real candidates exist, (b) each one's line number and enough of
+  its declaration text to write a next `contextSnippet` that's unique to it (e.g. `"Foo(string x)"`
+  from the line-5 preview), and (c) this holds identically for both the member-level and type-level
+  helper. On the "matches both" ambiguous case specifically, it's the only strategy that reveals
+  the ambiguity is real (2 candidates found) rather than reading like an ordinary not-found miss.
+
+**Decision:** `NearMissList` is the winning strategy, selected outright (no hybrid needed — it
+dominated on every fixture tested, including the "ambiguous, not just not-found" case the other two
+strategies handle worst). `ActiveHintStrategy` const and the `HintStrategy` enum/switch were removed
+entirely; `BuildMemberHint`/`BuildTypeHint` now call the (renamed-in-place, formerly
+`BuildNearMissListMemberHint`/`BuildNearMissListTypeHint`) preview-list logic directly. The other 2
+strategies' `Build*Hint` methods (6 total: near­est-snippet ×2, corrected-coordinates ×2 — the
+NearMissList member/type pair was kept) were deleted, per this task's own closing instruction.
+
+Task F's secondary (`symbolName`+`contextSnippet`) and legacy (`line`/`column`) paths were also
+checked: `SafeDeleteUnusedSymbol` resolves via `ContextHelper.FindSymbolAtSnippetAsync` directly
+(not through `ResolveMemberByNameOrSnippet`), so it was never wired to `HintStrategy` in the first
+place and needed no change here — its failure messages are hand-authored independently of this
+switch (see `StructuralRefinementEngine.SafeDeleteSymbolAsync`).
+
+`ReplaceMember_OverloadedMembers_StillRequireContextSnippetToDisambiguate`'s previously
+shape-only assertion (`Outcome == EditOutcome.CannotEdit`, no message check) was tightened to assert
+the specific `NearMissList` text, and 2 new tests
+(`ReplaceMember_ThreeOverloads_AmbiguousSnippetListsUpToThreeCandidates`,
+`AddBaseType_TwoNestedTypesSameName_AmbiguousSnippetListsBothCandidates`) were added permanently to
+`DeepFunctionalVerificationTests.cs` to keep the 3-candidate and type-level shapes under regression
+coverage going forward (the 4 probe fixtures used only for live strategy comparison were temporary
+and removed after recording the table above).
+
 ### Task J — Full verification and summary
 1. Full solution build (`RoslynSentinel.Common`, `RoslynSentinel.Basic`, `RoslynSentinel.Server.Basic`,
    `RoslynSentinel.Server.Advanced`, both `.Http` projects, `RoslynSentinel.Tests`), 0 errors.
@@ -500,3 +584,52 @@ every ambiguity-path test still passes with the now-fixed strategy. Build, test,
 6. In the summary, explicitly flag the deferred deprecation-tracking decision from Risks (whether/
    when `contextSnippet` should become required, or whether first-match-without-it should emit a
    warning) as a recommendation for the user to decide, not something this plan resolved.
+
+#### Addendum (2026-08-19) — Task J executed for the Task I re-do + raw-ContextHelper follow-on
+
+Tasks A–H had already landed in earlier commits (`84fb911` through `d6acc48`/`fa6e5e5` and later).
+This pass's scope was: finish Task I properly (see its addendum above) and extend equivalent
+candidate-aware error reporting to tools that resolve via raw `ContextHelper` calls rather than
+`ResolveMemberByNameOrSnippet`/`ResolveTypeByNameOrSnippet` (outside this plan's original Task
+list, but requested alongside this Task I re-do): `RefactoringEngine.ExtractLocalVariableAsync` and
+`SymbolNavigationEngine.FindCallersAsync`/`FindImplementationsForMemberAsync`.
+
+1. **Full solution build:** 0 errors (184 pre-existing warnings, unchanged in kind/count from
+   before this session's changes — all in test projects/unrelated files).
+2. **Full 5-project test run**, diffed against `docs/known-failing-tests.txt` by exact test name
+   (not just aggregate counts, since that file predates the `RoslynSentinel.Tests.Basic`/
+   `.Advanced` project split and mixes all projects together):
+
+   | Project | Result | Baseline | Regressions |
+   |---|---|---|---|
+   | `RoslynSentinel.Tests` | 199 passed / 0 failed | 199/0 | none |
+   | `RoslynSentinel.Tests.Basic` | 172 passed / 10 failed | 172/10 | none — all 10 confirmed present in known-failing-tests.txt |
+   | `RoslynSentinel.Tests.Advanced` | 792 passed / 26 failed / 1 skipped | 790/26/1 | none — the +2 passed are this session's new tests; all 26 failures confirmed present in known-failing-tests.txt |
+   | `RoslynSentinel.Tests.Battery` | 777 passed / 47 failed / 91 skipped | 777/47/91 | none, exact match |
+   | `RoslynSentinel.Tests.Asyncify` | 95 passed / 2 failed | 95/2 | none, exact match |
+
+3. **Partial-escape-hatch spot-check:** `ChangeSignature`, `PullUpMember`, `MoveTypeToFile`,
+   `InlineMethod`/`InlineField`, `IntroduceParameterObject` tests, and `FindReferences`-adjacent
+   tests (`ContextHelper_FindSnippetPosition_*`) all pass in the `.Advanced` run above — confirms
+   zero ripple from this session's `ContextHelper`-adjacent message changes onto tools this plan
+   deliberately left alone.
+4. **Live smoke test:** not performed. No RoslynSentinel MCP server process was found running
+   (`tasklist //FI "IMAGENAME eq RoslynSentinel*"` returned no matches), so there was nothing to
+   kill/restart, and restarting VS Code to exercise the tools live is a user action outside this
+   session's scope — flagging as still-optional/deferred, not blocking.
+5. **Summary table:**
+
+   | Task | Files touched | Status |
+   |---|---|---|
+   | Task I (re-done) | `RoslynSentinel.Basic/RefactoringEngine.cs` (collapsed `HintStrategy` enum/switch/const, deleted `BuildNearestSnippet*`/`BuildCorrectedCoordinates*` ×4 methods), `RoslynSentinel.Tests.Advanced/DeepFunctionalVerificationTests.cs` (tightened 1 loose assertion, added 2 new tests) | Done, build clean, tests green |
+   | Raw-`ContextHelper` follow-on (not a numbered task in the original plan) | `RoslynSentinel.Basic/RefactoringEngine.cs` (`ExtractLocalVariableAsync`'s 2 failure messages), `RoslynSentinel.Basic/SymbolNavigationEngine.cs` (`FindCallersAsync`/`FindImplementationsForMemberAsync`: fixed `"FindReferences:"` → `"FindCallers:"`/`"FindImplementations:"` prefix bug, added `DescribeNameOnlyCandidates` helper for the contextSnippet-not-resolved case) | Done, build clean, tests green |
+   | Docs | `docs/TODO.md`, `Samples/ContosoOrders/SCENARIOS.md`, this plan file | Done |
+
+6. **Deferred deprecation-tracking recommendation (repeating Risks, not resolved here):** whether
+   `contextSnippet` should eventually become required on these tools, or whether silently
+   first-matching-by-name without one should emit a non-fatal warning, remains an open product
+   decision for the user — this plan (and this session) deliberately kept every path additive.
+   Separately, worth deciding: should `NearMissList`'s "+N more" cap of 3 candidates be raised for
+   pathological cases (5+ same-named overloads)? No fixture with more than 3 real candidates was
+   observed in this codebase's test suite, so this was left at the plan's originally-specified cap
+   rather than speculatively widened.

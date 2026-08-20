@@ -1302,7 +1302,7 @@ public class SymbolNavigationEngine
             if (document == null)
             {
                 throw new InvalidOperationException(
-                    $"FindReferences: filePath '{filePath}' was not found in the loaded solution. " +
+                    $"FindCallers: filePath '{filePath}' was not found in the loaded solution. " +
                     "Verify the path against ListSolutionItems/GetFileOutline, or omit filePath to " +
                     "resolve by symbolName across the whole solution instead. This is NOT a confirmed " +
                     "zero-references result — the lookup never ran.");
@@ -1313,9 +1313,21 @@ public class SymbolNavigationEngine
             if (root == null || model == null)
             {
                 throw new InvalidOperationException(
-                    $"FindReferences: could not obtain a syntax tree/semantic model for '{filePath}'. " +
+                    $"FindCallers: could not obtain a syntax tree/semantic model for '{filePath}'. " +
                     "This is NOT a confirmed zero-references result — the lookup never ran.");
             }
+
+            // Shared by both branches below so the contextSnippet-failure message (immediately
+            // below) can report whether symbolName itself WAS found nearby, instead of leaving the
+            // caller unsure whether the name or the snippet is the actual problem.
+            var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                .Where(m => m switch
+                {
+                    MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                    PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                    FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
+                    _ => false
+                }).ToList();
 
             if (contextSnippet != null)
             {
@@ -1323,22 +1335,15 @@ public class SymbolNavigationEngine
                 if (symbol == null)
                 {
                     throw new InvalidOperationException(
-                        $"FindReferences: contextSnippet did not resolve to a symbol in '{filePath}'. " +
+                        $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' — the lookup " +
-                        "never ran. Re-check the snippet against GetMethodSource/GetFileOutline output, " +
+                        "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
+                        "Re-check the snippet against GetMethodSource/GetFileOutline output, " +
                         "or omit contextSnippet if the symbolName is unambiguous in this file.");
                 }
             }
             else
             {
-                var decls = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                    .Where(m => m switch
-                    {
-                        MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                        PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                        FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
-                        _ => false
-                    }).ToList();
                 var decl = decls.FirstOrDefault(m => m.Ancestors().OfType<ClassDeclarationSyntax>().Any())
                     ?? decls.FirstOrDefault();
                 if (decl != null)
@@ -1349,7 +1354,7 @@ public class SymbolNavigationEngine
                 if (symbol == null)
                 {
                     throw new InvalidOperationException(
-                        $"FindReferences: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
+                        $"FindCallers: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
                         "This is NOT a confirmed zero-references result — the lookup never ran. Verify the " +
                         "name against GetFileOutline, or omit filePath to search by name across the solution.");
                 }
@@ -1366,7 +1371,7 @@ public class SymbolNavigationEngine
         if (symbol == null)
         {
             throw new InvalidOperationException(
-                $"FindReferences: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
+                $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result — the lookup never ran. Verify the name via " +
                 "LocateSymbol/GetFileOutline before treating this as evidence the symbol is unused.");
@@ -1490,7 +1495,18 @@ public class SymbolNavigationEngine
                     symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (symbol == null)
                     {
-                        scopedResolutionFailure = $"contextSnippet did not resolve to a symbol in '{filePath}'.";
+                        // Same name-only lookup as the no-snippet branch below, used purely to
+                        // enrich this message with "symbolName WAS found at line N" when possible —
+                        // does not change resolution/matching behavior, only what the error reports.
+                        var nameOnlyCandidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                            .Where(m => m switch
+                            {
+                                MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                                PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                                _ => false
+                            }).ToList();
+                        scopedResolutionFailure = $"contextSnippet did not resolve to a symbol in '{filePath}'. " +
+                            DescribeNameOnlyCandidates(nameOnlyCandidates, symbolName);
                     }
                 }
                 else
@@ -1545,7 +1561,7 @@ public class SymbolNavigationEngine
         if (symbol == null)
         {
             throw new InvalidOperationException(
-                "FindReferences: " + (scopedResolutionFailure ??
+                "FindImplementations: " + (scopedResolutionFailure ??
                     $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".") +
                 " This is NOT a confirmed zero-implementations result — the lookup never ran. Verify " +
@@ -1865,6 +1881,35 @@ public class SymbolNavigationEngine
             a is IfStatementSyntax or
             SwitchStatementSyntax or
             ConditionalExpressionSyntax) == true;
+
+    /// <summary>
+    /// Builds a "symbolName WAS found at these locations, but contextSnippet didn't match" hint for
+    /// a contextSnippet-resolution failure, given the name-only candidate declarations already
+    /// available at the call site. Mirrors RefactoringEngine's NearMissList hint shape (line +
+    /// first-line preview, up to 3, "+N more" suffix) so an agent sees the same style of actionable
+    /// error across every tool in this codebase that resolves by name+contextSnippet, not just the
+    /// RefactoringEngine mutation tools. Returns an empty string (not a sentence fragment) when
+    /// symbolName itself doesn't resolve to anything nearby, since there's nothing to list.
+    /// </summary>
+    private static string DescribeNameOnlyCandidates(List<MemberDeclarationSyntax> candidates, string symbolName)
+    {
+        if (candidates.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var previews = candidates.Take(3).Select(c =>
+        {
+            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var text = c.ToString().Split('\n').First().Trim();
+            if (text.Length > 50) text = text.Substring(0, 47) + "...";
+            return $"line {line} `{text}`";
+        });
+
+        var count = candidates.Count;
+        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
+        return $"symbolName '{symbolName}' WAS found declared at: {string.Join(", ", previews)}{suffix}. ";
+    }
 
     /// <summary>
     /// Resolves a member symbol by name across the solution without requiring a file path.
