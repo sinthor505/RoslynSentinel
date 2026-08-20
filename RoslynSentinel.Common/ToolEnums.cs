@@ -52,6 +52,12 @@ public enum AttributeModifyAction { add, replace, remove }
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TypedMemberKind { property, field }
 
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum AddRemoveViewAction { add, remove, view }
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum MemberAction { add, remove, replace, view }
+
 // ── Documentation ─────────────────────────────────────────────────────────────
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

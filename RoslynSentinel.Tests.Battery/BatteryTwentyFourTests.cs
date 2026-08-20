@@ -178,7 +178,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RemoveMember("Order.cs", "GetLabel");
+        var result = await _tools.Member("Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -272,21 +272,21 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- AddUsingDirective ---
+    // --- UsingDirective ---
 
     [Test]
-    public async Task AddUsingDirective_AutoStageTrue_ReturnsNotNull()
+    public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddUsingDirective("Order.cs", "System.Linq");
+        var result = await _tools.UsingDirective("Order.cs", AddRemoveViewAction.add, "System.Linq");
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public async Task AddUsingDirective_AutoStageFalse_ReturnsNotNull()
+    public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddUsingDirective("Order.cs", "System.Linq", autoStage: false);
+        var result = await _tools.UsingDirective("Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
         Assert.That(result, Is.Not.Null);
     }
 
@@ -306,7 +306,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMember("Order.cs", "Order", "public string Description => \"\";", "after:GetLabel");
+        var result = await _tools.Member("Order.cs", MemberAction.add, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -316,7 +316,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMember("Order.cs", "Order", "public string Tag => \"\";", "before:GetLabel");
+        var result = await _tools.Member("Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -417,13 +417,13 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- AddSummaryComment ---
+    // --- SummaryComment ---
 
     [Test]
-    public async Task AddSummaryComment_AutoStageTrue_ReturnsNotNull()
+    public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddSummaryComment("Order.cs", "Order", "Represents an order.");
+        var result = await _tools.SummaryComment("Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -433,7 +433,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMemberTyped("Order.cs", "Order", "Description", "string", TypedMemberKind.property);
+        var result = await _tools.Member("Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -443,7 +443,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMemberTyped("Order.cs", "Order", "_tag", "string", TypedMemberKind.field);
+        var result = await _tools.Member("Order.cs", MemberAction.add, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -467,13 +467,13 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- AddConstructorParameter ---
+    // --- ConstructorParameter ---
 
     [Test]
-    public async Task AddConstructorParameter_AutoStageTrue_ReturnsNotNull()
+    public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddConstructorParameter("Order.cs", "Order", "notes", "string");
+        var result = await _tools.ConstructorParameter("Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -716,7 +716,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ReplaceMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.ReplaceMember("Order.cs", "GetLabel", "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
+        var result = await _tools.Member("Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -726,7 +726,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.AddMember("Order.cs", "Order", "public string Tag { get; set; }");
+        var result = await _tools.Member("Order.cs", MemberAction.add, "Order", newMemberSource: "public string Tag { get; set; }");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -736,7 +736,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RemoveMember("Order.cs", "GetLabel");
+        var result = await _tools.Member("Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -744,7 +744,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _tools.RemoveMember("Order.cs", "GetLabel");
+        var result = await _tools.Member("Order.cs", MemberAction.remove, memberName: "GetLabel");
         Assert.That(result.Success, Is.True, "GetLabel has no callers in SimpleSource — default precheck must let it through.");
     }
 
@@ -765,7 +765,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.RemoveMember("Helper.cs", "GetName");
+        var result = await _tools.Member("Helper.cs", MemberAction.remove, memberName: "GetName");
 
         Assert.That(result.Success, Is.False, "A member with a real caller must be refused by default.");
         Assert.That(result.Error, Is.Not.Null);
@@ -794,7 +794,7 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Helper.cs");
 
-        var result = await _tools.RemoveMember("Helper.cs", "GetName", skipPrecheck: true);
+        var result = await _tools.Member("Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
 
         Assert.That(result.Success, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
     }
@@ -822,11 +822,11 @@ public enum Status { Active = 1, Pending = 2 }
         }
         """, "Greeter.cs");
 
-        var refused = await _tools.RemoveMember("Greeter.cs", "Greet");
+        var refused = await _tools.Member("Greeter.cs", MemberAction.remove, memberName: "Greet");
         Assert.That(refused.Success, Is.False, "An interface member's implementation must be caught by the default precheck.");
         Assert.That(refused.Error!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
 
-        var result = await _tools.RemoveMember("Greeter.cs", "Greet", skipPrecheck: true);
+        var result = await _tools.Member("Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
         Assert.That(result.Success, Is.False, "Removing an interface's sole implementation still breaks compilation — the separate compile-validation safety net catches it.");
         Assert.That(result.Error!.Message, Does.Contain("does not implement interface member"),
             "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped.");
@@ -856,7 +856,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """));
 
-        var result = await _tools.RemoveMember("Dog.cs", "Speak");
+        var result = await _tools.Member("Dog.cs", MemberAction.remove, memberName: "Speak");
         Assert.That(result.Success, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
     }
 

@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
@@ -17,6 +18,8 @@ public record ExtractMethodResult(
     string? CallSiteReplacement,
     string? ExtractedMethodText,
     string? UpdatedSourceContent);
+
+public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 
 public record RenameHunk(int LineNumber, string Before, string After, string? ContextBefore, string? ContextAfter);
 
@@ -2327,7 +2330,7 @@ public class RefactoringEngine
         );
     }
 
-    public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePath filePath, string namespaceName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePath filePath, string namespaceName, bool simplifyExisting = false, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2382,13 +2385,95 @@ public class RefactoringEngine
 
         var annotation = new SyntaxAnnotation();
         var newRoot = root.AddUsings(newUsing.WithAdditionalAnnotations(annotation));
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var editedDocument = document.WithSyntaxRoot(newRoot);
+        var formattedDoc = await Formatter.FormatAsync(editedDocument, annotation, cancellationToken: cancellationToken);
+
+        if (simplifyExisting)
+        {
+            // Semantic-safe shortening of now-redundant fully-qualified names, via Roslyn's own
+            // Simplifier (not text find/replace) — it consults the semantic model per-node, so it
+            // only reduces a qualified name when doing so introduces no ambiguity in this file.
+            formattedDoc = await Simplifier.ReduceAsync(formattedDoc, Simplifier.Annotation, cancellationToken: cancellationToken);
+            var simplifiedRoot = await formattedDoc.GetSyntaxRootAsync(cancellationToken);
+            formattedDoc = await Formatter.FormatAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), cancellationToken: cancellationToken);
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
+    }
+
+    public async Task<DocumentEditResult> RemoveUsingDirectiveAsync(FilePath filePath, string namespaceName, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        var targetName = namespaceName.StartsWith("static ") ? namespaceName[7..] : namespaceName;
+        var isStaticTarget = namespaceName.StartsWith("static ");
+        var existing = root.Usings.FirstOrDefault(u => u.Name?.ToString() == targetName && u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) == isStaticTarget);
+        if (existing == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Using directive '{namespaceName}' not found."
+            };
+        }
+
+        var newRoot = root.RemoveNode(existing, SyntaxRemoveOptions.KeepExteriorTrivia)!.NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
+    }
+
+    public async Task<List<UsingDirectiveInfo>> GetUsingDirectivesAsync(FilePath filePath, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return [];
+        }
+
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
+        {
+            return [];
+        }
+
+        return root.Usings
+            .Select(u => new UsingDirectiveInfo(
+                Name: u.Name?.ToString() ?? "",
+                IsStatic: u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword),
+                Alias: u.Alias?.Name.ToString()))
+            .ToList();
     }
 
     /// <summary>
@@ -3554,6 +3639,125 @@ public class RefactoringEngine
         };
     }
 
+    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        MemberDeclarationSyntax? target;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (target == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: target not found."
+            };
+        }
+
+        if (!target.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.NoChange,
+                FilePath = filePath,
+                Message = "// No summary comment present.",
+                UpdatedText = root.ToFullString()
+            };
+        }
+
+        var stripped = target.GetLeadingTrivia()
+            .Where(t => !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
+            .ToList();
+        var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped))).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString()
+        };
+    }
+
+    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", null);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", null);
+        }
+
+        MemberDeclarationSyntax? target;
+        try
+        {
+            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (EditOutcome.CannotEdit, ex.Message, null);
+        }
+
+        if (target == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: target not found.", null);
+        }
+
+        var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
+        if (docTrivia == default)
+        {
+            return (EditOutcome.NoChange, "// No summary comment present.", null);
+        }
+
+        var lines = docTrivia.ToFullString()
+            .Split('\n')
+            .Select(l => l.Trim().TrimStart('/').Trim())
+            .Where(l => l.Length > 0 && !l.StartsWith("<summary>") && !l.StartsWith("</summary>"))
+            .ToList();
+        return (EditOutcome.Modified, null, string.Join(" ", lines));
+    }
+
     public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
@@ -4043,6 +4247,232 @@ public class RefactoringEngine
         };
     }
 
+    /// <summary>
+    /// Removes a DI constructor parameter and its assignment statement. The backing field is only
+    /// deleted when a solution-wide reference check (SymbolFinder.FindReferencesAsync) confirms
+    /// nothing outside the removed assignment reads or writes it — otherwise the field is left in
+    /// place so removal never silently breaks code that still depends on it.
+    /// </summary>
+    public async Task<DocumentEditResult> RemoveConstructorParameterAsync(FilePath filePath, string className, string paramName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.DocumentNotFound,
+                FilePath = filePath,
+                Message = "// Document not found."
+            };
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: syntax root not found."
+            };
+        }
+
+        BaseTypeDeclarationSyntax? classNode;
+        try
+        {
+            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
+        }
+
+        if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = "// Cannot edit: class not found."
+            };
+        }
+
+        var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+        var targetParam = ctor?.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == paramName);
+        if (ctor == null || targetParam == null || ctor.Body == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// Constructor parameter '{paramName}' not found on '{className}'."
+            };
+        }
+
+        // Locate the `<field> = <paramName>;` assignment this parameter feeds, so we know which
+        // field is the removal candidate and which statement to drop alongside the parameter.
+        var assignment = ctor.Body.Statements.OfType<ExpressionStatementSyntax>()
+            .FirstOrDefault(s => s.Expression is AssignmentExpressionSyntax
+            {
+                Right: IdentifierNameSyntax rhs
+            } assign && rhs.Identifier.Text == paramName
+            && (assign.Left is IdentifierNameSyntax || (assign.Left is MemberAccessExpressionSyntax ma && ma.Expression is ThisExpressionSyntax)));
+
+        string? candidateFieldName = assignment != null && assignment.Expression is AssignmentExpressionSyntax a
+            ? a.Left switch
+            {
+                IdentifierNameSyntax id => id.Identifier.Text,
+                MemberAccessExpressionSyntax { Name: IdentifierNameSyntax memberId } => memberId.Identifier.Text,
+                _ => null
+            }
+            : null;
+
+        var newParams = ctor.ParameterList.WithParameters(SyntaxFactory.SeparatedList(ctor.ParameterList.Parameters.Where(p => p != targetParam)));
+        var newStatements = assignment != null
+            ? ctor.Body.Statements.Where(s => s != assignment).ToList()
+            : ctor.Body.Statements.ToList();
+        var newCtor = ctor.WithParameterList(newParams).WithBody(ctor.Body.WithStatements(SyntaxFactory.List(newStatements)));
+
+        var fieldDecl = candidateFieldName != null
+            ? classDecl.Members.OfType<FieldDeclarationSyntax>()
+                .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == candidateFieldName))
+            : null;
+
+        var newMembers = classDecl.Members.Select(m => m == ctor ? (MemberDeclarationSyntax)newCtor : m).ToList();
+
+        if (fieldDecl != null)
+        {
+            var semanticModel = await document.Project.GetCompilationAsync(cancellationToken) is { } compilation
+                ? compilation.GetSemanticModel(root.SyntaxTree)
+                : null;
+            var fieldSymbol = semanticModel?.GetDeclaredSymbol(fieldDecl.Declaration.Variables.First(), cancellationToken);
+
+            var fieldStillUsedElsewhere = false;
+            if (fieldSymbol != null)
+            {
+                var references = await SymbolFinder.FindReferencesAsync(fieldSymbol, solution, cancellationToken);
+                foreach (var reference in references)
+                {
+                    foreach (var location in reference.Locations)
+                    {
+                        if (location.IsImplicit)
+                        {
+                            continue;
+                        }
+                        // The assignment statement we're removing is itself a reference to the field —
+                        // don't let it count against "still used elsewhere".
+                        if (assignment != null && location.Document.FilePath == filePath && assignment.Span.Contains(location.Location.SourceSpan))
+                        {
+                            continue;
+                        }
+                        fieldStillUsedElsewhere = true;
+                        break;
+                    }
+                    if (fieldStillUsedElsewhere)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // No semantic model / symbol available — can't prove the field is unused, so err
+                // conservative and leave it in place rather than risk deleting something still live.
+                fieldStillUsedElsewhere = true;
+            }
+
+            if (!fieldStillUsedElsewhere)
+            {
+                newMembers = newMembers.Where(m => m != fieldDecl).ToList();
+            }
+        }
+
+        var newClassNode = classDecl.WithMembers(SyntaxFactory.List(newMembers));
+        var newRoot = root.ReplaceNode(classDecl, newClassNode).NormalizeWhitespace();
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            UpdatedText = newRoot.ToFullString(),
+            Message = fieldDecl != null
+                ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'"
+                : $"// paramName='{paramName}'"
+        };
+    }
+
+    public record ConstructorParameterInfo(string ParamName, string ParamType, string? FieldName);
+
+    /// <summary>
+    /// Lists a class's primary constructor parameters alongside their best-guess backing field,
+    /// inferred from a `<field> = <paramName>;` (or `this.<field> = <paramName>;`) assignment
+    /// statement in the constructor body — the same convention AddConstructorParameterAsync writes.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, List<ConstructorParameterInfo> Parameters)> GetConstructorParametersAsync(FilePath filePath, string className, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+        }
+
+        BaseTypeDeclarationSyntax? classNode;
+        try
+        {
+            classNode = ResolveTypeByNameOrSnippet(root, sourceText, className, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (EditOutcome.CannotEdit, ex.Message, []);
+        }
+
+        if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: class not found.", []);
+        }
+
+        var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
+        if (ctor == null)
+        {
+            return (EditOutcome.Modified, null, []);
+        }
+
+        var assignments = ctor.Body?.Statements.OfType<ExpressionStatementSyntax>()
+            .Select(s => s.Expression as AssignmentExpressionSyntax)
+            .Where(a => a != null && a!.Right is IdentifierNameSyntax)
+            .ToList() ?? [];
+
+        var result = new List<ConstructorParameterInfo>();
+        foreach (var param in ctor.ParameterList.Parameters)
+        {
+            var paramName = param.Identifier.Text;
+            var match = assignments.FirstOrDefault(a => ((IdentifierNameSyntax)a!.Right).Identifier.Text == paramName);
+            string? fieldName = match?.Left switch
+            {
+                IdentifierNameSyntax id => id.Identifier.Text,
+                MemberAccessExpressionSyntax { Name: IdentifierNameSyntax memberId } => memberId.Identifier.Text,
+                _ => null
+            };
+            result.Add(new ConstructorParameterInfo(paramName, param.Type?.ToString() ?? "", fieldName));
+        }
+
+        return (EditOutcome.Modified, null, result);
+    }
+
     public async Task<DocumentEditResult> WrapInRegionAsync(FilePath filePath, int startLine, int endLine, string regionName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -4234,6 +4664,77 @@ public class RefactoringEngine
 
         // 2+ matches
         throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
+    }
+
+    public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
+
+    /// <summary>
+    /// Lists the direct members of one container (class/struct/interface/record) in one file,
+    /// syntax-scoped rather than symbol-scoped — unlike GetTypeInfo/GetTypeMembersDetailAsync
+    /// (which resolve by type name across the whole solution's compilation and include inherited
+    /// members), this only looks at the exact container the caller is about to edit, so its
+    /// output lines up with what RemoveMember/ReplaceMember need: an exact memberName plus enough
+    /// signature text to build a contextSnippet if the name turns out to be overloaded.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, List<ContainerMemberInfo> Members)> GetContainerMembersAsync(FilePath filePath, string containerName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+        }
+
+        BaseTypeDeclarationSyntax? containerNode;
+        try
+        {
+            containerNode = ResolveTypeByNameOrSnippet(root, sourceText, containerName, contextSnippet, lineBefore, lineAfter);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return (EditOutcome.CannotEdit, ex.Message, []);
+        }
+
+        if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot edit: container not found.", []);
+        }
+
+        var lines = sourceText.Lines;
+        var result = typeDecl.Members.Select(m =>
+        {
+            var kind = m switch
+            {
+                MethodDeclarationSyntax => "method",
+                PropertyDeclarationSyntax => "property",
+                FieldDeclarationSyntax => "field",
+                ConstructorDeclarationSyntax => "constructor",
+                EventDeclarationSyntax or EventFieldDeclarationSyntax => "event",
+                IndexerDeclarationSyntax => "indexer",
+                _ => m.Kind().ToString()
+            };
+            var signature = m.WithLeadingTrivia().WithTrailingTrivia().ToFullString().Trim();
+            var firstLineEnd = signature.IndexOfAny(['\n', '{', ';']);
+            if (firstLineEnd > 0)
+            {
+                signature = signature[..firstLineEnd].Trim();
+            }
+            return new ContainerMemberInfo(
+                GetMemberName(m),
+                kind,
+                signature,
+                lines.GetLineFromPosition(m.SpanStart).LineNumber + 1,
+                lines.GetLineFromPosition(m.Span.End).LineNumber + 1);
+        }).ToList();
+
+        return (EditOutcome.Modified, null, result);
     }
 
     /// <summary>
