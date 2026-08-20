@@ -33,7 +33,7 @@ public class BatteryTwentyTests
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectConsistencyEngine = new ProjectConsistencyEngine(_workspaceManager);
         _tools = new SentinelWorkspaceTools(

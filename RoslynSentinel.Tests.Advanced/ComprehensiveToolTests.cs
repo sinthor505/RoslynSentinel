@@ -78,7 +78,7 @@ public class ComprehensiveToolTests
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _impactAnalyzer = new ImpactAnalyzer(NullLogger<ImpactAnalyzer>.Instance, _workspaceManager);
         _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);
         _metricsEngine = new MetricsEngine(_workspaceManager);

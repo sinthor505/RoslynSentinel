@@ -114,7 +114,7 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
         _refinementEngine = new RefinementEngine(_workspaceManager);
         _advancedTypeEngine = new AdvancedTypeEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);

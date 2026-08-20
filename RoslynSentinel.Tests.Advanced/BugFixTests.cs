@@ -45,7 +45,7 @@ public class BugFixTests
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
     }
 
     [TearDown]
@@ -1989,6 +1989,7 @@ public class Processor
         private RefactoringEngine _refactoringEngine;
         private AdvancedStructuralEngine _advancedStructuralEngine;
         private CodeGenerationEngine _codeGenerationEngine;
+        private StructuralRefinementEngine _structuralRefinementEngine;
 
         [SetUp]
         public void Setup()
@@ -2000,6 +2001,7 @@ public class Processor
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
             _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+            _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         }
 
         [TearDown]
@@ -2166,15 +2168,16 @@ public class MyService
 }"));
 
             var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "ImportHistoryDto.cs");
-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(
+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(
                 filePath,
+                "ImportHistoryDto",
                 "public class ImportHistoryDto",
                 lineBefore: null,
                 lineAfter: null);
 
-            // Should return empty dict or error (not staged changeId) since the symbol IS used
-            Assert.That(result, Is.Empty.Or.Null,
-                "Should return empty/error since symbol is used, not a ChangeId");
+            // Should refuse to delete since the symbol IS used
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
+                "Should refuse deletion since symbol is used, not modify the file");
         }
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -3141,19 +3144,23 @@ public class Processor
     public class CriticalBugRegressionTests
     {
         private PersistentWorkspaceManager _workspaceManager;
+        private SentinelConfiguration _config;
         private GranularRefactoringEngine _granularRefactoringEngine;
         private RefactoringEngine _refactoringEngine;
         private RefinementEngine _refinementEngine;
         private AdvancedStructuralEngine _advancedStructuralEngine;
+        private StructuralRefinementEngine _structuralRefinementEngine;
 
         [SetUp]
         public void Setup()
         {
             _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _config = new SentinelConfiguration();
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
-            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, new SentinelConfiguration());
+            _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
             _refinementEngine = new RefinementEngine(_workspaceManager);
             _advancedStructuralEngine = new AdvancedStructuralEngine(_workspaceManager);
+            _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
         }
 
         [TearDown]
@@ -3260,16 +3267,16 @@ public class Service
 
             SetSource(code, "Service.cs");
 
-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(
+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(
                 "Service.cs",
+                "GetValue",
                 contextSnippet: "public string GetValue",
                 lineBefore: null,
                 lineAfter: null);
 
-            // Verify it returns error dict (not empty) for used symbols
-            Assert.That(result, Is.Not.Empty, "Should return non-empty dict for used symbol");
-            Assert.That(result.ContainsKey("ERROR"), Is.True,
-                "Should contain ERROR key when symbol is used and cannot be deleted");
+            // Verify it refuses deletion for used symbols
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
+                "Should refuse deletion when symbol is used and cannot be deleted");
         }
 
         [Test]
@@ -3288,17 +3295,16 @@ public class Service
 
             SetSource(code, "Service.cs");
 
-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(
+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(
                 "Service.cs",
+                "UnusedHelper",
                 contextSnippet: "UnusedHelper",
-                lineBefore: "private string UnusedHelper");
+                lineBefore: "private string UnusedHelper",
+                lineAfter: null);
 
-            Assert.That(result, Is.Not.Null, "Should return a dict");
-            // Should not have error entries for unused symbol
-            if (result.Count > 0 && result.ContainsKey("ERROR"))
-            {
-                Assert.Fail("Should not error for truly unused symbol");
-            }
+            // Should not refuse for a truly unused symbol
+            Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.CannotEdit),
+                "Should not error for truly unused symbol");
         }
 
         // ── BUG-74: ExtractClass — handles file-scoped and nested types ──────
@@ -4003,7 +4009,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
             new MappingEngine(_workspaceManager),
             new SemanticRefactoringLibrary(_workspaceManager),
             new GranularRefactoringEngine(_workspaceManager),
-            new StructuralRefinementEngine(_workspaceManager),
+            new StructuralRefinementEngine(_workspaceManager, _config),
             new CodeStyleEngine(_workspaceManager, _config),
             new CodeFlowEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),
@@ -4025,7 +4031,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
             new AdvancedLogicEngine(_workspaceManager),
             new RefinementEngine(_workspaceManager),
             new AdvancedTypeEngine(_workspaceManager),
-            new StructuralRefinementEngine(_workspaceManager),
+            new StructuralRefinementEngine(_workspaceManager, _config),
             new CodeStyleEngine(_workspaceManager, _config),
             new CodeFlowEngine(_workspaceManager),
             new AdvancedRefactoringEngine(_workspaceManager),

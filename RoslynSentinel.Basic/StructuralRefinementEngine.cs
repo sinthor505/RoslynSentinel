@@ -11,10 +11,12 @@ namespace RoslynSentinel.Basic;
 public class StructuralRefinementEngine
 {
     private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly SentinelConfiguration _config;
 
-    public StructuralRefinementEngine(PersistentWorkspaceManager workspaceManager)
+    public StructuralRefinementEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
+        _config = config;
     }
 
     /// <summary>
@@ -72,6 +74,11 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, int line, int column, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
+        {
+            return DocumentEditResult.FeatureDisabled(filePath);
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -111,6 +118,12 @@ public class StructuralRefinementEngine
                 FilePath = filePath,
                 Message = $"// Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted."
             };
+        }
+
+        var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
+        if (reflectionRisk != null)
+        {
+            return reflectionRisk;
         }
 
         var newRoot = root!.RemoveNode(node!, SyntaxRemoveOptions.KeepUnbalancedDirectives);
@@ -218,10 +231,46 @@ public class StructuralRefinementEngine
     };
 
     /// <summary>
+    /// Scans every document in the solution for a string literal matching <paramref name="symbol"/>'s
+    /// name — a likely sign of reflection/<c>nameof</c>-adjacent dynamic usage that <see cref="SymbolFinder"/>
+    /// would not catch (ported from the dead <c>RefactoringEngine.SafeDeleteSymbolAsync</c> copy — see
+    /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
+    /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
+    /// </summary>
+    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePath filePath, ISymbol symbol, CancellationToken cancellationToken)
+    {
+        foreach (var proj in solution.Projects)
+        {
+            foreach (var doc in proj.Documents)
+            {
+                var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
+                var hasMatchingLiteral = docRoot?.DescendantNodes().OfType<LiteralExpressionSyntax>()
+                    .Any(l => l.IsKind(SyntaxKind.StringLiteralExpression) && l.Token.ValueText == symbol.Name) ?? false;
+                if (hasMatchingLiteral)
+                {
+                    return new DocumentEditResult
+                    {
+                        Outcome = EditOutcome.CannotEdit,
+                        FilePath = filePath,
+                        Message = $"// Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name} — possible reflection/dynamic usage. Delete manually after verifying."
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Safe deletes a symbol only if it has no usages in the entire solution (handle-based resolution).
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, ISymbol symbol, CancellationToken cancellationToken = default)
     {
+        if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
+        {
+            return DocumentEditResult.FeatureDisabled(filePath);
+        }
+
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
@@ -254,6 +303,12 @@ public class StructuralRefinementEngine
                 FilePath = filePath,
                 Message = $"// Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted."
             };
+        }
+
+        var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
+        if (reflectionRisk != null)
+        {
+            return reflectionRisk;
         }
 
         // Find the node that declares this symbol in the document

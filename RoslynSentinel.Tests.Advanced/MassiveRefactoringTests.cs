@@ -20,7 +20,7 @@ public class MassiveRefactoringTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
 
-        var sr = new StructuralRefinementEngine(_workspaceManager);
+        var sr = new StructuralRefinementEngine(_workspaceManager, config);
         var standard = new StandardRefactoringEngine(_workspaceManager);
         var advStruct = new AdvancedStructuralEngine(_workspaceManager);
         var mapping = new MappingEngine(_workspaceManager);

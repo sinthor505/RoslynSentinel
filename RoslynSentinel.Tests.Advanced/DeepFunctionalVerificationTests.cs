@@ -15,6 +15,7 @@ public class DeepFunctionalVerificationTests
     private RefactoringEngine _refactoringEngine;
     private DependencyEngine _dependencyEngine;
     private ModernizationEngine _modernizationEngine;
+    private StructuralRefinementEngine _structuralRefinementEngine;
 
     [SetUp]
     public void Setup()
@@ -28,6 +29,7 @@ public class DeepFunctionalVerificationTests
         _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager, config);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, config);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, config);
     }
 
     [TearDown]
@@ -79,14 +81,11 @@ public class Service {
         _workspaceManager.SetTestSolution(solution);
 
         // Act & Assert
-        var sourceText = "public class Target { public void DeadMethod() {} }";
-        var col = sourceText.IndexOf("DeadMethod") + 1; // 1-based column
+        var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "DeadMethod", "public void DeadMethod()", null, null);
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await _refactoringEngine.SafeDeleteSymbolAsync("Target.cs", "public void DeadMethod()"));
-
-        Assert.That(ex.Message, Does.Contain("Potential Reflection Risk"));
-        Assert.That(ex.Message, Does.Contain("Caller.cs"));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.Message, Does.Contain("Potential reflection risk"));
+        Assert.That(result.Message, Does.Contain("Caller.cs"));
     }
 
     [Test]

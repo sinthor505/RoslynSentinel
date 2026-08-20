@@ -27,7 +27,7 @@ public class FinalRegressionTests
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
     }
 
     [TearDown]

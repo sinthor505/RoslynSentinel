@@ -230,7 +230,7 @@ public class StructuralRefinementEngineTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
-        _engine = new StructuralRefinementEngine(_workspaceManager);
+        _engine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
