@@ -53,6 +53,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SyntaxUpgradeEngine>();
         // services.AddSingleton<RefinementEngine>();
         services.AddSingleton<DiagnosticEngine>();
+        services.AddSingleton<BuildEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MappingEngine>();
         services.AddSingleton<IDEStyleEngine>();

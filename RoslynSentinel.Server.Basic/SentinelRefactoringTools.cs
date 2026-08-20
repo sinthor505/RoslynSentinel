@@ -194,7 +194,7 @@ public class SentinelRefactoringTools
         return string.Join("\n", parts);
     }
 
-    private static string BuildDiffFromPreImages(
+    internal static string BuildDiffFromPreImages(
         Dictionary<FilePath, string> changes,
         IReadOnlyDictionary<string, string?>? preImages)
     {

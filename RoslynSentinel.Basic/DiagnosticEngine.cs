@@ -5,7 +5,8 @@ namespace RoslynSentinel.Basic;
 public record DiagnosticSummary(
     int Errors,
     int Warnings,
-    List<DiagnosticInfo> Details
+    List<DiagnosticInfo> Details,
+    BuildResult? BuildVerification = null
 );
 
 public class DiagnosticEngine

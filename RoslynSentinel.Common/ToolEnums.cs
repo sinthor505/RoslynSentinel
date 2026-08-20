@@ -70,3 +70,8 @@ public enum DocType { plan, handoff, completed_work, documentation, state }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AsyncMigrationPattern { AsyncBridgeCandidate, HandlerExtractCandidate, HandlerToAsyncCandidate, AsyncCallerUpliftCandidate }
+
+// ── Build ─────────────────────────────────────────────────────────────────────
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum BuildVerifyLevel { noBuild, quickBuild, fullBuild }

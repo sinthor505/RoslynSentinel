@@ -162,11 +162,10 @@ public class SentinelIntelligenceTools
             else
             {
 
-                var summary = await SentinelScanTools.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
+                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
                 return new ToolResult<object>
                 {
                     Success = true,
-                    Data = summary,
                     TotalRecords = results.Methods.Count,
                     LargeResult = new LargeResultInfo(
                         resultType: typeof(CodeInventoryReport).Name,

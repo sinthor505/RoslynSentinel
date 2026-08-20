@@ -15,72 +15,45 @@ namespace RoslynSentinel.Server.Advanced;
 public static class RoslynSentinelServiceExtensionsAdvanced
 {
     /// <summary>
-    /// Registers all Roslyn analysis engine singletons into the DI container.
+    /// Registers all Roslyn analysis engine singletons into the DI container: every engine
+    /// Basic registers (via <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelEnginesBasic"/>,
+    /// the shared base — Advanced does not maintain its own separate copy of that list) plus the
+    /// additional engines only Advanced's tool classes need.
     /// </summary>
     public static IServiceCollection AddRoslynSentinelEnginesAdvanced(this IServiceCollection services)
     {
-        services.AddSingleton<SentinelConfiguration>();
-        services.AddSingleton<PersistentWorkspaceManager>();
-        services.AddSingleton<DiffEngine>();
-        services.AddSingleton<ValidationEngine>();
-        services.AddSingleton<ImpactAnalyzer>();
-        services.AddSingleton<RefactoringEngine>();
+        services.AddRoslynSentinelEnginesBasic();
+
+        // Advanced-only engines: not registered by Basic (either because Basic's tool classes
+        // don't use them, or because they're deliberately gated to the fuller Advanced tool set).
         services.AddSingleton<MetricsEngine>();
         services.AddSingleton<CodeHealingEngine>();
-        services.AddSingleton<AnalysisEngine>();
         services.AddSingleton<PerformanceEngine>();
         services.AddSingleton<SecurityEngine>();
         services.AddSingleton<TestingEngine>();
-        services.AddSingleton<CodeGenerationEngine>();
         services.AddSingleton<ModernizationEngine>();
         services.AddSingleton<DependencyInjectionEngine>();
-        services.AddSingleton<ThreadSafetyEngine>();
         services.AddSingleton<ArchitecturalEngine>();
         services.AddSingleton<AdvancedRefactoringEngine>();
         services.AddSingleton<DocumentationEngine>();
         services.AddSingleton<SecurityAndSafetyEngine>();
         services.AddSingleton<ApiIntegrationEngine>();
-        services.AddSingleton<InventoryEngine>();
         services.AddSingleton<AsyncOptimizationEngine>();
-        services.AddSingleton<InstrumentationEngine>();
         services.AddSingleton<AdvancedTypeEngine>();
         services.AddSingleton<ModernLoggingEngine>();
-        services.AddSingleton<CodeFlowEngine>();
-        services.AddSingleton<StructuralRefinementEngine>();
         services.AddSingleton<LogicOptimizationEngine>();
-        services.AddSingleton<SemanticSearchEngine>();
         services.AddSingleton<ModernizationUpgradeEngine>();
         services.AddSingleton<AsyncSafetyEngine>();
-        services.AddSingleton<ProjectStructureEngine>();
         services.AddSingleton<DeadCodeEngine>();
-        services.AddSingleton<SyntaxUpgradeEngine>();
         services.AddSingleton<RefinementEngine>();
-        services.AddSingleton<DiagnosticEngine>();
-        services.AddSingleton<SolutionManagementEngine>();
-        services.AddSingleton<MappingEngine>();
-        services.AddSingleton<IDEStyleEngine>();
-        services.AddSingleton<StandardRefactoringEngine>();
-        services.AddSingleton<ImmutabilityEngine>();
-        services.AddSingleton<CodeStyleEngine>();
-        services.AddSingleton<DependencyEngine>();
         services.AddSingleton<AdvancedLogicEngine>();
         services.AddSingleton<AdvancedStructuralEngine>();
-        services.AddSingleton<SemanticRefactoringLibrary>();
-        services.AddSingleton<GranularRefactoringEngine>();
         services.AddSingleton<ApiAutomationEngine>();
-        services.AddSingleton<ControlFlowEngine>();
         services.AddSingleton<HealthOrchestrationEngine>();
-        services.AddSingleton<SymbolNavigationEngine>();
         services.AddSingleton<AntiPatternEngine>();
         services.AddSingleton<CloneDetectionEngine>();
         services.AddSingleton<OutParamRefactoringEngine>();
-        services.AddSingleton<DiscoveryEngine>();
-        services.AddSingleton<MsToolAugmentEngine>();
-        services.AddSingleton<CodeStyleAnalysisEngine>();
-        services.AddSingleton<ProjectConsistencyEngine>();
-        services.AddSingleton<BreakingChangeEngine>();
         services.AddSingleton<PathDrivenTestEngine>();
-        services.AddSingleton<StackOverflowEngine>();
         services.AddSingleton<AsyncBatchEngine>();
         services.AddSingleton<MigrationLedger>();
 
@@ -153,23 +126,22 @@ public static class RoslynSentinelServiceExtensionsAdvanced
 
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional) and the centralized error filter.
+    /// Delegates the modes/tools/filters Advanced shares with Basic to
+    /// <see cref="RoslynSentinelServiceExtensionsBasic.AddRoslynSentinelToolsBasic"/> (the shared
+    /// base — this used to be a fully separate hand-duplicated list, which is how it drifted out
+    /// of sync with Basic's filter set: Basic's content-drift-check filter was missing here for a
+    /// time because nothing forced the two lists to stay in sync). Only registers the additional
+    /// tool classes/modes Advanced has that Basic doesn't.
     /// </summary>
     public static IMcpServerBuilder AddRoslynSentinelToolsAdvanced(
         this IMcpServerBuilder mcpBuilder,
         IServiceCollection services,
         HashSet<string> activeModes)
     {
-        if (activeModes.Contains("Workspace"))
-        {
-            services.AddSingleton<SentinelWorkspaceTools>();
-            mcpBuilder.WithTools<SentinelWorkspaceTools>();
-            services.AddSingleton<DocumentationTools>();
-            mcpBuilder.WithTools<DocumentationTools>();
-            services.AddSingleton<SentinelSymbolTools>();
-            mcpBuilder.WithTools<SentinelSymbolTools>();
-            services.AddSingleton<GitTools>();
-            mcpBuilder.WithTools<GitTools>();
-        }
+        // Registers Workspace-mode tools, Refactor-mode's SentinelRefactoringTools/
+        // SentinelAugmentTools, and both request filters (including the drift-check filter).
+        mcpBuilder.AddRoslynSentinelToolsBasic(services, activeModes);
+
         if (activeModes.Contains("Intelligence"))
         {
             services.AddSingleton<SentinelIntelligenceTools>();
@@ -179,12 +151,9 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         }
         if (activeModes.Contains("Refactor"))
         {
-            services.AddSingleton<SentinelRefactoringTools>();
-            mcpBuilder.WithTools<SentinelRefactoringTools>();
+            // SentinelRefactoringTools/SentinelAugmentTools already registered above via Basic.
             services.AddSingleton<SentinelAdvancedRefactoringTools>();
             mcpBuilder.WithTools<SentinelAdvancedRefactoringTools>();
-            services.AddSingleton<SentinelAugmentTools>();
-            mcpBuilder.WithTools<SentinelAugmentTools>();
         }
         if (activeModes.Contains("Modernize"))
         {
@@ -212,41 +181,6 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             services.AddSingleton<SentinelAsyncifyTools>();
             mcpBuilder.WithTools<SentinelAsyncifyTools>();
         }
-
-        // Centralized error-to-success filter:
-        // Converts "No solution is loaded" InvalidOperationException into a successful
-        // CallToolResult so the agent displays the helpful message rather than a generic error.
-        mcpBuilder.WithRequestFilters(filters =>
-        {
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
-                {
-                    try
-                    {
-                        return await next(context, cancellationToken);
-                    }
-                    catch (InvalidOperationException ex) when (ex.Message.StartsWith("No solution is loaded", StringComparison.Ordinal))
-                    {
-                        return new ModelContextProtocol.Protocol.CallToolResult
-                        {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                            IsError = false,
-                        };
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
-
-                        return new ModelContextProtocol.Protocol.CallToolResult
-                        {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                            IsError = false,
-                        };
-                    }
-                }));
-        });
 
         return mcpBuilder;
     }

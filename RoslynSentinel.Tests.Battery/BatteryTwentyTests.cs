@@ -39,7 +39,7 @@ public class BatteryTwentyTests
         _tools = new SentinelWorkspaceTools(
             _workspaceManager, _validationEngine, _diffEngine, _diagnosticEngine,
             _solutionManagementEngine, _structuralRefinementEngine, _dependencyEngine,
-            _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance);
+            _projectConsistencyEngine, _config, NullLogger<SentinelWorkspaceTools>.Instance, new BuildEngine(_workspaceManager, _diagnosticEngine));
     }
 
     [TearDown]
@@ -532,6 +532,56 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _tools.GetDiagnostics(ToolScope.solution);
         Assert.That(result, Is.Not.Null);
+    }
+
+    // --- Build ---
+
+    [Test]
+    public async Task Build_QuickBuild_CleanSource_ReturnsSuccess()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (BuildResult)result.Data!;
+        Assert.That(data.BuildSucceeded, Is.True);
+        Assert.That(data.ErrorCount, Is.EqualTo(0));
+        Assert.That(data.ExitCode, Is.EqualTo(-1), "quickBuild does not run a subprocess.");
+    }
+
+    [Test]
+    public async Task Build_QuickBuild_SourceWithCompileError_ReturnsBuildFailure()
+    {
+        SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
+        var result = await _tools.Build(BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.BuildSucceeded.");
+        var data = (BuildResult)result.Data!;
+        Assert.That(data.BuildSucceeded, Is.False);
+        Assert.That(data.ErrorCount, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public async Task GetDiagnostics_VerifyQuickBuild_AttachesBuildVerification()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.GetDiagnostics(ToolScope.solution, verify: BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (DiagnosticSummary)result.Data!;
+        Assert.That(data.BuildVerification, Is.Not.Null);
+        Assert.That(data.BuildVerification!.BuildSucceeded, Is.True);
+    }
+
+    [Test]
+    public async Task GetWorkspaceHealth_VerifyQuickBuild_AttachesBuildVerification()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _tools.GetWorkspaceHealth(verify: BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.Success, Is.True);
+        var data = (WorkspaceHealthReport)result.Data!;
+        Assert.That(data.BuildVerification, Is.Not.Null);
     }
 
     // --- SplitProjectByFolder ---

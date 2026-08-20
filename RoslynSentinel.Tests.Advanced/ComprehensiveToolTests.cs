@@ -133,7 +133,8 @@ public class ComprehensiveToolTests
             _dependencyEngine,
             new ProjectConsistencyEngine(_workspaceManager),
             _config,
-            NullLogger<SentinelWorkspaceTools>.Instance);
+            NullLogger<SentinelWorkspaceTools>.Instance,
+            new BuildEngine(_workspaceManager, _diagnosticEngine));
         _intelligenceTools = new SentinelIntelligenceTools(_impactAnalyzer,
             _semanticSearchEngine,
             _metricsEngine,

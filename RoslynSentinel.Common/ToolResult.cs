@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 
 namespace RoslynSentinel.Common;
 
@@ -8,6 +8,7 @@ public static class ToolErrorCode
     public const string SolutionNotLoaded = "SolutionNotLoaded";
     public const string FeatureDisabled = "FeatureDisabled";
     public const string InvalidArgument = "InvalidArgument";
+    public const string BuildFailed = "BuildFailed";
     public const string Exception = "Exception";
 }
 
@@ -19,34 +20,55 @@ public static class ToolErrorCode
 /// </summary>
 public record ToolResult<T>
 {
-    /// <summary>Threshold in bytes for inlining scan results. Results exceeding this size are written to disk.</summary>
-    internal const int ThresholdBytes = 30 * 1024;
-
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
     {
         get; init;
     }
 
-    /// <summary>Inline payload. Non-null on success when the result fit below the size threshold.</summary>
+    /// <summary>
+    /// Inline payload. A plain passthrough - this record does not decide on its own whether a
+    /// value is "too large," since doing that here would need an async disk write inside a
+    /// property accessor, which isn't possible. Callers that might produce an oversized payload
+    /// should use <see cref="ForPossiblyLargeDataAsync"/> instead of setting this directly.
+    /// </summary>
     public T? Data
     {
-        get;
-        init
+        get; init;
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ToolResult{T}"/> for <paramref name="data"/>, offloading to disk via
+    /// <see cref="ScanResultHelper.StoreScanResultAsync{T}"/> (populating <see cref="LargeResult"/>
+    /// instead of <see cref="Data"/>) when the serialized payload exceeds
+    /// <see cref="ScanResultHelper.ThresholdBytes"/>. Use this instead of hand-rolling a
+    /// size-check/write-to-disk block per tool (that duplication is what let GetMethodSource and
+    /// ReadFile's offload paths silently diverge from GetScanResult's expected file format).
+    /// </summary>
+    public static async Task<ToolResult<T>> ForPossiblyLargeDataAsync(
+        T data, string? solutionRoot, string resultType, ScanWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null)
+    {
+        var stored = await ScanResultHelper.StoreScanResultAsync(data, solutionRoot, wrapperType);
+        if (!stored.offloaded)
         {
-            if (value is null) { return; }
-            string json = JsonSerializer.Serialize(value);
-            if (json.Length > ThresholdBytes)
-            {
-                // TODO: write to disk, set _largeResult
-                // For now just set the field to the value, but in a real implementation this would be null and the LargeResult property would be populated instead.
-                field = value;
-            }
-            else
-            {
-                field = value;
-            }
+            return new ToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };
         }
+
+        return new ToolResult<T>
+        {
+            Success = true,
+            TotalRecords = totalRecords,
+            WorkspaceVersion = workspaceVersion,
+            LargeResult = new LargeResultInfo(
+                resultType: resultType,
+                writtenToFile: true,
+                filePath: stored.filePath,
+                scanId: stored.scanId!,
+                sizeBytes: stored.jsonBytes.Length,
+                totalRecords: totalRecords ?? 1,
+                message: $"Result is {stored.jsonBytes.Length} bytes (threshold: {ScanResultHelper.ThresholdBytes}). " +
+                         $"Use GetScanResult(scanId: \"{stored.scanId}\") to page through results.")
+        };
     }
 
     /// <summary>Error details. Non-null when <see cref="Success"/> is false.</summary>

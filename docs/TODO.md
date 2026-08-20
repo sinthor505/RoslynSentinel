@@ -4,6 +4,32 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## `SentinelAsyncifyTools`'s `MigrationScanSummary` overflow writer is unreadable by `GetScanResult`
+
+**Found:** 2026-08-20/21, via the offload-mechanism survey done while fixing the `ToolResult<T>.Data`
+stub and `ApplyDiff`'s response-size issue (see `docs/TODO.md`'s now-removed entries on those, and
+the updated `project_offload_helper_partial_wiring` memory).
+
+**What:** `SentinelAsyncifyTools.cs` (~line 220-277, comment "B1 Fix 4: 10 KB overflow safety net —
+should be unreachable with slim types + caps") hand-writes the raw serialized `MigrationScanSummary`
+directly to `.roslynsentinel/scans/scan_{timestamp}_{scanId}.json` when it exceeds 10KB
+(`SummaryThresholdBytes`) — the same class of bug `GetMethodSource`/`ReadFile` had (and which was
+fixed 2026-08-20/21): the file is **not** wrapped in a `ScanWapper { Type, Data }` envelope, and
+there is no `ScanWrapperType.MigrationScanSummary` case, so `GetScanResult`'s
+`JsonSerializer.Deserialize<ScanWapper>` will fail to parse it correctly. Its own `LargeResultInfo`
+message still tells the caller to call `get_scan_result(scanId: ...)`, which will not work.
+
+**Why this matters:** the code comment suggests this path is expected to be rare ("should be
+unreachable with slim types + caps"), which is likely why it's gone unnoticed — but if it ever does
+trigger, the caller gets an opaque `"Failed to read scan file."` error instead of the summary,
+with no indication that the fallback path itself is broken.
+
+**Suggested approach:** same fix as `GetMethodSource`/`ReadFile` — add
+`ScanWrapperType.MigrationScanSummary`, add a matching case to `GetScanResult`'s switch (a single
+object, not a list, so `TotalRecords`/`HasMorePages` should short-circuit to `1`/`false` the same
+way the `MethodSource`/`FileSource` cases do), and replace the hand-written
+`File.WriteAllTextAsync` block with a call to `ScanResultHelper.StoreScanResultAsync`.
+
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 
 **Found:** 2026-08-19, while reviewing whether `UsingDirective` needed a `simplifySingleFile`/
@@ -157,3 +183,121 @@ position, which is a larger, more careful change than the guards applied elsewhe
 whether any other `RefactoringEngine`/`StructuralRefinementEngine` methods share this same
 `if (contextSnippet != null) { position } else { name }` shape (not yet audited) before fixing, so all
 affected methods get the same treatment in one pass rather than one at a time as each is found live.
+
+## No tool for creating or deleting a whole file
+
+**Found:** 2026-08-19/20, while implementing the `Build` tool (`docs/plan-build-verification-tool-v1.md`)
+using the MCP tools on their own source as a dogfooding exercise. Needed to create a brand-new
+`BuildEngine.cs` file and, after placing it in the wrong project, delete it.
+
+**What:** no tool is named or described for "create a new file" or "delete a file." `ApplyDiff`
+(`changesetFormat: files`) happens to work for creation — passing a path that doesn't exist yet in
+the `changes` dict creates it (confirmed: `preImages` reports `null` for that path on success) — but
+nothing in its `[Description]` mentions this, so an agent has no reason to expect it. There is no
+equivalent for deletion; the fallback was a raw filesystem `rm`, entirely outside the MCP tool
+surface and its validation/versioning/drift-tracking.
+
+**Why this matters:** any task that needs a new top-level type in a new file (a new engine class, a
+new tool class) or needs to remove one (abandoning a wrong placement, deleting a whole obsolete
+file) currently has no first-class tool path. Silent reliance on `ApplyDiff`'s undocumented
+file-creation side effect is fragile — nothing guarantees that behavior is intentional/stable rather
+than incidental to how it resolves a target path.
+
+**Suggested approach:** either (1) document `ApplyDiff`'s file-creation behavior explicitly in its
+`[Description]` and add a symmetric `deleteFile`/`action: delete` path that goes through the same
+validation/`workspaceVersion`/undo machinery as every other write, or (2) add small dedicated
+`CreateFile`/`DeleteFile` tools. Whichever direction, the delete side should update the in-memory
+workspace and stamp `WorkspaceVersion` like other mutating tools, not bypass it.
+
+## `ApplyDiff` reflows far more of the file than the target hunk
+
+**Found:** 2026-08-19/20, while implementing the `Build` tool. A handful of small, targeted diffs
+against `SentinelWorkspaceTools.cs` (adding one method, one parameter, a few lines inside two
+existing methods) produced a cumulative git diff of 571 insertions / 478 deletions on a file where
+the actual logical changes totaled well under 100 lines. Confirmed behavior-preserving each time
+(`GetDiagnostics` showed 0 new errors/warnings after every edit), so this is a formatting/reflow
+issue, not a correctness one — but it's a real usability and code-review cost.
+
+**What:** `ApplyDiff` appears to reformat substantially more of the surrounding file than the hunk it
+was asked to change (e.g. collapsing/reflowing multi-line method signatures elsewhere in the file
+that weren't part of the requested edit). Andrew noted this matches reflow behavior observed in
+other Claude sessions working on this codebase — this may not be specific to the `Build` tool work,
+and is likely a pre-existing, previously-unfixed issue in the shared write/formatting path `ApplyDiff`
+uses.
+
+**Why this matters:** beyond noisy diffs, `docs/plan-symbol-tool-hardening-v1.md` already documents a
+related, higher-severity variant of this exact class of bug (whole-file `NormalizeWhitespace()` on
+write shifting line numbers out from under an agent's cached references) as a fixed defect. Worth
+checking whether `ApplyDiff`'s reflow is the same root cause resurfacing on a different write path,
+or a distinct issue, before attempting a fix.
+
+**Suggested approach:** needs further review/repro before fixing — capture a minimal repro (a single
+small diff against a multi-hundred-line file) and diff the exact before/after byte content to
+characterize what triggers the reflow (whole-method reformatting? whole-file? specific node types?)
+rather than guessing at a fix from the one large repro seen here.
+
+## `AddConstructorParameter`/`ConstructorParameter` collapses multi-line signatures onto one line
+
+**Found:** 2026-08-19, while implementing the `Build` tool, using the (since renamed/consolidated)
+`AddConstructorParameter` tool to add a `BuildEngine` parameter to `SentinelWorkspaceTools`'s
+constructor. Note: this tool has since been renamed to `ConstructorParameter(operation: add)` by a
+concurrent session (confirmed live — `AddConstructorParameter` no longer resolves, `ConstructorParameter`
+does) — re-verify this repros on the current tool before fixing, since the consolidation may have
+touched the same code path.
+
+**What:** the target constructor's parameter list was originally formatted one parameter per line
+(a 10-parameter DI constructor). After the tool added the 11th parameter, the entire parameter list
+and the constructor's opening line were collapsed onto a single very long line. The field
+declaration and body-assignment ordering were also not inserted in the same relative position as
+the other fields/assignments (appended at the end rather than matching declaration order) — lower
+severity, but worth fixing in the same pass if the formatting fix touches that code anyway.
+
+**Why this matters:** same class of code-review/diff-noise cost as the `ApplyDiff` reflow issue above,
+though possibly a different code path (constructor-parameter insertion, not a generic diff apply) —
+don't assume they share a root cause without checking.
+
+**Suggested approach:** repro against current `ConstructorParameter(operation: add)` on a
+multi-line constructor before diagnosing; if confirmed, the fix likely belongs in whatever formatting
+step runs after the new parameter/field/assignment are inserted (preserve existing line-break style
+rather than normalizing to single-line).
+
+## Mutating tools don't return the resulting content, forcing a separate `ReadFile` to see the outcome
+
+**Found:** 2026-08-19/20, raised by Andrew while reviewing the `Build` tool implementation session.
+
+**What:** per Andrew, mutating tools originally returned the entire new file content on every write,
+which bloated agent context (especially on large files) — this was since changed so mutating tools
+return only a `changeId`/success flag, not the resulting text. The consequence: an agent that wants
+to confirm what its edit actually produced (e.g. see the replaced member's new text, confirm a
+generated signature looks right) must make a *second* tool call (`ReadFile`/`GetMethodSource`) to see
+it — which defeats the original goal of reducing tool-call count and context bloat, just shifts the
+cost from "one bloated response" to "two calls, one of which re-fetches what was just written."
+`docs/plan-symbol-tool-hardening-v1.md`'s own review guidance ("flag it if the agent never re-reads
+the file/method afterward to confirm... actually look correct") implicitly assumes agents *should* be
+re-reading after every write, which is exactly the extra round-trip this behavior forces.
+
+**Why this matters:** the large-result offload pattern is the mechanism that should resolve this
+tension: return the actual result (e.g. the new member's text, or a small tail/diff of the change)
+inline when it's small, and only offload to disk when it's genuinely large — rather than
+unconditionally omitting it. Right now the tool families that used the working offload mechanism
+(`SentinelIntelligenceTools`/`SentinelScanTools`/`SentinelAsyncifyTools`) aren't the ones doing small
+in-place edits (`Member`/`ReplaceMember`/`ConstructorParameter`/etc.), so the tools that would most
+benefit from "return the small result inline, offload only if large" don't have that machinery wired
+at all.
+
+**Update 2026-08-20/21:** the blocker this entry originally named — the `ToolResult<T>.Data`
+offload stub — is now finished. `ToolResult<T>.ForPossiblyLargeDataAsync(data, solutionRoot,
+resultType, wrapperType, ...)` (`RoslynSentinel.Common/ToolResult.cs`) is the new factory: small
+results go inline, large ones offload via `ScanResultHelper.StoreScanResultAsync` and populate
+`LargeResult`. `ApplyDiff` itself was also separately fixed in the same pass (no longer inlines
+`PreImages` by default; added `returnDiff` — see the removed "`ApplyDiff` response size..." entry
+this superseded). **What's still open:** the actual audit-and-wire-up below — `Member`/
+`ReplaceMember`/`ConstructorParameter`/etc. still only return a bare success/changeId, not their
+changed content. The mechanism they'd use now exists; nothing has been wired to it yet.
+
+**Suggested approach:** audit which mutating tools currently return only a bare success/changeId
+and add the actual changed content (e.g. `Member(replace)` returning the new member's source,
+`AddMember` returning the added member's source) through
+`ToolResult<T>.ForPossiblyLargeDataAsync` — small results inline, large ones offloaded, never
+unconditionally dropped.
+

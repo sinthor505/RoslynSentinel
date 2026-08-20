@@ -83,5 +83,6 @@ public record DiagnosticsSummaryResult(
     int TotalIssues,
     int Errors,
     int Warnings,
-    List<DiagnosticGroupSummary> TopIssues
+    List<DiagnosticGroupSummary> TopIssues,
+    BuildResult? BuildVerification = null
 );

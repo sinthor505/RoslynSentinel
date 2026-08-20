@@ -308,8 +308,10 @@ region boundaries and was being copied verbatim into the synthesized signature. 
 flow-state-only nullable annotation before rendering the type string. If a similarly-shaped selection
 (a block that uses a reference-typed local/parameter declared before it) still
 produces a nullable-annotated parameter for an obviously-non-null variable, that is a regression —
-verify with a real build (`dotnet build`), not just `GetDiagnostics`' summary count, since a single
-new warning is easy to miss if only checking for `errors: 0`.
+verify with a real build, not just `GetDiagnostics`' default in-memory diagnostics, since a single
+new warning is easy to miss if only checking for `errors: 0`. As of 2026-08-19, pass
+`verify: "fullBuild"` to `GetDiagnostics` (or call the standalone `Build` tool) to run `dotnet build`
+and get the same warning in one call, rather than shelling out separately.
 
 **Fixed regression — single-statement-before-a-loop ambiguity (attempt 4):** a live agent run passed
 `contextSnippet: "decimal runningTotal = 0m;"` — matching only the accumulator's *initialization*

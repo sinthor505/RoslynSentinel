@@ -626,6 +626,15 @@ public class SentinelScanTools
                       _jsonOptions)
                   ?? new ScanWapper();
 
+            if (all.Data == null)
+            {
+                return new ToolResult<object>
+                {
+                    Success = false,
+                    Error = new ResultError("Exception", "Scan file has no Data payload — it may be corrupt.")
+                };
+            }
+
             ToolResult<object> result;
 
             switch (all.Type)
@@ -666,6 +675,30 @@ public class SentinelScanTools
                         };
                         break;
                     }
+                case ScanWrapperType.MethodSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // GetMethodSource returns inline when the result is small enough not to offload.
+                        var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = methodSource
+                        };
+                        break;
+                    }
+                case ScanWrapperType.FileSource:
+                    {
+                        // Single object, not a list - limit/offset don't apply, matching the shape
+                        // ReadFile returns inline when the result is small enough not to offload.
+                        var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = fileSource
+                        };
+                        break;
+                    }
                 default:
                     {
                         return new ToolResult<object>
@@ -678,11 +711,25 @@ public class SentinelScanTools
             }
             ;
 
-            var dataArray = all.Data as JsonArray
-                ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
-                ?? [];
-            int totalRecords = dataArray.Count;
-            bool hasMorePages = (offset + limit) < totalRecords;
+            // MethodSource/FileSource wrap a single object, not a list - the array-shaped
+            // TotalRecords/HasMorePages computation below doesn't apply (and AsArray() on a
+            // single-object payload's first property, e.g. a string Signature, throws rather than
+            // returning null, since it's the wrong node kind rather than a missing one).
+            int totalRecords;
+            bool hasMorePages;
+            if (all.Type is ScanWrapperType.MethodSource or ScanWrapperType.FileSource)
+            {
+                totalRecords = 1;
+                hasMorePages = false;
+            }
+            else
+            {
+                var dataArray = all.Data as JsonArray
+                    ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
+                    ?? [];
+                totalRecords = dataArray.Count;
+                hasMorePages = (offset + limit) < totalRecords;
+            }
 
             return new ToolResult<object>
             {
@@ -704,29 +751,6 @@ public class SentinelScanTools
                               "Failed to read scan file.", ex.Message)
             };
         }
-    }
-
-    internal static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(T data, string? solutionRoot, ScanWrapperType wrapperType)
-    {
-        var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
-        if (jsonBytes.Length <= ScanResultHelper.ThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
-        {
-            return (false, null, null, jsonBytes);
-        }
-
-        var wrapper = new ScanWapper
-        {
-            Type = wrapperType,
-            Data = JsonSerializer.SerializeToNode(data, _jsonOptions)
-        };
-
-        var scanId = Guid.NewGuid().ToString("N");
-        var dir = Path.Combine(solutionRoot, ".roslynsentinel", "scans");
-        Directory.CreateDirectory(dir);
-        var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
-        var filePath = Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
-        await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(wrapper, _jsonOptions), new UTF8Encoding(false));
-        return (true, filePath, scanId, jsonBytes);
     }
 
     internal sealed record ScanDescriptor(DetectorId Id, string Domain, string ScopeHint, string Description);
@@ -978,7 +1002,7 @@ public class SentinelScanTools
             {
                 var apiResult = await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
 
-                var summaryResults = await SentinelScanTools.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
 
                 if (summaryResults.offloaded)
                 {
@@ -1023,7 +1047,7 @@ public class SentinelScanTools
 
                 var apiResult = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
 
-                var summaryResults = await SentinelScanTools.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
 
                 if (summaryResults.offloaded)
                 {

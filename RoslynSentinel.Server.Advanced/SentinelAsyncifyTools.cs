@@ -312,7 +312,7 @@ public class SentinelAsyncifyTools
             var page = allFindings.Skip(offset).Take(limit).ToList();
             bool hasMorePages = (offset + limit) < totalCount;
 
-            var (offloaded, storedPath, scanId, allBytes) = await SentinelScanTools.StoreScanResultAsync(
+            var (offloaded, storedPath, scanId, allBytes) = await ScanResultHelper.StoreScanResultAsync(
                 allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList);
 
             if (offloaded)
