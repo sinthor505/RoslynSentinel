@@ -70,7 +70,8 @@ public enum ScanWrapperType
     CodeInventoryReport,
     MethodSource,
     FileSource,
-    MigrationScanSummary
+    MigrationScanSummary,
+    MemberChangedContent
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>
@@ -81,4 +82,11 @@ public record FileSourceResult
     public int EndLine { get; init; }
     public int TotalLines { get; init; }
     public string Source { get; init; } = "";
+}
+
+/// <summary>Offloaded payload shape for a mutating member/constructor-parameter tool's changed content, too large to inline.</summary>
+public record MemberChangedContentResult
+{
+    public PersistentWorkspaceManager.AppliedChangeSummary Summary { get; init; } = null!;
+    public string ChangedContent { get; init; } = "";
 }

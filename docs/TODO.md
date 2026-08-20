@@ -290,13 +290,47 @@ resultType, wrapperType, ...)` (`RoslynSentinel.Common/ToolResult.cs`) is the ne
 results go inline, large ones offload via `ScanResultHelper.StoreScanResultAsync` and populate
 `LargeResult`. `ApplyDiff` itself was also separately fixed in the same pass (no longer inlines
 `PreImages` by default; added `returnDiff` — see the removed "`ApplyDiff` response size..." entry
-this superseded). **What's still open:** the actual audit-and-wire-up below — `Member`/
-`ReplaceMember`/`ConstructorParameter`/etc. still only return a bare success/changeId, not their
-changed content. The mechanism they'd use now exists; nothing has been wired to it yet.
+this superseded).
 
-**Suggested approach:** audit which mutating tools currently return only a bare success/changeId
-and add the actual changed content (e.g. `Member(replace)` returning the new member's source,
-`AddMember` returning the added member's source) through
-`ToolResult<T>.ForPossiblyLargeDataAsync` — small results inline, large ones offloaded, never
-unconditionally dropped.
+**Update 2026-08-20/21 (second pass):** `Member` (`add`/`remove`/`replace`) and `ConstructorParameter`
+(`add`/`remove`) in `SentinelRefactoringTools.cs` are now wired — this was the mechanism's first
+real caller (it had zero call sites before this). Added `ScanWrapperType.MemberChangedContent` +
+`MemberChangedContentResult` (`RoslynSentinel.Common/ScanResultHelper.cs`) and a matching
+`GetScanResult` switch case, mirroring `MethodSource`/`FileSource`/`MigrationScanSummary`. Notes on
+what "changed content" means per operation, since it isn't uniform:
+- `Member(replace)`: `newMemberSource` is already known verbatim from the caller — echoed back with
+  zero extra work.
+- `Member(add)`, raw-source path (`newMemberSource` supplied): same, echoed back verbatim.
+- `Member(add)`, typed-generation path (`typedKind`+`typedName`+`typedType`, no `newMemberSource`):
+  **`ChangedContent` is left empty.** The actual generated source is built inside
+  `RefactoringEngine.AddPropertyAsync`/`AddFieldAsync` and never returned separately from the
+  whole-file `UpdatedText` — reconstructing it at the tool layer would duplicate the engine's
+  formatting logic and drift if that formatting ever changes. Revisit if `AddPropertyAsync`/
+  `AddFieldAsync` are ever changed to return the generated fragment alongside `UpdatedText`.
+- `Member(remove)`: unchanged, still bare `AppliedChangeSummary`. There's no new content to show
+  for a removal — the `Description` field ("Removes 'X' from Y.cs") already says what happened, and
+  forcing a `ChangedContent` field onto this operation would just be an empty string.
+- `ConstructorParameter(add)`: `ChangedContent` is `"{paramType} {paramName}"`, reconstructed at the
+  tool layer (both values are caller-supplied, so this isn't duplicating engine logic the way the
+  `Member(add)` typed path would).
+- `ConstructorParameter(remove)`: same reasoning as `Member(remove)` — bare `AppliedChangeSummary`.
+
+**Still open — remaining ~24 tools not yet wired,** all in the same "return bare `AppliedChangeSummary`,
+built on `ValidateAndApplyAsync`" shape, inventoried during this pass:
+- `RoslynSentinel.Server.Basic/SentinelRefactoringTools.cs`: `RenameSymbol` (has richer `Data` already,
+  worth checking if it needs `ChangedContent` too), `GenerateMapping`, `UsingDirective` (add/remove),
+  `ModifyEnum`, `ChangeAccessibility`, `SummaryComment` (add/remove), `ExtractLocalVariable`,
+  `ExtractMethodSafe`, `ModifyAttribute` (add/replace/remove), `ModifyModifier` (add/remove),
+  `ModifyBaseType` (add/remove), `SyncTypeAndFilename`.
+- `RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs`: `ChangeSignature`,
+  `ConvertAnonymousToNamed`, `InlineClass`, `MoveAllTypesToFiles`, `InvertAssignments`, `PullUpMember`,
+  `IntroduceParameterObject`, `Introduce`, `ExtractMembers`, `SyncInterface`, `Inline`, `WrapRange`,
+  `MoveType`.
+
+**Suggested approach for the rest:** same pattern as `Member`/`ConstructorParameter` above — for each
+tool, decide per-operation whether the changed content is (a) already known verbatim from a caller
+parameter (cheapest, prefer this), (b) cheaply reconstructable from caller-supplied parts without
+duplicating engine formatting logic, or (c) not available without either engine changes or accepting
+the whole-file `UpdatedText`/diff (in which case, leave it out rather than duplicating engine logic
+or reintroducing the original context-bloat problem this mechanism was built to avoid).
 

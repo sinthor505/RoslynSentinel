@@ -402,7 +402,14 @@ public class SentinelRefactoringTools
                 var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress, cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
-                return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    new MemberChangedContentResult
+                    {
+                        Summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff),
+                        ChangedContent = newMemberSource
+                    },
+                    _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                    workspaceVersion: _workspaceManager.WorkspaceVersion);
             }
 
             if (operation == MemberAction.remove)
@@ -455,6 +462,12 @@ public class SentinelRefactoringTools
 
             DocumentEditResult updated;
             string description;
+            // Only the raw-source path has the added member's exact text available verbatim
+            // (the caller already supplied it). The typed-generation path (AddPropertyAsync/
+            // AddFieldAsync) builds its source string inside the engine and doesn't return it
+            // separately from the whole-file UpdatedText, so ChangedContent stays null there
+            // rather than duplicating the engine's formatting logic at the tool layer.
+            string? addedMemberSource = hasTypedSpec ? null : newMemberSource;
             if (hasTypedSpec)
             {
                 if (string.IsNullOrEmpty(typedName) || string.IsNullOrEmpty(typedType))
@@ -504,7 +517,14 @@ public class SentinelRefactoringTools
             var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (addApply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = addApply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(addApply.ChangeId, [filePath], description, addApply.DryRun, addApply.Diff, _workspaceManager.WorkspaceVersion) };
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult
+                {
+                    Summary = new PersistentWorkspaceManager.AppliedChangeSummary(addApply.ChangeId, [filePath], description, addApply.DryRun, addApply.Diff),
+                    ChangedContent = addedMemberSource ?? ""
+                },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
         {
@@ -804,7 +824,19 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff) };
+
+            // Added-parameter text is reconstructed here (paramType/paramName are already known)
+            // rather than extracted from AddConstructorParameterAsync's internal formatting — same
+            // reasoning as Member(add)'s typed-generation path. Remove has no new content to show.
+            var changedContent = operation == AddRemoveViewAction.add ? $"{paramType} {paramName}" : "";
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult
+                {
+                    Summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff),
+                    ChangedContent = changedContent
+                },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
         {
