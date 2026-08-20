@@ -4,6 +4,51 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## `ApplyDiff`'s hunk-anchor failure has a misleading error message
+
+**Found:** 2026-08-20/21, while migrating two tests in `BugFixTests.cs` off a dead
+`RefactoringEngine.SafeDeleteSymbolAsync` copy (see commit "Merge SafeDeleteSymbolAsync's
+reflection-risk check..."). A correctly-formed unified diff (verified byte-for-byte against the
+file's actual current content via `Read`/`awk`/`cat -A` immediately before each attempt, with a
+correct `@@` line-count header) repeatedly failed to apply against a target line that provably
+existed at exactly the declared position.
+
+**What:** the failure surfaces two misleading messages stacked together:
+1. The outer wrapper always says *"ApplyDiff diff apply for '\<path\>' failed unexpectedly
+   (InvalidOperationException). Check that the solution is loaded and the file path is valid."* —
+   even when the solution was loaded and the path was valid throughout (confirmed: the same path
+   succeeded on a retry moments later, and direct reads confirmed the file existed the whole time).
+   This phrasing steers a caller toward the wrong diagnosis (workspace/path problem) when the real
+   failure is hunk-anchoring against content that's right where it's declared to be.
+2. The inner message — *"Diff application failed: hunk '@@ -3267,14 +3267,15 @@' declares line
+   3267, but its content wasn't found there or within 60 lines in either direction. First expected
+   line: \"SetSource(code, \"Service.cs\");\". Regenerate the diff against the file's current
+   content, or use a whole-member/whole-file replacement tool instead."* — this is the actually
+   relevant error, but the "First expected line" it names was independently confirmed (via a
+   separate `Read` and a raw `awk`/`cat -A` byte dump immediately beforehand) to be present
+   verbatim at exactly that line number, with no leading/trailing whitespace or line-ending
+   difference. Two consecutive attempts against the same, freshly-re-verified location both failed
+   identically; the edit only succeeded once done via direct `Edit` instead.
+
+**Why this matters:** at least one *other* occurrence in the same session of this exact message
+turned out to be a genuine hunk-math mistake on the caller's side (a wrong `@@` line-count in the
+header) — so the message is sometimes accurate. But this occurrence had a verified-correct header
+and verified-matching content, meaning the anchor search itself can fail even when its own stated
+precondition (content present at the declared line) holds. The message doesn't distinguish these
+two cases, so a caller can't tell "your diff is malformed" from "the tool's anchor search has a
+bug" without independently re-verifying file content outside the tool, as done here.
+
+**Suggested approach:** needs a minimal repro before fixing — the failing case here involved a
+hunk whose first line was a blank context line (the previous hunk attempt at the same edit,
+starting one line later at the `SetSource(...)` line itself, failed identically). Worth checking
+whether the anchor search mishandles hunks with specific characteristics (leading blank context
+line, `@@` header math that's technically correct but structured unusually, or something about a
+duplicate `SetSource(code, "Service.cs");` line appearing 9 times elsewhere in the same file
+confusing the "search within 60 lines" fallback) before guessing at a fix. At minimum, the outer
+wrapper's generic "check the solution is loaded and the path is valid" text should not be shown
+for this specific inner failure — it's never the actual cause when the inner hunk-anchor message is
+present, and it costs a caller time chasing the wrong hypothesis.
+
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 
 **Found:** 2026-08-19, while reviewing whether `UsingDirective` needed a `simplifySingleFile`/
@@ -142,32 +187,53 @@ validation/`workspaceVersion`/undo machinery as every other write, or (2) add sm
 `CreateFile`/`DeleteFile` tools. Whichever direction, the delete side should update the in-memory
 workspace and stamp `WorkspaceVersion` like other mutating tools, not bypass it.
 
-## `ApplyDiff` reflows far more of the file than the target hunk
+## `ApplyDiff` reflows far more of the file than the target hunk — root cause found: whole-file CRLF normalization
 
-**Found:** 2026-08-19/20, while implementing the `Build` tool. A handful of small, targeted diffs
-against `SentinelWorkspaceTools.cs` (adding one method, one parameter, a few lines inside two
-existing methods) produced a cumulative git diff of 571 insertions / 478 deletions on a file where
-the actual logical changes totaled well under 100 lines. Confirmed behavior-preserving each time
-(`GetDiagnostics` showed 0 new errors/warnings after every edit), so this is a formatting/reflow
-issue, not a correctness one — but it's a real usability and code-review cost.
+**Found:** 2026-08-19/20, while implementing the `Build` tool (original repro, unconfirmed root
+cause). **Root cause isolated:** 2026-08-20/21, while merging `SafeDeleteSymbolAsync`'s
+reflection-risk check (see commit "Merge SafeDeleteSymbolAsync's reflection-risk check..."). A
+handful of small, targeted `ApplyDiff` calls (1-11 real changed lines each) against 5 different
+files produced a combined git diff of thousands of lines — `BugFixTests.cs` alone showed 8188
+changed lines for what should have been ~6 real lines. All behavior-preserving (`Build` showed 0
+new errors after every edit), so this is a formatting/reflow issue, not a correctness one — but a
+severe code-review/diff-noise cost, and the previous entry's "collapsing multi-line signatures"
+hypothesis turned out to be the wrong mechanism.
 
-**What:** `ApplyDiff` appears to reformat substantially more of the surrounding file than the hunk it
-was asked to change (e.g. collapsing/reflowing multi-line method signatures elsewhere in the file
-that weren't part of the requested edit). Andrew noted this matches reflow behavior observed in
-other Claude sessions working on this codebase — this may not be specific to the `Build` tool work,
-and is likely a pre-existing, previously-unfixed issue in the shared write/formatting path `ApplyDiff`
-uses.
+**Confirmed root cause:** `ApplyDiff`'s write path normalizes **every line ending in the whole
+file to CRLF** on every apply, regardless of the file's original predominant convention and
+regardless of hunk size. Verified by byte-level comparison (`od -tx1`) of the git blob before/after
+each of 5 `ApplyDiff` calls in the session that produced the commit above:
+- `FinalRegressionTests.cs`: 1/285 lines CRLF before → 285/285 after.
+- `BugFixTests.cs`: 1/4092 lines CRLF before → 4098/4098 after (edited via both `ApplyDiff` and
+  direct `Edit` calls — the CRLF flip happened on the `ApplyDiff`-touched portions).
+- `MassiveRefactoringTests.cs`: 2/134 CRLF before → 134/134 after (touched by exactly one
+  small `ApplyDiff` call).
+- `BatteryThirtyOneTests.cs`: 2/422 CRLF before → 422/422 after (one `ApplyDiff` call).
+- `BatteryNineTests.cs`: 1/273 CRLF before → 273/273 after (one `ApplyDiff` call).
+- Control case: `StructuralRefinementEngine.cs`, edited by 4 separate `ApplyDiff` calls in the same
+  session, was **already 100% CRLF** beforehand and stayed 100% CRLF after — no reflow-sized diff
+  resulted. This is the key data point: `ApplyDiff` normalizing to CRLF is a no-op (and produces a
+  minimal, correct-sized diff) on a file that's already all-CRLF, but reflows *every line* of a
+  file that has mixed or predominantly-LF line endings, because git then sees every line as
+  changed (the trailing `\r` becomes part of each line's content once endings are inconsistent
+  within the blob).
+- The lone stray CRLF line present in each "before" snapshot (1-2 out of hundreds) is itself
+  suspicious — likely a remnant of this exact bug firing on some earlier single-line edit to that
+  file in a prior session, never noticed because a 1-line diff doesn't look like reflow.
 
-**Why this matters:** beyond noisy diffs, `docs/plan-symbol-tool-hardening-v1.md` already documents a
-related, higher-severity variant of this exact class of bug (whole-file `NormalizeWhitespace()` on
-write shifting line numbers out from under an agent's cached references) as a fixed defect. Worth
-checking whether `ApplyDiff`'s reflow is the same root cause resurfacing on a different write path,
-or a distinct issue, before attempting a fix.
+**Why this matters:** this is a distinct root cause from (but the same symptom class as) the
+whole-file `NormalizeWhitespace()` bug `docs/plan-symbol-tool-hardening-v1.md` documents as fixed —
+that one shifted line numbers via re-indentation; this one is purely a line-ending write-time
+normalization with no semantic effect, but it inflates every git diff touching a non-uniformly-
+CRLF file to look like a full-file rewrite, defeating code review.
 
-**Suggested approach:** needs further review/repro before fixing — capture a minimal repro (a single
-small diff against a multi-hundred-line file) and diff the exact before/after byte content to
-characterize what triggers the reflow (whole-method reformatting? whole-file? specific node types?)
-rather than guessing at a fix from the one large repro seen here.
+**Suggested approach:** find wherever `ApplyDiff`'s write path re-serializes the document (likely a
+`.ToFullString()` write or a `File.WriteAllText`/`SourceText` round-trip that doesn't preserve the
+original `SourceText.ChecksumAlgorithm`/newline metadata) and make it preserve each line's existing
+ending — or at minimum detect the file's dominant line ending once and normalize consistently
+*to that*, rather than unconditionally forcing CRLF. Roslyn's `SourceText` already tracks per-file
+line-ending info; the fix likely means writing back through that instead of a raw string write that
+loses it.
 
 ## `AddConstructorParameter`/`ConstructorParameter` collapses multi-line signatures onto one line
 
