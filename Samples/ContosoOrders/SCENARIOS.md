@@ -493,6 +493,19 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   that method's resolution logic rather than the same one-line guard. See `docs/TODO.md`.
 
 ### Fixed
+- **(2026-08-19) `AddSummaryComment` silently produced malformed, doubly-nested `<summary>` tags
+  when `summaryText` was already XML-doc-comment-shaped.** Found via a live agent run (attempt 9,
+  Step 9): the agent passed `summaryText: "/// <summary>Creates a new order...</summary>"` (a
+  reasonable thing to do, since that's exactly the shape a `<summary>` doc comment takes) and the
+  tool unconditionally wrapped it again — `/// <summary>\n/// /// <summary>Creates a new
+  order...</summary>\n/// </summary>` — producing invalid nested XML doc comment markup that no
+  diagnostic catches (`GetDiagnostics`/compiler don't flag malformed doc-comment content), so the
+  tool reported success on a broken result. Fixed by adding
+  `RefactoringEngine.NormalizeSummaryText`, which strips any pre-existing `///` line-prefixes and
+  redundant `<summary>`/`</summary>` wrapper tags from `summaryText` before re-wrapping exactly
+  once — tolerant of plain prose, a full `/// <summary>...` block (single- or multi-line), or bare
+  `<summary>...</summary>` without `///` prefixes. See `RoslynSentinel.Tests.Basic/CodeEditingTests.cs`
+  for the 3 regression cases.
 - **(2026-08-19) `ReplaceMember`/`RemoveMember`/`ChangeAccessibility`/`ModifyBaseType`/
   `ModifyAttribute`/`ModifyModifier`/`AddSummaryComment`/`ModifyEnum`/`AddMember`-family/
   `AddConstructorParameter` disambiguation failures gave a bare "contextSnippet not found"/

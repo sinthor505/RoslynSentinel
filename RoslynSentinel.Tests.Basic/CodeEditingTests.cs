@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
@@ -719,6 +721,60 @@ public class Service
 
         Assert.That(result.UpdatedText, Does.Contain("New comment."));
         Assert.That(result.UpdatedText, Does.Not.Contain("Old comment."));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_CallerSuppliesAlreadyWrappedSingleLineSummary_DoesNotDoubleWrap()
+    {
+        SetSource(@"
+public class OrderService
+{
+    public Order CreateOrder(string customerId) => new Order(customerId);
+}
+", "OrderService.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "OrderService.cs", "CreateOrder",
+            "/// <summary>Creates a new order and returns it.</summary>");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// Creates a new order and returns it."));
+        Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
+        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_CallerSuppliesAlreadyWrappedMultiLineSummary_DoesNotDoubleWrap()
+    {
+        SetSource(@"
+public class Widget { }
+", "Widget2.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Widget2.cs", "Widget",
+            "/// <summary>\n/// A reusable widget.\n/// </summary>");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// A reusable widget."));
+        Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
+        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_CallerSuppliesBareSummaryTagsWithoutSlashes_StripsThemBeforeWrapping()
+    {
+        SetSource(@"
+public class Widget { }
+", "Widget3.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Widget3.cs", "Widget",
+            "<summary>A reusable widget.</summary>");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// A reusable widget."));
+        Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
+        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
     }
 
     // ══════════════════════════════════════════════════════════════

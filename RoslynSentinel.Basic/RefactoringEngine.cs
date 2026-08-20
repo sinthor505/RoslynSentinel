@@ -3619,7 +3619,8 @@ public class RefactoringEngine
             };
         }
 
-        var docText = $"/// <summary>\n/// {summaryText}\n/// </summary>\nvoid __Dummy__() {{}}";
+        var normalizedSummary = NormalizeSummaryText(summaryText);
+        var docText = $"/// <summary>\n/// {normalizedSummary}\n/// </summary>\nvoid __Dummy__() {{}}";
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia()
             .Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
@@ -3637,6 +3638,40 @@ public class RefactoringEngine
             FilePath = filePath,
             UpdatedText = newRoot.ToFullString()
         };
+    }
+
+    // Callers sometimes pass summaryText already shaped as a doc comment (e.g. "/// <summary>...</summary>"
+    // or "<summary>...</summary>") instead of plain prose, which would otherwise get wrapped a second time
+    // into malformed nested <summary> tags. Strip any such wrapping so the caller's text is always
+    // re-wrapped exactly once, regardless of the shape they supplied it in.
+    private static string NormalizeSummaryText(string summaryText)
+    {
+        var lines = summaryText.Replace("\r\n", "\n").Split('\n')
+            .Select(line =>
+            {
+                var trimmed = line.Trim();
+                if (trimmed.StartsWith("///"))
+                {
+                    trimmed = trimmed[3..].TrimStart();
+                }
+                return trimmed;
+            })
+            .Where(line => !line.Equals("<summary>", StringComparison.OrdinalIgnoreCase)
+                         && !line.Equals("</summary>", StringComparison.OrdinalIgnoreCase)
+                         && line.Length > 0);
+
+        var joined = string.Join(" ", lines).Trim();
+
+        if (joined.StartsWith("<summary>", StringComparison.OrdinalIgnoreCase))
+        {
+            joined = joined[9..];
+        }
+        if (joined.EndsWith("</summary>", StringComparison.OrdinalIgnoreCase))
+        {
+            joined = joined[..^10];
+        }
+
+        return joined.Trim();
     }
 
     public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
