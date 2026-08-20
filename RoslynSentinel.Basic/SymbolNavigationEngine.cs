@@ -1290,26 +1290,44 @@ public class SymbolNavigationEngine
 
         ISymbol? symbol = null;
 
-        if (filePath != null)
+        // The MCP tool layer resolves an omitted `filepath` to FilePath's empty-string default
+        // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
+        // branch, even when no filepath was actually supplied, silently bypassing the by-name
+        // fallback below. Treat blank the same as null.
+        if (!string.IsNullOrWhiteSpace(filePath))
         {
             // Original path: resolve from the declaring file.
             var document = solution.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
             if (document == null)
             {
-                return new List<CallerInfo>();
+                throw new InvalidOperationException(
+                    $"FindReferences: filePath '{filePath}' was not found in the loaded solution. " +
+                    "Verify the path against ListSolutionItems/GetFileOutline, or omit filePath to " +
+                    "resolve by symbolName across the whole solution instead. This is NOT a confirmed " +
+                    "zero-references result — the lookup never ran.");
             }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
             {
-                return new List<CallerInfo>();
+                throw new InvalidOperationException(
+                    $"FindReferences: could not obtain a syntax tree/semantic model for '{filePath}'. " +
+                    "This is NOT a confirmed zero-references result — the lookup never ran.");
             }
 
             if (contextSnippet != null)
             {
                 symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                if (symbol == null)
+                {
+                    throw new InvalidOperationException(
+                        $"FindReferences: contextSnippet did not resolve to a symbol in '{filePath}'. " +
+                        $"This is NOT a confirmed zero-references result for '{symbolName}' — the lookup " +
+                        "never ran. Re-check the snippet against GetMethodSource/GetFileOutline output, " +
+                        "or omit contextSnippet if the symbolName is unambiguous in this file.");
+                }
             }
             else
             {
@@ -1327,6 +1345,14 @@ public class SymbolNavigationEngine
                 {
                     symbol = model.GetDeclaredSymbol(decl, cancellationToken);
                 }
+
+                if (symbol == null)
+                {
+                    throw new InvalidOperationException(
+                        $"FindReferences: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
+                        "This is NOT a confirmed zero-references result — the lookup never ran. Verify the " +
+                        "name against GetFileOutline, or omit filePath to search by name across the solution.");
+                }
             }
         }
         else
@@ -1339,7 +1365,11 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            return new List<CallerInfo>();
+            throw new InvalidOperationException(
+                $"FindReferences: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
+                (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
+                "This is NOT a confirmed zero-references result — the lookup never ran. Verify the name via " +
+                "LocateSymbol/GetFileOutline before treating this as evidence the symbol is unused.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1428,40 +1458,59 @@ public class SymbolNavigationEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
 
         ISymbol? symbol = null;
+        // Non-null only when the filePath/contextSnippet-scoped lookup ran but definitively failed
+        // to resolve (as opposed to "no filePath was supplied, use the by-name paths below") — used
+        // to build an actionable error if every fallback is exhausted, instead of silently returning
+        // an empty list that reads identically to a confirmed zero-implementations result.
+        string? scopedResolutionFailure = null;
 
-        if (filePath != null)
+        // The MCP tool layer resolves an omitted `filepath` to FilePath's empty-string default
+        // (via SetFilePath), not a C# null — so checking `filePath != null` alone always took this
+        // branch, even when no filepath was actually supplied, silently bypassing the by-name
+        // fallback below. Treat blank the same as null.
+        if (!string.IsNullOrWhiteSpace(filePath))
         {
             // Original path: resolve from the declaring file.
             var document = solution.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
             if (document == null)
             {
-                return new List<ImplementationInfo>();
-            }
-
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            var model = await document.GetSemanticModelAsync(cancellationToken);
-            if (root == null || model == null)
-            {
-                return new List<ImplementationInfo>();
-            }
-
-            if (contextSnippet != null)
-            {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                scopedResolutionFailure = $"filePath '{filePath}' was not found in the loaded solution.";
             }
             else
             {
-                var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                    .FirstOrDefault(m => m switch
-                    {
-                        MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                        PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                        _ => false
-                    });
-                if (decl != null)
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
+                var model = await document.GetSemanticModelAsync(cancellationToken);
+                if (root == null || model == null)
                 {
-                    symbol = model.GetDeclaredSymbol(decl, cancellationToken);
+                    scopedResolutionFailure = $"could not obtain a syntax tree/semantic model for '{filePath}'.";
+                }
+                else if (contextSnippet != null)
+                {
+                    symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (symbol == null)
+                    {
+                        scopedResolutionFailure = $"contextSnippet did not resolve to a symbol in '{filePath}'.";
+                    }
+                }
+                else
+                {
+                    var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+                        .FirstOrDefault(m => m switch
+                        {
+                            MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
+                            PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
+                            _ => false
+                        });
+                    if (decl != null)
+                    {
+                        symbol = model.GetDeclaredSymbol(decl, cancellationToken);
+                    }
+
+                    if (symbol == null)
+                    {
+                        scopedResolutionFailure = $"symbolName '{symbolName}' was not found declared in '{filePath}'.";
+                    }
                 }
             }
         }
@@ -1495,7 +1544,12 @@ public class SymbolNavigationEngine
 
         if (symbol == null)
         {
-            return new List<ImplementationInfo>();
+            throw new InvalidOperationException(
+                "FindReferences: " + (scopedResolutionFailure ??
+                    $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
+                    (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".") +
+                " This is NOT a confirmed zero-implementations result — the lookup never ran. Verify " +
+                "the name via LocateSymbol/GetFileOutline before treating this as evidence of no implementations.");
         }
 
         var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);

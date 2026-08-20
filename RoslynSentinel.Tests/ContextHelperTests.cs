@@ -174,6 +174,46 @@ public class ContextHelperTests
     }
 
     [Test]
+    [Description("The single-line collapsed-whitespace fallback must resolve to the exact offset " +
+                 "where the (whitespace-collapsed) snippet begins within the line, not just the " +
+                 "start of the line as a whole — otherwise a sub-line snippet resolves to whatever " +
+                 "token happens to start the line (e.g. 'return' instead of the operand), which " +
+                 "breaks any caller needing expression-level precision (ExtractLocalVariableAsync). " +
+                 "Triggered here by an extra space around '+' in the source that the caller's snippet " +
+                 "doesn't reproduce — a real formatting difference the collapse fallback is meant to " +
+                 "tolerate, but only the whitespace-RUN-length differs; the caller can't get here by " +
+                 "adding whitespace the source never had (see the MultiSpaceRunInSource test below for " +
+                 "the mirror case). See docs/TODO.md for the original finding.")]
+    public void FindAllSnippetMatches_SubLineSnippetWithExtraSourceSpacing_ResolvesToPreciseOffsetNotLineStart()
+    {
+        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
+        var sourceText = SourceText.From(source);
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, "a + b");
+
+        Assert.That(matches, Has.Count.EqualTo(1));
+        var expectedOffset = source.IndexOf("a  +  b", StringComparison.Ordinal);
+        Assert.That(matches[0], Is.EqualTo(expectedOffset),
+            "Must resolve to the real 'a' offset, not the containing line's start.");
+    }
+
+    [Test]
+    [Description("Mirror of the above: the source has single spaces and the caller's snippet has a " +
+                 "double space (e.g. retyped from memory) — the raw offset must skip the entire " +
+                 "matched whitespace run in the SOURCE, not land partway through it.")]
+    public void FindAllSnippetMatches_MultiSpaceRunInSnippet_ResolvesPastEntireSourceRun()
+    {
+        var source = "public class C {\n    int M() {\n        return a + b;\n    }\n}";
+        var sourceText = SourceText.From(source);
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, "a  +  b");
+
+        Assert.That(matches, Has.Count.EqualTo(1));
+        var expectedOffset = source.IndexOf("a + b", StringComparison.Ordinal);
+        Assert.That(matches[0], Is.EqualTo(expectedOffset));
+    }
+
+    [Test]
     [Description("Regression (ContosoOrders live agent run, attempt 7): a caller-supplied "
                  + "contextSnippet ending in a trailing newline (e.g. copying a statement plus its "
                  + "closing brace with a trailing '\\n') produced a phantom empty line via "

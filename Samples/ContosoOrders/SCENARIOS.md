@@ -243,6 +243,15 @@ masquerade as a tool bug (the error may report `CannotEdit` or "Symbol not found
 "content doesn't match") when the actual defect is the caller inventing text instead of copying it.
 Flag this even when the agent successfully recovers via a fallback tool afterward.
 
+**Fixed regression — `FindReferences` silently returning a false zero-callers result:** as of
+2026-08-19, a `FindReferences(kind: callers)` call whose target fails to resolve (omitted `filepath`
+previously fell through to a dead by-name path; a stale/typo'd `contextSnippet` also failed silently)
+now throws a descriptive error explicitly stating the lookup never ran, rather than returning
+`Success: true, Data: []` — which used to be indistinguishable from a real zero-usages confirmation.
+If step 1 ever again reports zero callers/references for a symbol that is actually still referenced
+elsewhere, that is a regression in this fix, not evidence the tool's underlying safety check is
+merely advisory.
+
 **Fixed regression — `SafeDeleteUnusedSymbol`'s documented `contextSnippet` fallback didn't exist
 (attempt 5):** a live agent run had only a line number (from `SearchSolutionText`) and no column —
 no tool surfaces a column, so the legacy `line`/`column` path was effectively unobtainable — and
@@ -482,19 +491,39 @@ possible. As a result this is no longer the hardest scenario in the set; grade i
   rather than computing name-based candidates first and only consulting the snippet when there's
   real ambiguity) — not fixed as part of the `ReplaceMember` fix below, since it requires restructuring
   that method's resolution logic rather than the same one-line guard. See `docs/TODO.md`.
-- **CRITICAL — `FindReferences`/`FindCallersAsync`/`FindImplementationsForMemberAsync` silently
-  return an empty (`Success: true, Data: []`) result, indistinguishable from "confirmed zero
-  references," when `contextSnippet` fails to resolve a target** (found during the 2026-08-19
-  `contextSnippet` audit). This is a safety-relevant correctness bug, not just a wording gap:
-  `SafeDeleteUnusedSymbol`'s and `RemoveMember`'s zero-usage safety contract both depend on this call
-  being trustworthy. See `docs/TODO.md` for the full writeup — flagged as critical, not yet fixed.
-- **`ContextHelper`'s single-line whitespace-tolerant fallback resolves to a line-START position, not
-  a precise in-line position** — correct granularity for member/type disambiguation, but not precise
-  enough for `ExtractLocalVariableAsync`'s expression-boundary matching, so a same-line (not
-  multi-line) whitespace difference in an otherwise-complete expression can still fall through to the
-  ambiguous nearest-enclosing-expression guess instead of the exact-match path. See `docs/TODO.md`.
 
 ### Fixed
+- **(2026-08-19) CRITICAL — `FindReferences`/`FindCallersAsync`/`FindImplementationsForMemberAsync`
+  silently returned an empty (`Success: true, Data: []`) result, indistinguishable from "confirmed
+  zero references," whenever resolution of the target itself failed.** Two distinct bugs, found
+  together: (1) the MCP tool layer resolves an omitted `filepath` argument to `FilePath`'s
+  empty-string default via `SetFilePath` (a `string`, not a C# `null`), but the engine methods
+  checked `filePath != null` — always true for an empty string — so the by-`symbolName`
+  whole-solution fallback was structurally unreachable through the actual tool surface; every
+  no-`filepath` call silently took the file-scoped branch, found no document with an empty path, and
+  returned `[]`. (2) Even when a real `filepath` was supplied, a `contextSnippet` that failed to
+  resolve to a symbol (typo, stale text, wrong file) produced the same silent `[]` — indistinguishable
+  from a genuine zero-callers/zero-implementations answer. This directly undermines
+  `SafeDeleteUnusedSymbol`'s and `RemoveMember`'s "confirm zero usages, then delete" safety contract:
+  an agent could delete an actively-used symbol believing `FindReferences` had confirmed it unused,
+  when the lookup never actually ran. Fixed: both methods now treat a blank `filePath` the same as
+  `null` (reaching the by-name fallback as intended), and throw a descriptive `InvalidOperationException`
+  — explicitly stating "this is NOT a confirmed zero-references/implementations result" — at every
+  resolution-failure point, instead of returning an empty list. A symbol that resolves successfully but
+  genuinely has zero callers/implementations still correctly returns `[]` — only resolution failure now
+  errors, not a legitimate empty answer. See Scenario 5.
+- **(2026-08-19) `ContextHelper`'s single-line whitespace-tolerant fallback resolved to a line-START
+  position, not the actual match position within the line.** Fine for member/type disambiguation
+  (`ResolveMemberByNameOrSnippet`/`ResolveTypeByNameOrSnippet` only need the position to fall inside
+  the right member's span), but wrong for `ExtractLocalVariableAsync`, which needs the position to
+  land exactly at an `ExpressionSyntax`'s `SpanStart`. E.g. source `return a  +  b;` (extra spacing
+  around `+`) matched against a caller's `contextSnippet: "a + b"` used to resolve to the position of
+  `r` in `return`, not `a`, so the exact-match check never found a candidate and silently fell through
+  to the ambiguous nearest-enclosing-expression guess. Fixed by mapping the match offset found within
+  the whitespace-collapsed line back to the corresponding offset in the real, pre-collapse line text
+  (walking raw-vs-normalized in lockstep, consuming an entire raw whitespace run per normalized
+  space), so the resolved position now lands on the actual matched text, not just "somewhere in the
+  right line." See Scenario 6.
 - **(2026-08-19) `contextSnippet` wording and naming audit across all tools.** Surveyed every
   MCP tool accepting `contextSnippet` and classified each by verified engine behavior (not just its
   description) into two categories: `FRAGMENT_ANCHOR` (≈18 of 20 tools — a short, unique substring is

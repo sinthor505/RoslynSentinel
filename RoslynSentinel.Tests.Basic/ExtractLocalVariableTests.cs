@@ -397,4 +397,35 @@ public class Printer
         Assert.That(result.UpdatedText, Does.Contain("var sum"), "Should declare with the whole expression");
         Assert.That(result.UpdatedText, Does.Contain("return sum"), "Should replace the whole expression, not a sub-part of it");
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Test 14: Same-Line Inter-Token Spacing Difference Now Resolves Precisely
+    // ══════════════════════════════════════════════════════════════════════════
+    [Test]
+    [Description("Regression for the ContextHelper gap logged in docs/TODO.md: the single-line "
+                 + "collapsed-whitespace fallback used to resolve to the containing LINE's start "
+                 + "regardless of where in the line the match actually began, so a sub-line snippet "
+                 + "reached via that fallback (source has extra spacing around an operator that the "
+                 + "caller's snippet collapses) landed the position on the preceding token (e.g. "
+                 + "'return'), never reaching this method's exact-match check. ContextHelper now maps "
+                 + "the collapsed-offset match back to the real in-line offset, so this must resolve "
+                 + "via the exact-match path, not the ambiguous fallback.")]
+    public async Task ExtractLocalVariable_SameLineDifferentInternalSpacing_ResolvesExactly()
+    {
+        const string source =
+            "public class Calculator\n" +
+            "{\n" +
+            "    public int Add(int a, int b)\n" +
+            "    {\n" +
+            "        return a  +  b;\n" +
+            "    }\n" +
+            "}";
+        SetSource(source, "Test.cs");
+
+        var result = await _refactoringEngine.ExtractLocalVariableAsync(
+            "Test.cs", "a + b", "sum");
+
+        Assert.That(result.UpdatedText, Does.Contain("var sum"), "Should declare with the whole expression");
+        Assert.That(result.UpdatedText, Does.Contain("return sum"), "Should replace the whole expression, not a sub-part of it");
+    }
 }

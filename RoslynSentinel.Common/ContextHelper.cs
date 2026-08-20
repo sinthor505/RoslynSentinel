@@ -65,10 +65,20 @@ public static class ContextHelper
             var lines = sourceText.Lines;
             for (int i = 0; i < lines.Count; i++)
             {
-                var lineNorm = System.Text.RegularExpressions.Regex.Replace(lines[i].ToString().Trim(), @"\s+", " ");
-                if (lineNorm.Contains(snippetNorm, StringComparison.OrdinalIgnoreCase))
+                var lineText = lines[i].ToString();
+                var lineNorm = System.Text.RegularExpressions.Regex.Replace(lineText.Trim(), @"\s+", " ");
+                var normIndex = lineNorm.IndexOf(snippetNorm, StringComparison.OrdinalIgnoreCase);
+                if (normIndex >= 0)
                 {
-                    allMatches.Add(lines[i].Start);
+                    // Map the match offset within the whitespace-collapsed line back to the
+                    // corresponding offset in the real (pre-collapse) line text, so callers that
+                    // need in-line precision (e.g. ExtractLocalVariableAsync locating an
+                    // ExpressionSyntax's SpanStart) land on the actual match, not just "somewhere
+                    // in the right line" — the line-start position was fine for member/type
+                    // resolution (FindNode/AncestorsAndSelf walk up to the enclosing declaration
+                    // regardless of exact column) but wrong for expression-level lookups.
+                    var realOffset = MapNormalizedOffsetToRaw(lineText, normIndex);
+                    allMatches.Add(lines[i].Start + realOffset);
                 }
             }
         }
@@ -240,6 +250,42 @@ public static class ContextHelper
         string fullSource, string contextSnippet, out string? error,
         string? lineBefore = null, string? lineAfter = null)
         => TryFindSnippetPosition(SourceText.From(fullSource), contextSnippet, out error, lineBefore, lineAfter);
+
+    /// <summary>
+    /// Maps a character offset within a whitespace-collapsed, trimmed line (every run of
+    /// whitespace replaced by a single space) back to the corresponding offset in the original,
+    /// untrimmed line text. Used to recover a precise match position after
+    /// <see cref="FindAllSnippetMatches"/>'s whitespace-tolerant fallback locates a snippet inside
+    /// the collapsed form.
+    /// </summary>
+    private static int MapNormalizedOffsetToRaw(string rawLine, int normalizedOffset)
+    {
+        var leadingWhitespace = rawLine.Length - rawLine.TrimStart().Length;
+        int rawIndex = leadingWhitespace;
+        int normIndex = 0;
+
+        while (rawIndex < rawLine.Length && normIndex < normalizedOffset)
+        {
+            if (char.IsWhiteSpace(rawLine[rawIndex]))
+            {
+                // A whole run of raw whitespace collapses to a single normalized space — consume
+                // the entire run in one step so rawIndex lands on the next real character, not
+                // partway through the run.
+                normIndex++;
+                while (rawIndex < rawLine.Length && char.IsWhiteSpace(rawLine[rawIndex]))
+                {
+                    rawIndex++;
+                }
+            }
+            else
+            {
+                normIndex++;
+                rawIndex++;
+            }
+        }
+
+        return rawIndex;
+    }
 
     /// <summary>
     /// Checks if a source line contains the pattern. Falls back to a quote-normalized comparison
