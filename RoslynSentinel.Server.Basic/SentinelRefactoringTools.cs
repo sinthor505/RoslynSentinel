@@ -209,7 +209,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "RenameSymbol")]
     [Produces(DataTag.ChangeId)]
-    [Description("Renames a symbol and all its references across the solution. Returns changeId and updatedHandle for the renamed symbol.")]
+    [Description("Renames a symbol and all its references across the solution. Returns changeId and updatedHandle for the renamed symbol. Does NOT simplify call sites or add/remove using directives — if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
     public async Task<ToolResult<object>> RenameSymbol(
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)] string docCommentId,

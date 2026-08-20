@@ -330,7 +330,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
-    [Description("Applies or validates a change set. changesetFormat files → changes dict filePath→newContent; diff → filepath + unifiedDiff. For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply.")]
+    [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply.")]
     public async Task<ToolResult<object>> ApplyDiff(
         [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -379,9 +379,17 @@ public class SentinelWorkspaceTools
             }
             else if (changesetFormat == ChangesetFormat.diff)
             {
-                if (!filePath.Validated || string.IsNullOrEmpty(unifiedDiff))
+                if (!filePath.Validated && string.IsNullOrEmpty(unifiedDiff))
                 {
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "filePath and unifiedDiff are required when changesetFormat=diff.") };
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: both 'filepath' and 'unifiedDiff' are required when changesetFormat=diff.") };
+                }
+                if (!filePath.Validated)
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filepath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.") };
+                }
+                if (string.IsNullOrEmpty(unifiedDiff))
+                {
+                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'unifiedDiff' is required when changesetFormat=diff.") };
                 }
                 if (action == ProposedChangeAction.apply)
                 {

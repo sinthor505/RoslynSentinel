@@ -4,6 +4,28 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
+
+**Found:** 2026-08-19, while reviewing whether `UsingDirective` needed a `simplifySingleFile`/
+`simplifyAllCallers` split. `simplifySingleFile` already effectively exists as the current
+`simplifyExisting` bool (add-only, runs `Simplifier.ReduceAsync` scoped to just the edited
+document) — no new work needed there. `simplifyAllCallers` does not exist and would be new,
+larger-scope work, not a boolean flag on the existing method.
+
+**What it would need to do:** given a namespace being added to one file, find every other document
+in the solution that references that namespace via a fully-qualified name, ensure each has (or
+gets) the corresponding `using` directive, then run `Simplifier.ReduceAsync` per-document to shorten
+the now-redundant fully-qualified references — mirroring what `simplifyExisting` already does for
+a single file, but solution-wide.
+
+**Why not built now:** this changes the tool's blast radius from "one file" to "the whole
+solution" — every document touched needs its own using-directive-presence check (not just the
+one file the caller named), its own simplify pass, and its own change entry in the result. That's
+a meaningfully different feature (more like a bespoke `SymbolFinder`-driven sweep) than the current
+single-document flag, and deserves a deliberate design pass (e.g. should it also report which files
+it touched? cap how many files it'll touch in one call? require a dry-run first?) rather than being
+bolted on as a same-shaped bool.
+
 ## Duplicate/dead `SafeDeleteSymbolAsync` on `RefactoringEngine`
 
 **Found:** 2026-08-19, while adding a `symbolName`/`contextSnippet` fallback path to the
