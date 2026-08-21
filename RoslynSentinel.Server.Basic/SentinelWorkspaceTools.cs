@@ -149,10 +149,12 @@ public class SentinelWorkspaceTools
                         };
                     }
 
+                    var sep = Path.DirectorySeparatorChar;
+                    var files = project.Documents.Select(d => d.FilePath ?? d.Name).Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase)).ToList<object>();
                     return new ToolResult<object>()
                     {
                         Success = true,
-                        Data = project.Documents.Select(d => d.FilePath ?? d.Name).ToList<object>()
+                        Data = files
                     };
                 }
                 catch (Exception ex)
