@@ -92,15 +92,19 @@ public class DiffEngine
                         lines.RemoveAt(currentLine);
                         offset--;
                     }
-                    else if (diffLine.StartsWith(" "))
+                    else if (diffLine.StartsWith(" ") || diffLine.Length == 0)
                     {
-                        // Context line - validate it matches
+                        // Context line - validate it matches. A zero-length line (no leading space
+                        // marker at all) is tolerated as an implicit blank context line — see
+                        // IsContextOrRemovalLine's doc comment for why some diffs omit the marker
+                        // on otherwise-blank lines, and why silently dropping it here would
+                        // desynchronize currentLine from the anchor ReanchorHunk already matched.
                         if (currentLine >= lines.Count)
                         {
                             throw new InvalidOperationException($"Diff application failed: Context line {currentLine + 1} out of bounds.");
                         }
 
-                        var expected = diffLine.Substring(1).Trim();
+                        var expected = diffLine.Length == 0 ? "" : diffLine.Substring(1).Trim();
                         var actual = lines[currentLine].Trim();
                         if (expected != actual)
                         {
@@ -141,6 +145,18 @@ public class DiffEngine
     }
 
     /// <summary>
+    /// True for a hunk-body line that represents a context/removal line the file must already
+    /// contain: explicitly-marked (" "/"-") lines, plus a bare blank line with no marker at all —
+    /// tolerated as an implicit blank context line, since diff producers routinely emit an
+    /// unprefixed empty line for a blank line in the file rather than a single trailing space.
+    /// Without this, such a line is silently dropped from the anchor, desynchronizing the anchor
+    /// list from the declared line number by exactly one line and causing the re-anchor search to
+    /// look in the wrong place — a real defect this class had (see docs/TODO.md's entry on
+    /// ApplyDiff's misleading anchor-failure message, root-caused to this).
+    /// </summary>
+    private static bool IsContextOrRemovalLine(string line) => line.StartsWith(" ") || line.StartsWith("-") || line.Length == 0;
+
+    /// <summary>
     /// Finds where a hunk actually belongs by matching its leading run of context/removal lines
     /// (the only lines guaranteed to already exist in <paramref name="lines"/>) against the file,
     /// searching outward from <paramref name="declaredLine"/> within <see cref="HunkReanchorWindow"/>.
@@ -151,8 +167,8 @@ public class DiffEngine
     private static int ReanchorHunk(List<string> lines, List<string> hunkBody, int declaredLine, string hunkHeader)
     {
         var anchorLines = hunkBody
-            .Where(l => l.StartsWith(" ") || l.StartsWith("-"))
-            .Select(l => l.Substring(1).Trim())
+            .Where(IsContextOrRemovalLine)
+            .Select(l => l.Length == 0 ? "" : l.Substring(1).Trim())
             .ToList();
 
         if (anchorLines.Count == 0)

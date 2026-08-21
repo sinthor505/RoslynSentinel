@@ -4,50 +4,49 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
-## `ApplyDiff`'s hunk-anchor failure has a misleading error message
+## `ApplyDiff`'s outer error wrapper still says "check the solution/path" for non-workspace failures
 
-**Found:** 2026-08-20/21, while migrating two tests in `BugFixTests.cs` off a dead
-`RefactoringEngine.SafeDeleteSymbolAsync` copy (see commit "Merge SafeDeleteSymbolAsync's
-reflection-risk check..."). A correctly-formed unified diff (verified byte-for-byte against the
-file's actual current content via `Read`/`awk`/`cat -A` immediately before each attempt, with a
-correct `@@` line-count header) repeatedly failed to apply against a target line that provably
-existed at exactly the declared position.
+**Found:** 2026-08-20/21, while migrating tests off a dead `RefactoringEngine.SafeDeleteSymbolAsync`
+copy (see commit "Merge SafeDeleteSymbolAsync's reflection-risk check..."); root-caused and the
+underlying anchor-search bug fixed 2026-08-21 (see commit "Fix DiffEngine's ReanchorHunk desyncing
+on unmarked blank hunk lines").
 
-**What:** the failure surfaces two misleading messages stacked together:
-1. The outer wrapper always says *"ApplyDiff diff apply for '\<path\>' failed unexpectedly
-   (InvalidOperationException). Check that the solution is loaded and the file path is valid."* —
-   even when the solution was loaded and the path was valid throughout (confirmed: the same path
-   succeeded on a retry moments later, and direct reads confirmed the file existed the whole time).
-   This phrasing steers a caller toward the wrong diagnosis (workspace/path problem) when the real
-   failure is hunk-anchoring against content that's right where it's declared to be.
-2. The inner message — *"Diff application failed: hunk '@@ -3267,14 +3267,15 @@' declares line
-   3267, but its content wasn't found there or within 60 lines in either direction. First expected
-   line: \"SetSource(code, \"Service.cs\");\". Regenerate the diff against the file's current
-   content, or use a whole-member/whole-file replacement tool instead."* — this is the actually
-   relevant error, but the "First expected line" it names was independently confirmed (via a
-   separate `Read` and a raw `awk`/`cat -A` byte dump immediately beforehand) to be present
-   verbatim at exactly that line number, with no leading/trailing whitespace or line-ending
-   difference. Two consecutive attempts against the same, freshly-re-verified location both failed
-   identically; the edit only succeeded once done via direct `Edit` instead.
+**What was fixed:** the hunk-anchor search itself had a real defect, now fixed in
+`RoslynSentinel.Common/DiffEngine.cs`. `ReanchorHunk`'s `anchorLines` list only kept hunk-body lines
+starting with `" "` or `"-"` — a hunk-body line representing a blank file line but written with no
+leading space marker at all (a bare empty string, distinct from `" "`) was silently dropped instead
+of being treated as an implicit blank context line. Since the hunk's declared line number assumes
+every body line (including blank ones) is present and counted, dropping one desynchronizes the
+anchor list from the declared position by exactly one line per dropped line — causing the search to
+look one line off from where the real content is, and (if no coincidental match exists within the
+60-line window) throw "content wasn't found there or within 60 lines" even though the content was
+exactly where declared. Root-caused via byte-level replay of the actual failing hunk from this
+session against the actual file content at the time (see `DiffEngineTests.cs`'s new
+`ApplyDiff_HunkWithUnmarkedBlankContextLine_StillAnchorsCorrectly` test, which reproduces it exactly
+and confirms the fix). Both `ReanchorHunk`/`MatchesAt` (the search) and the main `ApplyDiff` hunk-body
+processing loop (the actual apply) were updated in tandem — a bare empty line is now treated as an
+implicit blank context line by both, consistently.
 
-**Why this matters:** at least one *other* occurrence in the same session of this exact message
-turned out to be a genuine hunk-math mistake on the caller's side (a wrong `@@` line-count in the
-header) — so the message is sometimes accurate. But this occurrence had a verified-correct header
-and verified-matching content, meaning the anchor search itself can fail even when its own stated
-precondition (content present at the declared line) holds. The message doesn't distinguish these
-two cases, so a caller can't tell "your diff is malformed" from "the tool's anchor search has a
-bug" without independently re-verifying file content outside the tool, as done here.
+**Still open (smaller, not fixed in this pass):** the *outer* tool-layer wrapper
+(`SentinelWorkspaceTools.cs`'s `ApplyDiff` method) still catches every exception from
+`DiffEngine.ApplyDiff` — including the inner `InvalidOperationException` this bug produced — with a
+generic *"ApplyDiff diff apply for '\<path\>' failed unexpectedly (InvalidOperationException). Check
+that the solution is loaded and the file path is valid."* message, even when the solution was loaded
+and the path was valid the whole time and the real cause is a hunk-content mismatch. This didn't
+need fixing to resolve the underlying bug (the inner message was accurate and specific enough to
+diagnose it), but it's still misleading on its own whenever *any* `DiffEngine.ApplyDiff` exception
+propagates up — worth a follow-up that either catches `InvalidOperationException` specifically and
+passes its message through unwrapped, or drops the generic "check the solution/path" sentence when
+an inner message already explains the real cause.
 
-**Suggested approach:** needs a minimal repro before fixing — the failing case here involved a
-hunk whose first line was a blank context line (the previous hunk attempt at the same edit,
-starting one line later at the `SetSource(...)` line itself, failed identically). Worth checking
-whether the anchor search mishandles hunks with specific characteristics (leading blank context
-line, `@@` header math that's technically correct but structured unusually, or something about a
-duplicate `SetSource(code, "Service.cs");` line appearing 9 times elsewhere in the same file
-confusing the "search within 60 lines" fallback) before guessing at a fix. At minimum, the outer
-wrapper's generic "check the solution is loaded and the path is valid" text should not be shown
-for this specific inner failure — it's never the actual cause when the inner hunk-anchor message is
-present, and it costs a caller time chasing the wrong hypothesis.
+**Related, separate observation:** applying this fix's own edit to `DiffEngineTests.cs` (via the
+IDE's direct file-edit tool, not `ApplyDiff`) silently normalized that file's line endings from
+mixed CRLF/LF to pure LF — the same class of unrequested whole-file line-ending rewrite as
+`ApplyDiff`'s CRLF-forcing bug (see the "reflows far more of the file" entry, now fixed), just in
+the opposite direction and via a different tool. Not investigated further here since it didn't
+break anything (LF end-to-end is arguably the more consistent state) and reverting file-by-file
+would risk introducing a real mistake, but worth knowing this isn't purely an `ApplyDiff`-specific
+problem — something in the write path generally doesn't preserve mixed line endings verbatim.
 
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 

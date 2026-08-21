@@ -153,4 +153,37 @@ public class DiffEngineTests
 
         Assert.That(newText, Is.EqualTo("line1" + nl + "added" + nl + "line2" + nl + "line3"));
     }
+
+    [Test]
+    [Description("A hunk whose leading context line is a blank file line, but the diff text represents "
+                 + "it as a bare empty line with no leading space marker (rather than a single space), "
+                 + "must still anchor and apply correctly. A caller-authored diff routinely omits the "
+                 + "marker on an otherwise-blank context line; treating that line as absent (rather than "
+                 + "an implicit blank context line) desynchronizes the anchor search from the declared "
+                 + "line number and produces a spurious 'content not found nearby' failure even though "
+                 + "the content is exactly where declared — this reproduces a real failure hit live "
+                 + "against RoslynSentinel.Tests.Advanced/BugFixTests.cs (see docs/TODO.md).")]
+    public void ApplyDiff_HunkWithUnmarkedBlankContextLine_StillAnchorsCorrectly()
+    {
+        var nl = Environment.NewLine;
+        var oldText = SourceText.From(string.Join(nl,
+            "}\";",
+            "",
+            "            SetSource(code, \"Service.cs\");",
+            "",
+            "            var result = await _refactoringEngine.SafeDeleteSymbolAsync(",
+            "                \"Service.cs\",",
+            "                contextSnippet: \"public string GetValue\",",
+            "                lineBefore: null,",
+            "                lineAfter: null);"));
+
+        // Hunk body's first line is a bare empty string (no leading space marker) representing the
+        // blank line before "SetSource(...)" — the exact malformation that triggered the bug.
+        var diff = "@@ -2,4 +2,4 @@\n\n            SetSource(code, \"Service.cs\");\n\n-            var result = await _refactoringEngine.SafeDeleteSymbolAsync(\n+            var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Does.Contain("var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("));
+        Assert.That(newText, Does.Not.Contain("var result = await _refactoringEngine.SafeDeleteSymbolAsync("));
+    }
 }
