@@ -4,14 +4,14 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
-## `ApplyDiff`'s outer error wrapper still says "check the solution/path" for non-workspace failures
+## `ApplyDiff` hunk-anchoring and error-wrapper fixes — closed
 
 **Found:** 2026-08-20/21, while migrating tests off a dead `RefactoringEngine.SafeDeleteSymbolAsync`
-copy (see commit "Merge SafeDeleteSymbolAsync's reflection-risk check..."); root-caused and the
-underlying anchor-search bug fixed 2026-08-21 (see commit "Fix DiffEngine's ReanchorHunk desyncing
-on unmarked blank hunk lines").
+copy (see commit "Merge SafeDeleteSymbolAsync's reflection-risk check..."). Fixed in two passes:
+the anchor-search bug on 2026-08-21 (commit "Fix DiffEngine's ReanchorHunk desyncing on unmarked
+blank hunk lines"), and the outer error-wrapper message on 2026-08-21 (same day, follow-up commit).
 
-**What was fixed:** the hunk-anchor search itself had a real defect, now fixed in
+**Fix 1 — the hunk-anchor search itself had a real defect**, now fixed in
 `RoslynSentinel.Common/DiffEngine.cs`. `ReanchorHunk`'s `anchorLines` list only kept hunk-body lines
 starting with `" "` or `"-"` — a hunk-body line representing a blank file line but written with no
 leading space marker at all (a bare empty string, distinct from `" "`) was silently dropped instead
@@ -27,17 +27,19 @@ and confirms the fix). Both `ReanchorHunk`/`MatchesAt` (the search) and the main
 processing loop (the actual apply) were updated in tandem — a bare empty line is now treated as an
 implicit blank context line by both, consistently.
 
-**Still open (smaller, not fixed in this pass):** the *outer* tool-layer wrapper
-(`SentinelWorkspaceTools.cs`'s `ApplyDiff` method) still catches every exception from
-`DiffEngine.ApplyDiff` — including the inner `InvalidOperationException` this bug produced — with a
-generic *"ApplyDiff diff apply for '\<path\>' failed unexpectedly (InvalidOperationException). Check
-that the solution is loaded and the file path is valid."* message, even when the solution was loaded
-and the path was valid the whole time and the real cause is a hunk-content mismatch. This didn't
-need fixing to resolve the underlying bug (the inner message was accurate and specific enough to
-diagnose it), but it's still misleading on its own whenever *any* `DiffEngine.ApplyDiff` exception
-propagates up — worth a follow-up that either catches `InvalidOperationException` specifically and
-passes its message through unwrapped, or drops the generic "check the solution/path" sentence when
-an inner message already explains the real cause.
+**Fix 2 — the outer tool-layer wrapper's misleading message.** All three `catch` blocks in
+`SentinelWorkspaceTools.cs`'s `ApplyDiff` method previously appended a fixed *"Check that the
+solution is loaded and the file path is valid"* sentence to every exception unconditionally,
+including `DiffEngine`'s own `InvalidOperationException` — which already names the real cause (a
+stale/mismatched hunk) and has nothing to do with the solution or file path. That fixed phrase
+actively misled callers into checking the wrong thing, exactly as flagged live during this session.
+Replaced with a new `BuildApplyDiffError(ex, context)` helper that only asserts what it can verify:
+if `_workspaceManager.CurrentSolution` is actually `null`, it reports `SolutionNotLoaded` with a
+concrete "call LoadSolution first" instruction; if the exception is an `InvalidOperationException`
+(the type `DiffEngine.ApplyDiff` throws for its own actionable failures), its message is surfaced
+as-is with no added guesswork; otherwise a generic-but-honest "failed unexpectedly" message is used
+without asserting a specific unverified cause. All three catch sites (`ApplyDiff validate`,
+`ApplyDiff diff apply`, and the outer catch-all) now go through this helper.
 
 **Related, separate observation:** applying this fix's own edit to `DiffEngineTests.cs` (via the
 IDE's direct file-edit tool, not `ApplyDiff`) silently normalized that file's line endings from

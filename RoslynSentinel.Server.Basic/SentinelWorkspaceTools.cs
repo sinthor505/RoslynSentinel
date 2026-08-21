@@ -346,6 +346,33 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
+    /// <summary>
+    /// Builds an ApplyDiff error from a caught exception without asserting a specific cause that
+    /// may not be true. The old behavior appended "Check that the solution is loaded and the file
+    /// path is valid" to every exception unconditionally, including DiffEngine's own
+    /// InvalidOperationException, which already names the real cause (e.g. a stale/mismatched
+    /// hunk) and has nothing to do with the solution or file path — that fixed phrase actively
+    /// misled callers into checking the wrong thing. This instead checks the one cause that's
+    /// cheap to verify directly (whether a solution is loaded) and otherwise trusts the
+    /// exception's own message rather than guessing.
+    /// </summary>
+    private ResultError BuildApplyDiffError(Exception ex, string context)
+    {
+        if (_workspaceManager.CurrentSolution == null)
+        {
+            return new ResultError(ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Details: {ex.Message}");
+        }
+
+        // DiffEngine's own exceptions (bad/stale hunks) are already specific and actionable -
+        // surface them as-is instead of burying them under a generic, likely-wrong hint.
+        if (ex is InvalidOperationException)
+        {
+            return new ResultError(ToolErrorCode.Exception, $"{context} failed: {ex.Message}");
+        }
+
+        return new ResultError(ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}");
+    }
+
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead.")]
@@ -414,7 +441,7 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                            Error = BuildApplyDiffError(ex, "ApplyDiff validate")
                         };
                     }
                 }
@@ -494,7 +521,7 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff diff apply for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                            Error = BuildApplyDiffError(ex, $"ApplyDiff diff apply for '{filePath}'")
                         };
                     }
                 }
@@ -528,7 +555,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ApplyDiff failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = BuildApplyDiffError(ex, "ApplyDiff")
             };
         }
     }
