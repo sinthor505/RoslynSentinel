@@ -166,8 +166,7 @@ public class SentinelAsyncifyTools
                 return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError(MigrationErrorCode.Exception,
-                                  "An unexpected error occurred.", ex.Message)
+                    Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
                 };
             }
 
@@ -272,8 +271,7 @@ public class SentinelAsyncifyTools
                 return new ToolResult<object>
                 {
                     Success = false,
-                    Error = new ResultError(MigrationErrorCode.Exception,
-                                  "An unexpected error occurred.", ex.Message)
+                    Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
                 };
             }
 
@@ -361,8 +359,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<AsyncMigrationProgressReport>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetAsyncMigrationProgress")
             };
         }
     }
@@ -430,8 +427,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FlagAsyncMigrationCandidates")
             };
         }
     }
@@ -547,8 +543,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              $"ClearAsyncMigrationCandidateFlags failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ClearAsyncMigrationCandidateFlags")
             };
         }
     }
@@ -641,8 +636,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BridgeAsyncMethodsResult>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BridgeAsyncMethods")
             };
         }
     }
@@ -738,8 +732,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<UpliftCallersResult>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UpliftCallers")
             };
         }
     }
@@ -812,8 +805,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PropagateCancellationToken")
             };
         }
     }
@@ -880,8 +872,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AddCancellationToken")
             };
         }
     }
@@ -959,8 +950,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractEventHandlers")
             };
         }
     }
@@ -1020,8 +1010,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "EventHandlersToAsync")
             };
         }
     }
@@ -1137,8 +1126,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<BatchResultSummary>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              "An unexpected error occurred.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Asyncify")
             };
         }
     }
@@ -1269,8 +1257,7 @@ public class SentinelAsyncifyTools
             return new ToolResult<AsyncifyLoopResult>
             {
                 Success = false,
-                Error = new ResultError(MigrationErrorCode.Exception,
-                              $"AsyncifyLoop failed on iteration {iterations.Count + 1}.", ex.Message)
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"AsyncifyLoop iteration {iterations.Count + 1}")
             };
         }
 
@@ -1392,11 +1379,10 @@ public class SentinelAsyncifyTools
         {
             result = await _asyncBatchEngine.PropagateCancellationTokenBatchAsync(batchInput, progress: progress, cancellationToken: cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ToolException)
         {
             _logger.LogError(ex, "PropagateCancellationToken batch unexpected exception");
-            throw new InvalidOperationException(
-                $"PropagateCancellationToken failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
+            throw;
         }
 
         int succeeded = result.Applied.Count;
@@ -1868,11 +1854,10 @@ public class SentinelAsyncifyTools
         {
             result = await _asyncBatchEngine.RunUpliftBatchMultiAsync(multiInput, progress: progress, cancellationToken: cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ToolException)
         {
             _logger.LogError(ex, "UpliftCallers batch unexpected exception");
-            throw new InvalidOperationException(
-                $"UpliftCallers failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
+            throw;
         }
 
         // ── Classify each item into ItemOutcome ────────────────────────────────
@@ -2294,11 +2279,10 @@ public class SentinelAsyncifyTools
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ToolException)
         {
             _logger.LogError(ex, "FlagMigrationCandidates batch unexpected exception");
-            throw new InvalidOperationException(
-                $"FlagMigrationCandidates failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
+            throw;
         }
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
@@ -3244,11 +3228,10 @@ public class SentinelAsyncifyTools
                 stopReason = "maxRuntimeSeconds exceeded mid-phase";
             _logger.LogInformation("Asyncify stopped early: {Reason}", stopReason);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ToolException)
         {
             _logger.LogError(ex, "Asyncify unexpected exception");
-            throw new InvalidOperationException(
-                $"Asyncify failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
+            throw;
         }
 
         _workspaceManager.RecordBatchOutcome(succeeded, failed, rolledBack: 0, skipped: skipped);
@@ -3372,11 +3355,10 @@ public class SentinelAsyncifyTools
                 filePath: null, projectName: projectName, pattern: "HandlerToAsyncCandidate",
                 cancellationToken: cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ToolException)
         {
             _logger.LogError(ex, "EventHandlersToAsync discovery unexpected exception");
-            throw new InvalidOperationException(
-                $"EventHandlersToAsync discovery failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}", ex);
+            throw;
         }
 
         int overLimit = Math.Max(0, candidates.Count - maxItems);
@@ -3671,7 +3653,7 @@ public class SentinelAsyncifyTools
             }
             catch (Exception ex)
             {
-                var reason = $"apply failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
+                var reason = ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "ExtractEventHandlers apply");
                 items.Add(new OperationItemRecord
                 {
                     FilePath = target.FilePath,

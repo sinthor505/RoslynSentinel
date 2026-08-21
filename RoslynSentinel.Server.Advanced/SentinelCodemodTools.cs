@@ -199,11 +199,10 @@ public class SentinelCodemodTools
 
                             return new ToolResult<object>() { Success = true, Data = r.ToJsonSummary() };
                         }
-                        catch (InvalidOperationException ioe) { return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep failed for '{filePath}': {ioe.Message}. Ensure the solution is loaded.") }; }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePath}'", filePath, cancellationToken);
-                            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"fix_thread_sleep for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{filePath}'") };
                         }
                     }
                 case "format_document_preview":
@@ -382,7 +381,7 @@ public class SentinelCodemodTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ApplyFileCodemod ({Transform}) failed", transform, cancellationToken);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ApplyFileCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyFileCodemod ({transform})") };
         }
     }
 
@@ -496,14 +495,13 @@ public class SentinelCodemodTools
 
                             return new ToolResult<object>() { Success = true, Data = new SourceTransformResult(r.UpdatedText, false, false, filePath) };
                         }
-                        catch (InvalidOperationException) { return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension failed for '{methodName}' in '{filePath}': invalid operation. Ensure the solution is loaded.") }; }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath, cancellationToken);
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension for '{methodName}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_static_to_extension for '{methodName}' in '{filePath}'")
                             };
                         }
                     }
@@ -587,21 +585,13 @@ public class SentinelCodemodTools
                                 Data = new SourceTransformResult(r.UpdatedText, false, false, filePath)
                             };
                         }
-                        catch (InvalidOperationException)
-                        {
-                            return new ToolResult<object>
-                            {
-                                Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"generate_async_overload failed for '{methodName}' in '{filePath}': invalid operation. Ensure the solution is loaded.")
-                            };
-                        }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath, cancellationToken);
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"generate_async_overload for '{methodName}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_async_overload for '{methodName}' in '{filePath}'")
                             };
                         }
                     }
@@ -756,7 +746,7 @@ public class SentinelCodemodTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ApplyMethodCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyMethodCodemod ({transform})")
             };
         }
     }
@@ -822,7 +812,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco for '{className}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"add_validation_to_poco for '{className}' in '{filePath}'")
                             };
                         }
                     }
@@ -883,7 +873,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>
                             {
                                 Success = false,
-                                Error = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface for '{className}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_abstract_to_interface for '{className}' in '{filePath}'")
                             };
                         }
                     }
@@ -1107,7 +1097,7 @@ public class SentinelCodemodTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ApplyClassCodemod ({transform}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyClassCodemod ({transform})")
             };
         }
     }
@@ -1335,7 +1325,7 @@ public class SentinelCodemodTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Generate ({Kind}) failed", kind, cancellationToken);
-            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.Exception, $"Generate ({kind}) failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Generate ({kind})") };
         }
     }
 

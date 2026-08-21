@@ -127,8 +127,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ValidateAndApply pre-validate failed for {OperationName}", operationName);
-            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} pre-validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}"), dryRun);
+            return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, _workspaceManager, $"{operationName} pre-validate"), dryRun);
         }
 
         if (!validation.Success)
@@ -347,7 +346,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "MoveAllTypesToFiles ({Scope}) failed", scope);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"MoveAllTypesToFiles failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveAllTypesToFiles") };
         }
     }
 
@@ -449,7 +448,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "InvertAssignments failed in '{FilePath}'", filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"InvertAssignments failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertAssignments") };
         }
     }
 
@@ -490,7 +489,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "PullUpMember failed for '{MemberName}' in '{ClassName}'", memberName, className);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"PullUpMember failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PullUpMember") };
         }
     }
 
@@ -532,7 +531,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "IntroduceParameterObject failed for '{MethodName}' in '{FilePath}'", methodName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"IntroduceParameterObject failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "IntroduceParameterObject") };
         }
     }
 
@@ -592,7 +591,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Introduce ({As}) failed for '{NewName}' in '{FilePath}'", @as, newName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Introduce failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Introduce") };
         }
     }
 
@@ -636,7 +635,7 @@ public class SentinelAdvancedRefactoringTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ExtractMembers/interface unexpected exception for '{NewTypeName}'", newTypeName);
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractMembers as=interface for '{newTypeName}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=interface for '{newTypeName}'") };
                 }
             }
             if (@as == "class")
@@ -695,7 +694,7 @@ public class SentinelAdvancedRefactoringTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ExtractMembers/superclass unexpected exception for '{NewTypeName}'", newTypeName);
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractMembers as=superclass for '{newTypeName}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers as=superclass for '{newTypeName}'") };
                 }
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown as '{@as}'. Valid values: interface, class, partial, superclass.") };
@@ -703,7 +702,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ExtractMembers ({As}) failed for '{ClassName}' in '{FilePath}'", @as, className, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractMembers failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMembers") };
         }
     }
 
@@ -782,7 +781,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SyncInterface ({Action}) failed for '{InterfaceName}'", action, interfaceName);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncInterface failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SyncInterface") };
         }
     }
 
@@ -818,7 +817,7 @@ public class SentinelAdvancedRefactoringTools
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Inline/method unexpected exception for '{TargetName}' in '{FilePath}'", targetName, filePath);
-                    return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline method '{targetName}' in '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+                    return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Inline method '{targetName}' in '{filePath}'") };
                 }
             }
             if (kind == "variable")
@@ -865,7 +864,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Inline ({Kind}) failed for '{TargetName}' in '{FilePath}'", kind, targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Inline") };
         }
     }
 
@@ -1013,7 +1012,7 @@ public class SentinelAdvancedRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "WrapRange ({Wrapper}) failed in '{FilePath}'", wrapper, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"WrapRange failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "WrapRange") };
         }
     }
 
@@ -1087,7 +1086,7 @@ public class SentinelAdvancedRefactoringTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"MoveType failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveType")
             };
         }
     }

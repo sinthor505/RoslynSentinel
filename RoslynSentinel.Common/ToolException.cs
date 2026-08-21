@@ -95,16 +95,33 @@ public static class ToolErrorMapper
     /// <param name="context">Short label prefixed to the message (e.g. "ApplyDiff diff apply for 'Foo.cs'").</param>
     public static ResultError ToResultError(Exception ex, PersistentWorkspaceManager workspaceManager, string context)
     {
+        var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
+        return new ResultError(code, message, ex.Message);
+    }
+
+    /// <summary>
+    /// Same mapping as <see cref="ToResultError"/>, for the handful of tool methods that return a
+    /// bare <see cref="string"/> instead of a <see cref="ToolResult{T}"/> (e.g. <c>Produces(DataTag.ResultOnly)</c>
+    /// methods in <c>SentinelGenerationTools</c>) and so have nowhere to put a structured <see cref="ResultError"/>.
+    /// </summary>
+    public static string ToErrorMessage(Exception ex, PersistentWorkspaceManager workspaceManager, string context)
+    {
+        var (_, message) = ToCodeAndMessage(ex, workspaceManager, context);
+        return message;
+    }
+
+    private static (string Code, string Message) ToCodeAndMessage(Exception ex, PersistentWorkspaceManager workspaceManager, string context)
+    {
         if (ex is ToolException toolEx)
         {
-            return new ResultError(toolEx.ErrorCode, $"{context} failed: {toolEx.Message}");
+            return (toolEx.ErrorCode, $"{context} failed: {toolEx.Message}");
         }
 
         if (workspaceManager.CurrentSolution == null)
         {
-            return new ResultError(ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Details: {ex.Message}");
+            return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Details: {ex.Message}");
         }
 
-        return new ResultError(ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}");
+        return (ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}");
     }
 }

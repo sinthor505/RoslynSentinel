@@ -114,7 +114,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetTestCoverageMap failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTestCoverageMap")
             };
         }
     }
@@ -145,7 +145,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetMethodComplexity failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodComplexity")
             };
         }
     }
@@ -186,7 +186,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeForeachForLinqConversion failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeForeachForLinqConversion")
             };
         }
     }
@@ -229,7 +229,7 @@ public class SentinelQualityTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"AnalyzeSwitchForPatternConversion failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeSwitchForPatternConversion")
             };
         }
     }

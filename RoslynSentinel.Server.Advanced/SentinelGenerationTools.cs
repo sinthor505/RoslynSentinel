@@ -49,7 +49,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName, cancellationToken);
-            return $"GenerateClassesFromJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}";
+            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateClassesFromJson");
         }
     }
 
@@ -83,7 +83,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath, cancellationToken);
-            return $"GenerateHttpClient failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
+            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateHttpClient");
         }
     }
 
@@ -120,7 +120,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName, cancellationToken);
-            return $"GenerateDefaultConfigJson failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
+            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateDefaultConfigJson");
         }
     }
 
@@ -162,7 +162,7 @@ public class SentinelGenerationTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath, cancellationToken);
-            return $"InterpolateStringSafe failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded. Details: {ex.Message}";
+            return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
         }
     }
 

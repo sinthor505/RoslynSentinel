@@ -47,7 +47,7 @@ break anything (LF end-to-end is arguably the more consistent state) and reverti
 would risk introducing a real mistake, but worth knowing this isn't purely an `ApplyDiff`-specific
 problem — something in the write path generally doesn't preserve mixed line endings verbatim.
 
-## Guessed-cause error messages, exception-hierarchy fix — Server.Basic done, Server.Advanced open
+## Guessed-cause error messages, exception-hierarchy fix — closed (Server.Basic + Server.Advanced)
 
 **Found:** 2026-08-21, auditing the codebase for other instances of `ApplyDiff`'s "Check that the
 solution is loaded and the file path is valid" pattern after fixing it there specifically. Found the
@@ -127,23 +127,53 @@ the file you think is affected) and diff the failure set against a real baseline
 "nothing else references this" grep-based audit** — several real misses here only surfaced through
 that final full-suite diff, not through code review.
 
-**Still open — Server.Advanced (not touched this pass, per explicit scoping decision to do
-Server.Basic first):** the same generic-phrase pattern remains in `SentinelScanTools.cs` (6),
-`SentinelAsyncifyTools.cs` (6), `SentinelIntelligenceTools.cs` (7), `SentinelAdvancedRefactoringTools.cs`
-(14), `SentinelCodemodTools.cs` (9), `SentinelQualityTools.cs` (4), `SentinelModernizationTools.cs`
-(1), `SentinelGenerationTools.cs` (4, 3 of which use a shorter "solution is loaded"-only variant) —
-89 total minus the ~34 already fixed in Server.Basic leaves ~55 remaining. `SentinelCodemodTools.cs`
-additionally has 5 `catch (InvalidOperationException ioe)` blocks (lines ~202, 499, 590, 809, 871)
-that specifically assumed `GetBranchedSolutionAsync`'s "solution not loaded" exception type — these
-no longer match (it's `SolutionNotLoadedException` now) but don't crash, since each has a fallback
-`catch (Exception ex)` immediately after; only the error message degrades to generic. Also
-unaudited: whichever `RoslynSentinel.Advanced`/`RoslynSentinel.Server.Advanced` engines have their
-own direct `FindSnippetPosition`/`ApplyDiff`/`GetBranchedSolutionAsync` call sites with local
-type-specific catches — the sweep above covered the whole solution for *these specific 3 already-
-migrated methods*, but a Server.Advanced throw-site migration (elevating its own engines' generic
-`InvalidOperationException`/`FileNotFoundException` "not found" throws to the new hierarchy, the
-way `StructuralRefinementEngine.cs` was done for Basic) has not been attempted and would need the
-same full-solution sweep-and-diff discipline before trusting it.
+**Done — Server.Advanced (2026-08-20, second pass):** all ~55 remaining generic-phrase sites across
+`SentinelScanTools.cs`, `SentinelIntelligenceTools.cs`, `SentinelAdvancedRefactoringTools.cs`,
+`SentinelCodemodTools.cs`, `SentinelQualityTools.cs`, `SentinelModernizationTools.cs`,
+`SentinelGenerationTools.cs` (via `ToErrorMessage` for its 4 bare-`string`-returning methods) migrated
+to `ToolErrorMapper`, mirroring Server.Basic. Along the way, fixed 2 pre-existing `ToolResult<T>`
+contract violations in `SentinelScanTools.cs` (`DescribeScanDetectors`/`AnalyzeMethod` set
+`Success = false` but put the error text in `Data` instead of `Error`).
+
+`SentinelAsyncifyTools.cs` needed more than a mechanical swap: its ~12 outer `catch (Exception ex)`
+blocks all hardcoded `MigrationErrorCode.Exception` + `"An unexpected error occurred."` regardless of
+cause, and 6 inner `*Core` helpers (`PropagateCancellationTokenCore`, `UpliftCallersCore`,
+`FlagMigrationCandidatesCore`, `AsyncifyCore`, `HandlerToAsyncCore`) additionally caught their engine
+call's real exception and **rethrew** a new `InvalidOperationException` carrying the guessed-cause
+sentence, discarding the original exception's type — so the outer catch had nothing accurate to map
+even after being fixed. Both layers were migrated: the inner helpers now
+`catch (Exception ex) when (ex is not ToolException) { log; throw; }` (let the real exception
+propagate) instead of wrapping it, and every outer catch calls `ToolErrorMapper.ToResultError`/
+`ToErrorMessage`. `MigrationErrorCode`'s constants (`SolutionNotLoaded`/`FeatureDisabled`/
+`InvalidArgument`/`Exception`, in `MigrationEnvelope.cs`) were left as-is rather than replaced with
+`ToolErrorCode` — `ResultError.ErrorCode` is a plain `string`, and the two enums' values are
+identical text, so there's no wire-format change from routing through the shared mapper. Left
+untouched (confirmed genuinely per-item, not the guessed-cause pattern): `AddCancellationTokenCore`'s
+loop-internal catch (already uses real `ex.Message`), `BridgeAsyncMethodsCore`'s retry-on-
+"already exists" catch, and 3 `throw new InvalidOperationException($"Validation: ...")` sites inside
+`AsyncifyCore`'s per-candidate loops (all caught locally by an immediately-following per-item catch
+that already uses `ex.Message`, never reaching the outer catch).
+
+**Bug found via this migration, fixed in the same pass:** `ToolErrorMapper.ToResultError` built
+`new ResultError(code, message)` — a 2-arg call, leaving the record's `Detail` field at its default
+`null` — even though `Message` already embeds `ex.Message` as inline text ("...Details: {ex.Message}").
+`RoslynSentinel.Tests.Asyncify/MigrationScanResultTests.cs`'s
+`T9_GetAsyncMigrationProgress_ForcedException_ReturnsException_DetailNonEmpty` asserts
+`result.Error.Detail` is non-empty — caught as a new full-suite test failure after the
+`SentinelAsyncifyTools.cs` migration (this test predates the migration; the old code path happened to
+pass `ex.Message` as a 3rd positional arg to `ResultError`, which the mapper's 2-arg call dropped).
+Fixed by passing `ex.Message` as `ToResultError`'s `Detail` argument — `new ResultError(code, message,
+ex.Message)` — restoring the structured field instead of relying solely on the inline text. Verified
+via `build.ps1 -Flavor Solution -Mode Test`: 0 new failures against the 87-line baseline both before
+and after this fix (the `Detail` fix was the only change needed; re-run confirmed 84 pre-existing
+failures, none new).
+
+Also confirmed unaudited and explicitly out of scope for this pass: engine-layer throw-site
+migration for Server.Advanced's own engines (e.g. `ApiIntegrationEngine.AddValidationToPocoAsync`'s
+"class not found" `InvalidOperationException`, still caught by name-specific `catch (InvalidOperationException ioe)`
+blocks in `SentinelCodemodTools.cs` for `add_validation_to_poco`/`convert_abstract_to_interface`) —
+these are already genuine, specific-cause exceptions, just not yet elevated to the `ToolException`
+hierarchy the way `StructuralRefinementEngine.cs` was for Basic. Left as future work, not a bug.
 
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 

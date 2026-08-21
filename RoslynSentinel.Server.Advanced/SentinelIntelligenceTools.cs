@@ -99,7 +99,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetComprehensiveHealthReport failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetComprehensiveHealthReport")
             };
         }
     }
@@ -127,7 +127,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetSolutionMetrics failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetSolutionMetrics")
             };
         }
     }
@@ -187,7 +187,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetCodeInventory failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCodeInventory")
             };
         }
     }
@@ -218,7 +218,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetDiRegistrations failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiRegistrations")
             };
         }
     }
@@ -297,7 +297,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetCallGraph failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetCallGraph")
             };
         }
     }
@@ -327,7 +327,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<string>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"PreviewMoveFileToNamespaceFolder failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewMoveFileToNamespaceFolder")
             };
         }
     }
@@ -361,7 +361,7 @@ public class SentinelIntelligenceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"TraceVariableLifetime failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "TraceVariableLifetime")
             };
         }
     }

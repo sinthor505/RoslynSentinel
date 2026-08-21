@@ -457,7 +457,7 @@ public class SentinelScanTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Scan ({Detector}) failed", detector);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Scan ({detector}) failed unexpectedly. Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Scan ({detector})") };
         }
     }
 
@@ -496,7 +496,7 @@ public class SentinelScanTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "DescribeScanDetectors failed");
-            return Task.FromResult(new ToolResult<object>() { Success = false, Data = $"DescribeScanDetectors failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}" });
+            return Task.FromResult(new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "DescribeScanDetectors") });
         }
     }
 
@@ -537,7 +537,7 @@ public class SentinelScanTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePath}'", aspect, methodName, filePath);
-            return new ToolResult<object>() { Success = false, Data = ($"AnalyzeMethod failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AnalyzeMethod") };
         }
     }
 
@@ -964,7 +964,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ScanBreakingChanges failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanBreakingChanges")
             };
         }
     }
@@ -998,7 +998,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ScanDuplicateBlocksInClass failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanDuplicateBlocksInClass")
             };
         }
     }
@@ -1119,7 +1119,7 @@ public class SentinelScanTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetPublicApiSurface")
             };
         }
     }
