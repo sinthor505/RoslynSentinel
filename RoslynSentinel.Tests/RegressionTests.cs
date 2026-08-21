@@ -1479,7 +1479,7 @@ public class ContextHelperDisambiguationTests
     public void FindSnippetPosition_MultipleMatches_NoHints_ThrowsAmbiguous()
     {
         var src = Src("int x = 1;\nint x = 2;");
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(
             () => ContextHelper.FindSnippetPosition(src, "int x"));
         Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase
             .Or.Contain("2 matches").IgnoreCase);
@@ -1504,7 +1504,7 @@ public class ContextHelperDisambiguationTests
     {
         // lineBefore and lineAfter both appear identically near each occurrence
         var src = Src("// same\nint x = 1;\n// end\n// same\nint x = 2;\n// end");
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(
             () => ContextHelper.FindSnippetPosition(src, "int x",
                 lineBefore: "same", lineAfter: "end"));
         Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase

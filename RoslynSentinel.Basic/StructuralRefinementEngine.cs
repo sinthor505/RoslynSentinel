@@ -29,7 +29,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new FileNotFoundException($"File not found: {filePath}");
+            throw new ToolNotFoundException($"File not found: {filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -182,7 +182,7 @@ public class StructuralRefinementEngine
         {
             int snippetPos;
             try { snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message };
             }

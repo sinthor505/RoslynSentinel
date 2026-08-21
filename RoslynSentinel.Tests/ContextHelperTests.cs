@@ -18,7 +18,7 @@ public class ContextHelperTests
     public void FindSnippetPosition_NotFound_ThrowsHelpfulError()
     {
         var source = "namespace Foo;\npublic class Bar { }";
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(source, "NotPresent"));
         Assert.That(ex!.Message, Does.Contain("not found").IgnoreCase);
     }
@@ -27,7 +27,7 @@ public class ContextHelperTests
     public void FindSnippetPosition_Ambiguous_ThrowsWithCount()
     {
         var source = "int x = 1; int y = 1;";
-        var ex = Assert.Throws<InvalidOperationException>(
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(
             () => ContextHelper.FindSnippetPosition(source, "int"));
         Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
         Assert.That(ex.Message, Does.Contain("2"));
@@ -37,7 +37,7 @@ public class ContextHelperTests
     public void FindSnippetPosition_EmptySnippet_Throws()
     {
         var source = "namespace Foo;";
-        Assert.Throws<InvalidOperationException>(
+        Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(source, "   "));
     }
 
@@ -169,7 +169,7 @@ public class ContextHelperTests
             "    totalUnits += line.Quantity;\n" +
             "}";
 
-        Assert.Throws<InvalidOperationException>(
+        Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippet));
     }
 
@@ -371,7 +371,7 @@ public class ContextHelperTests
         {
             pos = ContextHelper.FindSnippetPosition(testCase.Source, testCase.ContextSnippet);
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             Assert.Fail($"[{testCase.Label}] contextSnippet failed to resolve against real target " +
                 $"source, but this snippet targets code that genuinely exists: {ex.Message}");
@@ -400,7 +400,7 @@ public class ContextHelperTests
             "    return $\"{_customerId}\" + \" \" + {_lines.Count} + \" line(s)\";\n" +
             "}";
 
-        Assert.Throws<InvalidOperationException>(
+        Assert.Throws<ToolNotFoundException>(
             () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
     }
 }

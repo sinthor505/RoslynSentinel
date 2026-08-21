@@ -115,7 +115,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"LocateSymbol failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
             };
         }
     }
@@ -180,7 +180,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"InspectSymbol failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
             };
         }
     }
@@ -306,7 +306,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"QuerySymbolRelationships failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
             };
         }
     }
@@ -338,7 +338,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetBestInsertionPoint failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
             };
         }
     }
@@ -378,7 +378,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"PreviewRenameImpact failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
             };
         }
     }
@@ -440,7 +440,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"FindReferences failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")
             };
         }
     }
@@ -519,7 +519,7 @@ public class SentinelSymbolTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetTypeInfo failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
             };
         }
     }

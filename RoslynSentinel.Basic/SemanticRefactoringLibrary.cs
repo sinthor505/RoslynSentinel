@@ -312,7 +312,7 @@ public class SemanticRefactoringLibrary
 
             return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.NormalizeWhitespace().ToFullString(), FilePath = filePath };
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", FilePath = filePath };
         }

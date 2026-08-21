@@ -188,14 +188,14 @@ public static class ContextHelper
     {
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
-            throw new InvalidOperationException("contextSnippet must not be empty.");
+            throw new ToolNotFoundException("contextSnippet must not be empty.");
         }
 
         var matches = FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
 
         if (matches.Count == 0)
         {
-            throw new InvalidOperationException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
+            throw new ToolNotFoundException($"contextSnippet not found: \"{contextSnippet.Trim()}\"");
         }
 
         if (matches.Count == 1)
@@ -208,10 +208,10 @@ public static class ContextHelper
 
         return (lbTrimmed, laTrimmed) switch
         {
-            (null, null) => throw new InvalidOperationException(
+            (null, null) => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is ambiguous ({matches.Count} matches): \"{contextSnippet.Trim()}\". " +
                 "Provide lineBefore and/or lineAfter (verbatim text from the lines immediately above/below) to disambiguate."),
-            _ => throw new InvalidOperationException(
+            _ => throw new ToolAmbiguousMatchException(
                 $"contextSnippet is still ambiguous ({matches.Count} matches remain): \"{contextSnippet.Trim()}\". " +
                 "Provide more specific lineBefore and/or lineAfter content.")
         };
@@ -238,7 +238,7 @@ public static class ContextHelper
             error = null;
             return FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             error = ex.Message;
             return -1;

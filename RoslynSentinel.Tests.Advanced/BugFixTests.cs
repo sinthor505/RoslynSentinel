@@ -3235,7 +3235,7 @@ public class MyClass
                 // Should not crash and should return code
                 Assert.That(result, Is.Not.Null.And.Not.Empty, "Should return non-empty code");
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 // Context disambiguation errors are acceptable if the snippet is ambiguous
                 Assert.That(ex.Message, Does.Contain("ambiguous") | Does.Contain("match"),

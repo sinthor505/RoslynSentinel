@@ -267,7 +267,7 @@ public class StructuralRefinementEngineTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class C {}")]);
         _workspaceManager.SetTestSolution(solution);
 
-        await Assert.ThrowsAsync<FileNotFoundException>(
+        await Assert.ThrowsAsync<ToolNotFoundException>(
             () => _engine.SyncTypeAndFilenameAsync("DoesNotExist.cs"));
     }
 }

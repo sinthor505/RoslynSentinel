@@ -135,7 +135,7 @@ public class DiffEngineTests
         var oldText = SourceText.From(string.Join(Environment.NewLine, "line1", "line2", "line3"));
         var diff = "@@ -1,1 +1,1 @@\n-this text does not exist in the file\n+replacement";
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _diffEngine.ApplyDiff(oldText, diff));
+        var ex = Assert.Throws<DiffApplyException>(() => _diffEngine.ApplyDiff(oldText, diff));
         Assert.That(ex!.Message, Does.Contain("this text does not exist in the file"));
         Assert.That(ex.Message, Does.Contain("Regenerate the diff"));
     }

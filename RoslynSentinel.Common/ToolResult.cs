@@ -9,6 +9,9 @@ public static class ToolErrorCode
     public const string FeatureDisabled = "FeatureDisabled";
     public const string InvalidArgument = "InvalidArgument";
     public const string BuildFailed = "BuildFailed";
+    public const string NotFound = "NotFound";
+    public const string Ambiguous = "Ambiguous";
+    public const string DiffApplyFailed = "DiffApplyFailed";
     public const string Exception = "Exception";
 }
 

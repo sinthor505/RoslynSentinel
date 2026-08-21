@@ -242,7 +242,7 @@ public class MsToolAugmentEngine
             var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
             sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().FirstOrDefault();
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new SwitchConversionAnalysis(false, 0, [], ex.Message);
         }
@@ -442,7 +442,7 @@ public class MsToolAugmentEngine
         // Find the string.Format invocation
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
-        catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
             .AncestorsAndSelf()
@@ -737,7 +737,7 @@ public class MsToolAugmentEngine
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new ForeachLinqAnalysis(false, "", 0, ex.Message, "Cannot analyze.");
         }
@@ -1031,7 +1031,7 @@ public class MsToolAugmentEngine
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-        catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
 
         // Find the nearest literal expression at or near the snippet position
         var node = root.FindNode(new TextSpan(pos, contextSnippet.Length));
@@ -1431,7 +1431,7 @@ public class MsToolAugmentEngine
         {
             int pos;
             try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-            catch (InvalidOperationException ex) { return MsAugmentResult.Fail(ex.Message); }
+            catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
 
             var SelectionSpan = new TextSpan(pos, contextSnippet.Length);
             var node = root.FindNode(SelectionSpan);

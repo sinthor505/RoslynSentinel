@@ -146,7 +146,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
 
         // Centralized error-to-success filter:
-        // Converts "No solution is loaded" InvalidOperationException into a successful
+        // Converts a SolutionNotLoadedException into a successful
         // CallToolResult so the agent displays the helpful message rather than a generic error.
         mcpBuilder.WithRequestFilters(filters =>
         {
@@ -159,7 +159,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     {
                         return await next(context, cancellationToken);
                     }
-                    catch (InvalidOperationException ex) when (ex.Message.StartsWith("No solution is loaded", StringComparison.Ordinal))
+                    catch (SolutionNotLoadedException ex)
                     {
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {

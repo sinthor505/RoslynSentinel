@@ -161,7 +161,7 @@ public class SentinelWorkspaceTools
                     return new ToolResult<object>()
                     {
                         Success = false,
-                        Error = new ResultError(ToolErrorCode.Exception, $"List files for project '{projectName}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                        Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"List files for project '{projectName}'")
                     };
                 }
             }
@@ -197,7 +197,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"List failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
             };
         }
     }
@@ -271,10 +271,17 @@ public class SentinelWorkspaceTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "LoadSolution failed for '{SolutionPath}'", solutionPath);
+            // Not routed through ToolErrorMapper: its SolutionNotLoaded branch would
+            // say "call LoadSolution first" from inside LoadSolution's own catch block, which is
+            // circular and useless here — the exception (e.g. ToolNotFoundException for a bad path)
+            // already says what actually went wrong.
+            var codeAndMessage = ex is ToolException toolEx
+                ? (toolEx.ErrorCode, toolEx.Message)
+                : (ToolErrorCode.Exception, $"failed unexpectedly ({ex.GetType().Name}): {ex.Message}");
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
             };
         }
     }
@@ -346,33 +353,6 @@ public class SentinelWorkspaceTools
         return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
     }
 
-    /// <summary>
-    /// Builds an ApplyDiff error from a caught exception without asserting a specific cause that
-    /// may not be true. The old behavior appended "Check that the solution is loaded and the file
-    /// path is valid" to every exception unconditionally, including DiffEngine's own
-    /// InvalidOperationException, which already names the real cause (e.g. a stale/mismatched
-    /// hunk) and has nothing to do with the solution or file path — that fixed phrase actively
-    /// misled callers into checking the wrong thing. This instead checks the one cause that's
-    /// cheap to verify directly (whether a solution is loaded) and otherwise trusts the
-    /// exception's own message rather than guessing.
-    /// </summary>
-    private ResultError BuildApplyDiffError(Exception ex, string context)
-    {
-        if (_workspaceManager.CurrentSolution == null)
-        {
-            return new ResultError(ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Details: {ex.Message}");
-        }
-
-        // DiffEngine's own exceptions (bad/stale hunks) are already specific and actionable -
-        // surface them as-is instead of burying them under a generic, likely-wrong hint.
-        if (ex is InvalidOperationException)
-        {
-            return new ResultError(ToolErrorCode.Exception, $"{context} failed: {ex.Message}");
-        }
-
-        return new ResultError(ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Details: {ex.Message}");
-    }
-
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set. changesetFormat=files → changes dict filePath→newContent (filepath not used). changesetFormat=diff → filepath and unifiedDiff are BOTH REQUIRED (filepath names the single file the diff applies to; omitting it is a common mistake and fails immediately). For changesetFormat=diff, hunk line numbers are treated as a starting guess: if a hunk's declared position doesn't match, this searches nearby lines and re-anchors automatically, so modest line-number drift from an earlier edit to the same file is tolerated. Returns ApplyChangesResult with UndoChangeId on successful apply. The full pre-edit file content is NOT included by default (it's already captured for undo via UndoLastApply/GetOperationDetail) — pass returnDiff=true to get a unified-diff-style preview of what changed instead.")]
@@ -441,7 +421,7 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = BuildApplyDiffError(ex, "ApplyDiff validate")
+                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff validate")
                         };
                     }
                 }
@@ -521,7 +501,7 @@ public class SentinelWorkspaceTools
                         return new ToolResult<object>()
                         {
                             Success = false,
-                            Error = BuildApplyDiffError(ex, $"ApplyDiff diff apply for '{filePath}'")
+                            Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyDiff diff apply for '{filePath}'")
                         };
                     }
                 }
@@ -555,7 +535,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = BuildApplyDiffError(ex, "ApplyDiff")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ApplyDiff")
             };
         }
     }
@@ -580,7 +560,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"RetryFailedChanges failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
             };
         }
     }
@@ -712,7 +692,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetDiagnostics failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiagnostics")
             };
         }
     }
@@ -851,7 +831,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
             };
         }
     }
@@ -877,7 +857,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"CreateProject failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateProject")
             };
         }
     }
@@ -903,7 +883,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"SplitProjectByFolder failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SplitProjectByFolder")
             };
         }
     }
@@ -995,7 +975,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("GetMethodSourceFailed", $"GetMethodSource failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetMethodSource")
             };
         }
     }
@@ -1094,7 +1074,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("ReadFileFailed", $"ReadFile failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
             };
         }
     }
@@ -1186,7 +1166,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("GetFileOutlineFailed", $"GetFileOutline failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetFileOutline")
             };
         }
     }
@@ -1302,7 +1282,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("SearchSolutionTextFailed", $"SearchSolutionText failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SearchSolutionText")
             };
         }
     }
@@ -1477,7 +1457,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("GetOperationDetailFailed", $"GetOperationDetail failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetOperationDetail")
             };
         }
     }
@@ -1587,7 +1567,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = false,
-                Error = new ResultError("UndoLastApplyFailed", $"UndoLastApply failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
             };
         }
     }
@@ -1701,7 +1681,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetWorkspaceHealth failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")
             };
         }
     }
@@ -1727,7 +1707,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"GetProjectFrameworkSummary failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
             };
         }
     }

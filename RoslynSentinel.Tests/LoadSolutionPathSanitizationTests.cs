@@ -1,7 +1,7 @@
 // LoadSolution path sanitization — agents sometimes pass solutionPath/baseRepoDir wrapped in
 // stray quotes or whitespace (e.g. copied from a shell-quoted example). ResolveSolutionPath must
 // strip those before checking File.Exists / combining with base directories, otherwise resolution
-// fails with a FileNotFoundException that embeds the literal quote characters in every candidate.
+// fails with a ToolNotFoundException that embeds the literal quote characters in every candidate.
 
 #pragma warning disable CS8618
 
@@ -30,7 +30,7 @@ public class LoadSolutionPathSanitizationTests
         // (single quotes baked into the string itself, not a shell artifact).
         const string quotedPath = "'./Samples/DoesNotExist/DoesNotExist.sln'";
 
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(quotedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -47,7 +47,7 @@ public class LoadSolutionPathSanitizationTests
     {
         const string paddedPath = "  ./Samples/DoesNotExist/DoesNotExist.sln  \n";
 
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _workspaceManager.LoadSolutionAsync(paddedPath));
 
         var triedCandidates = ex!.Message.Split("Tried: ")[1];
@@ -64,7 +64,7 @@ public class LoadSolutionPathSanitizationTests
         {
             var quotedBaseRepoDir = $"\"{tempDir}\"";
 
-            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
                 async () => await _workspaceManager.LoadSolutionAsync("Missing.sln", quotedBaseRepoDir));
 
             Assert.That(ex!.Message, Does.Contain(Path.Combine(tempDir, "Missing.sln")),
@@ -104,14 +104,14 @@ public class LoadSolutionPathSanitizationTests
     {
         // An absolute path wrapped in quotes/whitespace must still resolve to the real file
         // (i.e. the quotes must be stripped, not treated as part of the filename), so loading
-        // proceeds to MSBuild instead of failing fast with FileNotFoundException.
+        // proceeds to MSBuild instead of failing fast with ToolNotFoundException.
         var tempFile = Path.Combine(Path.GetTempPath(), $"RoslynSentinelTests_{Guid.NewGuid()}.sln");
         File.WriteAllText(tempFile, "Microsoft Visual Studio Solution File, Format Version 12.00");
         try
         {
             var wrappedPath = $"  '{tempFile}'  ";
 
-            // Must not throw FileNotFoundException from ResolveSolutionPath; any failure past
+            // Must not throw ToolNotFoundException from ResolveSolutionPath; any failure past
             // that point (e.g. MSBuild parse errors) is swallowed internally by LoadSolutionAsync.
             await Assert.DoesNotThrowAsync(async () => await _workspaceManager.LoadSolutionAsync(wrappedPath));
         }

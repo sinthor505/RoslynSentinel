@@ -215,7 +215,7 @@ public class MappingEngine
                 UpdatedText = newRoot.NormalizeWhitespace().ToFullString()
             };
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {

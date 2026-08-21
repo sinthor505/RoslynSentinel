@@ -327,11 +327,11 @@ public class SymbolNavigationEngine
         {
             symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("matched") || ex.Message.Contains("No match"))
+        catch (ToolException ex) when (ex.Message.Contains("matched") || ex.Message.Contains("No match"))
         {
             return ErrorHoverInfo($"Snippet not found: {ex.Message}");
         }
-        catch (InvalidOperationException)
+        catch (ToolException)
         {
             // fallthrough to position-based approach
         }
@@ -345,7 +345,7 @@ public class SymbolNavigationEngine
             {
                 pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 return ErrorHoverInfo(ex.Message);
             }
@@ -1978,7 +1978,7 @@ public class SymbolNavigationEngine
                                 return found;
                             }
                         }
-                        catch (InvalidOperationException)
+                        catch (ToolException)
                         {
                             // snippet not found in this document — continue
                         }

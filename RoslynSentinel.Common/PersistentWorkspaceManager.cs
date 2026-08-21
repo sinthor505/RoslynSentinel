@@ -172,7 +172,7 @@ public partial class PersistentWorkspaceManager : IDisposable
             }
         }
 
-        throw new FileNotFoundException(
+        throw new ToolNotFoundException(
             $"Could not resolve relative solution path '{solutionPath}'. Tried: {string.Join(", ", candidates.Distinct())}. " +
             $"Pass an absolute path, or supply baseRepoDir to LoadSolution (or set --base-repo-dir at server startup).");
     }
@@ -715,7 +715,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {
-            return CurrentSolution ?? throw new InvalidOperationException(
+            return CurrentSolution ?? throw new SolutionNotLoadedException(
                 "No solution is loaded. Call load_solution with a .sln or .csproj path.");
         }
         finally
@@ -880,7 +880,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         {
             if (CurrentSolution == null)
             {
-                throw new InvalidOperationException("Solution not loaded.");
+                throw new SolutionNotLoadedException("Solution not loaded.");
             }
 
             // ── Pre-image capture ─────────────────────────────────────────────

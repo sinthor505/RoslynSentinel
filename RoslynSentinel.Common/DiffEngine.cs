@@ -76,14 +76,14 @@ public class DiffEngine
                     {
                         if (currentLine >= lines.Count)
                         {
-                            throw new InvalidOperationException($"Diff application failed: Line {currentLine + 1} out of bounds.");
+                            throw new DiffApplyException($"Line {currentLine + 1} out of bounds.");
                         }
                         var expected = diffLine.Substring(1).Trim();
                         var actual = lines[currentLine].Trim();
                         if (expected != actual)
                         {
-                            throw new InvalidOperationException(
-                                $"Diff application failed: hunk '{match.Value}' expected to remove \"{expected}\" " +
+                            throw new DiffApplyException(
+                                $"hunk '{match.Value}' expected to remove \"{expected}\" " +
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
                                 "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
@@ -101,15 +101,15 @@ public class DiffEngine
                         // desynchronize currentLine from the anchor ReanchorHunk already matched.
                         if (currentLine >= lines.Count)
                         {
-                            throw new InvalidOperationException($"Diff application failed: Context line {currentLine + 1} out of bounds.");
+                            throw new DiffApplyException($"Context line {currentLine + 1} out of bounds.");
                         }
 
                         var expected = diffLine.Length == 0 ? "" : diffLine.Substring(1).Trim();
                         var actual = lines[currentLine].Trim();
                         if (expected != actual)
                         {
-                            throw new InvalidOperationException(
-                                $"Diff application failed: hunk '{match.Value}' expected context \"{expected}\" " +
+                            throw new DiffApplyException(
+                                $"hunk '{match.Value}' expected context \"{expected}\" " +
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
                                 "stale relative to hunks applied earlier in this same diff — regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
@@ -193,8 +193,8 @@ public class DiffEngine
             }
         }
 
-        throw new InvalidOperationException(
-            $"Diff application failed: hunk '{hunkHeader}' declares line {declaredLine + 1}, but its content " +
+        throw new DiffApplyException(
+            $"hunk '{hunkHeader}' declares line {declaredLine + 1}, but its content " +
             $"wasn't found there or within {HunkReanchorWindow} lines in either direction. First expected line: " +
             $"\"{anchorLines[0]}\". Regenerate the diff against the file's current content, or use a " +
             "whole-member/whole-file replacement tool instead.");

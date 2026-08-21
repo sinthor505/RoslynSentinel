@@ -3531,7 +3531,7 @@ public class RefactoringEngine
                 UpdatedText = newRoot.ToFullString()
             };
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
@@ -3953,7 +3953,7 @@ public class RefactoringEngine
                 UpdatedText = sb.ToString()
             };
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {

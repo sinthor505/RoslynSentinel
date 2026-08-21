@@ -138,8 +138,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ValidateAndApply pre-validate failed for {OperationName}", operationName);
-            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} pre-validate failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}"), dryRun);
+            return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, _workspaceManager, $"{operationName} pre-validate"), dryRun);
         }
 
         if (!validation.Success)
@@ -529,7 +528,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePath}'", operation, containerName ?? memberName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Member failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
         }
     }
 
@@ -594,7 +593,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "UsingDirective failed for '{Namespace}' in '{FilePath}'", namespaceName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"UsingDirective failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UsingDirective") };
         }
     }
 
@@ -639,7 +638,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyEnum failed for '{EnumName}' in '{FilePath}'", enumName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyEnum failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyEnum") };
         }
     }
 
@@ -680,7 +679,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ChangeAccessibility failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ChangeAccessibility failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeAccessibility") };
         }
     }
 
@@ -742,7 +741,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SummaryComment failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SummaryComment failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SummaryComment") };
         }
     }
 
@@ -841,7 +840,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ConstructorParameter failed for '{ClassName}' in '{FilePath}'", className, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConstructorParameter") };
         }
     }
 
@@ -885,7 +884,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ExtractLocalVariable failed for '{VariableName}' in '{FilePath}'", variableName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ExtractLocalVariable failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractLocalVariable") };
         }
     }
 
@@ -955,7 +954,7 @@ public class SentinelRefactoringTools
             return new ToolResult<object>
             {
                 Success = false,
-                Error = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}")
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMethodSafe")
             };
         }
     }
@@ -1015,7 +1014,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyAttribute failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyAttribute failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyAttribute") };
         }
     }
 
@@ -1069,7 +1068,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyModifier failed for '{TargetName}' in '{FilePath}'", targetName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyModifier failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
         }
     }
 
@@ -1123,7 +1122,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "ModifyBaseType failed for '{TypeName}' in '{FilePath}'", typeName, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ModifyBaseType failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyBaseType") };
         }
     }
 
@@ -1179,7 +1178,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "SyncTypeAndFilename unexpected exception for '{FilePath}'", filePath);
-            return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename for '{filePath}' failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and the file path is valid. Details: {ex.Message}") };
+            return new ToolResult<object> { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"SyncTypeAndFilename for '{filePath}'") };
         }
     }
 }

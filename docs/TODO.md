@@ -27,19 +27,16 @@ and confirms the fix). Both `ReanchorHunk`/`MatchesAt` (the search) and the main
 processing loop (the actual apply) were updated in tandem — a bare empty line is now treated as an
 implicit blank context line by both, consistently.
 
-**Fix 2 — the outer tool-layer wrapper's misleading message.** All three `catch` blocks in
-`SentinelWorkspaceTools.cs`'s `ApplyDiff` method previously appended a fixed *"Check that the
-solution is loaded and the file path is valid"* sentence to every exception unconditionally,
+**Fix 2 — the outer tool-layer wrapper's misleading message (first pass).** All three `catch`
+blocks in `SentinelWorkspaceTools.cs`'s `ApplyDiff` method previously appended a fixed *"Check that
+the solution is loaded and the file path is valid"* sentence to every exception unconditionally,
 including `DiffEngine`'s own `InvalidOperationException` — which already names the real cause (a
 stale/mismatched hunk) and has nothing to do with the solution or file path. That fixed phrase
 actively misled callers into checking the wrong thing, exactly as flagged live during this session.
-Replaced with a new `BuildApplyDiffError(ex, context)` helper that only asserts what it can verify:
-if `_workspaceManager.CurrentSolution` is actually `null`, it reports `SolutionNotLoaded` with a
-concrete "call LoadSolution first" instruction; if the exception is an `InvalidOperationException`
-(the type `DiffEngine.ApplyDiff` throws for its own actionable failures), its message is surfaced
-as-is with no added guesswork; otherwise a generic-but-honest "failed unexpectedly" message is used
-without asserting a specific unverified cause. All three catch sites (`ApplyDiff validate`,
-`ApplyDiff diff apply`, and the outer catch-all) now go through this helper.
+First fix: a local `BuildApplyDiffError(ex, context)` helper that checked
+`_workspaceManager.CurrentSolution == null` directly and trusted `InvalidOperationException`
+messages instead of guessing. **Superseded the same day** by the broader fix below once an audit
+found the identical anti-pattern in ~89 catch blocks across 11 files, not just `ApplyDiff`.
 
 **Related, separate observation:** applying this fix's own edit to `DiffEngineTests.cs` (via the
 IDE's direct file-edit tool, not `ApplyDiff`) silently normalized that file's line endings from
@@ -49,6 +46,104 @@ the opposite direction and via a different tool. Not investigated further here s
 break anything (LF end-to-end is arguably the more consistent state) and reverting file-by-file
 would risk introducing a real mistake, but worth knowing this isn't purely an `ApplyDiff`-specific
 problem — something in the write path generally doesn't preserve mixed line endings verbatim.
+
+## Guessed-cause error messages, exception-hierarchy fix — Server.Basic done, Server.Advanced open
+
+**Found:** 2026-08-21, auditing the codebase for other instances of `ApplyDiff`'s "Check that the
+solution is loaded and the file path is valid" pattern after fixing it there specifically. Found the
+exact same unconditional, often-wrong guessed-cause message hardcoded into ~89 catch blocks across
+11 files (`SentinelWorkspaceTools.cs`, `SentinelRefactoringTools.cs`, `SentinelSymbolTools.cs` in
+Server.Basic; `SentinelScanTools.cs`, `SentinelAsyncifyTools.cs`, `SentinelIntelligenceTools.cs`,
+`SentinelAdvancedRefactoringTools.cs`, `SentinelCodemodTools.cs`, `SentinelQualityTools.cs`,
+`SentinelModernizationTools.cs`, `SentinelGenerationTools.cs` in Server.Advanced) — every one of
+these asserted "solution not loaded or path invalid" regardless of the exception's actual type or
+cause. One correctly-tailored variant already existed (`Build`'s "...and dotnet is on PATH"),
+showing the pattern was hand-copied per-tool with no shared helper.
+
+**Root design decision:** rather than guess a category from a caught exception's runtime type (most
+domain failures across the engine layer are stock `InvalidOperationException`/`ArgumentException`/
+`FileNotFoundException` with the real specifics only in message text — confirmed via an engine-wide
+survey; no custom exception types existed before this fix, and two pre-existing half-adopted
+taxonomies, `ToolErrorCode` and `EngineOutcome`/`EngineErrorCode`, were both largely bypassed in
+favor of a catch-all `Exception` code), the fix makes the **throw site** self-report its category.
+Added a small exception hierarchy in `RoslynSentinel.Common/ToolException.cs`:
+`SolutionNotLoadedException`, `ToolNotFoundException`, `ToolAmbiguousMatchException`,
+`DiffApplyException` (all `: ToolException : Exception`, each exposing its own `ErrorCode`). Added
+matching `ToolErrorCode.NotFound`/`Ambiguous`/`DiffApplyFailed` constants (`ToolResult.cs`). Added a
+single shared `ToolErrorMapper.ToResultError(ex, workspaceManager, context)` (also in
+`ToolException.cs`) that every catch block calls directly: `ToolException` subclasses pass their
+`ErrorCode`/`Message` straight through with no guessing; otherwise it checks
+`workspaceManager.CurrentSolution == null` directly (the one thing cheap to verify) before falling
+back to a generic, honest "failed unexpectedly" message with no asserted cause.
+
+**Done this pass (Server.Basic + the shared throw-site migration it depends on):**
+- `RoslynSentinel.Common/PersistentWorkspaceManager.cs`: `GetBranchedSolutionAsync` and
+  `ApplyProposedChangesAsync`'s "Solution not loaded" check now throw `SolutionNotLoadedException`;
+  `ResolveSolutionPath` now throws `ToolNotFoundException` instead of `FileNotFoundException`.
+- `RoslynSentinel.Common/DiffEngine.cs`: all of `ApplyDiff`'s throw sites and `ReanchorHunk`'s
+  "not found" throw now throw `DiffApplyException` (this also retired the original one-off
+  `BuildApplyDiffError` helper above — it's now just a call to the shared mapper).
+- `RoslynSentinel.Common/ContextHelper.cs`: `FindSnippetPosition`'s not-found/ambiguous throws now
+  throw `ToolNotFoundException`/`ToolAmbiguousMatchException`. `TryFindSnippetPosition`'s own catch
+  updated to match.
+- `RoslynSentinel.Basic/StructuralRefinementEngine.cs`: `SyncTypeAndFilenameAsync`'s "file not
+  found" now throws `ToolNotFoundException`.
+- All 89 generic-phrase catch sites in `SentinelWorkspaceTools.cs`, `SentinelRefactoringTools.cs`,
+  `SentinelSymbolTools.cs` (Server.Basic's 3 files with the pattern) replaced with
+  `ToolErrorMapper.ToResultError(ex, _workspaceManager, context)` calls. `LoadSolution`'s own catch
+  block deliberately does NOT go through the mapper — its `SolutionNotLoaded` branch would say "call
+  LoadSolution first" from inside `LoadSolution` itself, which is circular; it special-cases
+  `ToolException` vs. generic `Exception` inline instead. `Build`'s already-correct
+  "...dotnet is on PATH" message was left untouched.
+- Every downstream `catch (InvalidOperationException`/`catch (FileNotFoundException` site that
+  wrapped one of the migrated throw sites was found and updated to `catch (ToolException` (or the
+  specific subclass) instead, across both source and tests: `RoslynSentinel.Basic/RefactoringEngine.cs`
+  (2 sites, `WrapInTryCatchAsync`/`WrapInRegionAsync`), `SymbolNavigationEngine.cs` (3 sites in/around
+  `GetSymbolInfoAsync` and `ResolveSymbolByNameAsync`), `MsToolAugmentEngine.cs` (5 sites — the
+  broadest miss on the first sweep, see below), `SemanticRefactoringLibrary.cs` (`WrapInUsingAsync`),
+  `MappingEngine.cs` (`InvertAssignmentsAsync`), `ServiceRegistrationExtensionsBasic.cs` (the MCP
+  request filter that turns "no solution loaded" into a friendly non-error response — this one would
+  have silently stopped working, since its old filter matched on `InvalidOperationException` +
+  message-prefix rather than type); test-side: `RoslynSentinel.Tests/ContextHelperTests.cs`,
+  `RegressionTests.cs`, `LoadSolutionPathSanitizationTests.cs`, `RoslynSentinel.Tests.Basic/DiffEngineTests.cs`,
+  `RoslynSentinel.Tests.Advanced/BugFixTests.cs`, `RoslynSentinel.Tests.Battery/BatteryNineTests.cs`
+  (`SyncTypeAndFilename_UnknownFile_ThrowsFileNotFound`).
+- Verified via full-suite runs (`Tests`, `Tests.Basic`, `Tests.Advanced`, `Tests.Battery`) that the
+  post-fix failure sets are byte-for-byte identical to the pre-fix (stashed) baseline — no new
+  failures, confirmed by diffing sorted test-name lists, not just failure counts.
+
+**How the migration was actually caught being incomplete (worth remembering):** an initial
+targeted-file sweep (checking only `RefactoringEngine.cs`) missed 5 sites in
+`MsToolAugmentEngine.cs` that also call `ContextHelper.FindSnippetPosition` directly — caught only
+because running the full `Tests.Basic` suite surfaced a genuine new failure
+(`ExtractMethodSafe_SnippetNotFound_ReturnsFail`) that wasn't in the pre-existing-failure set. A
+second, deliberately paranoid whole-solution sweep (tracing actual call chains, not just grepping
+for exception-type names near each other) then found 2 more source sites
+(`SemanticRefactoringLibrary.cs`, `MappingEngine.cs`) and 1 more test site (`BugFixTests.cs`) that
+the first "careful" pass had also missed, plus a `Tests.Battery` site
+(`SyncTypeAndFilename_UnknownFile_ThrowsFileNotFound`) that a narrower grep pattern failed to catch
+initially. **Lesson: after any exception-type migration, always run the full test suite (not just
+the file you think is affected) and diff the failure set against a real baseline before trusting a
+"nothing else references this" grep-based audit** — several real misses here only surfaced through
+that final full-suite diff, not through code review.
+
+**Still open — Server.Advanced (not touched this pass, per explicit scoping decision to do
+Server.Basic first):** the same generic-phrase pattern remains in `SentinelScanTools.cs` (6),
+`SentinelAsyncifyTools.cs` (6), `SentinelIntelligenceTools.cs` (7), `SentinelAdvancedRefactoringTools.cs`
+(14), `SentinelCodemodTools.cs` (9), `SentinelQualityTools.cs` (4), `SentinelModernizationTools.cs`
+(1), `SentinelGenerationTools.cs` (4, 3 of which use a shorter "solution is loaded"-only variant) —
+89 total minus the ~34 already fixed in Server.Basic leaves ~55 remaining. `SentinelCodemodTools.cs`
+additionally has 5 `catch (InvalidOperationException ioe)` blocks (lines ~202, 499, 590, 809, 871)
+that specifically assumed `GetBranchedSolutionAsync`'s "solution not loaded" exception type — these
+no longer match (it's `SolutionNotLoadedException` now) but don't crash, since each has a fallback
+`catch (Exception ex)` immediately after; only the error message degrades to generic. Also
+unaudited: whichever `RoslynSentinel.Advanced`/`RoslynSentinel.Server.Advanced` engines have their
+own direct `FindSnippetPosition`/`ApplyDiff`/`GetBranchedSolutionAsync` call sites with local
+type-specific catches — the sweep above covered the whole solution for *these specific 3 already-
+migrated methods*, but a Server.Advanced throw-site migration (elevating its own engines' generic
+`InvalidOperationException`/`FileNotFoundException` "not found" throws to the new hierarchy, the
+way `StructuralRefinementEngine.cs` was done for Basic) has not been attempted and would need the
+same full-solution sweep-and-diff discipline before trusting it.
 
 ## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
 
