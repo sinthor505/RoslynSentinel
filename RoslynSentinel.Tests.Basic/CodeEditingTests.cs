@@ -831,6 +831,62 @@ public class Order
     }
 
     [Test]
+    public async Task AddSummaryComment_PreservesBlankLineBeforeTargetAndIndentsDocComment()
+    {
+        // Live-run regression (RoslynSentinel Advanced commenting pass, 2026-08-22): every single
+        // AddSummaryCommentAsync insertion across 4 files collapsed the blank line separating the
+        // target from the previous member, and landed "/// <summary>" at column 0 instead of the
+        // member's own indentation. Root cause: the synthetic doc comment (parsed from a string built
+        // at column 0) was inserted into rebuiltTrivia without ever prepending baseIndent to it, and
+        // WithLeadingTrivia(newTrivia) replaced the target's entire original leading trivia — including
+        // the blank-line EndOfLine trivia — with only docTrivia + kept comments + one trailing baseIndent.
+        SetSource(@"
+public class Widget
+{
+    private readonly int _value;
+
+    public Widget(int value)
+    {
+        _value = value;
+    }
+}
+", "Widget.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Widget.cs", "Widget",
+            "Initializes a new instance of the Widget class.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain(
+            "    private readonly int _value;\n\n    /// <summary>"),
+            "the blank line separating the constructor from the previous field must survive, and the doc comment must be indented to match the member, not land at column 0");
+    }
+
+    [Test]
+    public async Task AddSummaryComment_TargetAlreadyHasSummary_ReplacesIt()
+    {
+        SetSource(@"
+public class Widget
+{
+    /// <summary>
+    /// The old summary.
+    /// </summary>
+    public void DoWork()
+    {
+    }
+}
+", "Widget2.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Widget2.cs", "DoWork",
+            "The new summary.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("The new summary."));
+        Assert.That(result.UpdatedText, Does.Not.Contain("The old summary."));
+    }
+
+    [Test]
     public async Task AddSummaryComment_TargetIsEnum_Succeeds()
     {
         // GetMemberName had no switch case for EnumDeclarationSyntax, so ResolveMemberByNameOrSnippet

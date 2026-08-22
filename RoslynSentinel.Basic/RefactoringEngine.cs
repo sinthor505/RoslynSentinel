@@ -3091,35 +3091,27 @@ public class RefactoringEngine
             };
         }
 
+        // baseIndent is derived first because docText bakes it into every line of the synthetic doc
+        // comment (ParseMemberDeclaration has no notion of "the target's real indent" — whatever
+        // whitespace is in the string is exactly what ends up in the parsed trivia).
+        var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
+        var indentText = baseIndent != default ? baseIndent.ToFullString() : "";
         var normalizedSummary = NormalizeSummaryText(summaryText);
-        var docText = $"/// <summary>\n/// {normalizedSummary}\n/// </summary>\nvoid __Dummy__() {{}}";
+        var docText = $"{indentText}/// <summary>\n{indentText}/// {normalizedSummary}\n{indentText}/// </summary>\n{indentText}void __Dummy__() {{}}";
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
 
-        // Keep only the target's own real (non-doc, non-whitespace) trivia — e.g. a pre-existing
-        // "// planted scenario" line comment — and re-derive its indentation from the target's own
-        // base indent, rather than concatenating the synthetic doc block's whitespace with whatever
-        // blank-line/indentation trivia the original leading trivia happened to carry. Concatenating
-        // two independently-produced whitespace runs (one baked into the synthetic doc comment, one
-        // preserved verbatim from the original file) stacks rather than collapses, and
-        // NormalizeWhitespace() does not fix it: that whitespace is already attached to a comment
-        // trivia, not indentation Roslyn treats as owned by the node.
-        var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
-        var keptComments = target.GetLeadingTrivia()
-            .Where(t => t.IsKind(SyntaxKind.SingleLineCommentTrivia) || t.IsKind(SyntaxKind.MultiLineCommentTrivia))
+        // Keep the target's own real leading trivia that isn't the doc comment itself — blank-line
+        // separators from the previous member and any pre-existing "// planted scenario" line
+        // comments — in their original relative order and indentation, then splice the freshly
+        // indented doc comment in immediately before the target's own base indent. A pre-existing
+        // XML doc comment is dropped here deliberately: this is an Add operation and replaces
+        // whatever summary was already present.
+        var keptLeading = target.GetLeadingTrivia()
+            .Where(t => !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia))
             .ToList();
-        var rebuiltTrivia = new List<SyntaxTrivia>(docTrivia);
-        foreach (var comment in keptComments)
-        {
-            if (baseIndent != default)
-            {
-                rebuiltTrivia.Add(baseIndent);
-            }
-
-            rebuiltTrivia.Add(comment);
-            rebuiltTrivia.Add(SyntaxFactory.CarriageReturnLineFeed);
-        }
-
+        var rebuiltTrivia = new List<SyntaxTrivia>(keptLeading);
+        rebuiltTrivia.AddRange(docTrivia);
         if (baseIndent != default)
         {
             rebuiltTrivia.Add(baseIndent);
