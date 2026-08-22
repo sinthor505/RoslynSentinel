@@ -830,6 +830,66 @@ public class Order
             "the pre-existing trailing comment's original 4-space indentation must be preserved");
     }
 
+    [Test]
+    public async Task AddSummaryComment_TargetIsEnum_Succeeds()
+    {
+        // GetMemberName had no switch case for EnumDeclarationSyntax, so ResolveMemberByNameOrSnippet
+        // silently dropped every enum candidate regardless of name — a live agent's
+        // AddSummaryCommentAsync("OrderStatus", ...) against a real, unambiguous top-level enum
+        // failed "target not found" purely because of this gap, not any real ambiguity or missing file.
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "OrderStatus.cs", "OrderStatus",
+            "Enumeration of possible order status values.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
+        Assert.That(result.UpdatedText, Does.Contain("Enumeration of possible order status values."));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_TargetIsRecord_Succeeds()
+    {
+        SetSource(@"
+public record OrderLine(string Sku, int Quantity);
+", "OrderLine.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "OrderLine.cs", "OrderLine",
+            "A single line item within an order.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("A single line item within an order."));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_TargetIsStruct_Succeeds()
+    {
+        SetSource(@"
+public struct Point
+{
+    public int X;
+    public int Y;
+}
+", "Point.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Point.cs", "Point",
+            "A 2D point.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("A 2D point."));
+    }
+
     // ══════════════════════════════════════════════════════════════
     // AddPropertyAsync
     // ══════════════════════════════════════════════════════════════

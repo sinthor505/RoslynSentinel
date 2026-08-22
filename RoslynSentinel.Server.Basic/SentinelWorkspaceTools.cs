@@ -1083,7 +1083,7 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
-    [Description("Returns a structural outline of a file — namespaces, classes, interfaces, methods, and properties with 1-based line ranges. Member bodies are not included.")]
+    [Description("Returns a structural outline of a file — namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
     public async Task<ToolResult<object>> GetFileOutline([Consumes(DataTag.SourceFilepath, required: true)] string filepath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
@@ -1143,6 +1143,43 @@ public class SentinelWorkspaceTools
                         kind = "property";
                         name = prop.Identifier.Text;
                         container = (prop.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    // Struct/record/enum, and enum members, constructors, and fields were never
+                    // covered here — a file containing only these (e.g. a pure enum file) produced
+                    // an outline with nothing but a "namespace" entry, silently implying the file had
+                    // no commentable/editable members at all. Confirmed live: an agent asked to add
+                    // summary comments to every member skipped OrderStatus.cs's enum entirely because
+                    // GetFileOutline gave no indication OrderStatus existed, then SummaryComment also
+                    // failed once the agent tried it anyway (separate gap, see GetMemberName).
+                    case StructDeclarationSyntax @struct:
+                        kind = "struct";
+                        name = @struct.Identifier.Text;
+                        container = (@struct.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@struct.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    case RecordDeclarationSyntax record:
+                        kind = "record";
+                        name = record.Identifier.Text;
+                        container = (record.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (record.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    case EnumDeclarationSyntax @enum:
+                        kind = "enum";
+                        name = @enum.Identifier.Text;
+                        container = (@enum.Parent as BaseNamespaceDeclarationSyntax)?.Name.ToString() ?? (@enum.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    case EnumMemberDeclarationSyntax enumMember:
+                        kind = "enum member";
+                        name = enumMember.Identifier.Text;
+                        container = (enumMember.Parent as EnumDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    case ConstructorDeclarationSyntax ctor:
+                        kind = "constructor";
+                        name = ctor.Identifier.Text;
+                        container = (ctor.Parent as TypeDeclarationSyntax)?.Identifier.Text;
+                        break;
+                    case FieldDeclarationSyntax field:
+                        kind = "field";
+                        name = field.Declaration.Variables.FirstOrDefault()?.Identifier.Text;
+                        container = (field.Parent as TypeDeclarationSyntax)?.Identifier.Text;
                         break;
                 }
 

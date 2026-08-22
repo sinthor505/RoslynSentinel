@@ -4008,6 +4008,16 @@ public class RefactoringEngine
             InterfaceDeclarationSyntax i => i.Identifier.Text,
             FieldDeclarationSyntax f => f.Declaration.Variables.FirstOrDefault()?.Identifier.Text,
             ConstructorDeclarationSyntax ctor => ctor.Identifier.Text,
+            // EnumDeclarationSyntax/RecordDeclarationSyntax/StructDeclarationSyntax are all
+            // MemberDeclarationSyntax (via BaseTypeDeclarationSyntax) and so are already collected
+            // as candidates by ResolveMemberByNameOrSnippet's DescendantNodes().OfType<...>() scan —
+            // omitting them here didn't exclude them, it silently made GetMemberName return null for
+            // them, so the `GetMemberName(m) == memberName` filter dropped them regardless of what
+            // name was searched for. Confirmed: AddSummaryCommentAsync("OrderStatus", ...) against a
+            // real, unambiguous top-level enum failed "target not found" purely because of this gap.
+            EnumDeclarationSyntax e => e.Identifier.Text,
+            RecordDeclarationSyntax r => r.Identifier.Text,
+            StructDeclarationSyntax s => s.Identifier.Text,
             _ => null
         };
     }

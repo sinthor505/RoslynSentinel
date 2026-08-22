@@ -251,6 +251,24 @@ public class ComprehensiveToolTests
         Assert.That(deadCode, Is.Not.Null);
     }
 
+    [Test]
+    public async Task GetFileOutline_EnumOnlyFile_ListsTheEnumAndItsMembers()
+    {
+        // A file containing only an enum used to produce an outline with nothing but the
+        // "namespace" entry — enum/struct/record/constructor/field were never covered by the
+        // switch, silently implying the file had no commentable/editable members at all. This
+        // was the root cause behind a live agent skipping OrderStatus.cs entirely while adding
+        // summary comments to every other file in a solution.
+        SetSource("namespace N;\npublic enum Status\n{\n    Pending,\n    Shipped\n}", "Status.cs");
+        var result = await _workspaceTools.GetFileOutline("Status.cs");
+
+        Assert.That(result.Success, Is.True);
+        var items = (List<OutlineItem>)result.Data!;
+        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum", "Status")));
+        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Pending")));
+        Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Shipped")));
+    }
+
     private void SetSource(string source, string fileName)
     {
         _workspaceManager.SetTestSolution(CreateSolution(source, fileName));
