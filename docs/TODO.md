@@ -401,6 +401,29 @@ cost from "one bloated response" to "two calls, one of which re-fetches what was
 the file/method afterward to confirm... actually look correct") implicitly assumes agents *should* be
 re-reading after every write, which is exactly the extra round-trip this behavior forces.
 
+## `ChangeSignature` silently skips call-site reordering on arity mismatch
+
+**Found:** 2026-08-22, during a Roslyn-duplication audit of `ChangeSignatureAsync`
+(`RoslynSentinel.Basic/RefactoringEngine.cs`, currently around line 205). See
+`docs/roslyn-duplication-audit-v1.md` finding #3.
+
+**What:** after reordering the target method's declared parameter list, the tool walks all
+references via `SymbolFinder.FindReferencesAsync` and reorders each call site's arguments to match.
+But the reorder is only applied when `args.Count == parameters.Count` exactly
+(`RefactoringEngine.cs:205`) — any call site using named arguments, an omitted optional argument, or
+`params` array expansion has a different effective/textual arg count and is silently `continue`d
+past, with no error or warning surfaced anywhere in the result.
+
+**Why this matters:** the declaration is still reordered even when some call sites are skipped, so
+those skipped call sites are left passing arguments positionally to the *old* parameter order against
+the *new* declaration — a silent semantic break (wrong values going to wrong parameters, or a type
+mismatch if types differ) that compiles cleanly in many cases and is easy to miss in review.
+
+**Suggested approach:** at minimum, surface which call sites were skipped (file/line) in the result so
+the caller/agent knows to handle them manually. A fuller fix would need real argument-to-parameter
+binding (via the semantic model's `SemanticModel.GetSymbolInfo`/argument-matching, not just positional
+count) to correctly handle named/optional/params call sites instead of skipping them.
+
 **Why this matters:** the large-result offload pattern is the mechanism that should resolve this
 tension: return the actual result (e.g. the new member's text, or a small tail/diff of the change)
 inline when it's small, and only offload to disk when it's genuinely large — rather than
@@ -459,4 +482,43 @@ parameter (cheapest, prefer this), (b) cheaply reconstructable from caller-suppl
 duplicating engine formatting logic, or (c) not available without either engine changes or accepting
 the whole-file `UpdatedText`/diff (in which case, leave it out rather than duplicating engine logic
 or reintroducing the original context-bloat problem this mechanism was built to avoid).
+
+## `PullUpMember` tool is a no-op stub, but is exposed with a description implying it works
+
+**Found:** 2026-08-22, during a brief Roslyn-duplication review pass of the remaining structural
+refactoring tools. See `docs/roslyn-duplication-audit-v1.md`.
+
+**What:** `StructuralRefinementEngine.PullUpMemberAsync` (`RoslynSentinel.Basic/StructuralRefinementEngine.cs:351`)
+is entirely unimplemented — its body is just a comment (`// logic to remove from class, add to base...`)
+and an immediate `return new Dictionary<FilePath, string>();`. No syntax tree is touched, nothing is
+awaited. It is nonetheless wired up to a fully-described, user-facing MCP tool
+(`SentinelAdvancedRefactoringTools.PullUpMember`, `RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs:390`)
+whose `[Description]` reads: "Pulls a method or property from a derived class into its base class.
+Removes override, adds virtual (if not already abstract/virtual), and moves the declaration." None of
+that happens. Because the engine call always returns an empty dict, the tool wrapper's
+`changes.Count == 0` check (line 414) always fires, so every call fails with the misleading message
+`"Member 'X' not found or no accessible base class available."` — indistinguishable from a genuine
+"class/member doesn't exist" error, even when both exist and are eligible.
+
+The sibling method `StructuralRefinementEngine.PushMembersDownAsync` (line 360, "push member down to
+derived classes") has the identical stub shape, but is **not** wired to any exposed MCP tool — lower
+priority since no caller can reach it today, but should be fixed alongside `PullUpMemberAsync` if that
+one gets implemented, or removed if push-down is out of scope.
+
+**Why this matters:** an agent (or user) calling `PullUpMember` gets a plausible-sounding "not found"
+error and will reasonably conclude their class/member names are wrong or the base class is
+inaccessible, and may spend real effort double-checking names, symbol resolution, etc. — when the
+actual cause is that the tool does nothing at all. This is worse than an honest
+`NotImplementedException` or a `FeatureDisabled` result, both of which exist elsewhere in this codebase
+as an established pattern for gating incomplete tools.
+
+**Suggested approach:** short-term, make the failure honest — either gate `PullUpMember` behind
+`_config.IsFeatureEnabled(...)` returning `FeatureDisabled` (the pattern already used elsewhere, e.g.
+`ExtractLocalVariableAsync`), or have the engine method throw/return a distinct "not implemented"
+outcome instead of a silently-empty dict that collapses into the generic not-found path. Longer-term,
+implement the real logic: locate `className`'s base class via `INamedTypeSymbol.BaseType`, find
+`memberName`'s declaration, clone it into the base class syntax tree with `override` removed and
+`virtual` added (if not already `abstract`/`virtual`), remove the original from the derived class, and
+replace both documents — this is genuinely new logic (Roslyn has no public or internal "pull member
+up" refactoring service to delegate to), not a duplication-avoidance case.
 

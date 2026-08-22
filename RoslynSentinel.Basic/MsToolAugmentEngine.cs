@@ -272,19 +272,19 @@ public class MsToolAugmentEngine
         string? blockingReason = safe ? null
             : $"Cannot safely convert: {multiAssignCases.Count} case(s) assign to multiple variables. " +
               string.Join("; ", multiAssignCases.Select(c => $"'{c.CaseLabel}' assigns [{string.Join(", ", c.AssignedVariables)}]")) +
-              ". The standard tool will silently drop all but the last assignment. RefacancellationTokenor to a single assignment or helper method first.";
+              ". The standard tool will silently drop all but the last assignment. Refactor to a single assignment or helper method first.";
 
         return new SwitchConversionAnalysis(safe, caseInfos.Count, caseInfos, blockingReason);
     }
 
     // ── 3. ConvertSwitchToPatternSafe ─────────────────────────────────────────
     // MS Bug: convert_to_pattern_matching drops all but the last assignment in
-    // multi-assignment cases. This version rejecancellationTokens those with a clear error message
-    // and only converts when the output will be correcancellationToken.
+    // multi-assignment cases. This version rejects those with a clear error message
+    // and only converts when the output will be correct.
 
     /// <summary>
     /// Converts a switch statement to a switch expression. Unlike the standard
-    /// <c>convert_to_pattern_matching</c> tool, this version rejecancellationTokens switch statements
+    /// <c>convert_to_pattern_matching</c> tool, this version rejects switch statements
     /// where cases assign to multiple variables — preventing silent data loss.
     /// </summary>
     public async Task<MsAugmentResult> ConvertSwitchToPatternSafeAsync(
@@ -564,7 +564,7 @@ public class MsToolAugmentEngine
     // This combines sort + dedup in one pass.
 
     /// <summary>
-    /// Sorts <c>using</c> direcancellationTokenives alphabetically (System.* first) AND removes
+    /// Sorts <c>using</c> directives alphabetically (System.* first) AND removes
     /// duplicates in a single operation. Fixes the gap between <c>sort_usings</c>
     /// (no dedup) and <c>remove_unused_usings</c> (won't remove a duplicate that
     /// is technically "used").
@@ -682,7 +682,7 @@ public class MsToolAugmentEngine
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        // Use an AdhocWorkspace for formatting options — no projecancellationToken or solution needed
+        // Use an AdhocWorkspace for formatting options — no project or solution needed
         using var workspace = new AdhocWorkspace();
         var formattedRoot = Formatter.Format(root, workspace, cancellationToken: cancellationToken);
         var formatted = formattedRoot.ToFullString();
@@ -759,7 +759,7 @@ public class MsToolAugmentEngine
                 "No foreach statement found at contextSnippet location.", "Cannot analyze.");
         }
 
-        // Find List.Add() calls in the foreach body to determine the collecancellationTokenion variable
+        // Find List.Add() calls in the foreach body to determine the collection variable
         var addCalls = forEach.Statement.DescendantNodesAndSelf()
             .OfType<InvocationExpressionSyntax>()
             .Where(inv => inv.Expression is MemberAccessExpressionSyntax mae
@@ -773,7 +773,7 @@ public class MsToolAugmentEngine
                 "Manual analysis required — this foreach may not be convertible to LINQ.");
         }
 
-        // All Add() calls must target the same collecancellationTokenion
+        // All Add() calls must target the same collection
         var collectionNames = addCalls
             .Select(c => ((MemberAccessExpressionSyntax)c.Expression).Expression.ToString())
             .Distinct()
@@ -859,7 +859,7 @@ public class MsToolAugmentEngine
     // without ever touching the file.
 
     /// <summary>
-    /// Computes which <c>using</c> direcancellationTokenives would be added without modifying the file.
+    /// Computes which <c>using</c> directives would be added without modifying the file.
     /// Fixes the standard <c>add_missing_usings</c> tool's bug where <c>preview:true</c>
     /// is silently ignored and the file is modified on disk.
     /// </summary>
@@ -917,7 +917,7 @@ public class MsToolAugmentEngine
                 UpdatedContent: root.ToFullString());
         }
 
-        // ExtracancellationToken unresolved identifier names from diagnostics
+        // Extract unresolved identifier names from diagnostics
         var unresolvedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var diag in diagnostics)
         {
@@ -932,7 +932,7 @@ public class MsToolAugmentEngine
             }
         }
 
-        // Search all projecancellationTokens in the solution for types matching each unresolved name
+        // Search all projects in the solution for types matching each unresolved name
         var namespacesToAdd = new HashSet<string>(StringComparer.Ordinal);
         var warnings = new List<string>();
 
@@ -1050,7 +1050,7 @@ public class MsToolAugmentEngine
         {
             return MsAugmentResult.Fail(
                 "No literal expression found at contextSnippet location. " +
-                "Provide a contextSnippet that direcancellationTokenly contains or is adjacent to the literal.");
+                "Provide a contextSnippet that directly contains or is adjacent to the literal.");
         }
 
         if (!literal.IsKind(SyntaxKind.StringLiteralExpression) &&
@@ -1164,7 +1164,7 @@ public class MsToolAugmentEngine
     /// <summary>
     /// Generates a <c>ToString()</c> override for a type using a properly-escaped
     /// interpolated string. Fixes the standard <c>generate_tostring</c> bug where
-    /// literal <c>{</c> in the format secancellationTokenion is left unescaped, causing CS8086.
+    /// literal <c>{</c> in the format section is left unescaped, causing CS8086.
     /// </summary>
     /// <param name="filePath">Absolute path to the .cs file.</param>
     /// <param name="typeName">Name of the type to add ToString() to.</param>
@@ -1212,7 +1212,7 @@ public class MsToolAugmentEngine
                 $"'{typeName}' already has a ToString() override. Remove it first.");
         }
 
-        // CollecancellationToken members to include in the ToString output
+        // Collect members to include in the ToString output
         var SelectedMembers = new List<string>();
         if (members != null && members.Count > 0)
         {
@@ -1291,7 +1291,7 @@ public class MsToolAugmentEngine
     // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
     // MS Bug: extract_method generates `private void MethodName(...)` when the
     // Selected block ends with `return <expression>`, producing a compile error
-    // because the extracancellationTokened method has the wrong (void) return type.
+    // because the extracted method has the wrong (void) return type.
     // Fix: use SemanticModel.GetTypeInfo() on the return expression, and
     // DataFlowAnalysis.DataFlowsIn to determine the correct parameter list.
     //
@@ -1360,19 +1360,19 @@ public class MsToolAugmentEngine
     /// <summary>
     /// Extract a block of statements into a new private method using semantic
     /// analysis to determine the correct return type. Fixes the standard
-    /// <c>extracancellationToken_method</c> bug where Selections ending with <c>return expr</c>
-    /// produce <c>void</c> return type instead of the expression's acancellationTokenual type.
+    /// <c>extract_method</c> bug where Selections ending with <c>return expr</c>
+    /// produce <c>void</c> return type instead of the expression's actual type.
     /// </summary>
     /// <param name="filePath">Absolute path to the .cs file (must be in loaded solution).</param>
     /// <param name="newMethodName">Valid C# identifier for the new method.</param>
     /// <param name="contextSnippet">
     /// A short unique code snippet identifying the Selection.
-    /// When <paramref name="extracancellationTokenEntireBody"/> is <c>true</c>, treated as the name of
+    /// When <paramref name="extractEntireBody"/> is <c>true</c>, treated as the name of
     /// the source method whose entire body is extracted.
     /// </param>
     /// <param name="lineBefore">Optional line immediately before the snippet for disambiguation.</param>
     /// <param name="lineAfter">Optional line immediately after the snippet for disambiguation.</param>
-    /// <param name="extracancellationTokenEntireBody">
+    /// <param name="extractEntireBody">
     /// When <c>true</c>, <paramref name="contextSnippet"/> is interpreted as a method name
     /// and the entire block body of that method is used as the Selection.
     /// <paramref name="lineBefore"/> and <paramref name="lineAfter"/> are ignored.
@@ -1421,19 +1421,19 @@ public class MsToolAugmentEngine
             if (candidates.Count > 1)
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' is overloaded ({candidates.Count} declarations). " +
-                    "Use contextSnippet + lineBefore/lineAfter to identify the correcancellationToken overload.");
+                    "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.");
 
             var sourceMethod = candidates[0];
             if (sourceMethod.Body == null)
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' has an expression body (=> ...) which is not supported " +
-                    "with extracancellationTokenEntireBody. Use the contextSnippet path instead.");
+                    "with extractEntireBody. Use the contextSnippet path instead.");
 
             block = sourceMethod.Body;
             stmtsInSelection = block.Statements.ToList();
 
             if (stmtsInSelection.Count == 0)
-                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extracancellationToken.");
+                return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.");
         }
         else
         {
@@ -1577,7 +1577,7 @@ public class MsToolAugmentEngine
         var firstStmt = stmtsInSelection.First();
         var lastStmt = stmtsInSelection.Last();
 
-        // Determine the return type of the extracancellationTokened method
+        // Determine the return type of the extracted method
         string returnTypeStr = "void";
         bool returnsValue = false;
 
@@ -1675,10 +1675,10 @@ public class MsToolAugmentEngine
         if (containingType == null)
         {
             return MsAugmentResult.Fail(
-                "No containing type found — cannot place extracancellationTokened method.");
+                "No containing type found — cannot place extracted method.");
         }
 
-        // Build the extracancellationTokened method source text
+        // Build the extracted method source text
         var sb = new StringBuilder();
         sb.Append("private ");
         if (isStatic)

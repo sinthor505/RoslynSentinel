@@ -858,31 +858,6 @@ public class RefactoringEngine
         return hunks;
     }
 
-    // Returns the start offset of `symbolName` as a word-boundary identifier within `snippet`,
-    // or -1 if not found. Prefers the first match where neither adjacent char is an identifier char.
-    private static int FindIdentifierInSnippet(string snippet, string symbolName)
-    {
-        int searchFrom = 0;
-        while (true)
-        {
-            int idx = snippet.IndexOf(symbolName, searchFrom, StringComparison.Ordinal);
-            if (idx < 0)
-            {
-                return -1;
-            }
-
-            bool leftBound = idx == 0 || !IsIdentChar(snippet[idx - 1]);
-            bool rightBound = idx + symbolName.Length >= snippet.Length || !IsIdentChar(snippet[idx + symbolName.Length]);
-            if (leftBound && rightBound)
-            {
-                return idx;
-            }
-
-            searchFrom = idx + 1;
-        }
-    }
-
-    private static bool IsIdentChar(char c) => char.IsLetterOrDigit(c) || c == '_';
     public async Task<DocumentEditResult> ConvertIndexerToMethodAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertIndexerToMethod"))
