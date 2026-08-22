@@ -3095,9 +3095,44 @@ public class RefactoringEngine
         var docText = $"/// <summary>\n/// {normalizedSummary}\n/// </summary>\nvoid __Dummy__() {{}}";
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
-        var stripped = target.GetLeadingTrivia().Where(t => !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
-        var newTrivia = SyntaxFactory.TriviaList(docTrivia.Concat(stripped));
-        var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia)).NormalizeWhitespace();
+
+        // Keep only the target's own real (non-doc, non-whitespace) trivia — e.g. a pre-existing
+        // "// planted scenario" line comment — and re-derive its indentation from the target's own
+        // base indent, rather than concatenating the synthetic doc block's whitespace with whatever
+        // blank-line/indentation trivia the original leading trivia happened to carry. Concatenating
+        // two independently-produced whitespace runs (one baked into the synthetic doc comment, one
+        // preserved verbatim from the original file) stacks rather than collapses, and
+        // NormalizeWhitespace() does not fix it: that whitespace is already attached to a comment
+        // trivia, not indentation Roslyn treats as owned by the node.
+        var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
+        var keptComments = target.GetLeadingTrivia()
+            .Where(t => t.IsKind(SyntaxKind.SingleLineCommentTrivia) || t.IsKind(SyntaxKind.MultiLineCommentTrivia))
+            .ToList();
+        var rebuiltTrivia = new List<SyntaxTrivia>(docTrivia);
+        foreach (var comment in keptComments)
+        {
+            if (baseIndent != default)
+            {
+                rebuiltTrivia.Add(baseIndent);
+            }
+
+            rebuiltTrivia.Add(comment);
+            rebuiltTrivia.Add(SyntaxFactory.CarriageReturnLineFeed);
+        }
+
+        if (baseIndent != default)
+        {
+            rebuiltTrivia.Add(baseIndent);
+        }
+
+        // newTrivia's indentation is already correct by construction (derived from the target's own
+        // base indent) — do NOT run NormalizeWhitespace() on the result: it re-indents the whole tree
+        // and, when a SingleLineDocumentationCommentTrivia is immediately followed by a plain
+        // SingleLineCommentTrivia at the same level, inserts a spurious extra leading space before
+        // the plain comment. Confirmed via a debug dump comparing pre/post-normalize output — the
+        // trivia list built above renders correctly before that call and only gets corrupted by it.
+        var newTrivia = SyntaxFactory.TriviaList(rebuiltTrivia);
+        var newRoot = root.ReplaceNode(target, target.WithLeadingTrivia(newTrivia));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

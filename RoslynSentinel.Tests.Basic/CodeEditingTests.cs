@@ -777,6 +777,59 @@ public class Widget { }
         Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task AddSummaryComment_TargetHasPreexistingTrailingLineComment_DoesNotMisindentIt()
+    {
+        SetSource(@"
+public class Order
+{
+    // Intentional typo target for RenameSymbol scenario (""CalcuateTotal"" -> ""CalculateTotal"").
+    public decimal CalcuateTotal()
+    {
+        return 0m;
+    }
+}
+", "Order.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Order.cs", "CalcuateTotal",
+            "Calculates the total value of the order.");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// Calculates the total value of the order."));
+        Assert.That(result.UpdatedText, Does.Contain(
+            "    // Intentional typo target for RenameSymbol scenario (\"CalcuateTotal\" -> \"CalculateTotal\")."),
+            "the pre-existing trailing comment's original 4-space indentation must be preserved, not widened");
+    }
+
+    [Test]
+    public async Task AddSummaryComment_TargetHasBlankLineThenTrailingLineComment_DoesNotMisindentIt()
+    {
+        SetSource(@"
+public class Order
+{
+    public string CustomerId => ""x"";
+
+    // Intentional typo target for RenameSymbol scenario (""CalcuateTotal"" -> ""CalculateTotal"").
+    public decimal CalcuateTotal()
+    {
+        return 0m;
+    }
+}
+", "Order2.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "Order2.cs", "CalcuateTotal",
+            "Calculates the total value of the order.");
+
+        Assert.That(result.UpdatedText, Does.Contain("/// Calculates the total value of the order."));
+        Assert.That(result.UpdatedText, Does.Not.Contain(
+            "     // Intentional typo"),
+            "the pre-existing trailing comment must not gain an extra leading space");
+        Assert.That(result.UpdatedText, Does.Contain(
+            "    // Intentional typo target for RenameSymbol scenario (\"CalcuateTotal\" -> \"CalculateTotal\")."),
+            "the pre-existing trailing comment's original 4-space indentation must be preserved");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // AddPropertyAsync
     // ══════════════════════════════════════════════════════════════
