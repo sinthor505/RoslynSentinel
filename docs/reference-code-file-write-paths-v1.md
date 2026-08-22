@@ -41,8 +41,7 @@ and in the code comment on the method itself.
 
 | Caller | Location | Notes |
 |---|---|---|
-| `ValidateAndApplyAsync` (Basic) | `RoslynSentinel.Server.Basic/SentinelRefactoringTools.cs:157` | Shared local helper for RenameSymbol, GenerateMapping, Member replace/remove/add, UsingDirective, ModifyEnum, ChangeAccessibility, SummaryComment, ConstructorParameter, ExtractLocalVariable, ExtractMethodSafe, ModifyAttribute, ModifyModifier, ModifyBaseType, SyncTypeAndFilename |
-| `ValidateAndApplyAsync` (Advanced) | `RoslynSentinel.Server.Advanced/SentinelAdvancedRefactoringTools.cs:146` | **Duplicate implementation** of the Basic helper — copy-pasted, not shared via `RoslynSentinel.Common`. Same behavior, but a fix to one requires manually mirroring it in the other. |
+| `ValidateAndApplyHelper.ValidateAndApplyAsync` | `RoslynSentinel.Common/ValidateAndApplyHelper.cs` | **Deduplicated 2026-08-22** (commit `cb70952`) — both `SentinelRefactoringTools` (Basic) and `SentinelAdvancedRefactoringTools` (Advanced) now delegate their private `ValidateAndApplyAsync`/`BuildDiffAsync`/`BuildDiffFromPreImages` wrappers to this shared implementation instead of each carrying a verbatim copy. |
 | `SafeDeleteUnusedSymbol` | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:760` | Inline call after computing `DocumentEditResult.UpdatedText` |
 | `ApplyDiff` (files format) | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:380` | Direct inline call |
 | `ApplyDiff` (unified diff format) | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:482` | Direct inline call, after `_diffEngine.ApplyDiff(oldText, unifiedDiff)` |
