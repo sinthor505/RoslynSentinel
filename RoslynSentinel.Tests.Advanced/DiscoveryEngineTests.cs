@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class DiscoveryEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DiscoveryEngine _discoveryEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
@@ -17,7 +17,7 @@ public class DiscoveryEngineTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);

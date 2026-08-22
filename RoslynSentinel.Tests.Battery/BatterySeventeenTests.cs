@@ -17,7 +17,7 @@ public class LogicOptimizationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new LogicOptimizationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -80,7 +80,7 @@ public class MassiveAnalyzerEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MassiveAnalyzerEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -172,7 +172,7 @@ public class MsToolAugmentEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -215,7 +215,7 @@ public class ProjectStructureEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ProjectStructureEngine(_mgr, new SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -264,7 +264,7 @@ public class RefinementEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new RefinementEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));

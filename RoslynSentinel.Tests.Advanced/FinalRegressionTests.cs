@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class FinalRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -23,7 +23,7 @@ public class FinalRegressionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);

@@ -32,9 +32,9 @@ public record DecoratorResult(
 
 public partial class CodeGenerationEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CodeGenerationEngine(PersistentWorkspaceManager workspaceManager)
+    public CodeGenerationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

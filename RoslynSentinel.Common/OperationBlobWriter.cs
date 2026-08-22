@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -119,7 +118,7 @@ public static class OperationBlobWriter
     public static async Task<string> WriteApplyBlobAsync(
         string toolName,
         string changeId,
-        PersistentWorkspaceManager.ApplyChangesResult result,
+        ApplyChangesResult result,
         string? solutionRoot)
     {
         if (result.SucceededFiles.Count == 0)

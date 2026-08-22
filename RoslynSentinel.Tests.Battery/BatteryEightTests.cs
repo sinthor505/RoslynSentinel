@@ -20,13 +20,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class InventoryEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private InventoryEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new InventoryEngine(_workspaceManager);
     }
 
@@ -83,13 +83,13 @@ namespace ExpressRecipe.Services
 [TestFixture]
 public class ModernizationUpgradeEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ModernizationUpgradeEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ModernizationUpgradeEngine(_workspaceManager);
     }
 
@@ -167,13 +167,13 @@ public class Guard
 [TestFixture]
 public class DependencyEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private DependencyEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DependencyEngine(_workspaceManager);
     }
 
@@ -226,13 +226,13 @@ public class DependencyEngineTests
 [TestFixture]
 public class ModernLoggingEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ModernLoggingEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ModernLoggingEngine(_workspaceManager);
     }
 
@@ -298,13 +298,13 @@ public class UserService
 [TestFixture]
 public class IDEStyleEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private IDEStyleEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new IDEStyleEngine(_workspaceManager);
     }
 

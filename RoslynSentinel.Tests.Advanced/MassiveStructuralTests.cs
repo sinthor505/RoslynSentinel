@@ -10,13 +10,13 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class MassiveStructuralTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ProjectStructureEngine _structureEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 

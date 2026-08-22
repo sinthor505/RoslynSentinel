@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ToolGapsTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AsyncSafetyEngine _asyncSafetyEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private ThreadSafetyEngine _threadSafetyEngine;
@@ -26,7 +26,7 @@ public class ToolGapsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);

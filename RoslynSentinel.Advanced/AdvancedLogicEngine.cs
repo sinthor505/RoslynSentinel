@@ -7,9 +7,9 @@ namespace RoslynSentinel.Advanced;
 
 public class AdvancedLogicEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public AdvancedLogicEngine(PersistentWorkspaceManager workspaceManager)
+    public AdvancedLogicEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

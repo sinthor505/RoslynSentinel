@@ -6,10 +6,10 @@ namespace RoslynSentinel.Basic;
 
 public class CodeStyleEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public CodeStyleEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public CodeStyleEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
@@ -636,9 +636,9 @@ public class CodeStyleEngine
 
 public class CodeStyleAnalysisEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CodeStyleAnalysisEngine(PersistentWorkspaceManager workspaceManager)
+    public CodeStyleAnalysisEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

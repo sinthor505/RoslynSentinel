@@ -2,10 +2,12 @@ using System.ComponentModel;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol.Server;
 
 namespace RoslynSentinel.Server.Basic;
@@ -24,7 +26,7 @@ public class SentinelWorkspaceTools
 {
     // Added by AddConstructorParameter
     private readonly BuildEngine _buildEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly DiffEngine _diffEngine;
     private readonly DiagnosticEngine _diagnosticEngine;
@@ -34,7 +36,7 @@ public class SentinelWorkspaceTools
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelWorkspaceTools> _logger;
-    public SentinelWorkspaceTools(PersistentWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine)
+    public SentinelWorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<SentinelWorkspaceTools> logger, BuildEngine buildEngine)
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
@@ -64,7 +66,8 @@ public class SentinelWorkspaceTools
                 _ => new
                 {
                     Success = false,
-                    Error = $"Unknown action '{action}'. Valid values: list, get, update."}
+                    Error = $"Unknown action '{action}'. Valid values: list, get, update."
+                }
             };
         }
         catch (Exception ex)
@@ -73,7 +76,8 @@ public class SentinelWorkspaceTools
             return new
             {
                 Success = false,
-                Error = $"Features failed unexpectedly ({ex.GetType().Name}): {ex.Message}"};
+                Error = $"Features failed unexpectedly ({ex.GetType().Name}): {ex.Message}"
+            };
         }
     }
 
@@ -259,7 +263,8 @@ public class SentinelWorkspaceTools
                 return new ToolResult<object>()
                 {
                     Success = true,
-                    Data = $"Solution loaded: {solutionPath}{BuildPostLoadHint(solutionRoot)}"};
+                    Data = $"Solution loaded: {solutionPath}{BuildPostLoadHint(solutionRoot)}"
+                };
             }
             else
             {
@@ -290,7 +295,7 @@ public class SentinelWorkspaceTools
 
     // Subdirectories ProjectDoc reads/writes under docs/, paired with the docType value that
     // maps to each — see DocumentationTools.ProjectDoc.
-    private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"), ];
+    private static readonly (string Dir, string DocType)[] ProjectDocSubdirs = [("plans", "plan"), ("handoffs", "handoff"), ("completed", "completed_work"), ("documentation", "documentation"),];
     // Surfaces docs/ and Solution-Folder content right after a solution loads, so an agent
     // doesn't have to burn a round of (fruitless) SearchSolutionText calls to discover a plan,
     // handoff, or other doc file the solution already has waiting for it.
@@ -304,7 +309,7 @@ public class SentinelWorkspaceTools
         }
 
         var docsRoot = Path.Combine(solutionRoot, "docs");
-        foreach (var(dir, docType)in ProjectDocSubdirs)
+        foreach (var (dir, docType) in ProjectDocSubdirs)
         {
             var fullDir = Path.Combine(docsRoot, dir);
             if (!Directory.Exists(fullDir))
@@ -391,7 +396,11 @@ public class SentinelWorkspaceTools
                     // ApplyDiff responses exceeding the calling harness's token limit on large files.
                     var strippedResult = result with { PreImages = null };
                     object responseData = returnDiff
-                        ? new { result = strippedResult, diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages) }
+                        ? new
+                        {
+                            result = strippedResult,
+                            diff = SentinelRefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
+                        }
                         : strippedResult;
                     return new ToolResult<object>()
                     {
@@ -489,7 +498,11 @@ public class SentinelWorkspaceTools
                         await WriteBlobForApplyAsync("apply_diff", result);
                         var strippedDiffResult = result with { PreImages = null };
                         object diffResponseData = returnDiff
-                            ? new { result = strippedDiffResult, diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages) }
+                            ? new
+                            {
+                                result = strippedDiffResult,
+                                diff = SentinelRefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                            }
                             : strippedDiffResult;
                         return new ToolResult<object>()
                         {
@@ -573,7 +586,7 @@ public class SentinelWorkspaceTools
     /// blobChangeId: if provided, uses this id for the blob filename; if null, mints a fresh id.
     /// Logs a warning but does not throw on blob write failure — apply already succeeded.
     /// </summary>
-    private async Task WriteBlobForApplyAsync(string toolName, PersistentWorkspaceManager.ApplyChangesResult result, string? blobChangeId = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    private async Task WriteBlobForApplyAsync(string toolName, ApplyChangesResult result, string? blobChangeId = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         if (result.SucceededFiles.Count == 0)
@@ -773,7 +786,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = new PersistentWorkspaceManager.AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false)
+                Data = new AppliedChangeSummary(changeId, [filePath], $"Deleted unused symbol in {Path.GetFileName(filePath)}.", false)
             };
         }
 
@@ -1606,7 +1619,8 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = $"Reverted {reverted.Count} files. Files: {string.Join(", ", reverted)}{failedPart}"};
+                Data = $"Reverted {reverted.Count} files. Files: {string.Join(", ", reverted)}{failedPart}"
+            };
         }
         catch (Exception ex)
         {

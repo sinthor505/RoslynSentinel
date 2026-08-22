@@ -12,12 +12,12 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class LoadSolutionPathSanitizationTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]

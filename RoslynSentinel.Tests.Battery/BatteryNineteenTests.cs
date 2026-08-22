@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryNineteenTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _codeGenerationEngine;
     private ApiAutomationEngine _apiAutomationEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -62,7 +62,7 @@ public interface IOrderRepository
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _apiAutomationEngine = new ApiAutomationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);

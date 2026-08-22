@@ -17,7 +17,7 @@ public class AdvancedLogicEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedLogicEngine(_mgr);
     }
 
@@ -75,7 +75,7 @@ public class AdvancedRefactoringEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedRefactoringEngine(_mgr);
     }
 
@@ -132,7 +132,7 @@ public class AdvancedStructuralEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedStructuralEngine(_mgr);
     }
 
@@ -199,7 +199,7 @@ public class AntiPatternEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_mgr);
     }
 

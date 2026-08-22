@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryTwentyFourTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private StandardRefactoringEngine _standardRefactoringEngine;
@@ -103,7 +103,7 @@ public enum Status { Active = 1, Pending = 2 }
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);
@@ -387,12 +387,12 @@ public enum Status { Active = 1, Pending = 2 }
         var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
 
         var first = await _tools.ChangeAccessibility("Order.cs", "OrderId", "internal");
-        var firstSummary = (PersistentWorkspaceManager.AppliedChangeSummary)first.Data!;
+        var firstSummary = (AppliedChangeSummary)first.Data!;
         Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
         Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
 
         var second = await _tools.ChangeAccessibility("Order.cs", "CustomerName", "internal");
-        var secondSummary = (PersistentWorkspaceManager.AppliedChangeSummary)second.Data!;
+        var secondSummary = (AppliedChangeSummary)second.Data!;
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion),
             "A second mutation must stamp a strictly higher version than the first.");
     }
@@ -633,7 +633,7 @@ public enum Status { Active = 1, Pending = 2 }
         // empty since the on-disk "before" already matches the freshly-computed "after".
         var result = await _advTools.InlineClass("Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
         Assert.That(result.Success, Is.True, result.Error?.Message);
-        var summary = (PersistentWorkspaceManager.AppliedChangeSummary)result.Data!;
+        var summary = (AppliedChangeSummary)result.Data!;
         Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Has.Some.Contains("Owner.cs"));
         Assert.That(summary.Diff, Does.Contain("Value"));
         Assert.That(summary.Diff, Does.Contain("Go"));

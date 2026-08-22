@@ -6,7 +6,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class AdvancedToolsTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AsyncSafetyEngine _asyncSafetyEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
@@ -17,7 +17,7 @@ public class AdvancedToolsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _config = new SentinelConfiguration();
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);

@@ -16,7 +16,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class BugFixTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private CodeGenerationEngine _codeGenerationEngine;
@@ -33,7 +33,7 @@ public class BugFixTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -768,7 +768,7 @@ public class Service
     [TestFixture]
     public class Bug7BatchRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private AnalysisEngine _analysisEngine;
         private RefactoringEngine _refactoringEngine;
         private CodeGenerationEngine _codeGenerationEngine;
@@ -778,7 +778,7 @@ public class Service
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _analysisEngine = new AnalysisEngine(_workspaceManager, config);
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
@@ -1053,14 +1053,14 @@ public class Product
     [TestFixture]
     public class Bug8BatchRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private AnalysisEngine _analysisEngine;
         private AntiPatternEngine _antiPatternEngine;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _analysisEngine = new AnalysisEngine(_workspaceManager, config);
             _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
@@ -1185,7 +1185,7 @@ public class MyTests
     [TestFixture]
     public class Bug9BatchRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private SentinelConfiguration _config;
         private RefactoringEngine _refactoringEngine;
         private SyntaxUpgradeEngine _syntaxUpgradeEngine;
@@ -1196,7 +1196,7 @@ public class MyTests
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
             _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -1501,7 +1501,7 @@ public class Startup
     [TestFixture]
     public class Bug10BatchRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private GranularRefactoringEngine _granularEngine = null!;
         private MappingEngine _mappingEngine = null!;
         private AsyncOptimizationEngine _asyncEngine = null!;
@@ -1509,7 +1509,7 @@ public class Startup
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _granularEngine = new GranularRefactoringEngine(_workspaceManager);
             _mappingEngine = new MappingEngine(_workspaceManager);
             _asyncEngine = new AsyncOptimizationEngine(_workspaceManager);
@@ -1830,7 +1830,7 @@ public class TargetDto
     [TestFixture]
     public class Bug11RegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private RefactoringEngine _refactoringEngine = null!;
         private CodeGenerationEngine _codeGenerationEngine = null!;
         private PerformanceEngine _performanceEngine = null!;
@@ -1839,7 +1839,7 @@ public class TargetDto
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -1982,7 +1982,7 @@ public class Processor
     [TestFixture]
     public class Bug70_74RegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private SentinelConfiguration _config;
         private ProjectStructureEngine _projectStructureEngine;
         private GranularRefactoringEngine _granularRefactoringEngine;
@@ -1994,7 +1994,7 @@ public class Processor
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
             _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
@@ -2226,13 +2226,13 @@ public class ImportJobStatus
         [TestFixture]
         public class Bug52ReduceBlockDepthRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private CodeFlowEngine _codeFlowEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _codeFlowEngine = new CodeFlowEngine(_workspaceManager);
             }
 
@@ -2285,13 +2285,13 @@ public class Processor
         [TestFixture]
         public class Bug53MakeMethodThreadSafeRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private ThreadSafetyEngine _threadSafetyEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
             }
 
@@ -2341,13 +2341,13 @@ public class Counter
         [TestFixture]
         public class Bug58ConvertToAsyncEnumerableRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private AsyncOptimizationEngine _asyncOptEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);
             }
 
@@ -2401,13 +2401,13 @@ public class ItemProvider
         [TestFixture]
         public class Bug69InlineMethodRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private RefinementEngine _refinementEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _refinementEngine = new RefinementEngine(_workspaceManager);
             }
 
@@ -2477,13 +2477,13 @@ public class Math
         [TestFixture]
         public class Bug76PullUpMemberRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private RefinementEngine _refinementEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _refinementEngine = new RefinementEngine(_workspaceManager);
             }
 
@@ -2564,13 +2564,13 @@ public class Derived : Base
         [TestFixture]
         public class Bug77IntroduceParameterRegressionTests
         {
-            private PersistentWorkspaceManager _workspaceManager;
+            private IWorkspaceManager _workspaceManager;
             private GranularRefactoringEngine _granularEngine;
 
             [SetUp]
             public void Setup()
             {
-                _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+                _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _granularEngine = new GranularRefactoringEngine(_workspaceManager);
             }
 
@@ -2644,7 +2644,7 @@ public class Processor
     [TestFixture]
     public class Remaining22BugsRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private SentinelConfiguration _config;
         private RefactoringEngine _refactoringEngine;
         private CodeGenerationEngine _codeGenerationEngine;
@@ -2652,7 +2652,7 @@ public class Processor
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -2838,7 +2838,7 @@ public class Processor
     [TestFixture]
     public class Bug55_78BatchRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private AsyncOptimizationEngine _asyncOptimizationEngine;
         private AdvancedLogicEngine _advancedLogicEngine;
         private RefactoringEngine _refactoringEngine;
@@ -2849,7 +2849,7 @@ public class Processor
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             var config = new SentinelConfiguration();
             _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
             _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);
@@ -3143,7 +3143,7 @@ public class Processor
     [TestFixture]
     public class CriticalBugRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private SentinelConfiguration _config;
         private GranularRefactoringEngine _granularRefactoringEngine;
         private RefactoringEngine _refactoringEngine;
@@ -3154,7 +3154,7 @@ public class Processor
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _config = new SentinelConfiguration();
             _granularRefactoringEngine = new GranularRefactoringEngine(_workspaceManager);
             _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
@@ -3498,13 +3498,13 @@ public class Account
     [TestFixture]
     public class CallGraphNullReturnRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private SymbolNavigationEngine _symbolNavigationEngine;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         }
 
@@ -3585,13 +3585,13 @@ public class Svc
     [TestFixture]
     public class GenerateDecoratorClassNullReturnRegressionTests
     {
-        private PersistentWorkspaceManager _workspaceManager;
+        private IWorkspaceManager _workspaceManager;
         private CodeGenerationEngine _codeGenerationEngine;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         }
 
@@ -3662,14 +3662,14 @@ namespace MyApp
 [TestFixture]
 public class AddGuardClausesNullReturnRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private LogicOptimizationEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new LogicOptimizationEngine(_workspaceManager);
         _config = new SentinelConfiguration();
         // Load a minimal solution so engines can reach their "file not found" branch
@@ -3742,14 +3742,14 @@ public class AddGuardClausesNullReturnRegressionTests
 [TestFixture]
 public class AddBenchmarkStubNullReturnRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private TestingEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new TestingEngine(_workspaceManager);
         _config = new SentinelConfiguration();
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -3821,14 +3821,14 @@ public class AddBenchmarkStubNullReturnRegressionTests
 [TestFixture]
 public class AddBracesNullReturnRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SyntaxUpgradeEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -3901,14 +3901,14 @@ public class AddBracesNullReturnRegressionTests
 [TestFixture]
 public class MakeClassImmutableNullReturnRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ImmutabilityEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ImmutabilityEngine(_workspaceManager);
         _config = new SentinelConfiguration();
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
@@ -3985,14 +3985,14 @@ public class MakeClassImmutableNullReturnRegressionTests
 [TestFixture]
 public class SyncInterfaceToImplementationNullReturnRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _engine;
     private SentinelConfiguration _config;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _engine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         // Load a minimal solution so the engine reaches the "file/class not found" return path

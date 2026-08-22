@@ -8,9 +8,9 @@ namespace RoslynSentinel.Basic;
 
 public class CodeFlowEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CodeFlowEngine(PersistentWorkspaceManager workspaceManager)
+    public CodeFlowEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

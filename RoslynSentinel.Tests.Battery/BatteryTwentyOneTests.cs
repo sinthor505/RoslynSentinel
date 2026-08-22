@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryTwentyOneTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ModernizationEngine _modernizationEngine;
     private ModernizationUpgradeEngine _modernizationUpgradeEngine;
@@ -137,7 +137,7 @@ public class Worker
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _modernizationUpgradeEngine = new ModernizationUpgradeEngine(_workspaceManager);

@@ -21,13 +21,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryThirtyNineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private StackOverflowEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new StackOverflowEngine(_workspaceManager);
     }
 

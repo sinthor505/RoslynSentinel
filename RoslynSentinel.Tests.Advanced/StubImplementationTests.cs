@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class StubImplementationTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private IDEStyleEngine _ideStyleEngine;
     private ModernizationUpgradeEngine _modernizationEngine;
     private GranularRefactoringEngine _granularEngine;
@@ -22,7 +22,7 @@ public class StubImplementationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _modernizationEngine = new ModernizationUpgradeEngine(_workspaceManager);

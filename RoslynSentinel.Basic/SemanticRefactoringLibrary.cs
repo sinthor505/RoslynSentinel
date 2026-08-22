@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class SemanticRefactoringLibrary
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SemanticRefactoringLibrary(PersistentWorkspaceManager workspaceManager)
+    public SemanticRefactoringLibrary(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

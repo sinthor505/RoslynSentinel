@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class LogicOptimizationEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public LogicOptimizationEngine(PersistentWorkspaceManager workspaceManager)
+    public LogicOptimizationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

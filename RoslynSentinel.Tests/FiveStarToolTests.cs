@@ -25,14 +25,14 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class ExtractConstantSafeStrongTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -335,14 +335,14 @@ public class ExtractConstantSafeStrongTests
 [TestFixture]
 public class ConvertStringFormatSmartTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -550,14 +550,14 @@ public class ConvertStringFormatSmartTests
 [TestFixture]
 public class PreviewAddMissingUsingsLoadedTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -714,14 +714,14 @@ public class PreviewAddMissingUsingsLoadedTests
 [TestFixture]
 public class FormatDocumentSafeTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 

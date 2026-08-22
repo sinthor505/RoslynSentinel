@@ -8,9 +8,9 @@ public record CodeSmell(string Id, string Severity, string Description, int Line
 
 public class CodeSmellAndStyleEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CodeSmellAndStyleEngine(PersistentWorkspaceManager workspaceManager)
+    public CodeSmellAndStyleEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

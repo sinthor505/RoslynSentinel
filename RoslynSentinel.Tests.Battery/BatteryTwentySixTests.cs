@@ -28,13 +28,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BlockingCallFalsePositiveTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -159,13 +159,13 @@ public class BlockingCallFalsePositiveTests
 [TestFixture]
 public class AsyncVoidGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 
@@ -302,13 +302,13 @@ public class AsyncVoidGotchaTests
 [TestFixture]
 public class LockInAsyncGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 
@@ -405,13 +405,13 @@ public class LockInAsyncGotchaTests
 [TestFixture]
 public class ThreadSafeLockGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ThreadSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ThreadSafetyEngine(_workspaceManager);
     }
 
@@ -540,13 +540,13 @@ public class ThreadSafeLockGotchaTests
 [TestFixture]
 public class ValueTaskMisuseGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 
@@ -644,13 +644,13 @@ public class ValueTaskMisuseGotchaTests
 [TestFixture]
 public class ExceptionHandlingGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -783,13 +783,13 @@ public class ExceptionHandlingGotchaTests
 [TestFixture]
 public class ImmutabilityGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ImmutabilityEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
@@ -890,13 +890,13 @@ public class ImmutabilityGotchaTests
 [TestFixture]
 public class StringConcatInLoopGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -1004,13 +1004,13 @@ public class StringConcatInLoopGotchaTests
 [TestFixture]
 public class MissingCancellationTokenGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -1099,13 +1099,13 @@ public class MissingCancellationTokenGotchaTests
 [TestFixture]
 public class UnsafeTypeCastGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SecurityAndSafetyEngine(_workspaceManager);
     }
 
@@ -1214,13 +1214,13 @@ public class UnsafeTypeCastGotchaTests
 [TestFixture]
 public class FireAndForgetGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 
@@ -1325,13 +1325,13 @@ public class FireAndForgetGotchaTests
 [TestFixture]
 public class ConfigureAwaitInLibraryGotchaTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 

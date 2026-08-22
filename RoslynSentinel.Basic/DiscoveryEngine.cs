@@ -47,9 +47,9 @@ public record ApiSurfaceEntry(
 public class DiscoveryEngine
 {
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public DiscoveryEngine(PersistentWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine)
+    public DiscoveryEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine)
     {
         _workspaceManager = workspaceManager;
         _symbolNavigationEngine = symbolNavigationEngine;

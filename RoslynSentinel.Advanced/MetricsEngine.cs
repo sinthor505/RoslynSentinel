@@ -40,9 +40,9 @@ public record CohesionAnalysis(
 
 public class MetricsEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public MetricsEngine(PersistentWorkspaceManager workspaceManager)
+    public MetricsEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

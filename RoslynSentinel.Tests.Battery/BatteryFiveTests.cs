@@ -19,13 +19,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class CodeSmellAndStyleEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private CodeSmellAndStyleEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new CodeSmellAndStyleEngine(_workspaceManager);
     }
 
@@ -117,14 +117,14 @@ public class C
 [TestFixture]
 public class AnalyzerEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ExhaustiveAnalyzerEngine _exhaustiveEngine;
     private MassiveAnalyzerEngine _massiveEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _exhaustiveEngine = new ExhaustiveAnalyzerEngine(_workspaceManager);
         _massiveEngine = new MassiveAnalyzerEngine(_workspaceManager);
     }
@@ -242,13 +242,13 @@ public class AnalyzerEngineTests
 [TestFixture]
 public class SecurityAndSafetyEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SecurityAndSafetyEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SecurityAndSafetyEngine(_workspaceManager);
     }
 
@@ -487,13 +487,13 @@ public class Service
 [TestFixture]
 public class InstrumentationEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private InstrumentationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new InstrumentationEngine(_workspaceManager);
     }
 

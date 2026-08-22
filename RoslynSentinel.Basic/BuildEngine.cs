@@ -6,10 +6,10 @@ namespace RoslynSentinel.Basic;
 
 public class BuildEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly DiagnosticEngine _diagnosticEngine;
 
-    public BuildEngine(PersistentWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine)
+    public BuildEngine(IWorkspaceManager workspaceManager, DiagnosticEngine diagnosticEngine)
     {
         _workspaceManager = workspaceManager;
         _diagnosticEngine = diagnosticEngine;

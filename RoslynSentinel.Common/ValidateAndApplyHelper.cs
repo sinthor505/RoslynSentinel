@@ -9,7 +9,7 @@ namespace RoslynSentinel.Common;
 /// SentinelRefactoringTools (Basic) and SentinelAdvancedRefactoringTools (Advanced) — previously
 /// duplicated verbatim in each. Validates proposed changes against the current in-memory
 /// solution and, unless <paramref name="dryRun"/> is set, writes them straight to disk via
-/// <see cref="PersistentWorkspaceManager.ApplyProposedChangesAsync"/> (write-through — no
+/// <see cref="IWorkspaceManager.ApplyProposedChangesAsync"/> (write-through — no
 /// intermediate staging step). Rolls back any already-written files if a multi-file change
 /// partially fails, so a change never lands half-applied.
 /// </summary>
@@ -17,7 +17,7 @@ public static class ValidateAndApplyHelper
 {
     public static async Task<ApplyOutcome> ValidateAndApplyAsync(
         ValidationEngine validationEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger logger,
         Dictionary<FilePath, string> changes,
         string operationName,
@@ -68,7 +68,7 @@ public static class ValidateAndApplyHelper
     }
 
     public static async Task<string> BuildDiffAsync(
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         Dictionary<FilePath, string> changes,
         CancellationToken cancellationToken)
     {

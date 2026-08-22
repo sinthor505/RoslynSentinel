@@ -35,13 +35,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class B08_DeadCode_WrittenButNeverRead
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private DeadCodeEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DeadCodeEngine(_workspaceManager);
     }
 
@@ -99,13 +99,13 @@ public class B08_DeadCode_WrittenButNeverRead
 [TestFixture]
 public class B02_Immutability_ConstFieldNotReadonly
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ImmutabilityEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
@@ -145,13 +145,13 @@ public class B02_Immutability_ConstFieldNotReadonly
 [TestFixture]
 public class B01_Instrumentation_ValidThrowStatement
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private InstrumentationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new InstrumentationEngine(_workspaceManager);
     }
 
@@ -214,13 +214,13 @@ public class B01_Instrumentation_ValidThrowStatement
 [TestFixture]
 public class B03_ArchitecturalEngine_ValidMemberAccess
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ArchitecturalEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ArchitecturalEngine(_workspaceManager);
     }
 
@@ -264,13 +264,13 @@ public class B03_ArchitecturalEngine_ValidMemberAccess
 [TestFixture]
 public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AdvancedRefactoringEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedRefactoringEngine(_workspaceManager);
     }
 
@@ -382,13 +382,13 @@ public class B18_ContextHelper_CaseSensitiveKeywords
 [TestFixture]
 public class B19_TestingEngine_MSTestSupport
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private TestingEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new TestingEngine(_workspaceManager);
     }
 
@@ -470,13 +470,13 @@ public class B19_TestingEngine_MSTestSupport
 [TestFixture]
 public class B17_DocumentationEngine_RegionMethodsGetDocs
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private DocumentationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DocumentationEngine(_workspaceManager);
     }
 
@@ -533,13 +533,13 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 [TestFixture]
 public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ModernizationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -602,13 +602,13 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 [TestFixture]
 public class B10_ModernizationEngine_OrChainFullPattern
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ModernizationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -656,13 +656,13 @@ public class B10_ModernizationEngine_OrChainFullPattern
 [TestFixture]
 public class B20_LogicOptimization_NullableParamNoGuard
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private LogicOptimizationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new LogicOptimizationEngine(_workspaceManager);
     }
 
@@ -716,13 +716,13 @@ public class B20_LogicOptimization_NullableParamNoGuard
 [TestFixture]
 public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -786,13 +786,13 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 [TestFixture]
 public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SecurityAndSafetyEngine(_workspaceManager);
     }
 

@@ -19,13 +19,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class TestingEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private TestingEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new TestingEngine(_workspaceManager);
     }
 
@@ -107,13 +107,13 @@ namespace MyApp
 [TestFixture]
 public class SolutionManagementEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SolutionManagementEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SolutionManagementEngine(_workspaceManager);
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source", [("Foo.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
@@ -151,13 +151,13 @@ public class SolutionManagementEngineTests
 [TestFixture]
 public class PerformanceEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private PerformanceEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new PerformanceEngine(_workspaceManager);
     }
 
@@ -223,13 +223,13 @@ public class Clean
 [TestFixture]
 public class StructuralRefinementEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private StructuralRefinementEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
     }
 

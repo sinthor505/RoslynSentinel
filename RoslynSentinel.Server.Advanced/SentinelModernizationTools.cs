@@ -21,7 +21,7 @@ public class SentinelModernizationTools
     private readonly IDEStyleEngine _ideStyleEngine;
     private readonly ImmutabilityEngine _immutabilityEngine;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelModernizationTools> _logger;
 
@@ -38,7 +38,7 @@ public class SentinelModernizationTools
         IDEStyleEngine ideStyleEngine,
         ImmutabilityEngine immutabilityEngine,
         AsyncOptimizationEngine asyncOptimizationEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelModernizationTools> logger)
     {

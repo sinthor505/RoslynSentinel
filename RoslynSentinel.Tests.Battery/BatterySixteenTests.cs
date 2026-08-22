@@ -17,7 +17,7 @@ public class DependencyInjectionEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DependencyInjectionEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -71,7 +71,7 @@ public class ExhaustiveAnalyzerEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ExhaustiveAnalyzerEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -150,7 +150,7 @@ public class GranularRefactoringEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new GranularRefactoringEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Other.cs", "public class Other {}")]));
@@ -212,7 +212,7 @@ public class HealthOrchestrationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
         var pse = new ProjectStructureEngine(_mgr, config);
         var ae = new AnalysisEngine(_mgr, config);

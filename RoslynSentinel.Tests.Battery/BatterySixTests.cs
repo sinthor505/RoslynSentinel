@@ -20,13 +20,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class DocumentationEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private DocumentationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DocumentationEngine(_workspaceManager);
     }
 
@@ -106,13 +106,13 @@ public class UserDto
 [TestFixture]
 public class ArchitecturalEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ArchitecturalEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ArchitecturalEngine(_workspaceManager);
     }
 
@@ -214,13 +214,13 @@ public class NodeB
 [TestFixture]
 public class ApiAutomationEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ApiAutomationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ApiAutomationEngine(_workspaceManager);
     }
 

@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryTwentyTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ValidationEngine _validationEngine;
     private DiffEngine _diffEngine;
@@ -27,7 +27,7 @@ public class BatteryTwentyTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _diffEngine = new DiffEngine(_workspaceManager);
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);

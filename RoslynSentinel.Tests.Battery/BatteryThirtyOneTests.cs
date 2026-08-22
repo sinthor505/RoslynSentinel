@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryThirtyOneTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private StandardRefactoringEngine _standardRefactoringEngine;
@@ -36,7 +36,7 @@ public class BatteryThirtyOneTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _standardRefactoringEngine = new StandardRefactoringEngine(_workspaceManager);

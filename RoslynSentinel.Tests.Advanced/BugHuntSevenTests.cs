@@ -25,13 +25,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH01_MissingCancellationTokenThresholdTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private AntiPatternEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new AntiPatternEngine(_workspaceManager);
         }
 
@@ -154,13 +154,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH02_StringConcatInLoopNonCompoundTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private AntiPatternEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new AntiPatternEngine(_workspaceManager);
         }
 
@@ -280,13 +280,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH03_UnsafeCastFalsePositiveTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private SecurityAndSafetyEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new SecurityAndSafetyEngine(_workspaceManager);
         }
 
@@ -384,13 +384,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH04_MissingNullCheckTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private SecurityAndSafetyEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new SecurityAndSafetyEngine(_workspaceManager);
         }
 
@@ -486,13 +486,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH05_ConvertLockOverloadBugTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private ThreadSafetyEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new ThreadSafetyEngine(_workspaceManager);
         }
 
@@ -594,13 +594,13 @@ namespace RoslynSentinel.Tests.Advanced
     [TestFixture]
     public class BH_RegressionGuardTests
     {
-        private PersistentWorkspaceManager _workspaceManager = null!;
+        private IWorkspaceManager _workspaceManager = null!;
         private AntiPatternEngine _engine = null!;
 
         [SetUp]
         public void Setup()
         {
-            _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+            _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
             _engine = new AntiPatternEngine(_workspaceManager);
         }
 

@@ -12,14 +12,14 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class ValidationEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private DiffEngine _diffEngine = null!;
     private ValidationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _diffEngine = new DiffEngine(_workspaceManager);
         _engine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
 
@@ -77,13 +77,13 @@ public class ValidationEngineTests
 [TestFixture]
 public class MetricsEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private MetricsEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MetricsEngine(_workspaceManager);
     }
 
@@ -136,13 +136,13 @@ public class MetricsEngineTests
 [TestFixture]
 public class DiagnosticEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private DiagnosticEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DiagnosticEngine(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source",
@@ -185,13 +185,13 @@ public class DiagnosticEngineTests
 [TestFixture]
 public class SecurityEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SecurityEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SecurityEngine(_workspaceManager);
     }
 

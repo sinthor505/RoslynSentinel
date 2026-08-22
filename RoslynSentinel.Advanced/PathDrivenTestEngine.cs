@@ -10,9 +10,9 @@ namespace RoslynSentinel.Advanced;
 
 public class PathDrivenTestEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public PathDrivenTestEngine(PersistentWorkspaceManager workspaceManager)
+    public PathDrivenTestEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

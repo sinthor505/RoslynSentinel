@@ -25,14 +25,14 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class AugmentToolsTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 

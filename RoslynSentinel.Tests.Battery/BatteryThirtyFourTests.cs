@@ -32,7 +32,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
     // ── State ───────────────────────────────────────────────────────────────
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
 
     /// Generic file discovered at SetUp — guaranteed to contain a class.
     private string _realFilePath = null!;
@@ -51,7 +51,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
         }
 
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
 
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 

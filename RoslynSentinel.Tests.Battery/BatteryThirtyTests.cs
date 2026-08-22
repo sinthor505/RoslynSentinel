@@ -29,7 +29,7 @@ public class B30_RegressionTests
     [SetUp]
     public void Setup()
     {
-        _ws        = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _ws        = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _cfg       = new SentinelConfiguration();
         _apiEngine = new ApiIntegrationEngine(_ws);
         _modEngine = new ModernizationEngine(_ws, _cfg);

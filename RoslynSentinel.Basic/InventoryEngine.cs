@@ -7,9 +7,9 @@ namespace RoslynSentinel.Basic;
 
 public class InventoryEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public InventoryEngine(PersistentWorkspaceManager workspaceManager)
+    public InventoryEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

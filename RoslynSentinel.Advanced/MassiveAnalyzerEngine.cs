@@ -6,9 +6,9 @@ public record AnalyzerIssue(string RuleId, string Message, int Line);
 
 public class MassiveAnalyzerEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public MassiveAnalyzerEngine(PersistentWorkspaceManager workspaceManager)
+    public MassiveAnalyzerEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -27,7 +27,7 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class RegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private RefactoringEngine _refactoringEngine;
     private CodeGenerationEngine _codeGenerationEngine;
@@ -37,7 +37,7 @@ public class RegressionTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, _config);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -1283,7 +1283,7 @@ public class RegressionTests
     {
         // Create a fresh workspace manager with NO solution loaded
         using var freshManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         var engine = new MsToolAugmentEngine(freshManager);
 
         var report = await engine.GetWorkspaceHealthAsync();
@@ -1320,7 +1320,7 @@ public class RegressionTests
     public async Task PreviewAddMissingUsings_NoSolutionLoaded_ReturnsSolutionRequired()
     {
         using var freshManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         var engine = new MsToolAugmentEngine(freshManager);
 
         var result = await engine.PreviewAddMissingUsingsAsync("SomeFile.cs");

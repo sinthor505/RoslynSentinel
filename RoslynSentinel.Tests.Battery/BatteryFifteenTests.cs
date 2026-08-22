@@ -17,7 +17,7 @@ public class ApiIntegrationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ApiIntegrationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
@@ -78,7 +78,7 @@ public class AsyncOptimizationEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncOptimizationEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
@@ -147,7 +147,7 @@ public class CodeFlowEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new CodeFlowEngine(_mgr);
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }
@@ -217,7 +217,7 @@ public class CodeHealingEngineTests
     [SetUp]
     public void SetUp()
     {
-        _mgr = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new CodeHealingEngine(_mgr, new SentinelConfiguration());
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", Stub));
     }

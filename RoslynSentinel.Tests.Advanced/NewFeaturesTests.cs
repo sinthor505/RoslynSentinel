@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class NewFeaturesTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private CloneDetectionEngine _cloneEngine;
     private OutParamRefactoringEngine _outParamEngine;
     private AntiPatternEngine _antiPatternEngine;
@@ -20,7 +20,7 @@ public class NewFeaturesTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _cloneEngine = new CloneDetectionEngine(_workspaceManager);
         _outParamEngine = new OutParamRefactoringEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);

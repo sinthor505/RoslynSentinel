@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class OrchestrationTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _structureEngine;
     private AnalysisEngine _analysisEngine;
@@ -16,7 +16,7 @@ public class OrchestrationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);

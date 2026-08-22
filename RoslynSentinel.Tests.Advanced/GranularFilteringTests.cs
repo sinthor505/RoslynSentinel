@@ -9,14 +9,14 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class GranularFilteringTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ProjectStructureEngine _projectStructureEngine;
     private MetricsEngine _metricsEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
         _metricsEngine = new MetricsEngine(_workspaceManager);
 

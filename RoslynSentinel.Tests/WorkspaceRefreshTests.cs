@@ -7,12 +7,12 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class WorkspaceRefreshTests
 {
-    private PersistentWorkspaceManager _manager = null!;
+    private IWorkspaceManager _manager = null!;
 
     [SetUp]
     public void Setup()
     {
-        _manager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _manager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
     [TearDown]

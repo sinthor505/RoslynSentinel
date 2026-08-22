@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class MassiveQualityTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AnalysisEngine _analysisEngine;
     private SecurityEngine _securityEngine;
     private AsyncSafetyEngine _asyncSafetyEngine;
@@ -19,7 +19,7 @@ public class MassiveQualityTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);

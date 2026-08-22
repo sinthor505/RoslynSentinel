@@ -15,13 +15,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class CodeStyleEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private CodeStyleEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new CodeStyleEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -74,13 +74,13 @@ public class CodeStyleEngineTests
 [TestFixture]
 public class SyntaxUpgradeEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SyntaxUpgradeEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SyntaxUpgradeEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -132,13 +132,13 @@ public class SyntaxUpgradeEngineTests
 [TestFixture]
 public class ModernizationEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ModernizationEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ModernizationEngine(_workspaceManager, new SentinelConfiguration());
     }
 
@@ -190,13 +190,13 @@ public class ModernizationEngineTests
 [TestFixture]
 public class RefactoringEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private RefactoringEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new RefactoringEngine(
             NullLogger<RefactoringEngine>.Instance,
             _workspaceManager,

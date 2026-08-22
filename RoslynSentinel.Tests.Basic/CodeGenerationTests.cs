@@ -9,13 +9,13 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class CodeGenerationTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new CodeGenerationEngine(_workspaceManager);
     }
 

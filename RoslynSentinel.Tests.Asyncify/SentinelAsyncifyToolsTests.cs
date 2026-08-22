@@ -28,7 +28,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 [TestFixture]
 public class SentinelAsyncifyToolsTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelAsyncifyTools _asyncifyTools;
     private string _tempDir;
 
@@ -78,7 +78,7 @@ public class SentinelAsyncifyToolsTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         _tempDir = Path.Combine(Path.GetTempPath(), "SentinelAsyncifyToolsTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);

@@ -10,14 +10,14 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class MoveTypeToFileTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         _refactoringEngine = new RefactoringEngine(new NullLogger<RefactoringEngine>(), _workspaceManager, config);
     }
 

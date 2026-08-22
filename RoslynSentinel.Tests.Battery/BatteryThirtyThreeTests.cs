@@ -23,7 +23,7 @@ namespace RoslynSentinel.Tests.Battery;
 public class BatteryThirtyThreeTests
 {
     // ── engines for SentinelIntelligenceTools (Bug #1) ─────────────────────────
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ImpactAnalyzer _impactAnalyzer;
     private SemanticSearchEngine _semanticSearchEngine;
@@ -57,7 +57,7 @@ public class BatteryThirtyThreeTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
 
         _impactAnalyzer = new ImpactAnalyzer(NullLogger<ImpactAnalyzer>.Instance, _workspaceManager);

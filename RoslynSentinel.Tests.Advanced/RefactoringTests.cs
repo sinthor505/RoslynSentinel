@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Advanced;
 
 public class RefactoringTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
     private RefinementEngine _refinementEngine;
     private AdvancedLogicEngine _advancedLogicEngine;
@@ -20,7 +20,7 @@ public class RefactoringTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         _refinementEngine = new RefinementEngine(_workspaceManager);
         _advancedLogicEngine = new AdvancedLogicEngine(_workspaceManager);

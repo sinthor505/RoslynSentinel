@@ -22,13 +22,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class B02extra_Immutability_ReadonlySpacing
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ImmutabilityEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
@@ -147,13 +147,13 @@ public class B02extra_Immutability_ReadonlySpacing
 [TestFixture]
 public class B04extra_AntiPattern_ZeroParamCancellationToken
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AntiPatternEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AntiPatternEngine(_workspaceManager);
     }
 
@@ -240,13 +240,13 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
 [TestFixture]
 public class B16extra_SecuritySafety_NullConditionalGuards
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SecurityAndSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SecurityAndSafetyEngine(_workspaceManager);
     }
 
@@ -337,13 +337,13 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 [TestFixture]
 public class WFextra_AdvancedLogic_WhileToFor
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AdvancedLogicEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedLogicEngine(_workspaceManager);
     }
 
@@ -452,7 +452,7 @@ public class RealSolution_SmokeTests_Battery28
 {
     private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
 
     /// A real .cs file path and its first class name, discovered at SetUp time.
     private string _realFilePath = null!;
@@ -466,7 +466,7 @@ public class RealSolution_SmokeTests_Battery28
             Assert.Ignore("Set ROSLYN_SENTINEL_TEST_SLN env var to run real-solution integration tests.");
         }
 
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         // Find one document that has at least one class declaration

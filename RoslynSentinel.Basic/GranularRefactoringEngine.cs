@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class GranularRefactoringEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public GranularRefactoringEngine(PersistentWorkspaceManager workspaceManager)
+    public GranularRefactoringEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

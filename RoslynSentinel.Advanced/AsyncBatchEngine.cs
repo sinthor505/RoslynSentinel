@@ -313,7 +313,7 @@ public class PropagateCtBatchResult
 /// </summary>
 public class AsyncBatchEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly ValidationEngine _validationEngine;
     private readonly AntiPatternEngine _antiPatternEngine;
@@ -324,7 +324,7 @@ public class AsyncBatchEngine
     /// Initialises a new <see cref="AsyncBatchEngine"/> with all required dependencies.
     /// </summary>
     public AsyncBatchEngine(
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         AsyncOptimizationEngine asyncOptimizationEngine,
         ValidationEngine validationEngine,
         AntiPatternEngine antiPatternEngine,

@@ -11,10 +11,10 @@ namespace RoslynSentinel.Common;
 public class ValidationEngine
 {
     private readonly ILogger<ValidationEngine> _logger;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly DiffEngine _diffEngine;
 
-    public ValidationEngine(ILogger<ValidationEngine> logger, PersistentWorkspaceManager workspaceManager, DiffEngine diffEngine)
+    public ValidationEngine(ILogger<ValidationEngine> logger, IWorkspaceManager workspaceManager, DiffEngine diffEngine)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;

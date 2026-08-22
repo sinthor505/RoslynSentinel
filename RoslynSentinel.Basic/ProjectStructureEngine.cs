@@ -6,10 +6,10 @@ namespace RoslynSentinel.Basic;
 
 public class ProjectStructureEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public ProjectStructureEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public ProjectStructureEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;

@@ -12,13 +12,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class ImmutabilityEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ImmutabilityEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ImmutabilityEngine(_workspaceManager);
     }
 
@@ -69,13 +69,13 @@ public class ImmutabilityEngineTests
 [TestFixture]
 public class ThreadSafetyEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private ThreadSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new ThreadSafetyEngine(_workspaceManager);
     }
 
@@ -128,13 +128,13 @@ public class ThreadSafetyEngineTests
 [TestFixture]
 public class AsyncSafetyEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private AsyncSafetyEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncSafetyEngine(_workspaceManager);
     }
 
@@ -202,13 +202,13 @@ public class Worker
 [TestFixture]
 public class DeadCodeEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private DeadCodeEngine _engine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new DeadCodeEngine(_workspaceManager);
     }
 

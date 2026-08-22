@@ -23,7 +23,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 [TestFixture]
 public class MigrationScanResultTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AntiPatternEngine _antiPatternEngine;
     private SentinelQualityTools _qualityTools;
@@ -45,7 +45,7 @@ public class MigrationScanResultTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
 

@@ -19,9 +19,9 @@ public record OutParamConversionResult(
 
 public class OutParamRefactoringEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public OutParamRefactoringEngine(PersistentWorkspaceManager workspaceManager)
+    public OutParamRefactoringEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

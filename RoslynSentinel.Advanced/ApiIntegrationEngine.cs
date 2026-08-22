@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ApiIntegrationEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ApiIntegrationEngine(PersistentWorkspaceManager workspaceManager)
+    public ApiIntegrationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

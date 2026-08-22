@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class MassiveIntelligenceTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AnalysisEngine _analysisEngine;
     private MetricsEngine _metricsEngine;
     private SemanticSearchEngine _searchEngine;
@@ -20,7 +20,7 @@ public class MassiveIntelligenceTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _searchEngine = new SemanticSearchEngine(_workspaceManager);

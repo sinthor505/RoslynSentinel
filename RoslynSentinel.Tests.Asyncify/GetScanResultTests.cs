@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 [TestFixture]
 public class GetScanResultTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelScanTools _scanTools;
     private string _tempDir;
 
@@ -34,7 +34,7 @@ public class GetScanResultTests
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
         _tempDir = Path.Combine(Path.GetTempPath(), "GetScanResultTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);

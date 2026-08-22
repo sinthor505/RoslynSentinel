@@ -26,13 +26,13 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class InlineVariableTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SemanticRefactoringLibrary _library;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _library = new SemanticRefactoringLibrary(_workspaceManager);
     }
 

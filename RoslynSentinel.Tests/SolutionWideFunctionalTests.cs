@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class SolutionWideFunctionalTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
     private ProjectStructureEngine _projectStructureEngine;
     private AnalysisEngine _analysisEngine;
@@ -15,7 +15,7 @@ public class SolutionWideFunctionalTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);

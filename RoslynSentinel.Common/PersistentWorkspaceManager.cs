@@ -15,9 +15,9 @@ using ModelContextProtocol;
 
 namespace RoslynSentinel.Common;
 
-public partial class PersistentWorkspaceManager : IDisposable
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 {
-    private readonly ILogger<PersistentWorkspaceManager> _logger;
+    private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
@@ -32,7 +32,8 @@ public partial class PersistentWorkspaceManager : IDisposable
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
-    public readonly Guid SessionId = Guid.NewGuid();
+
+    public Guid SessionId { get; } = Guid.NewGuid();
 
     /// <summary>
     /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
@@ -70,29 +71,7 @@ public partial class PersistentWorkspaceManager : IDisposable
     private int _totalFailures;
     private int _weightedRollbackScore;
 
-    /// <summary>
-    /// Result summary returned by the write-through refactoring tools (ValidateAndApplyAsync).
-    /// The change is already written to disk (or, when <see cref="DryRun"/> is true, validated
-    /// but deliberately not written) — there is no separate apply step.
-    /// </summary>
-    public record AppliedChangeSummary(
-        string? ChangeId,
-        List<FilePath> AffectedFiles,
-        string Description,
-        bool DryRun,
-        string? Diff = null,
-        int? WorkspaceVersion = null
-    )
-    {
-        /// <summary>Machine-parseable outcome — "applied" once written to disk, "dry_run_ok" when validated but not written.</summary>
-        public string Status => DryRun ? "dry_run_ok" : "applied";
-
-        public string Note => DryRun
-            ? "Validated — introduces no new compiler errors. Not written to disk (dryRun=true). Re-call with dryRun=false to apply."
-            : $"Written to disk. Call UndoLastApply(changeId: \"{ChangeId}\") to revert if needed.";
-    }
-
-    public PersistentWorkspaceManager(ILogger<PersistentWorkspaceManager> logger)
+    public PersistentWorkspaceManager(ILogger<IWorkspaceManager> logger)
     {
         _logger = logger;
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
@@ -906,27 +885,6 @@ public partial class PersistentWorkspaceManager : IDisposable
             SampleStaleFiles: sampleStaleFiles.Count > 0 ? sampleStaleFiles : null
         );
     }
-
-    /// <summary>
-    /// Result of an attempt to apply multiple file changes to disk.
-    /// <para><see cref="WorkspaceInSync"/> indicates whether the in-memory workspace was
-    /// successfully refreshed after the write. If <c>false</c>, call <c>load_solution</c>
-    /// to resync before making further semantic queries.</para>
-    /// <para><see cref="PreImages"/> maps each file path to its content immediately before
-    /// the write (null if the file did not exist). Callers use this to populate
-    /// <see cref="OperationItemRecord.BeforeSource"/> in forensic blobs, enabling undo.</para>
-    /// </summary>
-    public record ApplyChangesResult(
-        bool Success,
-        List<string> SucceededFiles,
-        Dictionary<FilePath, string> FailedFiles,
-        string Summary,
-        bool WorkspaceInSync = false,
-        int WorkspaceVersion = 0,
-        IReadOnlyDictionary<string, string?>? PreImages = null,
-        DiagnosticReport? ValidationResult = null,
-        List<string>? RolledBackFiles = null
-    );
 
     /// <summary>
     /// Writes proposed file changes to disk and updates the in-memory workspace.

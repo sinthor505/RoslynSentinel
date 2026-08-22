@@ -8,9 +8,9 @@ namespace RoslynSentinel.Advanced;
 
 public class SecurityEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SecurityEngine(PersistentWorkspaceManager workspaceManager)
+    public SecurityEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

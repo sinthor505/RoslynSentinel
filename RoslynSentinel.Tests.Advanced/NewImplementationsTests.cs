@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class NewImplementationsTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private DeadCodeEngine _deadCodeEngine;
     private AnalysisEngine _analysisEngine;
@@ -27,7 +27,7 @@ public class NewImplementationsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);

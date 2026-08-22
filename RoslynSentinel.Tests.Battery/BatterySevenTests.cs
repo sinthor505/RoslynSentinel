@@ -20,13 +20,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class StandardRefactoringEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private StandardRefactoringEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new StandardRefactoringEngine(_workspaceManager);
     }
 
@@ -105,13 +105,13 @@ public class MathHelper
 [TestFixture]
 public class SemanticSearchEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SemanticSearchEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new SemanticSearchEngine(_workspaceManager);
     }
 
@@ -189,13 +189,13 @@ public class PlainDto { public int Id { get; set; } }
 [TestFixture]
 public class AdvancedTypeEngineTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AdvancedTypeEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AdvancedTypeEngine(_workspaceManager);
     }
 

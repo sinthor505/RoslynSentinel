@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class IDEStyleEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public IDEStyleEngine(PersistentWorkspaceManager workspaceManager)
+    public IDEStyleEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

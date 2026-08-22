@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ExhaustiveRefactoringTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private CodeStyleEngine _codeStyleEngine;
 
@@ -16,7 +16,7 @@ public class ExhaustiveRefactoringTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
     }

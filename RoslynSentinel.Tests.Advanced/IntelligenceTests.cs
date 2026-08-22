@@ -8,14 +8,14 @@ namespace RoslynSentinel.Tests.Advanced;
 
 public class IntelligenceTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AnalysisEngine _analysisEngine;
 
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);
     }
 

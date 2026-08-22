@@ -9,9 +9,9 @@ namespace RoslynSentinel.Advanced;
 
 public class AsyncOptimizationEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public AsyncOptimizationEngine(PersistentWorkspaceManager workspaceManager)
+    public AsyncOptimizationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryTwentyTwoTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ImpactAnalyzer _impactAnalyzer;
     private SemanticSearchEngine _semanticSearchEngine;
@@ -106,7 +106,7 @@ public class OrderService : IOrderService
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _impactAnalyzer = new ImpactAnalyzer(NullLogger<ImpactAnalyzer>.Instance, _workspaceManager);
         _semanticSearchEngine = new SemanticSearchEngine(_workspaceManager);

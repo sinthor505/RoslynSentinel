@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class ThreadSafetyEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ThreadSafetyEngine(PersistentWorkspaceManager workspaceManager)
+    public ThreadSafetyEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

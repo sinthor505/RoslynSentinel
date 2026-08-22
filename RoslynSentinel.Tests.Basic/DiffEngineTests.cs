@@ -13,7 +13,7 @@ public class DiffEngineTests
     [SetUp]
     public void Setup()
     {
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         _diffEngine = new DiffEngine(workspaceManager);
     }
 
@@ -48,7 +48,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine(workspaceManager);
@@ -67,7 +67,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine(workspaceManager);

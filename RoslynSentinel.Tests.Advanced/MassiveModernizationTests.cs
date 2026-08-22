@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class MassiveModernizationTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private ModernizationEngine _modernizationEngine;
@@ -22,7 +22,7 @@ public class MassiveModernizationTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
 

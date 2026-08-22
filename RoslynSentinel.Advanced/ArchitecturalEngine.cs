@@ -12,9 +12,9 @@ public record CircularDependencyChain(
 
 public class ArchitecturalEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ArchitecturalEngine(PersistentWorkspaceManager workspaceManager)
+    public ArchitecturalEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

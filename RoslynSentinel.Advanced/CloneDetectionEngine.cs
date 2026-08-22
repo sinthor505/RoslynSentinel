@@ -26,9 +26,9 @@ public record DuplicateBlockGroup(
 
 public class CloneDetectionEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public CloneDetectionEngine(PersistentWorkspaceManager workspaceManager)
+    public CloneDetectionEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

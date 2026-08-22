@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ModernizationIntegrationTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private ProjectStructureEngine _projectStructureEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private CodeStyleEngine _codeStyleEngine;
@@ -16,7 +16,7 @@ public class ModernizationIntegrationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<PersistentWorkspaceManager>());
+        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);

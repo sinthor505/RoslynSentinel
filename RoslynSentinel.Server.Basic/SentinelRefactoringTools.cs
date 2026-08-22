@@ -28,7 +28,7 @@ public class SentinelRefactoringTools
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly CodeGenerationEngine _codeGenerationEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly SentinelConfiguration _config;
     private readonly ILogger<SentinelRefactoringTools> _logger;
@@ -52,7 +52,7 @@ public class SentinelRefactoringTools
         MsToolAugmentEngine augmentEngine,
         CodeGenerationEngine codeGenerationEngine,
         SymbolNavigationEngine symbolNavigationEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         SentinelConfiguration config,
         ILogger<SentinelRefactoringTools> logger)
@@ -248,7 +248,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -339,7 +339,7 @@ public class SentinelRefactoringTools
                 return await ToolResult<object>.ForPossiblyLargeDataAsync(
                     new MemberChangedContentResult
                     {
-                        Summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff),
+                        Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Replaces '{memberName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff),
                         ChangedContent = newMemberSource
                     },
                     _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
@@ -380,7 +380,7 @@ public class SentinelRefactoringTools
                 var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
-                return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Removes '{memberName}' from {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+                return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Removes '{memberName}' from {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
             }
 
             // operation == MemberAction.add
@@ -454,7 +454,7 @@ public class SentinelRefactoringTools
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
                 new MemberChangedContentResult
                 {
-                    Summary = new PersistentWorkspaceManager.AppliedChangeSummary(addApply.ChangeId, [filePath], description, addApply.DryRun, addApply.Diff),
+                    Summary = new AppliedChangeSummary(addApply.ChangeId, [filePath], description, addApply.DryRun, addApply.Diff),
                     ChangedContent = addedMemberSource ?? ""
                 },
                 _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
@@ -523,7 +523,7 @@ public class SentinelRefactoringTools
             var description = operation == AddRemoveViewAction.add
                 ? $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}."
                 : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePath)}.";
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
         {
@@ -568,7 +568,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
         {
@@ -609,7 +609,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
         {
@@ -671,7 +671,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff) };
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -766,7 +766,7 @@ public class SentinelRefactoringTools
             return await ToolResult<object>.ForPossiblyLargeDataAsync(
                 new MemberChangedContentResult
                 {
-                    Summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff),
+                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff),
                     ChangedContent = changedContent
                 },
                 _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
@@ -814,7 +814,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
@@ -880,7 +880,7 @@ public class SentinelRefactoringTools
             return new ToolResult<object>
             {
                 Success = true,
-                Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{newMethodName}' into a new method in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion)
+                Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{newMethodName}' into a new method in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion)
             };
         }
         catch (Exception ex)
@@ -943,7 +943,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -997,7 +997,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -1051,7 +1051,7 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            var summary = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
         catch (Exception ex)
@@ -1108,7 +1108,7 @@ public class SentinelRefactoringTools
             // the compilation, corrupting symbol resolution for every subsequent call.
             await _workspaceManager.RemoveDocumentByPathAsync(filePath, cancellationToken);
 
-            return new ToolResult<object> { Success = true, Data = new PersistentWorkspaceManager.AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"Renamed '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
+            return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"Renamed '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {

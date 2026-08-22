@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class NewToolTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private CodeGenerationEngine _codeGenerationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
@@ -22,7 +22,7 @@ public class NewToolTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

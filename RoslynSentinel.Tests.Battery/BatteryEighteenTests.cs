@@ -10,7 +10,7 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryEighteenTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _msEngine;
 
     private const string RichSource = @"
@@ -89,7 +89,7 @@ public class OrderService : IOrderService
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _msEngine = new MsToolAugmentEngine(_workspaceManager);
     }
 

@@ -17,7 +17,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
 {
     private static readonly string SlnPath = Environment.GetEnvironmentVariable("ROSLYN_SENTINEL_TEST_SLN") ?? string.Empty;
 
-    private PersistentWorkspaceManager _workspaceManager = null!;
+    private IWorkspaceManager _workspaceManager = null!;
     private SentinelConfiguration _config = null!;
 
     private string _realFilePath = null!;
@@ -34,7 +34,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         }
 
         _config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);

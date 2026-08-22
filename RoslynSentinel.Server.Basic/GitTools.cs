@@ -136,11 +136,11 @@ public class GitRevertResult
 [McpServerToolType]
 public class GitTools
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<GitTools> _logger;
 
     public GitTools(
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger<GitTools> logger)
     {
         _workspaceManager = workspaceManager;

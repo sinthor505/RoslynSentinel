@@ -7,9 +7,9 @@ namespace RoslynSentinel.Advanced;
 
 public class DeadCodeEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public DeadCodeEngine(PersistentWorkspaceManager workspaceManager)
+    public DeadCodeEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -14,13 +14,13 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class ConvertToNullCoalescingTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private LogicOptimizationEngine _logicOptimizationEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
     }
 

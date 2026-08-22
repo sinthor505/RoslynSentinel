@@ -4,9 +4,9 @@ namespace RoslynSentinel.Basic;
 
 public partial class DependencyEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public DependencyEngine(PersistentWorkspaceManager workspaceManager)
+    public DependencyEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

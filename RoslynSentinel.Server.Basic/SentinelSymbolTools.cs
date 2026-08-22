@@ -25,7 +25,7 @@ public class SentinelSymbolTools
     // private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelSymbolTools> _logger;
 
     public SentinelSymbolTools(
@@ -45,7 +45,7 @@ public class SentinelSymbolTools
         // DependencyInjectionEngine dependencyInjectionEngine,
         DiscoveryEngine discoveryEngine,
         ProjectConsistencyEngine projectConsistencyEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelSymbolTools> logger)
     {

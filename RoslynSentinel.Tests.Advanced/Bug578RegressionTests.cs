@@ -13,13 +13,13 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class Bug578RegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private CodeGenerationEngine _codeGenerationEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
     }
 

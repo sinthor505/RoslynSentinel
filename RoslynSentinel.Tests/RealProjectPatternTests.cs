@@ -28,14 +28,14 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class RealProjectPatternTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -639,7 +639,7 @@ public class InventoryRepository { }";
         // Fresh workspace manager with no solution set — workspace itself is operational,
         // but no solution is loaded yet. The health check correctly distinguishes these.
         using var fresh = new PersistentWorkspaceManager(
-            NullLogger<PersistentWorkspaceManager>.Instance);
+            NullLogger<IWorkspaceManager>.Instance);
         var freshEngine = new MsToolAugmentEngine(fresh);
 
         var report = await freshEngine.GetWorkspaceHealthAsync();

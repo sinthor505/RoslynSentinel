@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace RoslynSentinel.Common;
 
 // ── Error codes ───────────────────────────────────────────────────────────────
@@ -114,7 +112,7 @@ public record ToolResult<T>
     }
 
     /// <summary>
-    /// <see cref="PersistentWorkspaceManager.WorkspaceVersion"/> at the time this result was
+    /// <see cref="IWorkspaceManager.WorkspaceVersion"/> at the time this result was
     /// produced. Null when the tool that produced this result doesn't stamp it. Lets a caller
     /// compare a version fetched by a read tool against one returned by a later write to tell
     /// whether the workspace changed between the two calls (e.g. a cached line number may no

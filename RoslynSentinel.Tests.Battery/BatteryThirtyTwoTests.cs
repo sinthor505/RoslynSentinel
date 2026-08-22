@@ -28,14 +28,14 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryThirtyTwoTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private CodeGenerationEngine _codeGenerationEngine;
 
     [SetUp]
     public void SetUp()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
     }

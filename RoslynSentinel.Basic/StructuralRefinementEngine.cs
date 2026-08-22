@@ -10,10 +10,10 @@ namespace RoslynSentinel.Basic;
 
 public class StructuralRefinementEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public StructuralRefinementEngine(PersistentWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public StructuralRefinementEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;

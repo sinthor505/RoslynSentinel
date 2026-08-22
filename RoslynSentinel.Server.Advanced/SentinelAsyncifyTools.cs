@@ -17,7 +17,7 @@ public class SentinelAsyncifyTools
     private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     private readonly AsyncBatchEngine _asyncBatchEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ValidationEngine _validationEngine;
     private readonly FailureRouter _failureRouter;
     private readonly MigrationLedger _ledger;
@@ -38,7 +38,7 @@ public class SentinelAsyncifyTools
         AsyncOptimizationEngine asyncOptimizationEngine,
         AsyncBatchEngine asyncBatchEngine,
         MsToolAugmentEngine msToolAugmentEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ValidationEngine validationEngine,
         FailureRouter failureRouter,
         MigrationLedger ledger,

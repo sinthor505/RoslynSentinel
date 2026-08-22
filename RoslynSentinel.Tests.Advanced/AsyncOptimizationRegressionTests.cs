@@ -7,13 +7,13 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class AsyncOptimizationRegressionTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncOptimizationEngine(_workspaceManager);
     }
 

@@ -16,13 +16,13 @@ public enum HealthEngineType
 
 public class HealthOrchestrationEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ProjectStructureEngine _projectStructureEngine;
     private readonly AnalysisEngine _analysisEngine;
     private readonly SentinelConfiguration _config;
 
     public HealthOrchestrationEngine(
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ProjectStructureEngine projectStructureEngine,
         AnalysisEngine analysisEngine,
         SentinelConfiguration config)

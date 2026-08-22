@@ -62,13 +62,13 @@ public class DocListResult
 [McpServerToolType]
 public class DocumentationTools
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<DocumentationTools> _logger;
 
     private const int MaxDocBytes = 512 * 1024;   // 512 KB
 
     public DocumentationTools(
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger<DocumentationTools> logger)
     {
         _workspaceManager = workspaceManager;

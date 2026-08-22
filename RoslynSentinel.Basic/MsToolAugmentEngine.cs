@@ -64,10 +64,10 @@ public record AddUsingsPreview(
 /// </summary>
 public class MsToolAugmentEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private static readonly char[] anyOf = new[] { '{', '}' };
 
-    public MsToolAugmentEngine(PersistentWorkspaceManager workspaceManager)
+    public MsToolAugmentEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

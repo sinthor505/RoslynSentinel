@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class MassiveRefactoringTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private RefactoringEngine _refactoringEngine;
     private SentinelRefactoringTools _refactoringTools;
     private SentinelAdvancedRefactoringTools _advancedRefactoringTools;
@@ -17,7 +17,7 @@ public class MassiveRefactoringTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _refactoringEngine = new RefactoringEngine(NullLogger<RefactoringEngine>.Instance, _workspaceManager, config);
 
         var sr = new StructuralRefinementEngine(_workspaceManager, config);

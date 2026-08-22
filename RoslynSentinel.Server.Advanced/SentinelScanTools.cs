@@ -35,7 +35,7 @@ public class SentinelScanTools
     private readonly RefactoringEngine _refactoringEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly BreakingChangeEngine _breakingChangeEngine;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelScanTools> _logger;
     private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -70,7 +70,7 @@ public class SentinelScanTools
         RefactoringEngine refactoringEngine,
         SymbolNavigationEngine symbolNavigationEngine,
         BreakingChangeEngine breakingChangeEngine,
-        PersistentWorkspaceManager workspaceManager,
+        IWorkspaceManager workspaceManager,
         ILogger<SentinelScanTools> logger)
     {
         _analysisEngine = analysisEngine;

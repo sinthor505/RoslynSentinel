@@ -87,6 +87,6 @@ public record FileSourceResult
 /// <summary>Offloaded payload shape for a mutating member/constructor-parameter tool's changed content, too large to inline.</summary>
 public record MemberChangedContentResult
 {
-    public PersistentWorkspaceManager.AppliedChangeSummary Summary { get; init; } = null!;
+    public AppliedChangeSummary Summary { get; init; } = null!;
     public string ChangedContent { get; init; } = "";
 }

@@ -8,10 +8,10 @@ namespace RoslynSentinel.Common;
 
 public class DiffEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
     private static readonly string[] separatorArray = new[] { "\r\n", "\r", "\n" };
 
-    public DiffEngine(PersistentWorkspaceManager workspaceManager)
+    public DiffEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

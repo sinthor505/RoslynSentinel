@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class PerformanceEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public PerformanceEngine(PersistentWorkspaceManager workspaceManager)
+    public PerformanceEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

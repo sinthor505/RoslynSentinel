@@ -7,9 +7,9 @@ namespace RoslynSentinel.Basic;
 public class ImpactAnalyzer
 {
     private readonly ILogger<ImpactAnalyzer> _logger;
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public ImpactAnalyzer(ILogger<ImpactAnalyzer> logger, PersistentWorkspaceManager workspaceManager)
+    public ImpactAnalyzer(ILogger<ImpactAnalyzer> logger, IWorkspaceManager workspaceManager)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;

@@ -19,13 +19,13 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class EncapsulateFieldSafeAdvancedTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -156,13 +156,13 @@ public class EncapsulateFieldSafeAdvancedTests
 [TestFixture]
 public class AnalyzeForeachAdvancedTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -291,13 +291,13 @@ public class AnalyzeForeachAdvancedTests
 [TestFixture]
 public class SwitchConversionAdvancedTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private MsToolAugmentEngine _engine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 

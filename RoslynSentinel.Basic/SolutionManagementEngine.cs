@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class SolutionManagementEngine
 {
-    private readonly PersistentWorkspaceManager _workspaceManager;
+    private readonly IWorkspaceManager _workspaceManager;
 
-    public SolutionManagementEngine(PersistentWorkspaceManager workspaceManager)
+    public SolutionManagementEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class FeatureToggleTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private SentinelConfiguration _config;
     private ProjectStructureEngine _structureEngine;
     private AnalysisEngine _analysisEngine;
@@ -15,7 +15,7 @@ public class FeatureToggleTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);

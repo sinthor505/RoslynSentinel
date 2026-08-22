@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Advanced;
 
 public class QualityTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private LogicOptimizationEngine _logicEngine;
     private PerformanceEngine _perfEngine;
     private AnalysisEngine _analysisEngine;
@@ -18,7 +18,7 @@ public class QualityTests
     public void Setup()
     {
         var config = new SentinelConfiguration();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _logicEngine = new LogicOptimizationEngine(_workspaceManager);
         _perfEngine = new PerformanceEngine(_workspaceManager);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);

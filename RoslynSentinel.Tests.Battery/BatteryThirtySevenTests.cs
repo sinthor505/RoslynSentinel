@@ -16,14 +16,14 @@ namespace RoslynSentinel.Tests.Battery;
 [TestFixture]
 public class BatteryThirtySevenTests
 {
-    private PersistentWorkspaceManager _workspaceManager;
+    private IWorkspaceManager _workspaceManager;
     private AntiPatternEngine _antiPatternEngine;
     private ProjectStructureEngine _structureEngine;
 
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<PersistentWorkspaceManager>.Instance);
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         _structureEngine = new ProjectStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
