@@ -21,13 +21,14 @@ public partial class PersistentWorkspaceManager : IDisposable
     private MSBuildWorkspace? _workspace;
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
+    private readonly List<FileSystemWatcher> _outOfTreeWatchers = new();
     private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _watcherOverflowed;
     private volatile bool _disposed = false;
     private readonly ConcurrentDictionary<FilePath, string> _failedChangesCache = new();
-    private readonly ConcurrentDictionary<string, DateTime> _internalChanges = new();
+    private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
     private readonly Timer _debounceTimer;
@@ -302,7 +303,9 @@ public partial class PersistentWorkspaceManager : IDisposable
 
             _lastLoadedAt = DateTime.UtcNow;
             SolutionPath = solutionPath;
-            SetupWatcher(Path.GetDirectoryName(solutionPath)!);
+            var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
+            SetupWatcher(solutionDirectory);
+            SetupOutOfTreeWatchers(solutionDirectory);
         }
         finally
         {
@@ -326,6 +329,93 @@ public partial class PersistentWorkspaceManager : IDisposable
         _watcher.Renamed += OnFileSystemChanged;
         _watcher.Error += OnWatcherError;
         _watcher.EnableRaisingEvents = true;
+    }
+
+    // The main watcher only covers the solution directory's own subtree
+    // (SetupWatcher(Path.GetDirectoryName(solutionPath))). A project or document referenced from
+    // outside that tree — a linked file, a shared project pulled in via a relative "..\" path, a
+    // solution folder pointing elsewhere — is invisible to it: edits there never populate
+    // _externalChanges and the drift write-guard in ApplyProposedChangesAsync never fires for
+    // them either, so reads would silently serve stale content indefinitely. This sets up one
+    // extra watcher per distinct out-of-tree project directory found in the freshly loaded
+    // solution, deduped to the shortest common ancestor so a project nested inside another
+    // watched project's directory doesn't get its own redundant watcher.
+    private void SetupOutOfTreeWatchers(string solutionDirectory)
+    {
+        foreach (var watcher in _outOfTreeWatchers)
+        {
+            watcher.Dispose();
+        }
+        _outOfTreeWatchers.Clear();
+
+        if (CurrentSolution is null)
+        {
+            return;
+        }
+
+        var solutionDirFull = Path.GetFullPath(solutionDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        var outOfTreeDirs = CurrentSolution.Projects
+            .Select(p => p.FilePath)
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => Path.GetDirectoryName(p!))
+            .Where(d => !string.IsNullOrEmpty(d))
+            .Select(d => Path.GetFullPath(d!).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            .Where(d => !IsUnderDirectory(d, solutionDirFull))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Drop any directory that is itself a subdirectory of another candidate — the parent's
+        // recursive watcher already covers it.
+        var roots = outOfTreeDirs
+            .Where(d => !outOfTreeDirs.Any(other =>
+                !string.Equals(other, d, StringComparison.OrdinalIgnoreCase) && IsUnderDirectory(d, other)))
+            .ToList();
+
+        foreach (var dir in roots)
+        {
+            if (!Directory.Exists(dir))
+            {
+                continue;
+            }
+
+            try
+            {
+                var watcher = new FileSystemWatcher(dir)
+                {
+                    IncludeSubdirectories = true,
+                    NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+                    Filter = "*.*"
+                };
+
+                watcher.Changed += OnFileSystemChanged;
+                watcher.Created += OnFileSystemChanged;
+                watcher.Deleted += OnFileSystemChanged;
+                watcher.Renamed += OnFileSystemChanged;
+                watcher.Error += OnWatcherError;
+                watcher.EnableRaisingEvents = true;
+
+                _outOfTreeWatchers.Add(watcher);
+
+                if (_logger.IsEnabled(LogLevel.Information))
+                {
+                    _logger.LogInformation("Watching out-of-tree project directory: {Directory}", dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning(ex, "Failed to set up watcher for out-of-tree directory {Directory}", dir);
+                }
+            }
+        }
+    }
+
+    private static bool IsUnderDirectory(string candidate, string root)
+    {
+        var rootWithSep = root + Path.DirectorySeparatorChar;
+        return candidate.StartsWith(rootWithSep, StringComparison.OrdinalIgnoreCase);
     }
 
     // FileSystemWatcher has a fixed-size internal buffer; a burst of changes arriving faster
@@ -356,11 +446,34 @@ public partial class PersistentWorkspaceManager : IDisposable
 
         // Ignore files written by ApplyProposedChangesAsync — they are already reflected in
         // the in-memory workspace and a redundant reload would hold _solutionLock for tens of
-        // seconds, starving every other caller.
-        if (_internalChanges.TryGetValue(e.FullPath, out var changedAt) &&
-            (DateTime.UtcNow - changedAt).TotalSeconds < 5)
+        // seconds, starving every other caller. Path+timing alone isn't enough to tell our own
+        // write apart from a human editing the same file within the suppression window, so we
+        // also verify the on-disk content still matches what we wrote (Changed/Created events
+        // only — Renamed/Deleted have no content to compare and always fall through as real).
+        if (_internalChanges.TryGetValue(e.FullPath, out var recordedChange) &&
+            (DateTime.UtcNow - recordedChange.Timestamp).TotalSeconds < 5)
         {
-            return;
+            if (e.ChangeType is WatcherChangeTypes.Renamed or WatcherChangeTypes.Deleted)
+            {
+                // Fall through — treat as a real external change.
+            }
+            else
+            {
+                try
+                {
+                    var onDiskContent = File.Exists(e.FullPath) ? File.ReadAllText(e.FullPath) : null;
+                    if (onDiskContent == recordedChange.Content)
+                    {
+                        return;
+                    }
+                }
+                catch (IOException)
+                {
+                    // File locked/being written concurrently — can't verify, assume it's our
+                    // own write in progress rather than false-positive an external edit.
+                    return;
+                }
+            }
         }
 
         // Ignore files generated by MSBuild under obj/ and bin/ directories.
@@ -983,8 +1096,11 @@ public partial class PersistentWorkspaceManager : IDisposable
                     }
                 }
 
-                // Mark as internal change before writing to avoid FileSystemWatcher loop
-                _internalChanges[filePath] = DateTime.UtcNow;
+                // Mark as internal change before writing to avoid FileSystemWatcher loop.
+                // Content is recorded alongside the timestamp so the watcher handler can verify
+                // an incoming event actually matches what we wrote, rather than suppressing by
+                // path+timing alone (see OnFileSystemChanged).
+                _internalChanges[filePath] = (DateTime.UtcNow, newContent);
 
                 for (int attempt = 0; attempt <= retryCount; attempt++)
                 {
@@ -1049,7 +1165,7 @@ public partial class PersistentWorkspaceManager : IDisposable
                     try
                     {
                         preImages.TryGetValue(filePath, out var original);
-                        _internalChanges[filePath] = DateTime.UtcNow;
+                        _internalChanges[filePath] = (DateTime.UtcNow, original ?? "");
                         if (original is null)
                         {
                             if (File.Exists(filePath))
@@ -1221,7 +1337,7 @@ public partial class PersistentWorkspaceManager : IDisposable
         var cutoff = DateTime.UtcNow.AddSeconds(-5);
         foreach (var key in _internalChanges.Keys.ToList())
         {
-            if (_internalChanges.TryGetValue(key, out var ts) && ts < cutoff)
+            if (_internalChanges.TryGetValue(key, out var entry) && entry.Timestamp < cutoff)
             {
                 _internalChanges.TryRemove(key, out _);
             }
@@ -1325,7 +1441,7 @@ public partial class PersistentWorkspaceManager : IDisposable
             var cutoff = DateTime.UtcNow.AddSeconds(-5);
             foreach (var key in _internalChanges.Keys.ToList())
             {
-                if (_internalChanges.TryGetValue(key, out var ts) && ts < cutoff)
+                if (_internalChanges.TryGetValue(key, out var entry) && entry.Timestamp < cutoff)
                 {
                     _internalChanges.TryRemove(key, out _);
                 }
@@ -1377,6 +1493,11 @@ public partial class PersistentWorkspaceManager : IDisposable
         _disposed = true;
         _workspace?.Dispose();
         _watcher?.Dispose();
+        foreach (var watcher in _outOfTreeWatchers)
+        {
+            watcher.Dispose();
+        }
+        _outOfTreeWatchers.Clear();
         _debounceTimer.Dispose();
         _solutionLock.Dispose();
         GC.SuppressFinalize(this);
