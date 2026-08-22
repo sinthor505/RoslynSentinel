@@ -130,10 +130,10 @@ WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:3801
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:3848
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:3903
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:3947
-WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4104
-WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4237
-WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4404
-WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4536
+WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4153
+WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4286
+WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4453
+WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:4585
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:473
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:637
 WARNING CS8604 RoslynSentinel.Basic\RefactoringEngine.cs:695

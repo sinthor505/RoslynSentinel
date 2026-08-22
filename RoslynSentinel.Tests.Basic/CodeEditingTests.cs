@@ -857,6 +857,63 @@ public enum OrderStatus
     }
 
     [Test]
+    public async Task AddSummaryComment_TargetIsEnumMember_Succeeds()
+    {
+        // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax, so it was
+        // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
+        // scan regardless of GetMemberName — a live agent's AddSummaryCommentAsync("Pending", ...)
+        // against an unambiguous enum member failed "target not found" even though the enclosing
+        // enum type itself resolved fine.
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var result = await _engine.AddSummaryCommentAsync(
+            "OrderStatus.cs", "Pending",
+            "The order is pending.");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
+        Assert.That(result.UpdatedText, Does.Contain("The order is pending."));
+    }
+
+    [Test]
+    public async Task SummaryComment_EnumMember_ViewAndRemoveRoundtrip()
+    {
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var added = await _engine.AddSummaryCommentAsync("OrderStatus.cs", "Shipped", "The order has shipped.");
+        Assert.That(added.Outcome, Is.EqualTo(EditOutcome.Modified));
+
+        // RefactoringEngine methods read from the workspace's current solution rather than each
+        // other's return values — in the real tool layer, SentinelRefactoringTools writes
+        // UpdatedText back into the workspace between calls, so mirror that here.
+        SetSource(added.UpdatedText!, "OrderStatus.cs");
+
+        var viewed = await _engine.GetSummaryCommentAsync("OrderStatus.cs", "Shipped");
+        Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(viewed.SummaryText, Does.Contain("The order has shipped."));
+
+        var removed = await _engine.RemoveSummaryCommentAsync("OrderStatus.cs", "Shipped");
+        Assert.That(removed.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(removed.UpdatedText, Does.Not.Contain("The order has shipped."));
+    }
+
+    [Test]
     public async Task AddSummaryComment_TargetIsRecord_Succeeds()
     {
         SetSource(@"

@@ -3066,10 +3066,10 @@ public class RefactoringEngine
             };
         }
 
-        MemberDeclarationSyntax? target = null;
+        SyntaxNode? target = null;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3197,10 +3197,10 @@ public class RefactoringEngine
             };
         }
 
-        MemberDeclarationSyntax? target;
+        SyntaxNode? target;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -3259,10 +3259,10 @@ public class RefactoringEngine
             return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", null);
         }
 
-        MemberDeclarationSyntax? target;
+        SyntaxNode? target;
         try
         {
-            target = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -4069,7 +4069,7 @@ public class RefactoringEngine
         var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
         if (matches.Count == 0)
         {
-            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
+            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "not found"));
         }
 
         if (matches.Count == 1)
@@ -4082,6 +4082,55 @@ public class RefactoringEngine
             }
 
             // Snippet matched but didn't align to a candidate member — treat as ambiguous
+            throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
+        }
+
+        // 2+ matches
+        throw new InvalidOperationException(BuildMemberHint(candidates.Cast<SyntaxNode>().ToList(), matches, "ambiguous"));
+    }
+
+    // EnumMemberDeclarationSyntax does not derive from MemberDeclarationSyntax (it hangs directly
+    // off EnumDeclarationSyntax, not off a Members list of MemberDeclarationSyntax), so it is
+    // invisible to ResolveMemberByNameOrSnippet's DescendantNodes().OfType<MemberDeclarationSyntax>()
+    // scan regardless of what GetMemberName returns for it. Confirmed: AddSummaryCommentAsync
+    // against an enum member (e.g. OrderStatus.Pending) fails "target not found" even though the
+    // enum type itself resolves fine. SummaryComment's three operations only ever call SyntaxNode-
+    // level trivia APIs (GetLeadingTrivia/WithLeadingTrivia) on the resolved target, never anything
+    // MemberDeclarationSyntax-specific, so this dedicated resolver returns the broader SyntaxNode
+    // and is used only by those three methods — other tools (ReplaceMember, ModifyModifier, etc.)
+    // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
+    // APIs (e.g. .Modifiers) that an enum member does not have.
+    private SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter)
+    {
+        var candidates = new List<SyntaxNode>();
+        candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)));
+        candidates.AddRange(root.DescendantNodes().OfType<EnumMemberDeclarationSyntax>().Where(m => m.Identifier.Text == memberName));
+
+        if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
+        {
+            candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        if (contextSnippet == null || candidates.Count <= 1)
+        {
+            return candidates.FirstOrDefault();
+        }
+
+        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        if (matches.Count == 0)
+        {
+            throw new InvalidOperationException(BuildMemberHint(candidates, matches, "not found"));
+        }
+
+        if (matches.Count == 1)
+        {
+            var match = matches[0];
+            var matchedMember = candidates.FirstOrDefault(c => c.Span.Contains(match));
+            if (matchedMember != null)
+            {
+                return matchedMember;
+            }
+
             throw new InvalidOperationException(BuildMemberHint(candidates, matches, "ambiguous"));
         }
 
@@ -4190,7 +4239,7 @@ public class RefactoringEngine
         throw new InvalidOperationException(BuildTypeHint(candidates, matches, "ambiguous"));
     }
 
-    private string BuildMemberHint(List<MemberDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    private string BuildMemberHint(List<SyntaxNode> candidates, List<int> matches, string failureMode)
     {
         if (candidates.Count == 0)
         {
