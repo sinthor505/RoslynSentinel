@@ -1572,8 +1572,8 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            var reverted = new List<string>();
             var failed = new List<string>();
+            var revertChanges = new Dictionary<FilePath, string>();
             foreach (var item in revertable)
             {
                 // Security: only revert files under the solution root to prevent path traversal.
@@ -1583,14 +1583,22 @@ public class SentinelWorkspaceTools
                     continue;
                 }
 
-                try
+                revertChanges[item.FilePath] = item.BeforeSource!;
+            }
+
+            var reverted = new List<string>();
+            if (revertChanges.Count > 0)
+            {
+                // Route through the shared chokepoint (ApplyProposedChangesAsync) rather than
+                // writing directly, so an undo gets the same rollback-on-partial-failure and
+                // FileSystemWatcher loop suppression as a forward apply — a revert that bypassed
+                // this previously looked like an external edit to the watcher.
+                var revertResult = await _workspaceManager.ApplyProposedChangesAsync(
+                    revertChanges, rollbackOnPartialFailure: true, cancellationToken: cancellationToken);
+                reverted.AddRange(revertResult.SucceededFiles);
+                foreach (var (path, error) in revertResult.FailedFiles)
                 {
-                    await File.WriteAllTextAsync(item.FilePath, item.BeforeSource!);
-                    reverted.Add(item.FilePath);
-                }
-                catch (Exception ex)
-                {
-                    failed.Add($"{item.FilePath}: {ex.Message}");
+                    failed.Add($"{path}: {error}");
                 }
             }
 

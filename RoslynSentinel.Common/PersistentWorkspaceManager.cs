@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
@@ -820,6 +821,17 @@ public partial class PersistentWorkspaceManager : IDisposable
     /// BeforeSource on OperationItemRecords for undo support.
     /// Retries on IOExceptions (e.g. file locks).
     /// </summary>
+    /// <remarks>
+    /// This is the shared chokepoint for writing modified source (.cs) file content to disk —
+    /// every tool/engine that persists an edit to a workspace file should route through this
+    /// method (directly or via a caller that does), rather than calling File.WriteAllText*
+    /// itself. Bypassing it loses external-drift refusal, pre-image capture for undo,
+    /// no-op/whitespace-only-write skipping, FileSystemWatcher loop suppression, retry-on-lock,
+    /// and rollback-on-partial-failure — see docs/reference-code-file-write-paths-v1.md for the
+    /// full inventory of callers and the divergent paths found (and fixed) by bypassing this.
+    /// There is no IWorkspaceManager interface enforcing this, so it is a convention, not a
+    /// compiler-checked constraint — keep it in mind when adding a new write path.
+    /// </remarks>
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(
         Dictionary<FilePath, string> changes,
         int retryCount = 3,
@@ -943,6 +955,31 @@ public partial class PersistentWorkspaceManager : IDisposable
                     catch
                     {
                         // Parse failure (e.g. malformed generated code) — fall through to normal write.
+                    }
+                }
+
+                // Dev diagnostic only: measure how far this write's content diverges from what
+                // Roslyn's own formatter would produce, purely for observability — never mutates
+                // newContent or affects what gets written below. See
+                // docs/reference-code-file-write-paths-v1.md ("Format-and-log diagnostic").
+                if (_logger.IsEnabled(LogLevel.Debug) &&
+                    string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var tree = CSharpSyntaxTree.ParseText(newContent, cancellationToken: cancellationToken);
+                        using var formattingWorkspace = new AdhocWorkspace();
+                        var formattedRoot = Formatter.Format(await tree.GetRootAsync(cancellationToken), formattingWorkspace, cancellationToken: cancellationToken);
+                        var formattedText = formattedRoot.ToFullString();
+                        if (formattedText != newContent)
+                        {
+                            var lineDelta = CountLines(formattedText) - CountLines(newContent);
+                            _logger.LogDebug("Formatter divergence for {FilePath}: written content differs from Formatter.Format output (line delta {LineDelta}).", filePath, lineDelta);
+                        }
+                    }
+                    catch
+                    {
+                        // Diagnostic-only — a parse/format failure here must never block the real write.
                     }
                 }
 
@@ -1595,5 +1632,18 @@ public partial class PersistentWorkspaceManager : IDisposable
         }
 
         return new SymbolResolution { Symbol = symbol, Handle = handle };
+    }
+
+    private static int CountLines(string text)
+    {
+        int count = 1;
+        foreach (var c in text)
+        {
+            if (c == '\n')
+            {
+                count++;
+            }
+        }
+        return count;
     }
 }

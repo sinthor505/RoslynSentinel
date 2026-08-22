@@ -611,7 +611,9 @@ public class MsToolAugmentEngine
 
         if (writeToFile)
         {
-            await File.WriteAllTextAsync(filePath, updatedContent, cancellationToken);
+            await _workspaceManager.ApplyProposedChangesAsync(
+                new Dictionary<FilePath, string> { [filePath] = updatedContent },
+                cancellationToken: cancellationToken);
         }
 
         return new UsingsCleanupResult(originalCount, removedDuplicates, updatedContent, WrittenToDisk: writeToFile);
@@ -687,20 +689,26 @@ public class MsToolAugmentEngine
 
         if (!preview)
         {
-            try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
-            catch (Exception ex) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
-
-            // If a solution is loaded, keep the workspace in sync
-            try
+            var currentSolution = _workspaceManager.CurrentSolution;
+            if (currentSolution != null && currentSolution.GetDocumentIdsWithFilePath(filePath).Any())
             {
-                var currentSolution = _workspaceManager.CurrentSolution;
-                if (currentSolution != null && currentSolution.GetDocumentIdsWithFilePath(filePath).Any())
+                // Solution is loaded — route through the shared chokepoint so this write gets
+                // drift detection, pre-image capture, and workspace resync like every other tool.
+                var result = await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePath, string> { [filePath] = formatted },
+                    cancellationToken: cancellationToken);
+                if (!result.Success)
                 {
-                    await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePath, string> { [filePath] = formatted });
+                    return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}");
                 }
             }
-            catch { /* workspace might not be loaded — safe to ignore */ }
+            else
+            {
+                // No solution loaded — the chokepoint requires CurrentSolution, so fall back to a
+                // direct write. Same fallback the previous code silently relied on via its try/catch.
+                try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
+                catch (Exception ex) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
+            }
         }
 
         return MsAugmentResult.Ok(formatted);
