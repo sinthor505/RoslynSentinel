@@ -40,9 +40,26 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager
     public List<string> GetExternalDrift() => throw new NotImplementedException();
     public HealthComponents GetHealthComponents() => throw new NotImplementedException();
     public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems() => throw new NotImplementedException();
-    public string? GetSolutionRoot() => throw new NotImplementedException();
+
+    // Mirrors PersistentWorkspaceManager.GetSolutionRoot(): CurrentSolution built via
+    // TestSolutionBuilder has no FilePath (it's an AdhocWorkspace solution), so this falls
+    // back to SolutionPath, which tests can set directly when a root is needed.
+    public string? GetSolutionRoot()
+    {
+        var filePath = CurrentSolution?.FilePath ?? SolutionPath;
+        return filePath is not null ? Path.GetDirectoryName(filePath) : null;
+    }
+
     public List<string> GetWorkspaceLoadErrors() => throw new NotImplementedException();
-    public WorkspaceStatus GetWorkspaceStatus() => throw new NotImplementedException();
+
+    // A fake was never "loaded" from disk, so there's no staleness to report - always fresh.
+    public WorkspaceStatus GetWorkspaceStatus() => new(
+        State: CurrentSolution != null ? 2 : 0,
+        SolutionLoaded: CurrentSolution != null,
+        SolutionPath: SolutionPath,
+        ProjectCount: ProjectCount,
+        DocumentCount: CurrentSolution?.Projects.SelectMany(p => p.Documents).Count() ?? 0);
+
     public bool IsCurrentSession(string sessionId) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default) => throw new NotImplementedException();
@@ -53,6 +70,22 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3) => throw new NotImplementedException();
-    public FilePath SetFilePath(string? filepath) => throw new NotImplementedException();
+
+    // Mirrors PersistentWorkspaceManager.SetFilePath(): resolves a wire path against
+    // GetSolutionRoot(). Returns an unvalidated FilePath (SolutionRoot null/empty) rather than
+    // throwing, same as the real implementation, when no root is set.
+    public FilePath SetFilePath(string? filepath)
+    {
+        FilePath filePath = default;
+        var solutionRoot = GetSolutionRoot();
+
+        if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            filePath = FilePath.FromWire(filepath, solutionRoot);
+        }
+
+        return filePath;
+    }
+
     public void TrackSymbol(string agentHandle, SymbolHandle handle) => throw new NotImplementedException();
 }
