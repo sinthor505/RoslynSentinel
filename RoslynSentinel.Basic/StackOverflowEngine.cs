@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public sealed class StackOverflowEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public StackOverflowEngine(IWorkspaceManager workspaceManager)
+    public StackOverflowEngine(ISolutionProvider workspaceManager)
         => _workspaceManager = workspaceManager;
 
     public async Task<StackOverflowReport> AnalyzeStackOverflowRisksAsync(

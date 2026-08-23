@@ -18,9 +18,9 @@ public record SearchResult(
 
 public class SemanticSearchEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public SemanticSearchEngine(IWorkspaceManager workspaceManager)
+    public SemanticSearchEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

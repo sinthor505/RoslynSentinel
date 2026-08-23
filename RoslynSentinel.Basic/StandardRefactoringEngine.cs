@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class StandardRefactoringEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public StandardRefactoringEngine(IWorkspaceManager workspaceManager)
+    public StandardRefactoringEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

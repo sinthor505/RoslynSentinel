@@ -116,10 +116,10 @@ public record SymbolLocation(
 
 public class SymbolNavigationEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SymbolNavigationEngine> _logger;
 
-    public SymbolNavigationEngine(IWorkspaceManager workspaceManager, ILogger<SymbolNavigationEngine> logger)
+    public SymbolNavigationEngine(ISolutionProvider workspaceManager, ILogger<SymbolNavigationEngine> logger)
     {
         _workspaceManager = workspaceManager;
         _logger = logger;

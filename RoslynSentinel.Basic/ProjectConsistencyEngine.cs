@@ -18,9 +18,9 @@ public record ProjectConsistencyIssue(
 /// </summary>
 public class ProjectConsistencyEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ProjectConsistencyEngine(IWorkspaceManager workspaceManager)
+    public ProjectConsistencyEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

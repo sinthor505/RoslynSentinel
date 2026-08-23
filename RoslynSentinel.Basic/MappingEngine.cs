@@ -8,9 +8,9 @@ namespace RoslynSentinel.Basic;
 
 public class MappingEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public MappingEngine(IWorkspaceManager workspaceManager)
+    public MappingEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

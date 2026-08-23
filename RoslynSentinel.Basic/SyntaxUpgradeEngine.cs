@@ -6,10 +6,10 @@ namespace RoslynSentinel.Basic;
 
 public class SyntaxUpgradeEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public SyntaxUpgradeEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public SyntaxUpgradeEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;

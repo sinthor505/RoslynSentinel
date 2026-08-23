@@ -28,7 +28,7 @@ public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk>
 public class RefactoringEngine
 {
     private readonly ILogger<RefactoringEngine> _logger;
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
     private static readonly string[] separator = new[]
     {
@@ -36,7 +36,7 @@ public class RefactoringEngine
         "\r",
         "\n"
     };
-    public RefactoringEngine(ILogger<RefactoringEngine> logger, IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public RefactoringEngine(ILogger<RefactoringEngine> logger, ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _logger = logger;
         _workspaceManager = workspaceManager;
