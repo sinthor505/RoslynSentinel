@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 using Microsoft.CodeAnalysis;
-using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests;
 
@@ -15,7 +16,7 @@ public class SolutionWideFunctionalTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        _workspaceManager = new FakeWorkspaceManager();
         var config = new SentinelConfiguration();
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, config);

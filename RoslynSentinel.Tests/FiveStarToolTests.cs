@@ -1,6 +1,5 @@
-using Microsoft.Extensions.Logging.Abstractions;
-
 using RoslynSentinel.Common;
+using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
@@ -31,8 +30,7 @@ public class ExtractConstantSafeStrongTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -341,8 +339,7 @@ public class ConvertStringFormatSmartTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -556,8 +553,7 @@ public class PreviewAddMissingUsingsLoadedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -720,8 +716,7 @@ public class FormatDocumentSafeTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(
-            NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
