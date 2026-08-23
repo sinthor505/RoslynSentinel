@@ -1,13 +1,13 @@
-// ProgramServerBasicHttp.cs v1
+// ServerHttp.cs v1
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace RoslynSentinel.Server.Basic.Http;
+namespace RoslynSentinel.Server.Basic;
 
-public static class ProgramHttpHostBasic
+public static class ServerHttp
 {
     // All modes available in the Basic variant.
     private static readonly HashSet<string> AllModes =
@@ -16,7 +16,7 @@ public static class ProgramHttpHostBasic
             "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation",
         };
 
-    public static async Task Main(string[] args)
+    public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);

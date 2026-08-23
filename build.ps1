@@ -23,10 +23,10 @@
     See -SkipVSCodeRestart to disable both.
 
 .PARAMETER Flavor
-    Basic | Advanced | Basic.Http | Solution
-    Advanced covers both transports (stdio and HTTP are the same RoslynSentinel.Server.Advanced
-    binary, chosen at runtime via --transport) - there is no separate Advanced.Http flavor to
-    build/test.
+    Basic | Advanced | Solution
+    Both Basic and Advanced cover both transports (stdio and HTTP are the same
+    RoslynSentinel.Server.Basic / RoslynSentinel.Server.Advanced binary, chosen at runtime via
+    --transport) - there is no separate Basic.Http or Advanced.Http flavor to build/test.
     "Solution" builds/tests RoslynSentinel.slnx as a whole and is not associated with any one
     running server process (no lock-check, since nothing runs directly from the .slnx).
 
@@ -72,7 +72,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Basic', 'Advanced', 'Basic.Http', 'Solution')]
+    [ValidateSet('Basic', 'Advanced', 'Solution')]
     [string]$Flavor,
 
     [ValidateSet('Debug', 'Release')]
@@ -101,7 +101,6 @@ $testsBaseline = Join-Path $docsDir "known-failing-tests.$Flavor.txt"
 $flavorToProject = @{
     'Basic'          = 'RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj'
     'Advanced'       = 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
-    'Basic.Http'     = 'RoslynSentinel.Server.Basic.Http\RoslynSentinel.Server.Basic.Http.csproj'
     'Solution'       = 'RoslynSentinel.slnx'
 }
 $targetProject = Join-Path $repoRoot $flavorToProject[$Flavor]
@@ -234,7 +233,6 @@ function Invoke-TestMode {
     $testProjectMap = @{
         'Basic'         = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
         'Advanced'      = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
-        'Basic.Http'    = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
         'Solution'      = 'RoslynSentinel.slnx'
     }
     $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]

@@ -1,4 +1,4 @@
-// ProgramServerBasic.cs v1
+// ServerStdio.cs v1
 using System.Diagnostics;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Server.Basic;
 
-public class ProgramServerBasic
+public class ServerStdio
 {
     // All modes available in the Basic variant. Asyncify is Advanced-only.
     private static readonly HashSet<string> AllModes =
@@ -26,7 +26,7 @@ public class ProgramServerBasic
         typeof(SentinelAugmentTools),
     ];
 
-    public static async Task Main(string[] args)
+    public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
@@ -84,14 +84,14 @@ public class ProgramServerBasic
             mcpBuilder.AddRoslynSentinelToolsBasic(builder.Services, activeModes);
 
             using var host = builder.Build();
-            var logger = host.Services.GetRequiredService<ILogger<ProgramServerBasic>>();
+            var logger = host.Services.GetRequiredService<ILogger<ServerStdio>>();
 
             ServerStartupHelpers.SmokeResolveToolTypes(host.Services, ActiveToolTypes);
 
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
             SentinelConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
             SentinelConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
-            ServerStartupHelpers.LogStartup<ProgramServerBasic>(logger, logPath, activeModes, modeArg);
+            ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg);
 
             try
             {

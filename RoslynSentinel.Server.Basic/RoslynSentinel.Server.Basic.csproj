@@ -7,6 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+	<ItemGroup>
+		<!-- MSBuild packages already come in transitively via RoslynSentinel.Basic. -->
+		<!-- HTTP transport for MCP -->
+		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+		<!-- Logging -->
+		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+	</ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />

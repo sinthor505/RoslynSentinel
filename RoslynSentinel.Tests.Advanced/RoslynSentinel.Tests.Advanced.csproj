@@ -24,7 +24,6 @@
     <ProjectReference Include="..\RoslynSentinel.Basic\RoslynSentinel.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Server.Basic.Http\RoslynSentinel.Server.Basic.Http.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
     <ProjectReference Include="..\RoslynSentinel.Tests\RoslynSentinel.Tests.csproj" />
   </ItemGroup>
