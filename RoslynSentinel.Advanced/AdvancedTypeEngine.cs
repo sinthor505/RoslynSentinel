@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class AdvancedTypeEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public AdvancedTypeEngine(IWorkspaceManager workspaceManager)
+    public AdvancedTypeEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

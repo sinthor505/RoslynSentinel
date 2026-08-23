@@ -21,9 +21,9 @@ public record UnregisteredServiceFinding(
 
 public class DependencyInjectionEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public DependencyInjectionEngine(IWorkspaceManager workspaceManager)
+    public DependencyInjectionEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

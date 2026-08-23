@@ -66,7 +66,7 @@ public record ObsoleteCallerFinding(
 
 public class AntiPatternEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
     private static readonly HashSet<string> AllPatterns = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -77,7 +77,7 @@ public class AntiPatternEngine
         "ThrowInFinally", "StaticEventSubscription"
     };
 
-    public AntiPatternEngine(IWorkspaceManager workspaceManager)
+    public AntiPatternEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

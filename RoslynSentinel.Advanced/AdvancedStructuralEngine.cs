@@ -7,9 +7,9 @@ namespace RoslynSentinel.Advanced;
 
 public class AdvancedStructuralEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public AdvancedStructuralEngine(IWorkspaceManager workspaceManager)
+    public AdvancedStructuralEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

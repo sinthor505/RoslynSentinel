@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class AdvancedRefactoringEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public AdvancedRefactoringEngine(IWorkspaceManager workspaceManager)
+    public AdvancedRefactoringEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

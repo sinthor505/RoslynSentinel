@@ -6,10 +6,10 @@ namespace RoslynSentinel.Advanced;
 
 public class CodeHealingEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public CodeHealingEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public CodeHealingEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;
