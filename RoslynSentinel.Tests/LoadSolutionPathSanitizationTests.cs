@@ -120,4 +120,18 @@ public class LoadSolutionPathSanitizationTests
             File.Delete(tempFile);
         }
     }
+
+    [Test]
+    public async Task LoadSolutionAsync_RealSolutionOnDisk_LoadsWithNoWorkspaceErrorsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        Assert.That(_workspaceManager.CurrentSolution, Is.Not.Null);
+        Assert.That(_workspaceManager.CurrentSolution!.Projects.Any(p => p.Name == "ContosoOrders.Core"), Is.True,
+            "ContosoOrders.Core should be loaded as a project in the solution.");
+        Assert.That(_workspaceManager.GetWorkspaceLoadErrors(), Is.Empty,
+            "A real, well-formed solution should load without accumulating workspace errors.");
+    }
 }
