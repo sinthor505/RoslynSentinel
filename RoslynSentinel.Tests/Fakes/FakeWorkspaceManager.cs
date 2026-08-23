@@ -2,11 +2,13 @@ using Microsoft.CodeAnalysis;
 
 using ModelContextProtocol;
 
-namespace RoslynSentinel.Tests.Basic.Fakes;
+using RoslynSentinel.Common;
+
+namespace RoslynSentinel.Tests.Fakes;
 
 // Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetBranchedSolutionAsync.
 // Every other member throws NotImplementedException - extend as a test actually needs a member.
-internal sealed class FakeWorkspaceManager : IWorkspaceManager
+public sealed class FakeWorkspaceManager : IWorkspaceManager
 {
     public Solution? CurrentSolution { get; private set; }
 

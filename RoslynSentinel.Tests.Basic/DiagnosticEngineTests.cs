@@ -1,5 +1,5 @@
 using RoslynSentinel.Tests;
-using RoslynSentinel.Tests.Basic.Fakes;
+using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Basic;
 
