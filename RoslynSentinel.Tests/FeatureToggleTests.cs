@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
+using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests;
 
@@ -15,7 +16,7 @@ public class FeatureToggleTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _config = new SentinelConfiguration();
         _structureEngine = new ProjectStructureEngine(_workspaceManager, _config);
         _analysisEngine = new AnalysisEngine(_workspaceManager, _config);

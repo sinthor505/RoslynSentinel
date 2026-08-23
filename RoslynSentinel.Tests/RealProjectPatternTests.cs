@@ -34,6 +34,9 @@ public class RealProjectPatternTests
     [SetUp]
     public void Setup()
     {
+        // Real manager required: SortAndDeduplicateUsingsAsync(writeToFile: true) tests in this
+        // file go through ApplyProposedChangesAsync, which FakeWorkspaceManager intentionally
+        // leaves unimplemented (real disk writes + drift detection, not worth faking faithfully).
         _workspaceManager = new PersistentWorkspaceManager(
             NullLogger<IWorkspaceManager>.Instance);
         _engine = new MsToolAugmentEngine(_workspaceManager);

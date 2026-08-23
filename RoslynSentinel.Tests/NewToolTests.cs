@@ -1,6 +1,8 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Tests.Fakes;
+
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests;
 
@@ -22,7 +24,7 @@ public class NewToolTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _workspaceManager = new FakeWorkspaceManager();
         _config = new SentinelConfiguration();
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);

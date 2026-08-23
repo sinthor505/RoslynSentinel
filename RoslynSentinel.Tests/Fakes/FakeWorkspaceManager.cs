@@ -50,7 +50,8 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager
         return filePath is not null ? Path.GetDirectoryName(filePath) : null;
     }
 
-    public List<string> GetWorkspaceLoadErrors() => throw new NotImplementedException();
+    // A fake was never "loaded" from disk, so there are no accumulated load errors to report.
+    public List<string> GetWorkspaceLoadErrors() => new();
 
     // A fake was never "loaded" from disk, so there's no staleness to report - always fresh.
     public WorkspaceStatus GetWorkspaceStatus() => new(
