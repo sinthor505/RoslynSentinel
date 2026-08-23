@@ -10,20 +10,23 @@
     Stops every running RoslynSentinel* process before building (any of them can transitively
     lock a build via project references or shared projects - see the Lock check region).
 
-    On a successful build (of any flavor - not just Advanced/Advanced.Http themselves), also
-    refreshes two dedicated VS Code copies, separate from the flavor/config combo the rest of
-    the script builds/tests so a routine baseline check never locks or interrupts VS Code's own
-    connection:
-      - bin-vscode\Advanced (stdio): rebuilt only. VS Code's MCP client spawns stdio servers
-        itself per-connection, so there's no standalone process here to stop/start - just a
-        fresh .exe at a stable path outside the Debug/Release output this script's Lock check
-        region stops/rebuilds during normal dev work.
-      - bin-vscode\Advanced.Http (HTTP): rebuilt AND restarted as a standalone process on
-        $VSCodePort, since the HTTP flavor has no external spawner to do that for it.
+    On a successful build (of any flavor - not just Advanced itself), also refreshes two
+    dedicated VS Code copies of the Advanced binary (one process per transport, launched with
+    different --transport args), separate from the flavor/config combo the rest of the script
+    builds/tests so a routine baseline check never locks or interrupts VS Code's own connection:
+      - bin-vscode\Advanced (--transport=stdio): rebuilt only. VS Code's MCP client spawns
+        stdio servers itself per-connection, so there's no standalone process here to
+        stop/start - just a fresh .exe at a stable path outside the Debug/Release output this
+        script's Lock check region stops/rebuilds during normal dev work.
+      - bin-vscode\Advanced.Http (--transport=http): rebuilt AND restarted as a standalone
+        process on $VSCodePort, since HTTP has no external spawner to do that for it.
     See -SkipVSCodeRestart to disable both.
 
 .PARAMETER Flavor
-    Basic | Advanced | Basic.Http | Advanced.Http | Solution
+    Basic | Advanced | Basic.Http | Solution
+    Advanced covers both transports (stdio and HTTP are the same RoslynSentinel.Server.Advanced
+    binary, chosen at runtime via --transport) - there is no separate Advanced.Http flavor to
+    build/test.
     "Solution" builds/tests RoslynSentinel.slnx as a whole and is not associated with any one
     running server process (no lock-check, since nothing runs directly from the .slnx).
 
@@ -51,13 +54,14 @@
     seconds and avoids working against stale tools.
 
 .PARAMETER VSCodePort
-    Port for the dedicated VS Code Advanced.Http copy. Default: 5150. Kept distinct from 5100
-    (used by any manually-launched Advanced.Http instance) so the two never collide.
+    Port for the dedicated VS Code Advanced binary's HTTP-transport instance. Default: 5150.
+    Kept distinct from 5100 (used by any manually-launched --transport=http instance) so the
+    two never collide.
 
 .EXAMPLE
-    .\build.ps1 -Flavor Advanced.Http -Config Debug
-    Build + test the Advanced HTTP flavor's Debug config; report only new warnings/failures;
-    on a successful build, also refresh both dedicated VS Code copies (stdio rebuild in
+    .\build.ps1 -Flavor Advanced -Config Debug
+    Build + test the Advanced flavor's Debug config; report only new warnings/failures; on a
+    successful build, also refresh both dedicated VS Code copies (stdio rebuild in
     bin-vscode\Advanced, HTTP rebuild+restart on port 5150 in bin-vscode\Advanced.Http).
 
 .EXAMPLE
@@ -68,7 +72,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Basic', 'Advanced', 'Basic.Http', 'Advanced.Http', 'Solution')]
+    [ValidateSet('Basic', 'Advanced', 'Basic.Http', 'Solution')]
     [string]$Flavor,
 
     [ValidateSet('Debug', 'Release')]
@@ -98,20 +102,22 @@ $flavorToProject = @{
     'Basic'          = 'RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj'
     'Advanced'       = 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
     'Basic.Http'     = 'RoslynSentinel.Server.Basic.Http\RoslynSentinel.Server.Basic.Http.csproj'
-    'Advanced.Http'  = 'RoslynSentinel.Server.Advanced.Http\RoslynSentinel.Server.Advanced.Http.csproj'
     'Solution'       = 'RoslynSentinel.slnx'
 }
 $targetProject = Join-Path $repoRoot $flavorToProject[$Flavor]
 
 #region Lock check
 # Any running RoslynSentinel flavor can lock a build, not just the one matching the target
-# flavor+config: project references pull in other projects' DLLs (e.g. Tests.Advanced
-# transitively references Advanced.Http, so a running Advanced.Http locks a Tests.Advanced build
-# even though "Advanced" != "Advanced.Http"), and shared projects like RoslynSentinel.Common are
-# referenced by everything. Matching only the exact target output path missed this - confirmed
-# 2026-08-20, a running Advanced.Http (Debug) silently failed an Advanced (Debug) test build with
-# MSB3027, and because the failure was mid-pipeline, dotnet test exited non-zero without emitting
-# any "Failed <test>" lines, which build.ps1 read as "0 known-failing tests" - a false green.
+# flavor+config: project references pull in other projects' DLLs, and shared projects like
+# RoslynSentinel.Common are referenced by everything. Matching only the exact target output path
+# missed this - confirmed 2026-08-20 (back when stdio and HTTP were still separate Advanced /
+# Advanced.Http projects), a running Advanced.Http (Debug) silently failed an Advanced (Debug)
+# test build with MSB3027, and because the failure was mid-pipeline, dotnet test exited non-zero
+# without emitting any "Failed <test>" lines, which build.ps1 read as "0 known-failing tests" - a
+# false green. (Advanced now covers both transports as one binary, so this exact cross-flavor
+# case can't recur for Advanced/Advanced.Http specifically, but the general risk - any running
+# RoslynSentinel* process locking an unrelated build via shared project references - still
+# applies broadly, hence the unconditional stop-everything approach below.)
 # Simplest correct fix: stop every RoslynSentinel* process up front, unconditionally, before any
 # build/test. Restarting anything stopped here is the caller's job once the script finishes.
 $allRunning = Get-Process | Where-Object { $_.ProcessName -like '*RoslynSentinel*' }
@@ -229,7 +235,6 @@ function Invoke-TestMode {
         'Basic'         = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
         'Advanced'      = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
         'Basic.Http'    = 'RoslynSentinel.Tests.Battery\RoslynSentinel.Tests.Battery.csproj'
-        'Advanced.Http' = 'RoslynSentinel.Tests.Advanced\RoslynSentinel.Tests.Advanced.csproj'
         'Solution'      = 'RoslynSentinel.slnx'
     }
     $testProject = Join-Path $repoRoot $testProjectMap[$Flavor]
@@ -318,20 +323,21 @@ function Invoke-VSCodeStdioRebuild {
     Write-Host "VS Code Advanced (stdio) copy rebuilt at $vscodeOutDir. VS Code will spawn it fresh on its next connection - no running process to restart here." -ForegroundColor Green
 }
 
-# Dedicated Advanced.Http copy for anything still using HTTP (manual testing, curl, etc.):
-# separate output dir and port from whatever this run just built/tested, so the two never lock
-# each other and this copy's connection doesn't drop just because a routine baseline check is in
-# progress elsewhere. It's stateless (reloads the workspace from disk on start), so refreshing it
-# after every successful build is cheap and keeps it from silently serving a stale tool list.
+# Dedicated Advanced binary copy running in HTTP mode, for anything still using HTTP (manual
+# testing, curl, etc.): separate output dir and port from whatever this run just built/tested, so
+# the two never lock each other and this copy's connection doesn't drop just because a routine
+# baseline check is in progress elsewhere. It's stateless (reloads the workspace from disk on
+# start), so refreshing it after every successful build is cheap and keeps it from silently
+# serving a stale tool list.
 function Invoke-VSCodeServerRestart {
     $vscodeOutDir = Join-Path $repoRoot 'bin-vscode\Advanced.Http'
-    $vscodeProject = Join-Path $repoRoot $flavorToProject['Advanced.Http']
-    $vscodeExe = Join-Path $vscodeOutDir 'RoslynSentinel.Server.Advanced.Http.exe'
+    $vscodeProject = Join-Path $repoRoot $flavorToProject['Advanced']
+    $vscodeExe = Join-Path $vscodeOutDir 'RoslynSentinel.Server.Advanced.exe'
 
     Write-Host ""
     Write-Host "=== Rebuilding VS Code Advanced.Http copy (bin-vscode, port $VSCodePort) ===" -ForegroundColor Cyan
 
-    $existing = Get-Process | Where-Object { $_.ProcessName -eq 'RoslynSentinel.Server.Advanced.Http' -and $_.Path -eq $vscodeExe }
+    $existing = Get-Process | Where-Object { $_.ProcessName -eq 'RoslynSentinel.Server.Advanced' -and $_.Path -eq $vscodeExe }
     if ($existing) {
         Write-Host "Stopping existing VS Code copy (PID $($existing.Id))..." -ForegroundColor Yellow
         $existing | Stop-Process -Force
@@ -349,9 +355,9 @@ function Invoke-VSCodeServerRestart {
         return
     }
 
-    Start-Process -FilePath $vscodeExe -ArgumentList "--port=$VSCodePort" -WindowStyle Hidden
+    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort" -WindowStyle Hidden
     Start-Sleep -Seconds 1
-    Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $((Get-Process -Name 'RoslynSentinel.Server.Advanced.Http' | Where-Object { $_.Path -eq $vscodeExe }).Id))." -ForegroundColor Green
+    Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $((Get-Process -Name 'RoslynSentinel.Server.Advanced' | Where-Object { $_.Path -eq $vscodeExe }).Id))." -ForegroundColor Green
 }
 #endregion
 
@@ -371,11 +377,11 @@ if (-not $UpdateBaseline) {
 
 if ($SkipVSCodeRestart) {
     Write-Host ""
-    Write-Host "Skipping VS Code Advanced/Advanced.Http refresh (-SkipVSCodeRestart). Both may now be running stale code." -ForegroundColor Yellow
+    Write-Host "Skipping VS Code Advanced (stdio + HTTP) refresh (-SkipVSCodeRestart). Both copies may now be running stale code." -ForegroundColor Yellow
 } else {
-    # Each gated on its own dotnet build of Advanced/Advanced.Http specifically, not on whatever
+    # Each gated on its own dotnet build of the Advanced project specifically, not on whatever
     # flavor/mode this run targeted - a Basic build succeeding (or a Test-only run with no build
-    # at all) says nothing about whether Advanced or Advanced.Http themselves currently compile.
+    # at all) says nothing about whether Advanced itself currently compiles.
     Invoke-VSCodeStdioRebuild
     Invoke-VSCodeServerRestart
 }

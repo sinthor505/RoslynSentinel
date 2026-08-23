@@ -1,15 +1,13 @@
-// ProgramServerAdvancedHttp.cs v1
+// ServerHttp.cs v1
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel.Server.Basic;
+namespace RoslynSentinel.Server.Advanced;
 
-namespace RoslynSentinel.Server.Advanced.Http;
-
-public class ProgramHttpHostAdvanced
+public class ServerHttp
 {
     // All modes available in the Advanced variant. Asyncify is Advanced-only.
     private static readonly HashSet<string> AllModes =
@@ -18,7 +16,7 @@ public class ProgramHttpHostAdvanced
             "Workspace", "Intelligence", "Refactor", "Modernize", "Quality", "Generation", "Asyncify",
         };
 
-    public static async Task Main(string[] args)
+    public static async Task Startup(string[] args)
     {
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);

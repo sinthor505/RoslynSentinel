@@ -85,6 +85,9 @@ public static class ServerStartupHelpers
         return int.TryParse(portArg, out var parsed) ? parsed : defaultPort;
     }
 
+    /// <summary>Parses --transport (either "--transport=stdio|http" or "--transport stdio|http"); returns "stdio" if absent.</summary>
+    public static string ParseTransport(string[] args) => GetArgValue(args, "--transport") ?? "stdio";
+
     // ── Fast-exit: --list-tools ───────────────────────────────────────────────
 
     /// <summary>
