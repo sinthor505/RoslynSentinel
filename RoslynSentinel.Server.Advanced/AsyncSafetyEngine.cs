@@ -6,9 +6,9 @@ namespace RoslynSentinel.Server.Advanced;
 
 public class AsyncSafetyEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public AsyncSafetyEngine(IWorkspaceManager workspaceManager)
+    public AsyncSafetyEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

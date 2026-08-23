@@ -13,7 +13,7 @@ public class SentinelGenerationTools
     private readonly ApiAutomationEngine _apiAutomationEngine;
     // private readonly AsyncOptimizationEngine _asyncOptimizationEngine;
     // private readonly ApiIntegrationEngine _apiIntegrationEngine;
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SentinelGenerationTools> _logger;
 
     public SentinelGenerationTools(
@@ -21,7 +21,7 @@ public class SentinelGenerationTools
         ApiAutomationEngine apiAutomationEngine,
         // AsyncOptimizationEngine asyncOptimizationEngine,
         // ApiIntegrationEngine apiIntegrationEngine,
-        IWorkspaceManager workspaceManager,
+        ISolutionProvider workspaceManager,
         ILogger<SentinelGenerationTools> logger)
     {
         _codeGenerationEngine = codeGenerationEngine;

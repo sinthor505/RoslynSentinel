@@ -23,7 +23,7 @@ public abstract class ToolException : Exception
 }
 
 /// <summary>
-/// No solution is loaded (<see cref="IWorkspaceManager.CurrentSolution"/> is null) where
+/// No solution is loaded (<see cref="ISolutionProvider.CurrentSolution"/> is null) where
 /// an operation requires one. Maps to <see cref="ToolErrorCode.SolutionNotLoaded"/>.
 /// </summary>
 public sealed class SolutionNotLoadedException : ToolException
@@ -92,11 +92,11 @@ public static class ToolErrorMapper
     /// <param name="workspaceManager">
     /// Used as a fallback signal only: if a not-yet-migrated call site throws a plain
     /// <see cref="InvalidOperationException"/> for a "no solution loaded" reason without using
-    /// <see cref="SolutionNotLoadedException"/>, checking <see cref="IWorkspaceManager.CurrentSolution"/>
+    /// <see cref="SolutionNotLoadedException"/>, checking <see cref="ISolutionProvider.CurrentSolution"/>
     /// directly still catches it correctly instead of guessing from the exception type.
     /// </param>
     /// <param name="context">Short label prefixed to the message (e.g. "ApplyDiff diff apply for 'Foo.cs'").</param>
-    public static ResultError ToResultError(Exception ex, IWorkspaceManager workspaceManager, string context)
+    public static ResultError ToResultError(Exception ex, ISolutionProvider workspaceManager, string context)
     {
         var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
         return new ResultError(code, message, ex.Message);
@@ -107,13 +107,13 @@ public static class ToolErrorMapper
     /// bare <see cref="string"/> instead of a <see cref="ToolResult{T}"/> (e.g. <c>Produces(DataTag.ResultOnly)</c>
     /// methods in <c>SentinelGenerationTools</c>) and so have nowhere to put a structured <see cref="ResultError"/>.
     /// </summary>
-    public static string ToErrorMessage(Exception ex, IWorkspaceManager workspaceManager, string context)
+    public static string ToErrorMessage(Exception ex, ISolutionProvider workspaceManager, string context)
     {
         var (_, message) = ToCodeAndMessage(ex, workspaceManager, context);
         return message;
     }
 
-    private static (string Code, string Message) ToCodeAndMessage(Exception ex, IWorkspaceManager workspaceManager, string context)
+    private static (string Code, string Message) ToCodeAndMessage(Exception ex, ISolutionProvider workspaceManager, string context)
     {
         if (ex is ToolException toolEx)
         {

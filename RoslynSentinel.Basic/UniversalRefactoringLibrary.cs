@@ -8,9 +8,9 @@ namespace RoslynSentinel.Basic;
 
 public class UniversalRefactoringLibrary
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public UniversalRefactoringLibrary(IWorkspaceManager workspaceManager)
+    public UniversalRefactoringLibrary(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

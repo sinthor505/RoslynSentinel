@@ -19,7 +19,7 @@ public class SentinelQualityTools
     private readonly CodeStyleAnalysisEngine _codeStyleAnalysisEngine;
     private readonly StackOverflowEngine _stackOverflowEngine;
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SentinelQualityTools> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions
     {
@@ -36,7 +36,7 @@ public class SentinelQualityTools
         CodeStyleAnalysisEngine codeStyleAnalysisEngine,
         StackOverflowEngine stackOverflowEngine,
         MsToolAugmentEngine toolAugmentEngine,
-        IWorkspaceManager workspaceManager,
+        ISolutionProvider workspaceManager,
         ILogger<SentinelQualityTools> logger)
     {
         _testingEngine = testingEngine;

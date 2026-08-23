@@ -42,7 +42,7 @@ public class SentinelCodemodTools
     private readonly TestingEngine _testingEngine;
     private readonly PathDrivenTestEngine _pathDrivenTestEngine;
 
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SentinelCodemodTools> _logger;
 
     public SentinelCodemodTools(
@@ -73,7 +73,7 @@ public class SentinelCodemodTools
         AnalysisEngine analysisEngine,
         TestingEngine testingEngine,
         PathDrivenTestEngine pathDrivenTestEngine,
-        IWorkspaceManager workspaceManager,
+        ISolutionProvider workspaceManager,
         ILogger<SentinelCodemodTools> logger)
     {
         _refactoringEngine = refactoringEngine;

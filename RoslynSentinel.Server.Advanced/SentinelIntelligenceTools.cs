@@ -25,7 +25,7 @@ public class SentinelIntelligenceTools
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<SentinelIntelligenceTools> _logger;
 
     public SentinelIntelligenceTools(
@@ -45,7 +45,7 @@ public class SentinelIntelligenceTools
         DependencyInjectionEngine dependencyInjectionEngine,
         DiscoveryEngine discoveryEngine,
         ProjectConsistencyEngine projectConsistencyEngine,
-        IWorkspaceManager workspaceManager,
+        ISolutionProvider workspaceManager,
         SentinelConfiguration config,
         ILogger<SentinelIntelligenceTools> logger)
     {
