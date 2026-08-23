@@ -426,7 +426,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.AnalyzePathCoverageAsync(_realFilePath, _realMethodName),
             "AnalyzePathCoverageAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "PathCoverageReport must not be null.");
-        Assert.That(result.MethodName, Is.EqualTo(_realMethodName),
+        Assert.That(result!.MethodName, Is.EqualTo(_realMethodName),
             "Report must carry back the queried method name.");
     }
 
@@ -439,7 +439,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.AnalyzeMethodControlFlowAsync(_realFilePath, _realMethodName),
             "AnalyzeMethodControlFlowAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.MethodName, Is.EqualTo(_realMethodName));
+        Assert.That(result!.MethodName, Is.EqualTo(_realMethodName));
     }
 
     [Test]
@@ -451,7 +451,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.AnalyzeMethodDataFlowAsync(_realFilePath, _realMethodName),
             "AnalyzeMethodDataFlowAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.MethodName, Is.EqualTo(_realMethodName));
+        Assert.That(result!.MethodName, Is.EqualTo(_realMethodName));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -564,7 +564,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.GetProjectDependenciesAsync(_realProjectName, CancellationToken.None),
             "GetProjectDependenciesAsync must not throw when given a real project name.");
         Assert.That(result, Is.Not.Null, "ProjectDependencyReport must not be null.");
-        Assert.That(result.ProjectReferences, Is.Not.Null, "ProjectReferences list must not be null.");
+        Assert.That(result!.ProjectReferences, Is.Not.Null, "ProjectReferences list must not be null.");
         Assert.That(result.PackageReferences, Is.Not.Null, "PackageReferences list must not be null.");
     }
 
@@ -623,7 +623,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.SortAndDeduplicateUsingsAsync(_realFilePath),
             "SortAndDeduplicateUsingsAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null, "UsingsCleanupResult must not be null.");
-        Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty,
+        Assert.That(result!.UpdatedContent, Is.Not.Null.And.Not.Empty,
             "UpdatedContent must contain the reformatted source.");
         Assert.That(result.OriginalCount, Is.GreaterThanOrEqualTo(0),
             "OriginalCount must be a non-negative integer.");
@@ -639,7 +639,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.FormatDocumentSafeAsync(_realFilePath, preview: true),
             "FormatDocumentSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Success, Is.True, "Formatting a real file must succeed.");
+        Assert.That(result!.Success, Is.True, "Formatting a real file must succeed.");
         Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty,
             "Formatted content must not be empty.");
     }
@@ -654,7 +654,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             "GenerateToStringSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         // Success OR graceful failure — either way, result must carry a message
-        if (!result.Success)
+        if (!result!.Success)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "Failed result must carry a non-empty error message.");
@@ -670,7 +670,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.EncapsulateFieldSafeAsync(_realFilePath, "__nonExistentFieldXYZ__"),
             "EncapsulateFieldSafeAsync must not throw when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result object (not null) on field-not-found.");
-        Assert.That(result.Success, Is.False,
+        Assert.That(result!.Success, Is.False,
             "Result must be Success=false when field does not exist.");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
             "Error property must carry a descriptive message when field not found.");

@@ -155,7 +155,7 @@ public class SentinelAsyncifyToolsTests
         Assert.That(findings, Is.Not.Null, "Data should be List<MigrationCandidateFinding> for summarize=false.");
         Assert.That(findings!.Any(f => f.MethodName == "loadList"), Is.True,
             "loadList should be found as a migration candidate.");
-        var finding = findings.First(f => f.MethodName == "loadList");
+        var finding = findings!.First(f => f.MethodName == "loadList");
         Assert.That(finding.ClassName, Is.EqualTo("RegionForm"));
         Assert.That(finding.Pattern, Does.Contain("AsyncBridge"));
         Assert.That(finding.Score, Is.EqualTo(50));

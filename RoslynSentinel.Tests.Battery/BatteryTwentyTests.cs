@@ -285,6 +285,7 @@ public class BatteryTwentyTests
 
             var before = await _tools.SearchSolutionText("Bar");
             Assert.That(before.Success, Is.True);
+            Assert.That(before.WorkspaceVersion, Is.Not.Null);
 
             const string updatedContent = "namespace TestProj; public class Foo { public int Bar() => 2; public int Baz() => 3; }";
             await File.WriteAllTextAsync(tempFile, updatedContent);
@@ -296,7 +297,7 @@ public class BatteryTwentyTests
 
             Assert.That(after.Success, Is.True);
             Assert.That(after.WorkspaceVersion, Is.Not.Null);
-            Assert.That(after.WorkspaceVersion, Is.GreaterThan(before.WorkspaceVersion),
+            Assert.That(after.WorkspaceVersion, Is.GreaterThan(before.WorkspaceVersion!),
                 "A read tool's workspaceVersion must increase after a mutation lands, so a caller can tell its earlier response is stale.");
         }
         finally

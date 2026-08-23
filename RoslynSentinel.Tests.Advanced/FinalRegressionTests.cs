@@ -14,11 +14,11 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class FinalRegressionTests
 {
-    private IWorkspaceManager _workspaceManager;
-    private SentinelConfiguration _config;
-    private RefactoringEngine _refactoringEngine;
-    private AsyncOptimizationEngine _asyncOptimizationEngine;
-    private StructuralRefinementEngine _structuralRefinementEngine;
+    private IWorkspaceManager _workspaceManager = null!;
+    private SentinelConfiguration _config = null!;
+    private RefactoringEngine _refactoringEngine = null!;
+    private AsyncOptimizationEngine _asyncOptimizationEngine = null!;
+    private StructuralRefinementEngine _structuralRefinementEngine = null!;
 
     [SetUp]
     public void Setup()

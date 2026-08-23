@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tests.Basic;
 [TestFixture]
 public class DiffEngineTests
 {
-    private DiffEngine _diffEngine;
+    private DiffEngine _diffEngine = null!;
 
     [SetUp]
     public void Setup()

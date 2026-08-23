@@ -67,7 +67,7 @@ public class DiagnosticEngine
         project.Name.Contains("Blazor", StringComparison.OrdinalIgnoreCase) ||
         project.Name.Contains("Razor", StringComparison.OrdinalIgnoreCase) ||
         project.Documents.Any(d =>
-            d.FilePath.EndsWith(".razor.cs", StringComparison.OrdinalIgnoreCase) == true);
+            d.FilePath?.EndsWith(".razor.cs", StringComparison.OrdinalIgnoreCase) == true);
 
     private static int SeverityRank(DiagnosticInfo d) => d.Severity switch
     {

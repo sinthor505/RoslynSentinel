@@ -514,7 +514,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
                     if (ext == ".csproj")
                     {
-                        var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
+                        var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
                         if (project != null)
                         {
                             projectsToReload.Add(project.Id);
@@ -1632,7 +1632,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     public FilePath SetFilePath(string? filepath)
     {
-        FilePath filePath = null;
+        FilePath filePath = default;
         string? solutionRoot = this.GetSolutionRoot();
 
         if (!string.IsNullOrWhiteSpace(filepath) && !string.IsNullOrWhiteSpace(solutionRoot))
@@ -1657,6 +1657,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
+        if (compilation is null) { return null; }
         ISymbol? resolved = DocumentationCommentId.GetFirstSymbolForDeclarationId(handle.DocCommentId, compilation);
         return resolved;
     }
@@ -1666,6 +1667,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
+        if (compilation is null) { return null; }
         return DocumentationCommentId.GetFirstSymbolForDeclarationId(symbolId, compilation);
     }
 

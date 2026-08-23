@@ -171,7 +171,7 @@ public class SentinelIntelligenceTools
                         resultType: typeof(CodeInventoryReport).Name,
                         writtenToFile: summary.offloaded,
                         filePath: summary.filePath.Absolute.ToString(),
-                        scanId: summary.scanId,
+                        scanId: summary.scanId!,
                         sizeBytes: summary.jsonBytes.Length,
                         totalRecords: results.Methods.Count,
                         message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +

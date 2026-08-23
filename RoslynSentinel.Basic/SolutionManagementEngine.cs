@@ -44,7 +44,7 @@ public class SolutionManagementEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            FilePath = null,
+            FilePath = default,
             Message = $"Project {projectName} created and added to solution."
         };
     }
@@ -71,7 +71,7 @@ public class SolutionManagementEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            FilePath = null,
+            FilePath = default,
             Message = $"Moved {filesToMove.Count} files from {sourceProjectName}/{folderName} to {targetProjectName}. References will need manual updating."
         };
     }

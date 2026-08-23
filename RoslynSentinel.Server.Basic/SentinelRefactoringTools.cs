@@ -151,7 +151,7 @@ public class SentinelRefactoringTools
         [Description(ToolParams.SessionId)] string sessionId = "",
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -231,7 +231,7 @@ public class SentinelRefactoringTools
         [ExternalInputRequired(DataTag.DataType)] string toType,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -293,7 +293,7 @@ public class SentinelRefactoringTools
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
@@ -447,7 +447,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "Member", filePath) is { } guardResult)
                 return guardResult;
 
-            var addChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var addChanges = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (addApply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = addApply.Error };
@@ -516,7 +516,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "UsingDirective", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{opName} using {namespaceName}.", "UsingDirective", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -564,7 +564,7 @@ public class SentinelRefactoringTools
                 ? $"Sets '{enumName}' members in {Path.GetFileName(filePath)} to match the requested list."
                 : $"'{enumName}' in {Path.GetFileName(filePath)}: {updated.Message}.";
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -605,7 +605,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ChangeAccessibility", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -667,7 +667,7 @@ public class SentinelRefactoringTools
                 ? $"Added XML summary comment to '{targetName}' in {Path.GetFileName(filePath)}."
                 : $"Removed XML summary comment from '{targetName}' in {Path.GetFileName(filePath)}.";
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -754,7 +754,7 @@ public class SentinelRefactoringTools
                 : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePath)}."
                     + (updated.Message?.Contains("fieldRemoved='True'") == true ? $" Also removed unused backing field '{resolvedFieldName}'." : "");
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, description, "ConstructorParameter", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -939,7 +939,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyAttribute", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -993,7 +993,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyModifier", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -1047,7 +1047,7 @@ public class SentinelRefactoringTools
             if (RequireUpdatedText(updated, "ModifyBaseType", filePath) is { } guardResult)
                 return guardResult;
 
-            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText };
+            var changes = new Dictionary<FilePath, string> { [filePath] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };

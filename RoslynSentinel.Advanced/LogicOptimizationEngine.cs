@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Diagnostics.CodeAnalysis;
 
 namespace RoslynSentinel.Advanced;
 
@@ -386,7 +387,7 @@ public class LogicOptimizationEngine
             return false;
         }
 
-        private static bool IsAssignmentToVariable(SyntaxNode statement, ExpressionSyntax variable, out ExpressionSyntax? value)
+        private static bool IsAssignmentToVariable(SyntaxNode statement, ExpressionSyntax variable, [NotNullWhen(true)] out ExpressionSyntax? value)
         {
             value = null;
 

@@ -122,7 +122,7 @@ public class SentinelScanTools
 
         try
         {
-            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == "file" ? null : FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+            FilePath filePath = String.IsNullOrEmpty(filepath) && scope == "file" ? default : FilePath.FromWire(filepath!, _workspaceManager.GetSolutionRoot());
 
             switch (detector)
             {
@@ -1039,7 +1039,7 @@ public class SentinelScanTools
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
                             filePath: summaryResults.filePath.Absolute.ToString(),
-                            scanId: summaryResults.scanId,
+                            scanId: summaryResults.scanId!,
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +
@@ -1084,7 +1084,7 @@ public class SentinelScanTools
                             resultType: typeof(ApiSurfaceEntry).Name,
                             writtenToFile: true,
                             filePath: summaryResults.filePath.Absolute.ToString(),
-                            scanId: summaryResults.scanId,
+                            scanId: summaryResults.scanId!,
                             sizeBytes: summaryResults.jsonBytes.Length,
                             totalRecords: apiResult.Count,
                             message: $"Result written to file ({summaryResults.jsonBytes.Length} bytes, {apiResult.Count} records). " +

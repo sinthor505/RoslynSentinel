@@ -653,7 +653,7 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
         var allChanges = new Dictionary<FilePath, string>();
-        foreach (var document in project.Documents.Where(d => d.FilePath.EndsWith(".cs") == true))
+        foreach (var document in project.Documents.Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
             {
@@ -673,7 +673,7 @@ public class RefactoringEngine
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var allChanges = new Dictionary<FilePath, string>();
-        foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath.EndsWith(".cs") == true))
+        foreach (var document in solution.Projects.SelectMany(p => p.Documents).Where(d => d.FilePath?.EndsWith(".cs") == true))
         {
             foreach (var kvp in await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken))
             {

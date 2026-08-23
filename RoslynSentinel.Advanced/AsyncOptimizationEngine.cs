@@ -933,7 +933,7 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> AddConfigureAwaitFalseAsync(
         FilePath filePath,
         bool libraryMode = true,
-        IProgress<ProgressNotificationValue> progress = default,
+        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);

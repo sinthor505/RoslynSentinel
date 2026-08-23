@@ -1948,7 +1948,7 @@ public class TargetDto
             var issues = await _performanceEngine.AnalyzePerformanceAsync("Builder.cs");
 
             Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r =>
-                r.IssueType == "StringConcatenationInLoop"),
+                r?.IssueType == "StringConcatenationInLoop"),
                 "Should detect '+=' string concatenation inside loop");
         }
 
@@ -1971,7 +1971,7 @@ public class Processor
             var issues = await _performanceEngine.AnalyzePerformanceAsync("Processor.cs");
 
             Assert.That(issues, Has.Some.Matches<PerformanceIssueReport>(r =>
-                r.IssueType == "AllocationInLoop"),
+                r?.IssueType == "AllocationInLoop"),
                 "Should detect .ToList() allocation inside loop");
         }
     }

@@ -393,7 +393,7 @@ public enum Status { Active = 1, Pending = 2 }
 
         var second = await _tools.ChangeAccessibility("Order.cs", "CustomerName", "internal");
         var secondSummary = (AppliedChangeSummary)second.Data!;
-        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion),
+        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!),
             "A second mutation must stamp a strictly higher version than the first.");
     }
 

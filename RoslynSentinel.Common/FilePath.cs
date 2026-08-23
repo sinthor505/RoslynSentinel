@@ -101,10 +101,10 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     public static bool operator !=(FilePath left, FilePath right) => !left.Equals(right);
 
     // string equality operators for Windows
-    public static bool operator ==(FilePath left, string right) => left.Equals(right);
-    public static bool operator !=(FilePath left, string right) => !left.Equals(right);
-    public static bool operator ==(string left, FilePath right) => right.Equals(left);
-    public static bool operator !=(string left, FilePath right) => !right.Equals(left);
+    public static bool operator ==(FilePath left, string? right) => left.Equals(right);
+    public static bool operator !=(FilePath left, string? right) => !left.Equals(right);
+    public static bool operator ==(string? left, FilePath right) => right.Equals(left);
+    public static bool operator !=(string? left, FilePath right) => !right.Equals(left);
 
     public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Absolute);
 

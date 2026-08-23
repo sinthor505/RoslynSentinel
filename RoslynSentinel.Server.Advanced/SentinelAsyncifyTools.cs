@@ -110,7 +110,7 @@ public class SentinelAsyncifyTools
         bool forceRescan = true,
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -298,7 +298,7 @@ public class SentinelAsyncifyTools
                         resultType: typeof(MigrationCandidateFinding).Name,
                         writtenToFile: true,
                         filePath: storedPath.ToString(),
-                        scanId: scanId,
+                        scanId: scanId!,
                         sizeBytes: allBytes.Length,
                         totalRecords: totalCount,
                         message: $"Result written to file ({allBytes.Length} bytes, {totalCount} records). " +
@@ -377,7 +377,7 @@ public class SentinelAsyncifyTools
         int minScore = DefaultMinScore,
         bool dryRun = false,
         bool forceRescan = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -587,7 +587,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -677,7 +677,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxCallersPerMethod = 10,
         bool propagateCancellationTokens = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -769,7 +769,7 @@ public class SentinelAsyncifyTools
         List<BatchTarget> targets,
         bool dryRun = false,
         int maxItems = 100,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -836,7 +836,7 @@ public class SentinelAsyncifyTools
         List<BatchTarget> targets,
         bool dryRun = false,
         int maxItems = 100,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -917,7 +917,7 @@ public class SentinelAsyncifyTools
     public async Task<ToolResult<BatchResultSummary>> ExtractEventHandlers(
         List<HandlerExtractTarget> targets,
         bool dryRun = false,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -983,7 +983,7 @@ public class SentinelAsyncifyTools
         bool dryRun = false,
         int maxItems = 100,
         bool propagateCancellationTokens = true,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -1085,7 +1085,7 @@ public class SentinelAsyncifyTools
         int scoreThreshold = DefaultScoreThreshold,
         int maxRuntimeSeconds = 0,
         int maxIterations = 0,
-        RequestContext<CallToolRequestParams> requestParams = null,
+        RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
@@ -1225,7 +1225,7 @@ public class SentinelAsyncifyTools
                             failed = result.Failed,
                             skipped = result.Skipped,
                             attempted = result.Attempted,
-                            convergedThisIteration = result.PhaseBreakdown.Bridge.Succeeded == 0
+                            convergedThisIteration = result.PhaseBreakdown!.Bridge.Succeeded == 0
                                 && result.PhaseBreakdown.Uplift.Succeeded == 0
                                 && result.PhaseBreakdown.PropagateCt.Succeeded == 0,
                             breakerOpen = result.BreakerOpen,
@@ -1244,7 +1244,7 @@ public class SentinelAsyncifyTools
                 if (result.BreakerOpen)
                     break;
 
-                var pb = result.PhaseBreakdown;
+                var pb = result.PhaseBreakdown!;
                 if (pb.Flag.Succeeded == 0 && pb.Bridge.Succeeded == 0 && pb.Uplift.Succeeded == 0 && pb.PropagateCt.Succeeded == 0)
                 {
                     converged = true;
@@ -1495,6 +1495,15 @@ public class SentinelAsyncifyTools
                     var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                         target.FilePath, methodName);
                     updatedSource = convertResult.UpdatedText;
+
+                    if (string.IsNullOrEmpty(updatedSource))
+                    {
+                        var reason781 = $"Conversion failed: {convertResult.Outcome} — {convertResult.Message}";
+                        items.Add(new OperationItemRecord { FilePath = target.FilePath, MethodName = methodName, Outcome = ItemRecordOutcome.Failed, Reason = reason781 });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason781, Outcome = ItemRecordOutcome.Failed });
+                        failed++;
+                        continue;
+                    }
 
                     if (propagateCancellationTokens)
                     {
@@ -2926,6 +2935,11 @@ public class SentinelAsyncifyTools
                             candidate.FilePath, candidate.MethodName, progress: progress!, cancellationToken: innerToken);
                         updatedSource = convertResult.UpdatedText;
 
+                        if (string.IsNullOrEmpty(updatedSource))
+                        {
+                            throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                        }
+
                         if (input.PropagateCancellationTokens)
                         {
                             var asyncMethod = candidate.MethodName + "Async";
@@ -3400,6 +3414,11 @@ public class SentinelAsyncifyTools
                 var convertResult = await _asyncOptimizationEngine.ConvertToAsyncBridgeAsync(
                     filePath, methodName, progress: progress!, cancellationToken: cancellationToken);
                 updatedSource = convertResult.UpdatedText;
+
+                if (string.IsNullOrEmpty(updatedSource))
+                {
+                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                }
 
                 if (propagateCancellationTokens)
                 {

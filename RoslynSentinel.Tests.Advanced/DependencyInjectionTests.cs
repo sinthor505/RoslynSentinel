@@ -15,7 +15,7 @@ namespace RoslynSentinel.Tests.Advanced;
 [TestFixture]
 public class DependencyInjectionTests
 {
-    private IServiceProvider _serviceProvider;
+    private IServiceProvider _serviceProvider = null!;
 
     [SetUp]
     public void Setup()
