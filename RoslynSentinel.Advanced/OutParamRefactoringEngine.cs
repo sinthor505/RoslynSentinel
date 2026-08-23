@@ -19,9 +19,9 @@ public record OutParamConversionResult(
 
 public class OutParamRefactoringEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public OutParamRefactoringEngine(IWorkspaceManager workspaceManager)
+    public OutParamRefactoringEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

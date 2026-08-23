@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ModernLoggingEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ModernLoggingEngine(IWorkspaceManager workspaceManager)
+    public ModernLoggingEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

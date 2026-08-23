@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ModernizationUpgradeEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ModernizationUpgradeEngine(IWorkspaceManager workspaceManager)
+    public ModernizationUpgradeEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

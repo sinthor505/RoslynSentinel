@@ -7,9 +7,9 @@ namespace RoslynSentinel.Advanced;
 
 public class RefinementEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public RefinementEngine(IWorkspaceManager workspaceManager)
+    public RefinementEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -4,9 +4,9 @@ namespace RoslynSentinel.Advanced;
 
 public class ExhaustiveAnalyzerEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ExhaustiveAnalyzerEngine(IWorkspaceManager workspaceManager)
+    public ExhaustiveAnalyzerEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

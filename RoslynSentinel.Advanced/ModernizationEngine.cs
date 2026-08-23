@@ -6,10 +6,10 @@ namespace RoslynSentinel.Advanced;
 
 public class ModernizationEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public ModernizationEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public ModernizationEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;

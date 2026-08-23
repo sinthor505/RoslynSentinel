@@ -8,9 +8,9 @@ public record SafetyIssue(FilePath filePath, int Line, int Column, string Type, 
 
 public class SecurityAndSafetyEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public SecurityAndSafetyEngine(IWorkspaceManager workspaceManager)
+    public SecurityAndSafetyEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

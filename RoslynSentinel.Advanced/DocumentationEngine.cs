@@ -6,9 +6,9 @@ namespace RoslynSentinel.Advanced;
 
 public class DocumentationEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public DocumentationEngine(IWorkspaceManager workspaceManager)
+    public DocumentationEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
