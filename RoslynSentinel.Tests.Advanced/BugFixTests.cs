@@ -4016,7 +4016,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             _config,
             NullLogger<SentinelRefactoringTools>.Instance);
 
@@ -4042,7 +4042,7 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             _config,
             NullLogger<SentinelAdvancedRefactoringTools>.Instance);
 

@@ -54,7 +54,7 @@ public class BatteryThirtyOneTests
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
         _validationEngine = new ValidationEngine(
-            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager));
+            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine());
 
         _tools = new SentinelAdvancedRefactoringTools(
             _refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine,

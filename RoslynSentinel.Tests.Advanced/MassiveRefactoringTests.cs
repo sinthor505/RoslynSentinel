@@ -47,7 +47,7 @@ public class MassiveRefactoringTests
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             config,
             NullLogger<SentinelRefactoringTools>.Instance);
 
@@ -61,7 +61,7 @@ public class MassiveRefactoringTests
             new CodeGenerationEngine(_workspaceManager),
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             _workspaceManager,
-            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager)),
+            new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine()),
             config,
             NullLogger<SentinelAdvancedRefactoringTools>.Instance);
     }

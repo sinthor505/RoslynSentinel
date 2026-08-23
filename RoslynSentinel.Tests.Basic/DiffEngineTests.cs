@@ -15,7 +15,7 @@ public class DiffEngineTests
     public void Setup()
     {
         var workspaceManager = new FakeWorkspaceManager();
-        _diffEngine = new DiffEngine(workspaceManager);
+        _diffEngine = new DiffEngine();
     }
 
     [Test]
@@ -52,7 +52,7 @@ public class DiffEngineTests
         var workspaceManager = new FakeWorkspaceManager();
         workspaceManager.SetTestSolution(solution);
 
-        var diffEngine = new DiffEngine(workspaceManager);
+        var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(new NullLogger<ValidationEngine>(), workspaceManager, diffEngine);
 
         var diff = "@@ -1,1 +1,1 @@\n-public class C { public void M() {} }\n+public class C { public void M() { int x = 1; } }";
@@ -71,7 +71,7 @@ public class DiffEngineTests
         var workspaceManager = new FakeWorkspaceManager();
         workspaceManager.SetTestSolution(solution);
 
-        var diffEngine = new DiffEngine(workspaceManager);
+        var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(new NullLogger<ValidationEngine>(), workspaceManager, diffEngine);
 
         // Introducing a syntax error (missing semicolon)

@@ -84,7 +84,7 @@ public class SentinelAsyncifyToolsTests
         Directory.CreateDirectory(_tempDir);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
-        var diffEngine = new DiffEngine(_workspaceManager);
+        var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
         var antiPatternEngine = new AntiPatternEngine(_workspaceManager);
         var asyncOptEngine = new AsyncOptimizationEngine(_workspaceManager);

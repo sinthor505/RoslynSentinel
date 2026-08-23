@@ -120,7 +120,7 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _modernizationEngine = new ModernizationEngine(_workspaceManager, _config);
-        _diffEngine = new DiffEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
         _tools = new SentinelRefactoringTools(
             _refactoringEngine, _standardRefactoringEngine,

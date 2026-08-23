@@ -55,7 +55,7 @@ public class UndoLastApplyTests
     private static SentinelWorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine(workspaceManager);
+        var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, workspaceManager, diffEngine);
         var diagnosticEngine = new DiagnosticEngine(workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);

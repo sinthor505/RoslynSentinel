@@ -20,7 +20,7 @@ public class ValidationEngineTests
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _diffEngine = new DiffEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
         _engine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("Source",

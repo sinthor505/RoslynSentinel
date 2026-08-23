@@ -29,7 +29,7 @@ public class BatteryTwentyTests
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
-        _diffEngine = new DiffEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
         _validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);

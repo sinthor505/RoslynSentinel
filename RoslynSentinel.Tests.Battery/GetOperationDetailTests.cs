@@ -32,7 +32,7 @@ public class GetOperationDetailTests
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");
 
         var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine(_workspaceManager);
+        var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, diffEngine);
         var diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         var solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);

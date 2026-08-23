@@ -8,13 +8,7 @@ namespace RoslynSentinel.Common;
 
 public class DiffEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
     private static readonly string[] separatorArray = new[] { "\r\n", "\r", "\n" };
-
-    public DiffEngine(IWorkspaceManager workspaceManager)
-    {
-        _workspaceManager = workspaceManager;
-    }
 
     /// <summary>
     /// How far (in lines, either direction) a hunk's declared line number may drift from its

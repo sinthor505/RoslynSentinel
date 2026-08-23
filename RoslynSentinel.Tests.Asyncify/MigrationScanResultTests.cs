@@ -65,7 +65,7 @@ public class MigrationScanResultTests
         // The async-migration scan/progress tools moved from SentinelQualityTools to
         // SentinelAsyncifyTools during the Basic/Advanced server split.
         var validationEngine = new ValidationEngine(
-            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine(_workspaceManager));
+            NullLogger<ValidationEngine>.Instance, _workspaceManager, new DiffEngine());
         _asyncifyTools = new SentinelAsyncifyTools(
             _antiPatternEngine,
             _asyncOptimizationEngine,

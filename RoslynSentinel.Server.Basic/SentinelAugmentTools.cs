@@ -12,16 +12,13 @@ namespace RoslynSentinel.Server.Basic;
 public class SentinelAugmentTools
 {
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
-    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<SentinelAugmentTools> _logger;
 
     public SentinelAugmentTools(
         MsToolAugmentEngine engine,
-        IWorkspaceManager workspaceManager,
         ILogger<SentinelAugmentTools> logger)
     {
         _msToolAugmentEngine = engine;
-        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 

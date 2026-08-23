@@ -103,7 +103,7 @@ public class BatteryThirtyThreeTests
         _logicOptimizationEngine = new LogicOptimizationEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
-        _diffEngine = new DiffEngine(_workspaceManager);
+        _diffEngine = new DiffEngine();
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(NullLogger<ValidationEngine>.Instance, _workspaceManager, _diffEngine), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
 
         _qualityTools = new SentinelQualityTools(_testingEngine,
