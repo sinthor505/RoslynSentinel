@@ -1,66 +1,23 @@
-﻿using Microsoft.CodeAnalysis;
-
-using ModelContextProtocol;
-
+using Microsoft.CodeAnalysis;
 namespace RoslynSentinel.Common;
 
-public interface IWorkspaceManager
+/// <summary>Full workspace contract: solution access, mutation, health reporting, and breaker/session bookkeeping. Prefer a narrower interface (ISolutionProvider, etc.) where possible.</summary>
+public interface IWorkspaceManager :
+    ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter,
+    IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
-    string? BaseRepoDirectory
-    {
-        get;
-        set;
-    }
-    Solution? CurrentSolution
-    {
-        get;
-    }
-    int ProjectCount
-    {
-        get;
-    }
-    string? SolutionPath
-    {
-        get;
-        set;
-    }
-    int WorkspaceVersion
-    {
-        get;
-    }
-
-    Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default);
-    BatchResultSummary? CheckBreaker();
-    string? CheckRateLimit(string toolName, int defaultLimit);
-    void ClearDrift();
+    /// <summary>Unique identifier for this workspace manager instance's session. No production caller as of this writing.</summary>
+    Guid SessionId { get; }
+    /// <summary>Releases workspace resources. DI container owns lifetime; no production caller as of this writing.</summary>
     void Dispose();
-    Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken);
-    string GetBreakerDirective();
-    string GetBreakerSeverity();
-    BreakerStatusReport GetBreakerStatus();
-    Task<List<string>> GetContentDriftAsync(CancellationToken cancellationToken = default);
-    IEnumerable<string> GetDiagnostics();
-    List<string> GetExternalDrift();
-    HealthComponents GetHealthComponents();
-    List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems();
-    string? GetSolutionRoot();
-    List<string> GetWorkspaceLoadErrors();
-    WorkspaceStatus GetWorkspaceStatus();
+    /// <summary>Checks whether sessionId matches this instance's session. No production caller as of this writing.</summary>
     bool IsCurrentSession(string sessionId);
-    Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default);
-    Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default);
-    void RecordBatchOutcome(int succeeded, int failed, int rolledBack, int skipped);
-    Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default);
-    void ResetBreaker();
+    /// <summary>Resolves a symbol by its documentation-comment ID. Superseded by ResolveFromWireAsync; no production caller as of this writing.</summary>
     Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default);
-    Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken);
+    /// <summary>Resolves a symbol by handle. Superseded by ResolveFromWireAsync; no production caller as of this writing.</summary>
     Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken);
-    Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3);
-    FilePath SetFilePath(string? filepath);
+    /// <summary>Test-only seam: injects a solution directly, bypassing LoadSolutionAsync.</summary>
     void SetTestSolution(Solution solution);
+    /// <summary>Associates a symbol handle with an agent for later lookup. No production caller as of this writing.</summary>
     void TrackSymbol(string agentHandle, SymbolHandle handle);
-    Guid SessionId
-    {
-        get;
-    }
 }

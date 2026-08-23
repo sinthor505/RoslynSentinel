@@ -19,6 +19,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SentinelConfiguration>();
         services.AddSingleton<PersistentWorkspaceManager>();
         services.AddSingleton<IWorkspaceManager>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
+        services.AddSingleton<ISolutionProvider>(sp => sp.GetRequiredService<PersistentWorkspaceManager>());
         services.AddSingleton<DiffEngine>();
         services.AddSingleton<ValidationEngine>();
         services.AddSingleton<ImpactAnalyzer>();

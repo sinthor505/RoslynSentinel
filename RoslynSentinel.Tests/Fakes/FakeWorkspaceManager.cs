@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Fakes;
 
 // Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetBranchedSolutionAsync.
 // Every other member throws NotImplementedException - extend as a test actually needs a member.
-public sealed class FakeWorkspaceManager : IWorkspaceManager
+public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     public Solution? CurrentSolution { get; private set; }
 

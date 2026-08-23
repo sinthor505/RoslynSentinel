@@ -15,7 +15,7 @@ using ModelContextProtocol;
 
 namespace RoslynSentinel.Common;
 
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
+public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
