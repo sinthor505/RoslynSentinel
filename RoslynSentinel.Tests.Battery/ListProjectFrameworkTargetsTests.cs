@@ -7,8 +7,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-using RoslynSentinel.Tests;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
@@ -57,7 +55,7 @@ public class ListProjectFrameworkTargetsTests
     public async Task ListProjectFrameworkTargets_ProjectWithTargetFramework_ReturnsItAsync()
     {
         var csprojPath = Path.Combine(_tempDir, "TestProj.csproj");
-        File.WriteAllText(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>");
+        await File.WriteAllTextAsync(csprojPath, "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup></Project>");
         var docPath = Path.Combine(_tempDir, "Foo.cs");
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
@@ -99,7 +97,7 @@ public class ListProjectFrameworkTargetsTests
     public async Task ListProjectFrameworkTargets_MalformedCsprojXml_ReturnsUnknownAsync()
     {
         var csprojPath = Path.Combine(_tempDir, "Malformed.csproj");
-        File.WriteAllText(csprojPath, "<Project><Unclosed>");
+        await File.WriteAllTextAsync(csprojPath, "<Project><Unclosed>");
         var docPath = Path.Combine(_tempDir, "Foo.cs");
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject(

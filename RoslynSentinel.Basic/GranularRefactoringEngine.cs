@@ -489,7 +489,7 @@ public class GranularRefactoringEngine
         };
     }
 
-    private static bool IsExpressionClassScopeSafe(ExpressionSyntax expression, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    private static bool IsExpressionClassScopeSafe(ExpressionSyntax expression, SemanticModel? semanticModel, CancellationToken cancellationToken = default)
     {
         // Check all identifiers in the expression to see if they reference method parameters or local variables
         var identifiers = expression.DescendantNodes().OfType<IdentifierNameSyntax>();

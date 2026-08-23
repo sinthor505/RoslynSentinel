@@ -30,14 +30,14 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
         => throw new NotImplementedException();
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     public string? CheckRateLimit(string toolName, int defaultLimit) => throw new NotImplementedException();
-    public void ClearDrift() => throw new NotImplementedException();
+    public void ClearExternalFileChanges() => throw new NotImplementedException();
     public void Dispose() { }
     public string GetBreakerDirective() => throw new NotImplementedException();
     public string GetBreakerSeverity() => throw new NotImplementedException();
     public BreakerStatusReport GetBreakerStatus() => throw new NotImplementedException();
-    public Task<List<string>> GetContentDriftAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public IEnumerable<string> GetDiagnostics() => throw new NotImplementedException();
-    public List<string> GetExternalDrift() => throw new NotImplementedException();
+    public List<string> GetExternalFileChanges() => throw new NotImplementedException();
     public HealthComponents GetHealthComponents() => throw new NotImplementedException();
     public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems() => throw new NotImplementedException();
 
@@ -70,7 +70,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<SymbolResolution> ResolveFromWireAsync(string sessionId, string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3) => throw new NotImplementedException();
+    public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
     // Mirrors PersistentWorkspaceManager.SetFilePath(): resolves a wire path against
     // GetSolutionRoot(). Returns an unvalidated FilePath (SolutionRoot null/empty) rather than

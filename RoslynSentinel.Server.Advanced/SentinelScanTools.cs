@@ -472,6 +472,8 @@ public class SentinelScanTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
+
         try
         {
             IEnumerable<ScanDescriptor> entries = scan_descriptors;
@@ -519,16 +521,16 @@ public class SentinelScanTools
             switch (aspect)
             {
                 case "controlFlow":
-                    var resultControlFlow = await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null);
+                    var resultControlFlow = await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null, cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = resultControlFlow };
                 case "dataFlow":
-                    var resultDataFlow = await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null);
+                    var resultDataFlow = await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null, cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = resultDataFlow };
                 case "pathCoverage":
-                    var resultPathCoverage = await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName);
+                    var resultPathCoverage = await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName, cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = resultPathCoverage };
                 case "unreachableCode":
-                    var resultUnreachableCode = await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName);
+                    var resultUnreachableCode = await _analysisEngine.DetectUnreachableCodeAsync(filePath, methodName, cancellationToken);
                     return new ToolResult<object>() { Success = true, Data = resultUnreachableCode };
                 default:
                     return new ToolResult<object>() { Success = false, Data = ($"Unknown aspect '{aspect}'. Valid values: controlFlow, dataFlow, pathCoverage, unreachableCode.") };
@@ -620,7 +622,7 @@ public class SentinelScanTools
         ScanWapper all;
         try
         {
-            var json = await File.ReadAllTextAsync(resolvedPath);
+            var json = await File.ReadAllTextAsync(resolvedPath, cancellationToken);
             all = JsonSerializer.Deserialize<ScanWapper>(
                       json,
                       _jsonOptions)
@@ -951,7 +953,7 @@ public class SentinelScanTools
         {
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
-            var result = await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath);
+            var result = await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -1026,7 +1028,7 @@ public class SentinelScanTools
             {
                 var apiResult = await _breakingChangeEngine.GetPublicApiSurfaceAsync(projectName, filePath);
 
-                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList, cancellationToken);
 
                 if (summaryResults.offloaded)
                 {
@@ -1071,7 +1073,7 @@ public class SentinelScanTools
 
                 var apiResult = await _discoveryEngine.GetPublicApiSurfaceAsync(projectName, includeMethods, includeProperties, includeTypes);
 
-                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList);
+                var summaryResults = await ScanResultHelper.StoreScanResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ScanWrapperType.ApiSurfaceEntryList, cancellationToken);
 
                 if (summaryResults.offloaded)
                 {

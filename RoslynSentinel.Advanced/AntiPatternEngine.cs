@@ -2756,7 +2756,9 @@ public class AntiPatternEngine
                                         var refCompilation = await refProject
                                             .GetCompilationAsync(cancellationToken).ConfigureAwait(false);
                                         if (refCompilation != null && refCompilation.ContainsSyntaxTree(refSyntaxTree))
+                                        {
                                             refSemanticModel = refCompilation.GetSemanticModel(refSyntaxTree);
+                                        }
                                     }
                                 }
                             }

@@ -38,9 +38,10 @@ public class SentinelGenerationTools
     public object GenerateClassesFromJson(
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
-        [ExternalInputRequired(DataTag.Namespace)] string @namespace,
+        [ExternalInputRequired(DataTag.Namespace)] string @namespace
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        // CancellationToken cancellationToken = default
+        )
     {
         try
         {
@@ -48,7 +49,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName, cancellationToken);
+            _logger.LogError(ex, "GenerateClassesFromJson failed for rootClassName='{RootClassName}'", rootClassName);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateClassesFromJson");
         }
     }
@@ -82,7 +83,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath, cancellationToken);
+            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePath}'", controllerName, filePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateHttpClient");
         }
     }
@@ -119,7 +120,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName, cancellationToken);
+            _logger.LogError(ex, "GenerateDefaultConfigJson failed for project '{ProjectName}'", projectName);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateDefaultConfigJson");
         }
     }
@@ -161,7 +162,7 @@ public class SentinelGenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath, cancellationToken);
+            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePath}'", filePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
         }
     }

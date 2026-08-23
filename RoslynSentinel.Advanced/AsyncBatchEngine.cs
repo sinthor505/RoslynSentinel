@@ -421,7 +421,10 @@ public class AsyncBatchEngine
 
         for (int i = 0; i < budget; i++)
         {
-            if (cancellationToken.IsCancellationRequested) break;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             var candidate = eligible[i];
 
@@ -464,7 +467,7 @@ public class AsyncBatchEngine
                     {
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
                             new Dictionary<FilePath, string> { { candidate.FilePath, ctResult.UpdatedText } },
-                            progress, cancellationToken);
+                            cancellationToken);
                         if (ctValidation.Success)
                         {
                             string? beforeSource = File.Exists(candidate.FilePath)
@@ -506,7 +509,7 @@ public class AsyncBatchEngine
                                 asyncMethodName, candidate.FilePath);
                             var bodyValidation = await _validationEngine.ValidateChangesAsync(
                                 new Dictionary<FilePath, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
-                                progress, cancellationToken);
+                                cancellationToken);
                             if (bodyValidation.Success)
                             {
                                 string? beforeSource = File.Exists(candidate.FilePath)
@@ -551,7 +554,9 @@ public class AsyncBatchEngine
                                     methodName: candidate.MethodName,
                                     cancellationToken: cancellationToken);
                                 if (stripResult.Changes.Count > 0)
+                                {
                                     await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                                }
                             }
                             catch (Exception stripEx)
                             {
@@ -668,7 +673,9 @@ public class AsyncBatchEngine
                         progress: progress,
                         cancellationToken: cancellationToken);
                     if (bodyRewrite.Outcome == EditOutcome.Modified && bodyRewrite.UpdatedText != null)
+                    {
                         sourceToValidate = bodyRewrite.UpdatedText;
+                    }
                 }
                 catch (Exception rewriteEx)
                 {
@@ -682,7 +689,6 @@ public class AsyncBatchEngine
             Debug.WriteLine($"Validating in-memory for {candidate.MethodName} in {candidate.FilePath}...");
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { candidate.FilePath, sourceToValidate } },
-                progress,
                 cancellationToken);
 
             if (!validation.Success)
@@ -787,14 +793,22 @@ public class AsyncBatchEngine
         {
             if (projectName != null &&
                 !project.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase))
+            {
                 continue;
+            }
 
             foreach (var document in project.Documents)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
 
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
-                if (root == null) continue;
+                if (root == null)
+                {
+                    continue;
+                }
 
                 foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
                 {
@@ -803,7 +817,10 @@ public class AsyncBatchEngine
                         foreach (var attr in attrList.Attributes)
                         {
                             if (!attr.Name.ToString().EndsWith("Obsolete", StringComparison.Ordinal))
+                            {
                                 continue;
+                            }
+
                             var firstArg = attr.ArgumentList?.Arguments.FirstOrDefault()?.ToString() ?? "";
                             if (firstArg.Contains("Asyncify-bridge:", StringComparison.Ordinal))
                             {
@@ -923,7 +940,10 @@ public class AsyncBatchEngine
         int callerIndex = 0;
         foreach (var fileGroup in fileGroups)
         {
-            if (cancellationToken.IsCancellationRequested) break;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             var callerFilePath = fileGroup.Key;
             var callersInFile = fileGroup.ToList();
@@ -934,8 +954,11 @@ public class AsyncBatchEngine
             if (!hasInitialDoc && !File.Exists(callerFilePath))
             {
                 foreach (var (_, cm) in callersInFile)
+                {
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, cm,
                         "Caller file not found on disk.", new List<DiagnosticInfo>()));
+                }
+
                 callerIndex += callersInFile.Count;
                 continue;
             }
@@ -946,7 +969,10 @@ public class AsyncBatchEngine
 
             foreach (var (_, callerMethodName) in callersInFile)
             {
-                if (cancellationToken.IsCancellationRequested) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
 
                 _logger.LogInformation(
                     "RunUpliftBatch [{GI}/{GT}]: {Caller} in {File}",
@@ -981,7 +1007,7 @@ public class AsyncBatchEngine
 
                 var validation = await _validationEngine.ValidateChangesAsync(
                     new Dictionary<FilePath, string> { { callerFilePath, transformed! } },
-                    progress, cancellationToken);
+                    cancellationToken);
 
                 if (!validation.Success)
                 {
@@ -1025,12 +1051,14 @@ public class AsyncBatchEngine
                     progress: progress, cancellationToken: cancellationToken);
 
                 uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
-                    { BeforeSource = beforeSource });
+                {
+                    BeforeSource = beforeSource
+                });
                 _ledger.Record(callerFilePath, callerMethodName, "Uplift");
                 progress?.Report(new ProgressNotificationValue
                 {
                     Progress = (float)uplifted.Count / callerPairs.Count,
-                    Message  = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}",
+                    Message = $"{uplifted.Count} of {callerPairs.Count}. Uplifted {callerMethodName} in {callerFilePath}",
                 });
             }
         }
@@ -1113,11 +1141,11 @@ public class AsyncBatchEngine
             string preCheckSource,
             bool propagateCancellationTokens,
             IProgress<ProgressNotificationValue>? progress,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken = default)
     {
         // Pre-check: analyse the current in-memory source to determine the caller's async state.
-        var preCheckTree    = CSharpSyntaxTree.ParseText(preCheckSource);
-        var preCheckRoot    = preCheckTree.GetRoot();
+        var preCheckTree = CSharpSyntaxTree.ParseText(preCheckSource);
+        var preCheckRoot = preCheckTree.GetRoot();
         var preCheckMethods = preCheckRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
         var callerMethodNode = preCheckMethods.FirstOrDefault(m => m.Identifier.Text == callerMethodName);
 
@@ -1133,14 +1161,14 @@ public class AsyncBatchEngine
                 new List<DiagnosticInfo>(), NeedsManualReview: true));
         }
 
-        bool callerIsAsync      = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
+        bool callerIsAsync = callerMethodNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)) == true;
         bool asyncOverloadExists = preCheckMethods.Any(m => m.Identifier.Text == callerMethodName + "Async");
 
         // ── Step A: bridge ──────────────────────────────────────────────────────
         string bridgedCallerSource;
-        bool   isEventHandlerInPlace = false;
+        bool isEventHandlerInPlace = false;
         string? callerAsyncNameOverride = null;
-        bool    useSemanticRewrite = false;
+        bool useSemanticRewrite = false;
         string? semanticCtExpression = null;
 
         if (callerIsAsync)
@@ -1148,10 +1176,10 @@ public class AsyncBatchEngine
             _logger.LogInformation(
                 "TryTransformCaller: '{Method}' is already async — rewriting body in-place (semantic)",
                 callerMethodName);
-            bridgedCallerSource     = preCheckSource;
+            bridgedCallerSource = preCheckSource;
             callerAsyncNameOverride = callerMethodName;
-            bool callerReturnsVoid  = callerMethodNode?.ReturnType.ToString() == "void";
-            var  callerCtParam      = callerMethodNode?.ParameterList.Parameters
+            bool callerReturnsVoid = callerMethodNode?.ReturnType.ToString() == "void";
+            var callerCtParam = callerMethodNode?.ParameterList.Parameters
                 .FirstOrDefault(p => (p.Type?.ToString() ?? "").Contains("CancellationToken"));
             semanticCtExpression = callerReturnsVoid ? null
                 : (callerCtParam?.Identifier.Text ?? "CancellationToken.None");
@@ -1232,15 +1260,18 @@ public class AsyncBatchEngine
         }
         else if (useSemanticRewrite)
         {
-            var rewriteTarget = callerAsyncNameOverride ?? callerMethodName + "Async";
+            var rewriteTarget = callerAsyncNameOverride ?? (callerMethodName + "Async");
             try
             {
                 var semanticResult = await SemanticBridgeCallRewriteAsync(
                     callerFilePath, rewriteTarget, bridgedMethodName, semanticCtExpression, cancellationToken);
                 if (semanticResult == null)
+                {
                     return (null, null, new UpliftSkippedInfo(
                         callerFilePath, callerMethodName,
                         "Document not found in workspace for semantic body rewrite.", new List<DiagnosticInfo>()));
+                }
+
                 rewrittenSource = semanticResult;
             }
             catch (Exception ex)
@@ -1254,7 +1285,7 @@ public class AsyncBatchEngine
         }
         else
         {
-            var rewriteTarget = callerAsyncNameOverride ?? callerMethodName + "Async";
+            var rewriteTarget = callerAsyncNameOverride ?? (callerMethodName + "Async");
             try
             {
                 rewrittenSource = RewriteCallerAsyncBody(bridgedCallerSource, rewriteTarget, bridgedMethodName);
@@ -1277,7 +1308,7 @@ public class AsyncBatchEngine
         {
             try
             {
-                var callerAsyncName = callerAsyncNameOverride ?? callerMethodName + "Async";
+                var callerAsyncName = callerAsyncNameOverride ?? (callerMethodName + "Async");
                 var (propagated, _) = await _asyncOptimizationEngine
                     .PropagateCancellationTokenInSourceAsync(
                         rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
@@ -1287,13 +1318,13 @@ public class AsyncBatchEngine
             {
                 _logger.LogWarning(propEx,
                     "CT propagation failed for '{Method}' — using unrewritten source",
-                    callerAsyncNameOverride ?? callerMethodName + "Async");
+                    callerAsyncNameOverride ?? (callerMethodName + "Async"));
             }
         }
 
         string resolvedAsyncName = isEventHandlerInPlace
             ? callerMethodName
-            : (callerAsyncNameOverride ?? callerMethodName + "Async");
+            : (callerAsyncNameOverride ?? (callerMethodName + "Async"));
         return (sourceResult, resolvedAsyncName, null);
     }
 
@@ -1324,18 +1355,24 @@ public class AsyncBatchEngine
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
         if (document == null)
+        {
             return null;
+        }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);
         if (root == null || semanticModel == null)
+        {
             return null;
+        }
 
         var targetMethod = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == targetMethodName);
         if (targetMethod == null)
+        {
             return null;
+        }
 
         var asyncMethodName = bridgedMethodName + "Async";
         const string BridgeCallAnnotation = "AsyncifyBridgeCallSemantic";
@@ -1346,16 +1383,23 @@ public class AsyncBatchEngine
         {
             var sym = semanticModel.GetSymbolInfo(inv, cancellationToken).Symbol as IMethodSymbol;
             if (sym == null || sym.Name != bridgedMethodName)
+            {
                 continue;
+            }
+
             var obsoleteMsg = sym.GetAttributes()
                 .FirstOrDefault(a => a.AttributeClass?.Name is "ObsoleteAttribute")
                 ?.ConstructorArguments.FirstOrDefault().Value as string;
             if (obsoleteMsg != null && obsoleteMsg.StartsWith("Asyncify-bridge:", StringComparison.Ordinal))
+            {
                 bridgeCallNodes[inv] = true;
+            }
         }
 
         if (bridgeCallNodes.Count == 0)
+        {
             return root.ToFullString();
+        }
 
         // Annotate the confirmed bridge-call nodes before any structural rewrites.
         var annotatedRoot = root.ReplaceNodes(
@@ -1381,7 +1425,10 @@ public class AsyncBatchEngine
                         ma.WithName(SyntaxFactory.IdentifierName(asyncMethodName).WithTriviaFrom(ma.Name)),
                     _ => null,
                 };
-                if (newExpr == null) return original;
+                if (newExpr == null)
+                {
+                    return original;
+                }
 
                 var renamedCall = original.WithExpression(newExpr);
 
@@ -1553,8 +1600,16 @@ public class AsyncBatchEngine
             int processed = 0;
             foreach (var target in input.Targets)
             {
-                if (cancellationToken.IsCancellationRequested) break;
-                if (processed >= input.MaxFiles) break;
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                if (processed >= input.MaxFiles)
+                {
+                    break;
+                }
+
                 try
                 {
                     var (_, fileResult) = await _asyncOptimizationEngine
@@ -1590,7 +1645,10 @@ public class AsyncBatchEngine
                 break;
             }
 
-            if (cancellationToken.IsCancellationRequested) break;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             string updatedSource;
             PropagateCtFileResult fileResult;
@@ -1626,7 +1684,6 @@ public class AsyncBatchEngine
             // Validate
             var validation = await _validationEngine.ValidateChangesAsync(
                 new Dictionary<FilePath, string> { { target.FilePath, updatedSource } },
-                progress: progress,
                 cancellationToken: cancellationToken);
 
             if (!validation.Success)
@@ -1725,7 +1782,10 @@ public class AsyncBatchEngine
 
         foreach (var target in input.Targets)
         {
-            if (cancellationToken.IsCancellationRequested) break;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                break;
+            }
 
             var methodResult = new UpliftBatchMultiMethodResult
             {
@@ -1780,7 +1840,11 @@ public class AsyncBatchEngine
     /// </summary>
     private static string DiagSummary(List<DiagnosticInfo> diags, int n = 2)
     {
-        if (diags.Count == 0) return "";
+        if (diags.Count == 0)
+        {
+            return "";
+        }
+
         var top = string.Join("; ", diags.Take(n).Select(d => $"[{d.Id}] {d.Message}"));
         return diags.Count > n ? $" — {top} (+{diags.Count - n} more)" : $" — {top}";
     }

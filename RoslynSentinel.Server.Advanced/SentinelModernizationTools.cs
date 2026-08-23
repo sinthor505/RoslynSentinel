@@ -72,7 +72,7 @@ public class SentinelModernizationTools
 
         try
         {
-            var result = await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName);
+            var result = await _advancedLogicEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,

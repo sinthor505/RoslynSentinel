@@ -42,30 +42,42 @@ public static class DocPathGuard
         //    If the result differs from the input, path components were present.
         string bareName = Path.GetFileName(filename);
         if (bareName != filename)
+        {
             return (false, "", "Filename only — path components are not allowed.");
+        }
 
         if (string.IsNullOrWhiteSpace(bareName))
+        {
             return (false, "", "Empty filename.");
+        }
 
         // 2. Reject alternate data streams and invalid characters (Windows-specific).
         //    "notes.md:hidden.cs" is a valid NTFS ADS name but Path.GetFileName keeps the colon.
         if (bareName.Contains(':'))
+        {
             return (false, "", "Invalid character ':' in filename (alternate data stream).");
+        }
 
         if (bareName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
             return (false, "", "Invalid characters in filename.");
+        }
 
         // 3. Reject Windows reserved device names (CON, NUL, COM1, LPT1, etc.).
         //    Check the stem only so "CON.md" is caught as well as "CON".
         string nameNoExt = Path.GetFileNameWithoutExtension(bareName).ToUpperInvariant();
         if (ReservedNames.Contains(nameNoExt))
+        {
             return (false, "", $"'{nameNoExt}' is a reserved Windows filename.");
+        }
 
         // 4. Extension ALLOWLIST — closed set, matched exactly via Path.GetExtension.
         //    NEVER use substring matching (e.g. Contains(".cs")) — it over-matches and is gameable.
         string ext = Path.GetExtension(bareName).ToLowerInvariant();
         if (!AllowedExtensions.Contains(ext))
+        {
             return (false, "", $"Extension '{ext}' not permitted. Allowed: {string.Join(", ", AllowedExtensions)}");
+        }
 
         // 5. Resolve and confirm containment (defense-in-depth backstop).
         //    GetFullPath resolves any remaining traversal sequences so the StartsWith check
@@ -73,10 +85,14 @@ public static class DocPathGuard
         string fullPath = Path.GetFullPath(Path.Combine(docsSubdirRoot, bareName));
         string rootFull = Path.GetFullPath(docsSubdirRoot);
         if (!rootFull.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
+        {
             rootFull += Path.DirectorySeparatorChar;
+        }
 
         if (!fullPath.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
+        {
             return (false, "", "Resolved path escapes the documentation root.");
+        }
 
         return (true, fullPath, "");
     }

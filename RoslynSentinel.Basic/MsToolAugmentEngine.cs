@@ -573,12 +573,7 @@ public class MsToolAugmentEngine
         FilePath filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null)
-        {
-            throw new InvalidOperationException($"File not found: {filePath}");
-        }
-
+        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException($"File not found: {filePath}");
         var root = (await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax)!;
         var original = root.Usings;
         int originalCount = original.Count;
@@ -1417,23 +1412,32 @@ public class MsToolAugmentEngine
                 .ToList();
 
             if (candidates.Count == 0)
+            {
                 return MsAugmentResult.Fail($"No method named '{contextSnippet}' found in {filePath}.");
+            }
+
             if (candidates.Count > 1)
+            {
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' is overloaded ({candidates.Count} declarations). " +
                     "Use contextSnippet + lineBefore/lineAfter to identify the correct overload.");
+            }
 
             var sourceMethod = candidates[0];
             if (sourceMethod.Body == null)
+            {
                 return MsAugmentResult.Fail(
                     $"'{contextSnippet}' has an expression body (=> ...) which is not supported " +
                     "with extractEntireBody. Use the contextSnippet path instead.");
+            }
 
             block = sourceMethod.Body;
             stmtsInSelection = block.Statements.ToList();
 
             if (stmtsInSelection.Count == 0)
+            {
                 return MsAugmentResult.Fail($"'{contextSnippet}' has an empty body; nothing to extract.");
+            }
         }
         else
         {

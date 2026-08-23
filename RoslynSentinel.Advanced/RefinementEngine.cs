@@ -90,7 +90,7 @@ public class RefinementEngine
             }
 
             // Remove 'override', add 'virtual' (if not already abstract/virtual)
-            SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
+            static SyntaxTokenList AdjustModifiers(SyntaxTokenList modifiers)
             {
                 var overrideToken = modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.OverrideKeyword));
                 if (overrideToken != default)

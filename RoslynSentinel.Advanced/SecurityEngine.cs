@@ -355,7 +355,7 @@ public class SecurityEngine
     }
 
     /// <summary>Returns true only if any interpolation in the string is a non-constant (runtime) expression.</summary>
-    private static bool HasNonConstInterpolation(InterpolatedStringExpressionSyntax s, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    private static bool HasNonConstInterpolation(InterpolatedStringExpressionSyntax s, SemanticModel? semanticModel, CancellationToken cancellationToken = default)
     {
         foreach (var interp in s.Contents.OfType<InterpolationSyntax>())
         {

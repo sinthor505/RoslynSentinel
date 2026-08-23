@@ -122,7 +122,7 @@ public class SentinelAdvancedRefactoringTools
             _validationEngine, _workspaceManager, _logger, changes, operationName,
             dryRun, returnDiff, progress: null, cancellationToken);
 
-    private Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken) =>
+    private Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken = default) =>
         ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
 
     private static string BuildDiffFromPreImages(
@@ -193,7 +193,6 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
-
     [McpServerTool(Name = "InlineClass")]
     [Produces(DataTag.ChangeId)]
     [Description("Merges all members of a source class into a target class and removes the source class declaration. Works within the same file or across files. Updates all type references throughout the solution. Validates and writes to disk immediately; dryRun=true to preview without writing.")]
@@ -251,9 +250,9 @@ public class SentinelAdvancedRefactoringTools
 
                 return await MoveAllTypesToFilesCore(
                     await _refactoringEngine.MoveAllTypesToFilesAsync(target),
-                    autoStage, dryRun, returnDiff, cancellationToken,
-                    $"Move all types to files in '{Path.GetFileName(target)}'",
-                    previewFiles: true);
+                    autoStage, dryRun, returnDiff, $"Move all types to files in '{Path.GetFileName(target)}'",
+                    previewFiles: true,
+                    cancellationToken: cancellationToken);
             }
             if (scope == "project")
             {
@@ -264,17 +263,17 @@ public class SentinelAdvancedRefactoringTools
 
                 return await MoveAllTypesToFilesCore(
                     await _refactoringEngine.MoveAllTypesToFilesInProjectAsync(target),
-                    autoStage, dryRun, returnDiff, cancellationToken,
-                    $"Move all types to files in project '{target}'",
-                    previewFiles: false);
+                    autoStage, dryRun, returnDiff, $"Move all types to files in project '{target}'",
+                    previewFiles: false,
+                    cancellationToken: cancellationToken);
             }
             if (scope == "solution")
             {
                 return await MoveAllTypesToFilesCore(
                     await _refactoringEngine.MoveAllTypesToFilesInSolutionAsync(),
-                    autoStage, dryRun, returnDiff, cancellationToken,
-                    "Move all types to files in solution",
-                    previewFiles: false);
+                    autoStage, dryRun, returnDiff, "Move all types to files in solution",
+                    previewFiles: false,
+                    cancellationToken: cancellationToken);
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown scope '{scope}'. Valid: file, project, solution.") };
         }
@@ -290,9 +289,9 @@ public class SentinelAdvancedRefactoringTools
     bool autoStage,
     bool dryRun,
     bool returnDiff,
-    CancellationToken cancellationToken,
     string description,
-    bool previewFiles)
+    bool previewFiles,
+    CancellationToken cancellationToken = default)
     {
         if (!autoStage)
             return new ToolResult<object>() { Success = true, Data = changes };
@@ -708,7 +707,7 @@ public class SentinelAdvancedRefactoringTools
             }
             if (action == "verify")
             {
-                var result = await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName);
+                var result = await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName, cancellationToken);
                 return new ToolResult<object>() { Success = true, Data = result };
             }
             return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Unknown action '{action}'. Valid values: implement, sync, verify.") };
@@ -833,7 +832,7 @@ public class SentinelAdvancedRefactoringTools
                 if (wrapper == "tryCatch")
                 {
                     var exceptionType = name ?? "Exception";
-                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody);
+                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -851,7 +850,7 @@ public class SentinelAdvancedRefactoringTools
                     {
                         return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.") };
                     }
-                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, contextSnippet, lineBefore, lineAfter, name);
+                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -869,7 +868,7 @@ public class SentinelAdvancedRefactoringTools
                     {
                         return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.") };
                     }
-                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, contextSnippet, lineBefore, lineAfter, name);
+                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -889,7 +888,7 @@ public class SentinelAdvancedRefactoringTools
                 if (wrapper == "tryCatch")
                 {
                     var exceptionType = name ?? "Exception";
-                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody);
+                    var updated = await _refactoringEngine.WrapInTryCatchAsync(filePath, startLine, endLine, exceptionType, catchVariableName, catchBody, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -907,7 +906,7 @@ public class SentinelAdvancedRefactoringTools
                     {
                         return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.") };
                     }
-                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name);
+                    var updated = await _semanticRefactoringLibrary.WrapInUsingAsync(filePath, startLine, endLine, name, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };
@@ -925,7 +924,7 @@ public class SentinelAdvancedRefactoringTools
                     {
                         return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.") };
                     }
-                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name);
+                    var updated = await _refactoringEngine.WrapInRegionAsync(filePath, startLine, endLine, name, cancellationToken);
                     if (!autoStage)
                     {
                         return new ToolResult<object>() { Success = true, Data = updated.ToJsonSummary() };

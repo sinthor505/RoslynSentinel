@@ -1334,7 +1334,7 @@ public class AsyncSafetyEngine
     }
 
     // Returns true/false if the semantic model can resolve the return type; null if unresolvable (caller falls back).
-    private static bool? IsTaskReturningSemantic(SemanticModel? model, ExpressionSyntax expr, CancellationToken cancellationToken)
+    private static bool? IsTaskReturningSemantic(SemanticModel? model, ExpressionSyntax expr, CancellationToken cancellationToken = default)
     {
         if (model == null)
         {

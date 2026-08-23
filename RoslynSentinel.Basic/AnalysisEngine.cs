@@ -412,7 +412,7 @@ public class AnalysisEngine
         };
     }
 
-    private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken cancellationToken)
+    private async Task BuildCallTree(IMethodSymbol symbol, int currentDepth, int maxDepth, StringBuilder sb, HashSet<ISymbol> visited, CancellationToken cancellationToken = default)
     {
         if (currentDepth > maxDepth || !visited.Add(symbol))
         {
@@ -783,7 +783,7 @@ public class AnalysisEngine
 
                     var fieldDecl = classNode.Members.OfType<FieldDeclarationSyntax>()
                         .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
-                    var line = fieldDecl?.GetLocation().GetLineSpan().StartLinePosition.Line + 1 ?? 0;
+                    var line = (fieldDecl?.GetLocation().GetLineSpan().StartLinePosition.Line + 1) ?? 0;
                     results.Add(
                         $"{target.Document.FilePath ?? target.Document.Name}:{line} " +
                         $"- Class '{classNode.Identifier.Text}': IDisposable field '{fieldName}' is never disposed in Dispose(). " +
@@ -2098,9 +2098,11 @@ public class AnalysisEngine
 
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
+        {
             projects = projects.Where(p =>
                 p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) ||
                 p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
+        }
 
         // Build a cross-project lookup: fully-qualified-type-name → list of file paths
         // Used to detect duplicate type names across mismatched paths (Error severity).
@@ -2121,19 +2123,27 @@ public class AnalysisEngine
                 cancellationToken.ThrowIfCancellationRequested();
 
                 var filePath = doc.FilePath;
-                if (filePath is null) continue;
+                if (filePath is null)
+                {
+                    continue;
+                }
 
                 // Skip generated files.
                 var fileName = Path.GetFileName(filePath);
                 if (fileName.EndsWith(".g.cs", StringComparison.OrdinalIgnoreCase) ||
                     fileName.EndsWith(".generated.cs", StringComparison.OrdinalIgnoreCase) ||
                     fileName.EndsWith(".Designer.cs", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
 
                 totalFiles++;
 
                 var syntaxRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-                if (syntaxRoot is null) continue;
+                if (syntaxRoot is null)
+                {
+                    continue;
+                }
 
                 // Extract all namespace declarations (both block and file-scoped).
                 var nsDecls = syntaxRoot.DescendantNodes()
@@ -2199,7 +2209,10 @@ public class AnalysisEngine
                 {
                     var fqn = $"{declaredNs ?? ""}.{typeName}";
                     if (!typeToFiles.TryGetValue(fqn, out var list))
+                    {
                         typeToFiles[fqn] = list = [];
+                    }
+
                     list.Add(filePath);
                 }
 
@@ -2232,7 +2245,9 @@ public class AnalysisEngine
             }
 
             if (string.Equals(declaredNs, expectedNs, StringComparison.OrdinalIgnoreCase))
+            {
                 continue;  // Clean — matches.
+            }
 
             // Mismatch detected. Check for duplicate type names at the conflicting path.
             var conflicting = new List<string>();
@@ -2240,8 +2255,10 @@ public class AnalysisEngine
             {
                 var fqn = $"{expectedNs}.{typeName}";
                 if (typeToFiles.TryGetValue(fqn, out var otherFiles))
+                {
                     conflicting.AddRange(otherFiles.Where(f =>
                         !f.Equals(filePath, StringComparison.OrdinalIgnoreCase)));
+                }
             }
 
             if (conflicting.Count > 0)
@@ -2277,9 +2294,16 @@ public class AnalysisEngine
         var partialTypeToNamespaces = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         foreach (var (doc, declaredNs, _, typeNames, _) in findings)
         {
-            if (declaredNs is null) continue;
+            if (declaredNs is null)
+            {
+                continue;
+            }
+
             var syntaxRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-            if (syntaxRoot is null) continue;
+            if (syntaxRoot is null)
+            {
+                continue;
+            }
 
             var partials = syntaxRoot.DescendantNodes()
                 .OfType<BaseTypeDeclarationSyntax>()
@@ -2289,7 +2313,10 @@ public class AnalysisEngine
             foreach (var name in partials)
             {
                 if (!partialTypeToNamespaces.TryGetValue(name, out var nss))
+                {
                     partialTypeToNamespaces[name] = nss = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+
                 nss.Add(declaredNs);
             }
         }
@@ -2352,7 +2379,9 @@ public class AnalysisEngine
         var relativeDir = Path.GetRelativePath(projectRoot, fileDir);
 
         if (relativeDir == ".")
+        {
             return rootNamespace;
+        }
 
         // Convert directory separators to namespace separators, strip leading dots.
         var nsPart = relativeDir
@@ -2383,7 +2412,9 @@ public class AnalysisEngine
                                                         StringComparison.OrdinalIgnoreCase))
                     ?.Value;
                 if (!string.IsNullOrWhiteSpace(ns))
+                {
                     return ns.Trim();
+                }
             }
             catch { /* best effort — fall through to project name */ }
         }

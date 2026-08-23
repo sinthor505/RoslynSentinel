@@ -13,5 +13,5 @@ public interface IWorkspaceMutator
     /// <summary>Removes a document from the workspace and deletes its backing file.</summary>
     Task RemoveDocumentByPathAsync(FilePath filePath, CancellationToken cancellationToken = default);
     /// <summary>Retries previously failed writes, optionally scoped to specific files.</summary>
-    Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3);
+    Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default);
 }

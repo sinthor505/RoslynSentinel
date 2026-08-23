@@ -106,7 +106,7 @@ public class LoadSolutionPathSanitizationTests
         // (i.e. the quotes must be stripped, not treated as part of the filename), so loading
         // proceeds to MSBuild instead of failing fast with ToolNotFoundException.
         var tempFile = Path.Combine(Path.GetTempPath(), $"RoslynSentinelTests_{Guid.NewGuid()}.sln");
-        File.WriteAllText(tempFile, "Microsoft Visual Studio Solution File, Format Version 12.00");
+        await File.WriteAllTextAsync(tempFile, "Microsoft Visual Studio Solution File, Format Version 12.00");
         try
         {
             var wrappedPath = $"  '{tempFile}'  ";

@@ -1029,7 +1029,7 @@ public class SymbolNavigationEngine
         int depth,
         int maxDepth,
         HashSet<string> visited,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         var loc = method.Locations.FirstOrDefault(l => l.IsInSource);
         var filePath = loc?.SourceTree?.FilePath;
@@ -1168,7 +1168,7 @@ public class SymbolNavigationEngine
         int depth,
         int maxDepth,
         HashSet<string> visited,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         var loc = method.Locations.FirstOrDefault(l => l.IsInSource);
         var filePath = loc?.SourceTree?.FilePath;
@@ -1298,16 +1298,11 @@ public class SymbolNavigationEngine
         {
             // Original path: resolve from the declaring file.
             var document = solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-            if (document == null)
-            {
-                throw new InvalidOperationException(
+                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new InvalidOperationException(
                     $"FindCallers: filePath '{filePath}' was not found in the loaded solution. " +
                     "Verify the path against ListSolutionItems/GetFileOutline, or omit filePath to " +
                     "resolve by symbolName across the whole solution instead. This is NOT a confirmed " +
                     "zero-references result — the lookup never ran.");
-            }
-
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
@@ -1331,16 +1326,12 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (symbol == null)
-                {
-                    throw new InvalidOperationException(
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new InvalidOperationException(
                         $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' — the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output, " +
                         "or omit contextSnippet if the symbolName is unambiguous in this file.");
-                }
             }
             else
             {
@@ -1562,8 +1553,8 @@ public class SymbolNavigationEngine
         {
             throw new InvalidOperationException(
                 "FindImplementations: " + (scopedResolutionFailure ??
-                    $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
-                    (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".") +
+                    ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
+                    (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
                 " This is NOT a confirmed zero-implementations result — the lookup never ran. Verify " +
                 "the name via LocateSymbol/GetFileOutline before treating this as evidence of no implementations.");
         }
@@ -1666,7 +1657,7 @@ public class SymbolNavigationEngine
         }
 
         var declLoc = declNode?.GetLocation();
-        var declLine = declLoc?.GetLineSpan().StartLinePosition.Line + 1 ?? lineNumber;
+        var declLine = (declLoc?.GetLineSpan().StartLinePosition.Line + 1) ?? lineNumber;
         var declFilePath = declLoc?.SourceTree?.FilePath ?? filePath;
 
         // Get type name
@@ -1714,7 +1705,7 @@ public class SymbolNavigationEngine
         accesses.Add(new VariableAccess(
             FilePath: declFilePath,
             Line: declLine,
-            Column: declLoc?.GetLineSpan().StartLinePosition.Character + 1 ?? 0,
+            Column: (declLoc?.GetLineSpan().StartLinePosition.Character + 1) ?? 0,
             AccessKind: "Declaration",
             ContextStack: BuildContextStack(declNode),
             IsInLoop: IsInsideLoop(declNode),
@@ -1900,9 +1891,13 @@ public class SymbolNavigationEngine
 
         var previews = candidates.Take(3).Select(c =>
         {
-            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
             var text = c.ToString().Split('\n').First().Trim();
-            if (text.Length > 50) text = text.Substring(0, 47) + "...";
+            if (text.Length > 50)
+            {
+                text = text.Substring(0, 47) + "...";
+            }
+
             return $"line {line} `{text}`";
         });
 
@@ -1921,7 +1916,7 @@ public class SymbolNavigationEngine
         Solution solution,
         string symbolName,
         string? contextSnippet,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         foreach (var project in solution.Projects)
         {

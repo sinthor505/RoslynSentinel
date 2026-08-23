@@ -4,10 +4,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using NUnit.Framework;
-
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Battery;
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -43,7 +39,7 @@ public class Calc {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.ConvertIfToSwitchStatementAsync("Calc.cs", "Describe");
+        var result = await _engine.ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
 
         Assert.That(result, Is.Not.Null);
     }
@@ -494,7 +490,7 @@ public class Calculator {
         var result = await _engine.AnalyzeMethodDataFlowAsync("NoFile.cs", "Foo");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Error, Is.Not.Null.Or.Empty, "Should report an error for missing file");
+        Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "Should report an error for missing file");
     }
 }
 

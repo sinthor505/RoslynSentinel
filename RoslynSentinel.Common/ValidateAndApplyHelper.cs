@@ -29,7 +29,7 @@ public static class ValidateAndApplyHelper
         DiagnosticReport validation;
         try
         {
-            validation = await validationEngine.ValidateChangesAsync(changes, progress, cancellationToken);
+            validation = await validationEngine.ValidateChangesAsync(changes, cancellationToken);
         }
         catch (Exception ex)
         {

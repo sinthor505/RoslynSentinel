@@ -482,7 +482,7 @@ public class AdvancedStructuralEngine
         string newName,
         HashSet<string> skipPaths,
         Dictionary<FilePath, string> result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         var references = await SymbolFinder.FindReferencesAsync(classSymbol, solution, cancellationToken);
         var byDocument = references.SelectMany(r => r.Locations)

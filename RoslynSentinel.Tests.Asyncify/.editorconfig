@@ -4,16 +4,9 @@ root = true
 # C# files
 [*.cs]
 
-# hide ca1852
-dotnet_diagnostic.CA1852.severity = none
-dotnet_diagnostic.CA1707.severity = none
-dotnet_diagnostic.CA1822.severity = none
-dotnet_diagnostic.CA1848.severity = none
-dotnet_diagnostic.CA1852.severity = none
-dotnet_diagnostic.IDE0011.severity = none
-dotnet_diagnostic.IDE0270.severity = none
-dotnet_diagnostic.CA1859.severity = none
+# Surpress warnings
 dotnet_diagnostic.AsyncFixer01.severity = none
+dotnet_diagnostic.CA1859.severity = none
 
 #### Core EditorConfig Options ####
 
@@ -128,15 +121,16 @@ csharp_style_conditional_delegate_call = true:warning
 # Modifier preferences
 csharp_prefer_static_anonymous_function = true:warning
 csharp_prefer_static_local_function = true:warning
-csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,closed,sealed,override,readonly,unsafe,required,volatile,async
 csharp_style_prefer_readonly_struct = true:warning
 csharp_style_prefer_readonly_struct_member = true
 
 # Code-block preferences
-csharp_prefer_braces = true:warning
+csharp_prefer_braces = true:suggestion
 csharp_prefer_simple_using_statement = true:silent
 csharp_prefer_system_threading_lock = true
 csharp_style_namespace_declarations = file_scoped
+csharp_style_prefer_labeled_jump_statements = true
 csharp_style_prefer_method_group_conversion = true
 csharp_style_prefer_primary_constructors = true
 csharp_style_prefer_simple_property_accessors = true

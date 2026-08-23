@@ -16,12 +16,7 @@ public class AdvancedRefactoringEngine
     public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
@@ -101,12 +96,7 @@ public class AdvancedRefactoringEngine
     public async Task<DocumentEditResult> OptimizeTaskWaitAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
@@ -325,18 +315,9 @@ public class AdvancedRefactoringEngine
     public async Task<Dictionary<FilePath, string>> ExtractServiceFromControllerAsync(FilePath filePath, string controllerName, string serviceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
-        if (controller == null)
-        {
-            throw new InvalidOperationException("Controller not found.");
-        }
+        var controller = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName)) ?? throw new InvalidOperationException("Controller not found.");
 
         // Extract private methods and complex logic from public endpoints
         var methodsToMove = controller.Members.OfType<MethodDeclarationSyntax>()

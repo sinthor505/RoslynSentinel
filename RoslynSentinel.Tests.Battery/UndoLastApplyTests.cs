@@ -15,8 +15,6 @@ using System.Text.Json;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-using RoslynSentinel.Tests;
 using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
@@ -172,7 +170,7 @@ public class UndoLastApplyTests
                 new { FilePath = targetFile, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = originalContent },
             },
         };
-        File.WriteAllText(
+        await File.WriteAllTextAsync(
             Path.Combine(dir, $"apply_diff_20260101T000000Z_{changeId}.json"),
             JsonSerializer.Serialize(payload, PrettyJson));
 
@@ -181,7 +179,7 @@ public class UndoLastApplyTests
         // it as external drift. Acknowledge it here, same as a real agent would after an out-of-band
         // edit — otherwise the revert write is refused by the drift guard in ApplyProposedChangesAsync
         // (RoslynSentinel.Common/PersistentWorkspaceManager.cs) before it ever reaches undo logic.
-        workspaceManager.ClearDrift();
+        workspaceManager.ClearExternalFileChanges();
 
         var result = await tools.UndoLastApply(changeId);
 

@@ -27,7 +27,7 @@ public static class ScanResultHelper
     /// instead of reimplementing the write.
     /// </summary>
     public static async Task<(bool offloaded, FilePath filePath, string? scanId, byte[] jsonBytes)> StoreScanResultAsync<T>(
-        T data, string? solutionRoot, ScanWrapperType wrapperType)
+        T data, string? solutionRoot, ScanWrapperType wrapperType, CancellationToken cancellationToken)
     {
         var jsonBytes = JsonSerializer.SerializeToUtf8Bytes(data);
         if (jsonBytes.Length <= ThresholdBytes || string.IsNullOrEmpty(solutionRoot) || data == null)
@@ -46,7 +46,7 @@ public static class ScanResultHelper
         Directory.CreateDirectory(dir);
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
         var filePathString = Path.Combine(dir, $"scan_{timestamp}_{scanId}.json");
-        await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
         return (true, new FilePath(filePathString, solutionRoot, validated: true), scanId, jsonBytes);
     }
 }
@@ -78,9 +78,18 @@ public enum ScanWrapperType
 public record FileSourceResult
 {
     public string FilePath { get; init; } = "";
-    public int StartLine { get; init; }
-    public int EndLine { get; init; }
-    public int TotalLines { get; init; }
+    public int StartLine
+    {
+        get; init;
+    }
+    public int EndLine
+    {
+        get; init;
+    }
+    public int TotalLines
+    {
+        get; init;
+    }
     public string Source { get; init; } = "";
 }
 

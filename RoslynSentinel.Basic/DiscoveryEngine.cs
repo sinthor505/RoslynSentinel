@@ -309,14 +309,9 @@ public class DiscoveryEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var results = new List<ApiSurfaceEntry>();
 
+        //return results;
         var project = solution.Projects.FirstOrDefault(p =>
-            string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
-        if (project == null)
-        {
-            //return results;
-            throw new ArgumentException($"Project '{projectName}' not found in solution.");
-        }
-
+        string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ArgumentException($"Project '{projectName}' not found in solution.");
         foreach (var doc in project.Documents)
         {
             var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -515,25 +510,13 @@ public class DiscoveryEngine
         FilePath filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        if (root == null)
-        {
-            throw new InvalidOperationException("Could not get syntax root.");
-        }
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
 
         var container = root.DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
-            .FirstOrDefault(t => t.Identifier.Text == containerName);
-        if (container == null)
-        {
-            throw new InvalidOperationException($"Type '{containerName}' not found.");
-        }
+            .FirstOrDefault(t => t.Identifier.Text == containerName) ?? throw new InvalidOperationException($"Type '{containerName}' not found.");
 
         // Standard C# ordering: fields(0) → constructors(1) → destructors(2) → properties(3) → events(4) → methods(5) → nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
@@ -712,12 +695,7 @@ public class DiscoveryEngine
                 throw new ArgumentException("symbolName is required when docCommentId is not provided.");
             }
 
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-            if (document == null)
-            {
-                throw new FileNotFoundException($"File not found: {filePath}");
-            }
-
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var sourceText = await document.GetTextAsync(cancellationToken);
 
@@ -726,20 +704,10 @@ public class DiscoveryEngine
             var snippet = contextSnippet ?? symbolName;
             var position = ContextHelper.FindSnippetPosition(sourceText, snippet, lineBefore, lineAfter);
 
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            if (semanticModel == null)
-            {
-                throw new InvalidOperationException("Could not get semantic model.");
-            }
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get semantic model.");
 
-            var foundSymbol = semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol
-                         ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken);
-
-            if (foundSymbol == null)
-            {
-                throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
-            }
-
+            var foundSymbol = (semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol
+                         ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken)) ?? throw new InvalidOperationException($"Symbol '{symbolName}' not found at the provided location.");
             symbol = foundSymbol;
             resolvedSymbolName = symbolName;
         }

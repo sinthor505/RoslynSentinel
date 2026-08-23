@@ -83,8 +83,15 @@ public class MigrationLedger
     /// </summary>
     public async Task EnsureLoadedAsync(string? solutionRoot)
     {
-        if (string.IsNullOrEmpty(solutionRoot)) return;
-        if (_loaded && _solutionRoot == solutionRoot) return;
+        if (string.IsNullOrEmpty(solutionRoot))
+        {
+            return;
+        }
+
+        if (_loaded && _solutionRoot == solutionRoot)
+        {
+            return;
+        }
 
         if (_solutionRoot != null && _solutionRoot != solutionRoot)
         {
@@ -139,7 +146,11 @@ public class MigrationLedger
     /// </summary>
     public async Task SaveAsync()
     {
-        if (string.IsNullOrEmpty(_solutionRoot)) return;
+        if (string.IsNullOrEmpty(_solutionRoot))
+        {
+            return;
+        }
+
         await _saveLock.WaitAsync();
         try
         {
@@ -167,9 +178,15 @@ public class MigrationLedger
         {
             var entries = _entries.Values.AsEnumerable();
             if (phase != null)
+            {
                 entries = entries.Where(e => e.Operations.Any(o => o.Phase == phase));
+            }
+
             if (repeatedOnly)
+            {
                 entries = entries.Where(e => e.HitCount > 1);
+            }
+
             var list = entries.OrderByDescending(e => e.HitCount).ThenBy(e => e.MethodName).ToList();
             return new LedgerSnapshot
             {
@@ -197,19 +214,29 @@ public class MigrationLedger
     private async Task LoadFromDiskAsync()
     {
         var path = LedgerFilePath();
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
         try
         {
             var json = await File.ReadAllTextAsync(path);
             var data = JsonSerializer.Deserialize<LedgerData>(json, JsonOpts);
-            if (data == null) return;
+            if (data == null)
+            {
+                return;
+            }
+
             lock (_lock)
             {
                 _runCount = data.RunCount;
                 _currentRun = data.RunCount;
                 _entries.Clear();
                 foreach (var e in data.Entries)
+                {
                     _entries[e.Key] = e;
+                }
             }
         }
         catch { /* corrupt file — start fresh */ }

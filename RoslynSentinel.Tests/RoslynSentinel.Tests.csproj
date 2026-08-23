@@ -52,4 +52,12 @@
 		<IsCodeAnalysisAnalyzersExecuted>false</IsCodeAnalysisAnalyzersExecuted>
 	</PropertyGroup>
 
+	<ItemGroup>
+	  <EditorConfigFiles Remove="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests\.editorconfig" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Include="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests\.editorconfig" />
+	</ItemGroup>
+
 </Project>

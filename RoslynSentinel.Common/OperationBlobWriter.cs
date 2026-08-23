@@ -20,7 +20,8 @@ public static class OperationBlobWriter
         string toolName,
         string changeId,
         List<OperationItemRecord> items,
-        string? solutionRoot)
+        string? solutionRoot,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(solutionRoot))
         {
@@ -48,7 +49,8 @@ public static class OperationBlobWriter
             await File.WriteAllTextAsync(
                 filePath,
                 JsonSerializer.Serialize(payload, PrettyJson),
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
 
             if (!File.Exists(filePath))
             {

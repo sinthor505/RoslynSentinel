@@ -105,8 +105,8 @@ public class BuildEngine
 
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
-        process.OutputDataReceived += (_, e) => { if (e.Data is not null) stdout.AppendLine(e.Data); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
+        process.OutputDataReceived += (_, e) => { if (e.Data is not null) { stdout.AppendLine(e.Data); } };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) { stderr.AppendLine(e.Data); } };
 
         process.Start();
         process.BeginOutputReadLine();
@@ -144,7 +144,7 @@ public class BuildEngine
         }
 
         const int TailLines = 40;
-        string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
+        static string Tail(string text) => string.Join(Environment.NewLine, text.Split(Environment.NewLine).TakeLast(TailLines));
 
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             BuildSucceeded: process.ExitCode == 0,

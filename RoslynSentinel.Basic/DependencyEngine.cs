@@ -14,15 +14,10 @@ public partial class DependencyEngine
     /// <summary>
     /// Returns all project and NuGet dependencies for a specific project.
     /// </summary>
-    public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken)
+    public async Task<ProjectDependencyReport> GetProjectDependenciesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
-        if (project == null)
-        {
-            throw new InvalidOperationException($"Project '{projectName}' not found.");
-        }
-
+        var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
         var projectRefs = project.ProjectReferences
             .Select(r => solution.Projects.First(p => p.Id == r.ProjectId).Name)
             .ToList();
@@ -47,18 +42,9 @@ public partial class DependencyEngine
     public async Task<List<string>> FindUnusedReferencesAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project == null)
-        {
-            throw new InvalidOperationException($"Project '{projectName}' not found.");
-        }
+        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException($"Project '{projectName}' not found.");
 
-        var compilation = await project.GetCompilationAsync(cancellationToken);
-        if (compilation == null)
-        {
-            throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
-        }
-
+        var compilation = await project.GetCompilationAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get compilation for project '{projectName}'.");
         var usedAssemblies = new HashSet<string>();
         foreach (var document in project.Documents)
         {

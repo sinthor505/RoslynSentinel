@@ -161,7 +161,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Returns a list of files that have been modified externally since the last sync.
     /// </summary>
-    public List<string> GetExternalDrift()
+    public List<string> GetExternalFileChanges()
     {
         return _externalChanges.Distinct().ToList();
     }
@@ -169,7 +169,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Clears the drift list, indicating the AI has acknowledged and synced with disk.
     /// </summary>
-    public void ClearDrift()
+    public void ClearExternalFileChanges()
     {
         // ConcurrentBag has no Clear(); swap to a new instance atomically is not possible,
         // so drain it with TryTake instead.
@@ -178,11 +178,11 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     /// <summary>
     /// Compares every tracked document's in-memory text against the bytes currently on disk.
-    /// Unlike <see cref="GetExternalDrift"/> (which relies on the FileSystemWatcher and can miss
+    /// Unlike <see cref="GetExternalFileChanges"/> (which relies on the FileSystemWatcher and can miss
     /// events under overflow), this reads disk directly, so it also catches drift the watcher
     /// never reported.
     /// </summary>
-    public async Task<List<string>> GetContentDriftAsync(CancellationToken cancellationToken = default)
+    public async Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default)
     {
         var solution = CurrentSolution;
         if (solution is null)
@@ -714,7 +714,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
         // Drain expired entries from the front.
         while (queue.TryPeek(out long oldest) && oldest < cutoff)
+        {
             queue.TryDequeue(out _);
+        }
 
         int count = queue.Count;
         if (count >= limit)
@@ -762,7 +764,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 if (overrides is not null)
                 {
                     foreach (var (key, value) in overrides)
+                    {
                         defaults[key] = value;
+                    }
                 }
             }
         }
@@ -917,7 +921,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // hasn't been acknowledged, the proposed content is stale and writing it would silently
         // clobber whatever changed it externally. Fail loud instead — same "no silent overwrites"
         // rule the rest of this write path already follows for no-op/whitespace-only writes.
-        var drift = new HashSet<string>(GetExternalDrift(), StringComparer.OrdinalIgnoreCase);
+        var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
         var driftedTargets = changes.Keys.Where(k => drift.Contains(k)).Distinct().ToList();
         if (driftedTargets.Count > 0)
         {
@@ -948,7 +952,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
         }
 
-        await _solutionLock.WaitAsync();
+        await _solutionLock.WaitAsync(cancellationToken);
         var succeeded = new List<string>();
         var failed = new Dictionary<FilePath, string>();
         bool needsFullReload = false;
@@ -1070,7 +1074,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                             Directory.CreateDirectory(directory);
                         }
 
-                        await File.WriteAllTextAsync(filePath, newContent);
+                        await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
                         if (_logger.IsEnabled(LogLevel.Information))
@@ -1416,7 +1420,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>
     /// Attempts to re-write files that failed in previous attempts using cached content.
     /// </summary>
-    public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3)
+    public async Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default)
     {
         var toRetry = new Dictionary<FilePath, string>();
 

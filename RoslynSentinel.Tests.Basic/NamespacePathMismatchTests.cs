@@ -6,10 +6,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using NUnit.Framework;
-
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Basic;
 
 [TestFixture]
@@ -43,11 +39,11 @@ public class NamespacePathMismatchTests
         var projectRoot = Path.Combine(Path.GetTempPath(), projectName);
         var projectPath = Path.Combine(projectRoot, $"{projectName}.csproj");
 
-        var workspace  = new AdhocWorkspace();
-        var projectId  = ProjectId.CreateNewId();
+        var workspace = new AdhocWorkspace();
+        var projectId = ProjectId.CreateNewId();
 
         // Minimal metadata references (same set as TestSolutionBuilder).
-        var coreDir    = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         var references = new List<MetadataReference>();
         foreach (var name in new[] { "System.Runtime.dll", "System.Private.CoreLib.dll", "mscorlib.dll" })
         {
@@ -75,7 +71,7 @@ public class NamespacePathMismatchTests
         foreach (var (relPath, content) in documents)
         {
             var absolutePath = Path.Combine(projectRoot, relPath);
-            var docId        = DocumentId.CreateNewId(projectId, relPath);
+            var docId = DocumentId.CreateNewId(projectId, relPath);
             solution = solution.AddDocument(
                 docId,
                 Path.GetFileName(relPath),
@@ -99,12 +95,12 @@ public class NamespacePathMismatchTests
 
         var report = await _engine.FindNamespacePathMismatchesAsync(solution, null);
 
-        Assert.That(report.IsClean,       Is.True,  "Expected IsClean=true for a fully consistent solution");
-        Assert.That(report.MismatchCount, Is.Zero,  "Expected no mismatches");
-        Assert.That(report.Errors,        Is.Empty, "Expected no errors");
-        Assert.That(report.Warnings,      Is.Empty, "Expected no warnings");
-        Assert.That(report.TotalFiles,    Is.EqualTo(2));
-        Assert.That(report.Summary,       Does.Contain("Clean"));
+        Assert.That(report.IsClean, Is.True, "Expected IsClean=true for a fully consistent solution");
+        Assert.That(report.MismatchCount, Is.Zero, "Expected no mismatches");
+        Assert.That(report.Errors, Is.Empty, "Expected no errors");
+        Assert.That(report.Warnings, Is.Empty, "Expected no warnings");
+        Assert.That(report.TotalFiles, Is.EqualTo(2));
+        Assert.That(report.Summary, Does.Contain("Clean"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -120,16 +116,16 @@ public class NamespacePathMismatchTests
 
         var report = await _engine.FindNamespacePathMismatchesAsync(solution, null);
 
-        Assert.That(report.IsClean,  Is.False);
+        Assert.That(report.IsClean, Is.False);
         Assert.That(report.Warnings, Has.Count.EqualTo(1));
-        Assert.That(report.Errors,   Is.Empty);
+        Assert.That(report.Errors, Is.Empty);
 
         var w = report.Warnings[0];
-        Assert.That(w.Reason,            Is.EqualTo("NamespaceFolderMismatch"));
-        Assert.That(w.Severity,          Is.EqualTo("Warning"));
+        Assert.That(w.Reason, Is.EqualTo("NamespaceFolderMismatch"));
+        Assert.That(w.Severity, Is.EqualTo("Warning"));
         Assert.That(w.DeclaredNamespace, Is.EqualTo("TestProj.WrongFolder"));
         Assert.That(w.ExpectedNamespace, Is.EqualTo("TestProj.Services"));
-        Assert.That(w.ConflictingFiles,  Is.Empty);
+        Assert.That(w.ConflictingFiles, Is.Empty);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -154,11 +150,11 @@ public class NamespacePathMismatchTests
 
         var error = report.Errors.Find(e => e.Reason == "DuplicateTypeAtMismatchedPath");
         Assert.That(error, Is.Not.Null, "Expected a DuplicateTypeAtMismatchedPath error");
-        Assert.That(error!.Severity,          Is.EqualTo("Error"));
-        Assert.That(error.DeclaredNamespace,  Is.EqualTo("TestProj.Orders"));
-        Assert.That(error.ExpectedNamespace,  Is.EqualTo("TestProj.Services"));
-        Assert.That(error.ConflictingFiles,   Is.Not.Empty, "ConflictingFiles must name the shadow file");
-        Assert.That(error.ConflictingFiles,   Has.Some.EndsWith("Shadow.cs"));
+        Assert.That(error!.Severity, Is.EqualTo("Error"));
+        Assert.That(error.DeclaredNamespace, Is.EqualTo("TestProj.Orders"));
+        Assert.That(error.ExpectedNamespace, Is.EqualTo("TestProj.Services"));
+        Assert.That(error.ConflictingFiles, Is.Not.Empty, "ConflictingFiles must name the shadow file");
+        Assert.That(error.ConflictingFiles, Has.Some.EndsWith("Shadow.cs"));
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
@@ -175,7 +171,7 @@ public class NamespacePathMismatchTests
 
         var report = await _engine.FindNamespacePathMismatchesAsync(solution, null);
 
-        Assert.That(report.IsClean,    Is.True, "Generated files should be skipped entirely");
+        Assert.That(report.IsClean, Is.True, "Generated files should be skipped entirely");
         Assert.That(report.TotalFiles, Is.Zero, "TotalFiles should not count generated files");
     }
 
@@ -188,12 +184,12 @@ public class NamespacePathMismatchTests
     {
         // Build two separate projects and manually compose a solution.
         var projectRoot = Path.Combine(Path.GetTempPath(), "ProjectA");
-        var workspace   = new AdhocWorkspace();
+        var workspace = new AdhocWorkspace();
 
-        Solution BuildProjectInSolution(Solution sln, string projName, string relFile, string content)
+        static Solution BuildProjectInSolution(Solution sln, string projName, string relFile, string content)
         {
             var root = Path.Combine(Path.GetTempPath(), projName);
-            var pid  = ProjectId.CreateNewId();
+            var pid = ProjectId.CreateNewId();
             var info = ProjectInfo.Create(pid, VersionStamp.Default, projName, projName, LanguageNames.CSharp)
                 .WithFilePath(Path.Combine(root, $"{projName}.csproj"))
                 .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
@@ -326,10 +322,10 @@ public class NamespacePathMismatchTests
         var report1 = await _engine.FindNamespacePathMismatchesAsync(solution, null);
         var report2 = await _engine.FindNamespacePathMismatchesAsync(solution, null);
 
-        Assert.That(report1.IsClean,       Is.EqualTo(report2.IsClean));
-        Assert.That(report1.TotalFiles,    Is.EqualTo(report2.TotalFiles));
+        Assert.That(report1.IsClean, Is.EqualTo(report2.IsClean));
+        Assert.That(report1.TotalFiles, Is.EqualTo(report2.TotalFiles));
         Assert.That(report1.MismatchCount, Is.EqualTo(report2.MismatchCount));
         Assert.That(report1.Warnings.Count, Is.EqualTo(report2.Warnings.Count));
-        Assert.That(report1.Errors.Count,   Is.EqualTo(report2.Errors.Count));
+        Assert.That(report1.Errors.Count, Is.EqualTo(report2.Errors.Count));
     }
 }

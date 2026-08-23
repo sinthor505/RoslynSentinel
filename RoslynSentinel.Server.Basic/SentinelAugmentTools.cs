@@ -13,7 +13,6 @@ public class SentinelAugmentTools
 {
     private readonly MsToolAugmentEngine _msToolAugmentEngine;
     private readonly ILogger<SentinelAugmentTools> _logger;
-
     public SentinelAugmentTools(
         MsToolAugmentEngine engine,
         ILogger<SentinelAugmentTools> logger)
@@ -21,20 +20,4 @@ public class SentinelAugmentTools
         _msToolAugmentEngine = engine;
         _logger = logger;
     }
-
-    // ── 1. EncapsulateFieldSafe ───────────────────────────────────────────────
-
-
-
-
-
-
-
-    // ── 6. FormatDocumentSafe ─────────────────────────────────────────────────
-
-
-    // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
-
-
-
 }

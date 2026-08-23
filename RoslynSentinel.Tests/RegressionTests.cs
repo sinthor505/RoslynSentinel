@@ -2,8 +2,6 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests;
 
 /// <summary>
@@ -99,7 +97,9 @@ public class RegressionTests
         Assert.That(result.ContainsKey("App.cs"), "App.cs must be included — call site needs rewriting");
         var callSite = result["App.cs"];
         // Arguments reordered: was (1,2,3) → c=3 first, so (3, 1, 2)
+#pragma warning disable CA1865 // Use char overload
         var arg3Pos = callSite.IndexOf("3", callSite.IndexOf("Add(", StringComparison.Ordinal), StringComparison.Ordinal);
+#pragma warning restore CA1865 // Use char overload
         var arg1Pos = callSite.IndexOf("1", arg3Pos, StringComparison.Ordinal);
         Assert.That(arg3Pos, Is.LessThan(arg1Pos), "Call site: reordered arg 3 must appear before 1");
     }
@@ -142,7 +142,7 @@ public class RegressionTests
             """;
         SetSource(source, "ReportService.cs");
 
-        var result = await _refactoringEngine.ExtractInterfaceAsync("ReportService.cs", "ReportService", "IReportService");
+        var result = await _refactoringEngine.ExtractInterfaceAsync("ReportService.cs", "ReportService", "IReportService", CancellationToken.None);
 
         var ifacePath = result.Keys.First(k => k != "ReportService.cs");
         var ifaceContent = result[ifacePath];

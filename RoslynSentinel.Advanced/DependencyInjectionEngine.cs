@@ -34,21 +34,10 @@ public class DependencyInjectionEngine
     public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-
-        if (classNode == null)
-        {
-            throw new InvalidOperationException($"Class not found: {className}");
-        }
-
+        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException($"Class not found: {className}");
         var reports = new List<DependencyReport>();
         var constructor = classNode.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
 
@@ -254,19 +243,9 @@ public class DependencyInjectionEngine
     public async Task<DocumentEditResult> AddDependencyAsync(FilePath filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null)
-        {
-            throw new InvalidOperationException($"Class '{className}' not found in file: {filePath}");
-        }
-
+        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException($"Class '{className}' not found in file: {filePath}");
         var fieldName = $"_{char.ToLower(dependencyName[0])}{dependencyName.Substring(1)}";
 
         // 1. Create the field

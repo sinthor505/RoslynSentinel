@@ -149,6 +149,8 @@ public class StandardRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> InvertBooleanAsync(FilePath filePath, string boolName, CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
+
         // Requires solution-wide reference tracking, logic implemented in AdvancedLogicEngine.
         return new DocumentEditResult
         {

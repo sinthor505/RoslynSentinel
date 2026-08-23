@@ -57,7 +57,10 @@ public readonly struct FilePath : IEquatable<FilePath>, IComparable<FilePath>
     // and strip stray wrapping quotes/whitespace. Preserves the leading \\ of UNC paths.
     public static string NormalizeWirePath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path)) return path;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return path;
+        }
 
         var trimmed = path;
         string previous;

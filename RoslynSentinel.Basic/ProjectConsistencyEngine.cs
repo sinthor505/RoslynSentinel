@@ -43,7 +43,7 @@ public class ProjectConsistencyEngine
     }
 
     private static async Task<List<ProjectConsistencyIssue>> CheckTargetFrameworkConsistencyAsync(
-        List<Project> projects, CancellationToken cancellationToken)
+        List<Project> projects, CancellationToken cancellationToken = default)
     {
         var issues = new List<ProjectConsistencyIssue>();
 

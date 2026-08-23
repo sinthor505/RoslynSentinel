@@ -81,8 +81,7 @@ public class SentinelWorkspaceTools
         }
     }
 
-    private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates, // RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+    private string UpdateFeaturesInternal(List<KeyValuePair<string, bool>> updates)
     {
         _config.BatchUpdateFeatureStatus(updates);
         return $"Updated {updates.Count} features.";
@@ -215,6 +214,7 @@ public class SentinelWorkspaceTools
     public ToolResult<List<SolutionFileInfo>> ListWorkspaceSolutions(string workspacePath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
         workspacePath = FilePath.NormalizeWirePath(workspacePath);
         if (!Directory.Exists(workspacePath))
         {
@@ -333,18 +333,20 @@ public class SentinelWorkspaceTools
     public List<string> ListExternalDiskChanges(// RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        return _workspaceManager.GetExternalDrift();
+        _ = cancellationToken;
+        return _workspaceManager.GetExternalFileChanges();
     }
 
-    [McpServerTool(Name = "ClearExternalDrift")]
+    [McpServerTool(Name = "AcknowledgeExternalFileChanges")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Clears the external-drift list after the AI has read the latest disk changes. No parameters.")]
-    public string ClearExternalDrift(// RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Clears the external-change list after the AI has read the latest file changes. No parameters.")]
+    public string AcknowledgeExternalFileChanges(// RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        var count = _workspaceManager.GetExternalDrift().Count;
-        _workspaceManager.ClearDrift();
-        return $"Cleared {count} tracked external change(s).";
+        _ = cancellationToken;
+        var count = _workspaceManager.GetExternalFileChanges().Count;
+        _workspaceManager.ClearExternalFileChanges();
+        return $"Cleared {count} tracked external file change(s).";
     }
 
     private static string PreviewFileContent(string content)
@@ -566,7 +568,7 @@ public class SentinelWorkspaceTools
             return new ToolResult<object>()
             {
                 Success = true,
-                Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount)
+                Data = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
             };
         }
         catch (Exception ex)
@@ -606,7 +608,7 @@ public class SentinelWorkspaceTools
                 BeforeSource = before,
             };
         }).ToList();
-        var blobName = await OperationBlobWriter.WriteAsync(toolName, changeId, items, _workspaceManager.GetSolutionRoot());
+        var blobName = await OperationBlobWriter.WriteAsync(toolName, changeId, items, _workspaceManager.GetSolutionRoot(), cancellationToken);
         // OperationBlobWriter returns a diagnostic string (not an exception) on failure.
         if (blobName.StartsWith('('))
         {
@@ -859,7 +861,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType);
+            var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
             return new ToolResult<object>()
             {
                 Success = true,
@@ -885,7 +887,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName);
+            var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
             return new ToolResult<object>()
             {
                 Success = true,
@@ -958,7 +960,7 @@ public class SentinelWorkspaceTools
             if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
                 var fullResult = new MethodSourceResult { Signature = signature, Source = methodSource, Attributes = attributes };
-                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.MethodSource);
+                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.MethodSource, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -1056,7 +1058,7 @@ public class SentinelWorkspaceTools
             if (textBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {
                 var fullResult = new FileSourceResult { FilePath = (string)filePath, StartLine = 1, EndLine = totalLines, TotalLines = totalLines, Source = fullText };
-                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.FileSource);
+                var stored = await ScanResultHelper.StoreScanResultAsync(fullResult, solutionRoot, ScanWrapperType.FileSource, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -1459,7 +1461,7 @@ public class SentinelWorkspaceTools
                 };
             }
 
-            var json = await File.ReadAllTextAsync(blobPath);
+            var json = await File.ReadAllTextAsync(blobPath, cancellationToken);
             var doc = JsonSerializer.Deserialize<JsonElement>(json);
             var allItems = doc.GetProperty("items").EnumerateArray().Select(e => JsonSerializer.Deserialize<OperationItemRecord>(e.GetRawText())!).ToList();
             IEnumerable<OperationItemRecord> filtered = allItems;
@@ -1637,8 +1639,10 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "ResetBreaker")]
     [Produces(DataTag.ResultOnly)]
     [Description("Resets the circuit breaker and all failure counters, re-enabling mutating tools. Only call after investigating and addressing the root cause of the failures that tripped the breaker.")]
-    public ToolResult<object> ResetBreaker(// RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+    public ToolResult<object> ResetBreaker(
+        // RequestContext<CallToolRequestParams> requestParams = null,
+        //CancellationToken cancellationToken = default
+        )
     {
         _workspaceManager.ResetBreaker();
         return new ToolResult<object>()
@@ -1651,8 +1655,10 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "GetBreakerStatus")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns the current circuit breaker state: severity (ok/caution/halt), trip-condition counters, and thresholds. Use to assess failure health before running large batch operations.")]
-    public ToolResult<object> GetBreakerStatus(// RequestContext<CallToolRequestParams> requestParams = null,
-    CancellationToken cancellationToken = default)
+    public ToolResult<object> GetBreakerStatus(
+        // RequestContext<CallToolRequestParams> requestParams = null,
+        //CancellationToken cancellationToken = default
+        )
     {
         return new ToolResult<object>()
         {
@@ -1671,6 +1677,7 @@ public class SentinelWorkspaceTools
     /// </summary>
     public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
         // Use CurrentSolution (sync, no throw) rather than GetBranchedSolutionAsync
         // to distinguish "no solution loaded" from "workspace error"
         Solution? currentSolution;

@@ -3,8 +3,6 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery;
 
@@ -144,7 +142,7 @@ public class BatteryTwentyTests
         var tempDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         var slnPath = Path.Combine(tempDir, "Test.sln");
-        File.WriteAllText(slnPath, "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
+        await File.WriteAllTextAsync(slnPath, "Microsoft Visual Studio Solution File, Format Version 12.00\n" +
             "Project(\"{2150E333-8FDC-42A3-9474-1A3956D46DE8}\") = \"Solution Items\", \"Solution Items\", \"{856FAB21-F17B-44B2-8638-072C8D796F07}\"\n" +
             "\tProjectSection(SolutionItems) = preProject\n" +
             "\t\tdocs\\plans\\PLAN.md = docs\\plans\\PLAN.md\n" +
@@ -365,7 +363,7 @@ public class BatteryTwentyTests
     [Test]
     public void ClearExternalDrift_Always_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => _tools.ClearExternalDrift());
+        Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges());
     }
 
     // --- ApplyDiff (consolidated: format × action; formerly named ProposedChange) ---

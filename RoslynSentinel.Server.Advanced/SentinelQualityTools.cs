@@ -64,6 +64,7 @@ public class SentinelQualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
         return toolName switch
         {
             "scan" => SentinelScanTools.ScanOptions(),
@@ -101,7 +102,7 @@ public class SentinelQualityTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName);
+            var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -132,7 +133,7 @@ public class SentinelQualityTools
 
         try
         {
-            var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName);
+            var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -173,7 +174,7 @@ public class SentinelQualityTools
         }
         try
         {
-            var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -190,7 +191,6 @@ public class SentinelQualityTools
             };
         }
     }
-
 
     // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
 
@@ -216,7 +216,7 @@ public class SentinelQualityTools
         }
         try
         {
-            var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter);
+            var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,

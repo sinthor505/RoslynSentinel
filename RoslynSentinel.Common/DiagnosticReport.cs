@@ -9,6 +9,11 @@ public record DiagnosticReport(
 
 public static class DiagnosticReportExtensions
 {
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true
+    };
+
     public static string ToInfo(this IEnumerable<DiagnosticInfo> diagnostics)
     {
         return string.Join(", ", diagnostics.Select(d => d.Message.ToString()));
@@ -16,10 +21,7 @@ public static class DiagnosticReportExtensions
 
     public static string ToJson(this IEnumerable<DiagnosticInfo> diagnostics)
     {
-        return System.Text.Json.JsonSerializer.Serialize(diagnostics, new System.Text.Json.JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        return System.Text.Json.JsonSerializer.Serialize(diagnostics, _jsonOptions);
     }
 }
 

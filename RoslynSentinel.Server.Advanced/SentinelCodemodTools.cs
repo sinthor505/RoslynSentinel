@@ -201,7 +201,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePath}'", filePath, cancellationToken);
+                            _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePath}'", filePath);
                             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{filePath}'") };
                         }
                     }
@@ -380,7 +380,7 @@ public class SentinelCodemodTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ApplyFileCodemod ({Transform}) failed", transform, cancellationToken);
+            _logger.LogError(ex, "ApplyFileCodemod ({Transform}) failed", transform);
             return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyFileCodemod ({transform})") };
         }
     }
@@ -497,7 +497,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath, cancellationToken);
+                            _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -587,7 +587,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath, cancellationToken);
+                            _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePath}'", methodName, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -742,7 +742,7 @@ public class SentinelCodemodTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ApplyMethodCodemod ({Transform}) failed for '{MethodName}'", transform, methodName, cancellationToken);
+            _logger.LogError(ex, "ApplyMethodCodemod ({Transform}) failed for '{MethodName}'", transform, methodName);
             return new ToolResult<object>
             {
                 Success = false,
@@ -808,7 +808,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath, cancellationToken);
+                            _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -869,7 +869,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath, cancellationToken);
+                            _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePath}'", className, filePath);
                             return new ToolResult<object>
                             {
                                 Success = false,
@@ -1093,7 +1093,7 @@ public class SentinelCodemodTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ApplyClassCodemod ({Transform}) failed for '{ClassName}'", transform, className, cancellationToken);
+            _logger.LogError(ex, "ApplyClassCodemod ({Transform}) failed for '{ClassName}'", transform, className);
             return new ToolResult<object>
             {
                 Success = false,
@@ -1227,7 +1227,7 @@ public class SentinelCodemodTools
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePath}'", className, filePath, cancellationToken);
+                            _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePath}'", className, filePath);
                             return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.Exception, $"{ex.GetType().Name}: {ex.Message}") };
                         }
                     }
@@ -1303,8 +1303,7 @@ public class SentinelCodemodTools
                             return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.InvalidArgument, "className (typeName) is required for generate_to_string_safe.") };
                         }
 
-                        IList<string>? memberList = members is null ? null
-                            : members.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        IList<string>? memberList = members?.Split(',', StringSplitOptions.RemoveEmptyEntries)
                                      .Select(m => m.Trim())
                                      .Where(m => m.Length > 0)
                                      .ToList();
@@ -1324,7 +1323,7 @@ public class SentinelCodemodTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Generate ({Kind}) failed", kind, cancellationToken);
+            _logger.LogError(ex, "Generate ({Kind}) failed", kind);
             return new ToolResult<object>() { Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Generate ({kind})") };
         }
     }

@@ -6,9 +6,11 @@ using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
+
 using ModelContextProtocol;
 
 namespace RoslynSentinel.Basic;
+
 public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record RenameHunk(int LineNumber, string Before, string After, string? ContextBefore, string? ContextAfter);
@@ -48,7 +50,7 @@ public class RefactoringEngine
     /// replaced node (via a tracking annotation), instead of the whole file. Prevents write-back
     /// paths from silently reformatting unrelated code and shifting line numbers below the edit.
     /// </summary>
-    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken)
+    private static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default)
     {
         var annotation = new SyntaxAnnotation();
         var annotatedNewNode = newNode.WithAdditionalAnnotations(annotation);
@@ -61,7 +63,7 @@ public class RefactoringEngine
     /// Removes <paramref name = "nodeToRemove"/> and formats only its former container (the nearest
     /// ancestor whose node identity survives the removal), instead of the whole file.
     /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken)
+    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
     {
         var container = nodeToRemove.Parent;
         if (container == null)
@@ -342,7 +344,8 @@ public class RefactoringEngine
             ({ } rv, true) => SyntaxFactory.ParseTypeName($"Task<{DisplayTypeForExtractedSignature(rv.Type)}>"),
             ({ } rv, false) => SyntaxFactory.ParseTypeName(DisplayTypeForExtractedSignature(rv.Type)),
             (null, true) => SyntaxFactory.ParseTypeName("Task"),
-            _ => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))};
+            _ => SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword))
+        };
         // Build parameter list — include ref/out/in modifiers for parameter symbols
         var paramSyntax = parameters.Select(sym =>
         {
@@ -405,7 +408,8 @@ public class RefactoringEngine
                 {
                     RefKind.Out => SyntaxFactory.Token(SyntaxKind.OutKeyword),
                     RefKind.In => SyntaxFactory.Token(SyntaxKind.InKeyword),
-                    _ => SyntaxFactory.Token(SyntaxKind.RefKeyword)};
+                    _ => SyntaxFactory.Token(SyntaxKind.RefKeyword)
+                };
                 arg = arg.WithRefKindKeyword(kw);
             }
 
@@ -483,7 +487,7 @@ public class RefactoringEngine
             return new Dictionary<FilePath, string>();
         }
 
-        var(newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
+        var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root!, typeNode);
         var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (ns != null)
         {
@@ -523,7 +527,7 @@ public class RefactoringEngine
         };
     }
 
-    private async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken)
+    private async Task<Dictionary<FilePath, string>> MoveAllTypesToFilesForDocumentAsync(Document document, CancellationToken cancellationToken = default)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
@@ -550,7 +554,7 @@ public class RefactoringEngine
         foreach (var typeNode in typesToMove)
         {
             var ns = typeNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-            var(newRoot, cleanTypeNode) = BuildSplitFileRoot(root, typeNode);
+            var (newRoot, cleanTypeNode) = BuildSplitFileRoot(root, typeNode);
             if (ns != null)
             {
                 var cleanNsName = SyntaxFactory.ParseName(ns.Name.ToString());
@@ -692,12 +696,7 @@ public class RefactoringEngine
         }
 
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
@@ -792,33 +791,51 @@ public class RefactoringEngine
         return new RenameSymbolResult(symbol.Name, newName, pendingChanges, fileChanges, null, updatedHandle);
     }
 
-    private static async Task<SymbolHandle?> TryResolveUpdatedHandleAsync(SymbolHandle handle, ISymbol originalSymbol, Solution updatedSolution, string newName, CancellationToken cancellationToken)
+    private static async Task<SymbolHandle?> TryResolveUpdatedHandleAsync(SymbolHandle handle, ISymbol originalSymbol, Solution updatedSolution, string newName, CancellationToken cancellationToken = default)
     {
         try
         {
             var originalLocation = originalSymbol.Locations.FirstOrDefault(l => l.IsInSource);
             if (originalLocation is null)
+            {
                 return null;
+            }
+
             var docId = updatedSolution.GetDocumentId(originalLocation.SourceTree!);
             if (docId is null)
+            {
                 return null;
+            }
+
             var updatedDoc = updatedSolution.GetDocument(docId);
             if (updatedDoc is null)
+            {
                 return null;
+            }
+
             var updatedRoot = await updatedDoc.GetSyntaxRootAsync(cancellationToken);
             var updatedModel = await updatedDoc.GetSemanticModelAsync(cancellationToken);
             if (updatedRoot is null || updatedModel is null)
+            {
                 return null;
+            }
+
             var originalSpanStart = originalLocation.SourceSpan.Start;
             var candidates = updatedRoot.DescendantTokens().Where(t => t.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.IdentifierToken) && t.Text == newName && Math.Abs(t.SpanStart - originalSpanStart) < 500);
             foreach (var token in candidates)
             {
                 var parentNode = token.Parent;
                 if (parentNode is null)
+                {
                     continue;
+                }
+
                 var declaredSymbol = updatedModel.GetDeclaredSymbol(parentNode, cancellationToken);
                 if (declaredSymbol is null)
+                {
                     continue;
+                }
+
                 var newDocCommentId = declaredSymbol.GetDocumentationCommentId();
                 if (newDocCommentId is not null)
                 {
@@ -975,7 +992,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceMemberAsync(FilePath filePath, string memberName, string newSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1046,7 +1063,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddMemberAsync(FilePath filePath, string containerName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1126,7 +1143,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveMemberAsync(FilePath filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1192,7 +1209,8 @@ public class RefactoringEngine
                     {
                         Outcome = EditOutcome.CannotRemove,
                         FilePath = filePath,
-                        Message = $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}"};
+                        Message = $"// ERROR: Cannot remove member '{memberName}' — it has {usageCount} usages in the solution.\n{root!.ToFullString()}"
+                    };
                 }
             }
         }
@@ -1303,7 +1321,8 @@ public class RefactoringEngine
                 {
                     Outcome = EditOutcome.TargetNotFound,
                     FilePath = filePath,
-                    Message = $"// {snippetError}"};
+                    Message = $"// {snippetError}"
+                };
             }
 
             target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0)).AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
@@ -1320,7 +1339,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Member '{memberName}' not found in '{Path.GetFileName(filePath)}'."};
+                Message = $"// Member '{memberName}' not found in '{Path.GetFileName(filePath)}'."
+            };
         }
 
         SyntaxNode newTarget;
@@ -1339,7 +1359,8 @@ public class RefactoringEngine
                     {
                         Outcome = EditOutcome.CannotConvert,
                         FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted."};
+                        Message = $"// Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted."
+                    };
                 }
             }
             else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
@@ -1355,7 +1376,8 @@ public class RefactoringEngine
                     {
                         Outcome = EditOutcome.CannotConvert,
                         FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement."};
+                        Message = $"// Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement."
+                    };
                 }
             }
             else
@@ -1364,7 +1386,8 @@ public class RefactoringEngine
                 {
                     Outcome = EditOutcome.CannotConvert,
                     FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body."};
+                    Message = $"// Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body."
+                };
             }
         }
         else // ToBlockBody
@@ -1386,7 +1409,8 @@ public class RefactoringEngine
                 {
                     Outcome = EditOutcome.CannotConvert,
                     FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property)."};
+                    Message = $"// Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property)."
+                };
             }
         }
 
@@ -1434,7 +1458,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
-                Message = $"// Error: {snippetError}"};
+                Message = $"// Error: {snippetError}"
+            };
         }
 
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
@@ -1617,7 +1642,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.NoChange,
                 FilePath = filePath,
-                Message = $"// '{existingName}' is already a local variable — nothing to extract."};
+                Message = $"// '{existingName}' is already a local variable — nothing to extract."
+            };
         }
 
         // Skip if expression has potential side effects (method calls, assignments)
@@ -1867,7 +1893,7 @@ public class RefactoringEngine
             };
         }
 
-        var root = (CompilationUnitSyntax? )await document.GetSyntaxRootAsync(cancellationToken);
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -1937,7 +1963,7 @@ public class RefactoringEngine
             };
         }
 
-        var root = (CompilationUnitSyntax? )await document.GetSyntaxRootAsync(cancellationToken);
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
             return new DocumentEditResult
@@ -1957,7 +1983,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Using directive '{namespaceName}' not found."};
+                Message = $"// Using directive '{namespaceName}' not found."
+            };
         }
 
         var newRoot = root.RemoveNode(existing, SyntaxRemoveOptions.KeepExteriorTrivia)!.NormalizeWhitespace();
@@ -1975,13 +2002,13 @@ public class RefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return[];
+            return [];
         }
 
-        var root = (CompilationUnitSyntax? )await document.GetSyntaxRootAsync(cancellationToken);
+        var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return[];
+            return [];
         }
 
         return root.Usings.Select(u => new UsingDirectiveInfo(Name: u.Name?.ToString() ?? "", IsStatic: u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword), Alias: u.Alias?.Name.ToString())).ToList();
@@ -2022,7 +2049,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Cannot edit: cannot parse file."};
+                Message = $"// Cannot edit: cannot parse file."
+            };
         }
 
         BaseTypeDeclarationSyntax? enumNode = null;
@@ -2046,7 +2074,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Cannot edit: enum '{enumName}' not found."};
+                Message = $"// Cannot edit: enum '{enumName}' not found."
+            };
         }
 
         var enumDecl = (EnumDeclarationSyntax)enumNode;
@@ -2069,7 +2098,8 @@ public class RefactoringEngine
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = $"// Cannot edit: '{valueText}' in '{token}' is not a valid integer explicit value."};
+                    Message = $"// Cannot edit: '{valueText}' in '{token}' is not a valid integer explicit value."
+                };
             }
 
             requested.Add((name, explicitValue));
@@ -2092,7 +2122,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Cannot edit: duplicate member name(s) in values: {string.Join(", ", duplicates)}."};
+                Message = $"// Cannot edit: duplicate member name(s) in values: {string.Join(", ", duplicates)}."
+            };
         }
 
         var existingMembers = enumDecl.Members.ToList();
@@ -2116,7 +2147,7 @@ public class RefactoringEngine
         }
 
         var newMembers = new List<EnumMemberDeclarationSyntax>();
-        foreach (var(name, explicitValue)in requested)
+        foreach (var (name, explicitValue) in requested)
         {
             EnumMemberDeclarationSyntax member = existingByName.TryGetValue(name, out var existingMember) ? existingMember : SyntaxFactory.EnumMemberDeclaration(name);
             if (explicitValue.HasValue)
@@ -2154,11 +2185,20 @@ public class RefactoringEngine
         var updatedText = await ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
         var summary = new List<string>();
         if (added.Count > 0)
+        {
             summary.Add($"added {string.Join(", ", added)}");
+        }
+
         if (removed.Count > 0)
+        {
             summary.Add($"removed {string.Join(", ", removed)}");
+        }
+
         if (reordered)
+        {
             summary.Add("reordered");
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -2169,7 +2209,7 @@ public class RefactoringEngine
         static int? GetExistingExplicitValue(EnumMemberDeclarationSyntax member) => member.EqualsValue?.Value is LiteralExpressionSyntax { Token.Value: int existingValue } ? existingValue : null;
     }
 
-    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePath filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2257,10 +2297,10 @@ public class RefactoringEngine
         }
 
         // Fallback: append
-        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePath filePath, string containerName, string beforeMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> InsertMemberBeforeAsync(FilePath filePath, string containerName, string beforeMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2347,10 +2387,10 @@ public class RefactoringEngine
             };
         }
 
-        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, newMemberSource, null, null, null, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddAttributeAsync(FilePath filePath, string targetName, string attributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2456,7 +2496,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2530,7 +2570,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ReplaceAttributeAsync(FilePath filePath, string targetName, string oldAttributeName, string newAttributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ReplaceAttributeAsync(FilePath filePath, string targetName, string oldAttributeName, string newAttributeSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2581,11 +2621,7 @@ public class RefactoringEngine
         try
         {
             var memberTarget = ResolveMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, m => m is not BaseTypeDeclarationSyntax);
-            targetNode = memberTarget;
-            if (targetNode == null)
-            {
-                targetNode = ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
-            }
+            targetNode = memberTarget ?? ResolveTypeByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
         }
         catch (InvalidOperationException ex)
         {
@@ -2616,7 +2652,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// Cannot edit: attribute '{oldAttributeName}' not found on target."};
+                Message = $"// Cannot edit: attribute '{oldAttributeName}' not found on target."
+            };
         }
 
         var newRoot = root.ReplaceNode(oldAttr, newAttr).NormalizeWhitespace();
@@ -2634,10 +2671,11 @@ public class RefactoringEngine
         {
             IdentifierNameSyntax id => id.Identifier.Text,
             QualifiedNameSyntax q => q.Right.Identifier.Text,
-            _ => attr.Name.ToString()};
+            _ => attr.Name.ToString()
+        };
     }
 
-    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveAttributeAsync(FilePath filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2706,7 +2744,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveBaseTypeAsync(FilePath filePath, string typeName, string baseTypeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2778,7 +2816,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> ChangeAccessibilityAsync(FilePath filePath, string targetName, string accessibility, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2858,7 +2896,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -2937,7 +2975,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveModifierAsync(FilePath filePath, string targetName, string modifier, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3015,7 +3053,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3251,14 +3289,14 @@ public class RefactoringEngine
         return (EditOutcome.Modified, null, string.Join(" ", lines));
     }
 
-    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddPropertyAsync(FilePath filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var setter = hasSetter ? (isInit ? " init;" : " set;") : "";
         var source = $"{accessibility} {propertyType} {propertyName} {{ get;{setter} }}";
-        return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, source, contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddFieldAsync(FilePath filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var parts = new System.Text.StringBuilder();
         parts.Append(accessibility);
@@ -3279,10 +3317,10 @@ public class RefactoringEngine
         }
 
         parts.Append(';');
-        return await AddMemberAsync(filePath, containerName, parts.ToString(), contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
+        return await AddMemberAsync(filePath, containerName, parts.ToString(), contextSnippet, lineBefore, lineAfter, cancellationToken);
     }
 
-    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> SortMembersAsync(FilePath filePath, string containerName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3333,7 +3371,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePath filePath, int startLine, int endLine, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3539,11 +3577,12 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ContextSnippet error: {ex.Message}"};
+                Message = $"// ContextSnippet error: {ex.Message}"
+            };
         }
     }
 
-    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, IProgress<ProgressNotificationValue>? progress = default, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePath filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3661,7 +3700,8 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             UpdatedText = newRoot.ToFullString(),
-            Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"};
+            Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
+        };
     }
 
     /// <summary>
@@ -3729,7 +3769,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// Constructor parameter '{paramName}' not found on '{className}'."};
+                Message = $"// Constructor parameter '{paramName}' not found on '{className}'."
+            };
         }
 
         // Locate the `<field> = <paramName>;` assignment this parameter feeds, so we know which
@@ -3748,7 +3789,7 @@ public class RefactoringEngine
         var newMembers = classDecl.Members.Select(m => m == ctor ? (MemberDeclarationSyntax)newCtor : m).ToList();
         if (fieldDecl != null)
         {
-            var semanticModel = await document.Project.GetCompilationAsync(cancellationToken)is { } compilation ? compilation.GetSemanticModel(root.SyntaxTree) : null;
+            var semanticModel = await document.Project.GetCompilationAsync(cancellationToken) is { } compilation ? compilation.GetSemanticModel(root.SyntaxTree) : null;
             var fieldSymbol = semanticModel?.GetDeclaredSymbol(fieldDecl.Declaration.Variables.First(), cancellationToken);
             var fieldStillUsedElsewhere = false;
             if (fieldSymbol != null)
@@ -3800,7 +3841,8 @@ public class RefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             UpdatedText = newRoot.ToFullString(),
-            Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"};
+            Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"
+        };
     }
 
     public record ConstructorParameterInfo(string ParamName, string ParamType, string? FieldName);
@@ -3961,7 +4003,8 @@ public class RefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ContextSnippet error: {ex.Message}"};
+                Message = $"// ContextSnippet error: {ex.Message}"
+            };
         }
     }
 
@@ -4156,7 +4199,8 @@ public class RefactoringEngine
                 ConstructorDeclarationSyntax => "constructor",
                 EventDeclarationSyntax or EventFieldDeclarationSyntax => "event",
                 IndexerDeclarationSyntax => "indexer",
-                _ => m.Kind().ToString()};
+                _ => m.Kind().ToString()
+            };
             var signature = m.WithLeadingTrivia().WithTrailingTrivia().ToFullString().Trim();
             var firstLineEnd = signature.IndexOfAny(['\n', '{', ';']);
             if (firstLineEnd > 0)
@@ -4215,10 +4259,13 @@ public class RefactoringEngine
 
         var previews = candidates.Take(3).Select(c =>
         {
-            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
             var text = c.ToString().Split('\n').First().Trim();
             if (text.Length > 50)
+            {
                 text = text.Substring(0, 47) + "...";
+            }
+
             return $"line {line} `{text}`";
         });
         var count = candidates.Count;
@@ -4235,10 +4282,13 @@ public class RefactoringEngine
 
         var previews = candidates.Take(3).Select(c =>
         {
-            var line = c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1 ?? -1;
+            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
             var text = c.ToString().Split('\n').First().Trim();
             if (text.Length > 50)
+            {
                 text = text.Substring(0, 47) + "...";
+            }
+
             return $"line {line} `{text}`";
         });
         var count = candidates.Count;
@@ -4596,7 +4646,7 @@ public class RefactoringEngine
         int gStart = changedLines[0], gEnd = changedLines[0];
         for (int k = 1; k < changedLines.Count; k++)
         {
-            if (changedLines[k] - gEnd <= contextLines * 2 + 1)
+            if (changedLines[k] - gEnd <= (contextLines * 2) + 1)
             {
                 gEnd = changedLines[k];
             }
@@ -4609,7 +4659,7 @@ public class RefactoringEngine
 
         groups.Add((gStart, gEnd));
         var hunks = new List<FormatHunk>();
-        foreach (var(start, end)in groups)
+        foreach (var (start, end) in groups)
         {
             var ctxBeforeStart = Math.Max(0, start - contextLines);
             var ctxBefore = Enumerable.Range(ctxBeforeStart, start - ctxBeforeStart).Select(l => original[l]).ToList();

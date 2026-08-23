@@ -55,11 +55,7 @@ public class BreakingChangeEngine
         else if (!string.IsNullOrEmpty(projectName))
         {
             var project = solution.Projects.FirstOrDefault(p =>
-                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
-            if (project == null)
-            {
-                throw new ArgumentException($"Project '{projectName}' not found in the solution.");
-            }
+                string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ArgumentException($"Project '{projectName}' not found in the solution.");
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else

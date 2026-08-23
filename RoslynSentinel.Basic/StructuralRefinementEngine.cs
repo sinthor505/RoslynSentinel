@@ -4,8 +4,6 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Text;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Basic;
 
 public class StructuralRefinementEngine
@@ -26,12 +24,7 @@ public class StructuralRefinementEngine
     public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new ToolNotFoundException($"File not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
         // Find PRIMARY type (first non-nested type in file)
@@ -237,7 +230,7 @@ public class StructuralRefinementEngine
     /// docs/TODO.md's "Duplicate/dead SafeDeleteSymbolAsync" entry). Returns a blocking
     /// <see cref="DocumentEditResult"/> if a match is found anywhere, otherwise null.
     /// </summary>
-    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePath filePath, ISymbol symbol, CancellationToken cancellationToken)
+    private static async Task<DocumentEditResult?> CheckReflectionRiskAsync(Solution solution, FilePath filePath, ISymbol symbol, CancellationToken cancellationToken = default)
     {
         foreach (var proj in solution.Projects)
         {
@@ -324,7 +317,7 @@ public class StructuralRefinementEngine
         }
 
         var node = root.DescendantNodes().FirstOrDefault(n =>
-            semanticModel.GetDeclaredSymbol(n, cancellationToken) == symbol);
+            SymbolEqualityComparer.Default.Equals(semanticModel.GetDeclaredSymbol(n, cancellationToken), symbol));
 
         if (node == null)
         {
@@ -350,6 +343,8 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
+
         // logic to remove from class, add to base...
         return new Dictionary<FilePath, string>();
     }
@@ -359,6 +354,8 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<Dictionary<FilePath, string>> PushMembersDownAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
+
         // logic to move to children...
         return new Dictionary<FilePath, string>();
     }

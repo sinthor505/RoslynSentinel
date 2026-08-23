@@ -138,7 +138,7 @@ public class SentinelSymbolTools
         {
             if (aspect == InspectSymbolAspect.info)
             {
-                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter);
+                var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (symbolInfo == null)
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "…" : contextSnippet;
@@ -201,12 +201,12 @@ public class SentinelSymbolTools
     {
         object result = searchKind switch
         {
-            FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName),
-            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath),
-            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency),
-            FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName),
-            FindUsagesSearchKind.typesWithAttribute => await _semanticSearchEngine.FindTypesByAttributeAsync(name),
-            FindUsagesSearchKind.methodsByReturnType => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name),
+            FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
+            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePath, cancellationToken),
+            FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePath, projectName, sortByFrequency, cancellationToken),
+            FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
+            FindUsagesSearchKind.typesWithAttribute => await _semanticSearchEngine.FindTypesByAttributeAsync(name, cancellationToken),
+            FindUsagesSearchKind.methodsByReturnType => await _semanticSearchEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
         };
 
@@ -321,6 +321,7 @@ public class SentinelSymbolTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
 
         try
@@ -402,7 +403,7 @@ public class SentinelSymbolTools
 
             if (kind == FindReferencesKind.callers)
             {
-                var result = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter);
+                var result = await _symbolNavigationEngine.FindCallersAsync(filePath, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -462,7 +463,7 @@ public class SentinelSymbolTools
             List<TypeMemberDetail>? members = null;
             if (include == TypeInfoInclude.hierarchy || include == TypeInfoInclude.both)
             {
-                hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName);
+                hierarchy = await _symbolNavigationEngine.GetTypeHierarchyAsync(typeName, projectName, cancellationToken);
                 if (hierarchy.Error is not null)
                 {
                     // GetTypeMembersDetailAsync silently returns an empty list for the same

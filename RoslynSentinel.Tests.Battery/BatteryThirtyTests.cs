@@ -9,32 +9,28 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 
-using NUnit.Framework;
-
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Tests.Battery;
 
 [TestFixture]
 [Category("Battery30")]
 public class B30_RegressionTests
 {
-    private PersistentWorkspaceManager _ws  = null!;
-    private SentinelConfiguration      _cfg = null!;
-    private ApiIntegrationEngine       _apiEngine = null!;
-    private ModernizationEngine        _modEngine = null!;
-    private ThreadSafetyEngine         _tsEngine  = null!;
-    private SyntaxUpgradeEngine        _suEngine  = null!;
+    private PersistentWorkspaceManager _ws = null!;
+    private SentinelConfiguration _cfg = null!;
+    private ApiIntegrationEngine _apiEngine = null!;
+    private ModernizationEngine _modEngine = null!;
+    private ThreadSafetyEngine _tsEngine = null!;
+    private SyntaxUpgradeEngine _suEngine = null!;
 
     [SetUp]
     public void Setup()
     {
-        _ws        = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _cfg       = new SentinelConfiguration();
+        _ws = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _cfg = new SentinelConfiguration();
         _apiEngine = new ApiIntegrationEngine(_ws);
         _modEngine = new ModernizationEngine(_ws, _cfg);
-        _tsEngine  = new ThreadSafetyEngine(_ws);
-        _suEngine  = new SyntaxUpgradeEngine(_ws, _cfg);
+        _tsEngine = new ThreadSafetyEngine(_ws);
+        _suEngine = new SyntaxUpgradeEngine(_ws, _cfg);
     }
 
     [TearDown]
@@ -127,12 +123,12 @@ public class Customer {
     public int Age { get; set; }
 }";
         SetSource(code, "Customer.cs");
-        var first  = await _apiEngine.AddValidationToPocoAsync("Customer.cs", "Customer");
+        var first = await _apiEngine.AddValidationToPocoAsync("Customer.cs", "Customer");
         SetSource(first.UpdatedText!, "Customer.cs");
         var second = await _apiEngine.AddValidationToPocoAsync("Customer.cs", "Customer");
 
         // Running twice must produce the same result — no extra attributes appended
-        var req1 = CountOccurrences(first.UpdatedText!,  "[Required]");
+        var req1 = CountOccurrences(first.UpdatedText!, "[Required]");
         var req2 = CountOccurrences(second.UpdatedText!, "[Required]");
         Assert.That(req2, Is.EqualTo(req1), "Second run must not add duplicate attributes");
     }
@@ -192,7 +188,7 @@ public class Config {
 
         // Must preserve both initializers
         Assert.That(result.UpdatedText!, Contains.Substring("localhost"), "Default value 'localhost' must survive ClassToRecord");
-        Assert.That(result.UpdatedText!, Contains.Substring("8080"),      "Default value 8080 must survive ClassToRecord");
+        Assert.That(result.UpdatedText!, Contains.Substring("8080"), "Default value 8080 must survive ClassToRecord");
         // Should be a class-body record, not positional
         Assert.That(result.UpdatedText!, Does.Not.Contain("record Config("), "Should NOT use positional syntax when initializers exist");
     }
@@ -211,11 +207,11 @@ public class Item {
         SetSource(code, "Item.cs");
         var result = await _modEngine.ClassToRecordAsync("Item.cs", "Item");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("[Required]"),   "Must preserve [Required]");
+        Assert.That(result.UpdatedText!, Contains.Substring("[Required]"), "Must preserve [Required]");
         Assert.That(result.UpdatedText!, Contains.Substring("[Range(0, 999)]"), "Must preserve [Range]");
         Assert.That(result.UpdatedText!, Contains.Substring("string.Empty"), "Must preserve string.Empty initializer");
-        Assert.That(result.UpdatedText!, Contains.Substring("= 1"),          "Must preserve numeric initializer");
-        Assert.That(result.UpdatedText!, Contains.Substring("record Item"),  "Must be a record");
+        Assert.That(result.UpdatedText!, Contains.Substring("= 1"), "Must preserve numeric initializer");
+        Assert.That(result.UpdatedText!, Contains.Substring("record Item"), "Must be a record");
     }
 
     [Test]
@@ -367,10 +363,10 @@ public class Entity {
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Entity.cs");
 
         // Backing fields must be removed
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"),  "Backing field _name must be removed");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"),    "Backing field _count must be removed");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"), "Backing field _name must be removed");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"), "Backing field _count must be removed");
         // Properties must become auto-properties
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"),       "Properties must become auto-properties");
+        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Properties must become auto-properties");
     }
 
     [Test]
@@ -417,9 +413,9 @@ public class Auto {
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Auto.cs");
 
         // Must not expand auto-properties to backing fields
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"),  "Must NOT expand auto-prop to backing field");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"),    "Must NOT expand auto-prop to backing field");
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"),       "Auto-props must remain unchanged");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"), "Must NOT expand auto-prop to backing field");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"), "Must NOT expand auto-prop to backing field");
+        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Auto-props must remain unchanged");
     }
 
     [Test]
@@ -484,8 +480,8 @@ public class Vector { public double X { get; init; } public double Y { get; init
         var result = await _modEngine.ClassToRecordAsync("Vector.cs", "Vector");
 
         // Positional form should end with ; OR contain { }
-        bool hasSemicolon = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains(";");
-        bool hasBraces    = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains("{") && result.UpdatedText!.Contains("}");
+        bool hasSemicolon = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains(';');
+        bool hasBraces = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains('{') && result.UpdatedText!.Contains('}');
         Assert.That(hasSemicolon || hasBraces, Is.True,
             "Positional record must end with ; or contain braces");
     }

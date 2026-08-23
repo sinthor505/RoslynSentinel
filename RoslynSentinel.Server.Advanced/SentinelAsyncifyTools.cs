@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -285,7 +284,7 @@ public class SentinelAsyncifyTools
             bool hasMorePages = (offset + limit) < totalCount;
 
             var (offloaded, storedPath, scanId, allBytes) = await ScanResultHelper.StoreScanResultAsync(
-                allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList);
+                allFindings, _workspaceManager.GetSolutionRoot(), ScanWrapperType.MigrationCandidateFindingList, cancellationToken);
 
             if (offloaded)
             {
@@ -510,7 +509,7 @@ public class SentinelAsyncifyTools
 
             var changeId = Guid.NewGuid().ToString("N")[..8];
             var blobName = await OperationBlobWriter.WriteAsync(
-                "remove_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot());
+                "remove_migration_candidates", changeId, items, _workspaceManager.GetSolutionRoot(), cancellationToken);
 
             var patternLabel = pattern == null ? "all patterns" : $"pattern={pattern}";
             var directive = engineResult.TotalRemoved == 0
@@ -1282,7 +1281,7 @@ public class SentinelAsyncifyTools
                         phaseBreakdown = r.PhaseBreakdown,
                     }).ToList(),
                 };
-                await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(summary, _debugDumpOptions));
+                await File.WriteAllTextAsync(summaryPath, JsonSerializer.Serialize(summary, _debugDumpOptions), cancellationToken);
             }
             catch { /* non-fatal */ }
         }
@@ -2145,12 +2144,12 @@ public class SentinelAsyncifyTools
             if (input.Scope == "project")
             {
                 var engineResult = await _asyncOptimizationEngine.FlagCandidatesInProjectAsync(
-                    input.ProjectName, input.Pattern, input.MinScore, input.DryRun, input.ForceRescan);
+                    input.ProjectName, input.Pattern, input.MinScore, input.DryRun, input.ForceRescan, progress, cancellationToken);
 
                 if (!input.DryRun && engineResult.Changes.Count > 0)
                 {
                     var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(
-                        engineResult.Changes, validateChanges: true);
+                        engineResult.Changes, validateChanges: true, cancellationToken: cancellationToken);
                     if (!applyResult1126.Success && applyResult1126.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes — skipping write",
                             applyResult1126.ValidationResult.Diagnostics.Count);
@@ -2949,6 +2948,11 @@ public class SentinelAsyncifyTools
                                 updatedSource = propagationResult.UpdatedText;
                         }
 
+                        if (string.IsNullOrEmpty(updatedSource))
+                        {
+                            throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} — {convertResult.Message}");
+                        }
+
                         var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
                             new Dictionary<FilePath, string> { { candidate.FilePath, updatedSource } },
                             validateChanges: true, cancellationToken: innerToken);
@@ -3235,7 +3239,7 @@ public class SentinelAsyncifyTools
         WriteSummary:;
         }
         catch (OperationCanceledException) when (innerToken.IsCancellationRequested
-                                                  && !(cancellationToken.IsCancellationRequested))
+                                                  && !cancellationToken.IsCancellationRequested)
         {
             stoppedEarly = true;
             if (stopReason.Length == 0)

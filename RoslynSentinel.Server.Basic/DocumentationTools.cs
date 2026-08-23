@@ -166,6 +166,7 @@ public class DocumentationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
+        _ = cancellationToken;
         try
         {
             var rateLimitError = _workspaceManager.CheckRateLimit("project_doc", 30);

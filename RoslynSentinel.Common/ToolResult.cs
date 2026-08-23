@@ -47,9 +47,9 @@ public record ToolResult<T>
     /// ReadFile's offload paths silently diverge from GetScanResult's expected file format).
     /// </summary>
     public static async Task<ToolResult<T>> ForPossiblyLargeDataAsync(
-        T data, string? solutionRoot, string resultType, ScanWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null)
+        T data, string? solutionRoot, string resultType, ScanWrapperType wrapperType, int? totalRecords = null, int? workspaceVersion = null, CancellationToken cancellationToken = default)
     {
-        var stored = await ScanResultHelper.StoreScanResultAsync(data, solutionRoot, wrapperType);
+        var stored = await ScanResultHelper.StoreScanResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
             return new ToolResult<T> { Success = true, Data = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion };

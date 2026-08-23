@@ -235,7 +235,7 @@ public class HealthOrchestrationEngineTests
     public async Task GenerateHealthReport_ReportHasStatusMessage()
     {
         var report = await _engine.GenerateComprehensiveHealthReportAsync();
-        Assert.That(report.StatusMessage, Is.Not.Null.Or.Empty,
+        Assert.That(report.StatusMessage, Is.Not.Null.And.Not.Empty,
             "report should contain a non-empty StatusMessage");
     }
 

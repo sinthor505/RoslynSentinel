@@ -39,7 +39,7 @@ public partial class CodeGenerationEngine
         _workspaceManager = workspaceManager;
     }
 
-    private JsonSerializerOptions defaultJsonSerializerOptions = new()
+    private readonly JsonSerializerOptions defaultJsonSerializerOptions = new()
     {
         WriteIndented = true
     };
@@ -371,12 +371,7 @@ public partial class CodeGenerationEngine
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
-        if (project == null)
-        {
-            throw new InvalidOperationException("Project not found.");
-        }
-
+        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
         // IConfiguration type names to recognise the receiver
@@ -506,19 +501,10 @@ public partial class CodeGenerationEngine
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            throw new FileNotFoundException($"File not found: {filePath}");
-        }
-
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
-        if (classNode == null)
-        {
-            throw new InvalidOperationException($"Class '{className}' not found.");
-        }
+        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException($"Class '{className}' not found.");
 
         // Determine namespace
         var ns = root?.DescendantNodes()

@@ -131,12 +131,7 @@ public class ImpactAnalyzer
     public async Task<List<string>> GetDataFlowAsync(FilePath filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            throw new FileNotFoundException($"Document not found: {filePath}");
-        }
-
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)
@@ -180,18 +175,12 @@ public class ImpactAnalyzer
         return report;
     }
 
-    private async Task<ImpactReport> FindSymbolRelationsAsync(FilePath filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken)
+    private async Task<ImpactReport> FindSymbolRelationsAsync(FilePath filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
-            .FirstOrDefault();
-
-        if (document == null)
-        {
-            throw new FileNotFoundException($"Document not found: {filePath}");
-        }
-
+            .FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)

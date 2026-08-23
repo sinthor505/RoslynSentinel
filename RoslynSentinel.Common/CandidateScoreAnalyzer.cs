@@ -22,7 +22,10 @@ public static class CandidateScoreAnalyzer
             ["76plus"] = 0,
         };
         foreach (var s in scores)
+        {
             buckets[s < 0 ? "<0" : s <= 25 ? "0-25" : s <= 50 ? "26-50" : s <= 75 ? "51-75" : "76plus"]++;
+        }
+
         return buckets;
     }
 
@@ -31,7 +34,13 @@ public static class CandidateScoreAnalyzer
     {
         int? min = null;
         foreach (var s in scores)
-            if (min is null || s < min) min = s;
+        {
+            if (min is null || s < min)
+            {
+                min = s;
+            }
+        }
+
         return min;
     }
 
@@ -40,7 +49,13 @@ public static class CandidateScoreAnalyzer
     {
         int? max = null;
         foreach (var s in scores)
-            if (max is null || s > max) max = s;
+        {
+            if (max is null || s > max)
+            {
+                max = s;
+            }
+        }
+
         return max;
     }
 }

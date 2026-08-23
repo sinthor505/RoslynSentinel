@@ -19,20 +19,14 @@ public class InventoryEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
+        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
                                .Select(solution.GetDocument)
-                               .FirstOrDefault();
-
-        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
-        if (document == null)
-        {
-            document = solution.Projects
+                               .FirstOrDefault() ?? solution.Projects
                 .SelectMany(p => p.Documents)
                 .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
                                      string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
                                                    StringComparison.OrdinalIgnoreCase));
-        }
-
         if (document == null)
         {
             var existsOnDisk = File.Exists(normalizedPath);
@@ -60,20 +54,14 @@ public class InventoryEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
+        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
                                .Select(solution.GetDocument)
-                               .FirstOrDefault();
-
-        // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
-        if (document == null)
-        {
-            document = solution.Projects
+                               .FirstOrDefault() ?? solution.Projects
                 .SelectMany(p => p.Documents)
                 .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
                                      string.Equals(Path.GetFullPath(d.FilePath), normalizedPath,
                                                    StringComparison.OrdinalIgnoreCase));
-        }
-
         if (document == null)
         {
             var existsOnDisk = File.Exists(normalizedPath);

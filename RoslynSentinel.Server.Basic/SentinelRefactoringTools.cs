@@ -240,7 +240,7 @@ public class SentinelRefactoringTools
             ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
             IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-            var result = await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType, progress: progress, cancellationToken);
+            var result = await _mappingEngine.GenerateMappingAsync(filePath, fromType, toType, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePath}'. Ensure both types exist in the solution.") };
 
@@ -318,7 +318,7 @@ public class SentinelRefactoringTools
                 ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
                 IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = 10.0f }, null, cancellationToken));
 
-                var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, progress, cancellationToken);
+                var result = await _refactoringEngine.ReplaceMemberAsync(filePath, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     string reason = result.Outcome switch

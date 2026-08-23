@@ -80,13 +80,14 @@ public class SentinelIntelligenceTools
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 10,
         [ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25,
         // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default
+        )
     {
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
         try
         {
-            var result = await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds);
+            var result = await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -114,7 +115,7 @@ public class SentinelIntelligenceTools
     {
         try
         {
-            var result = await _metricsEngine.GetSolutionMetricsAsync(projectName);
+            var result = await _metricsEngine.GetSolutionMetricsAsync(projectName, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -145,7 +146,7 @@ public class SentinelIntelligenceTools
         try
         {
             //return await _inventoryEngine.GetCodeInventoryAsync(filePath);
-            var results = await _inventoryEngine.GetCodeInventoryAsync(filePath);
+            var results = await _inventoryEngine.GetCodeInventoryAsync(filePath, cancellationToken);
 
             // convert results to json
             var jsonResults = System.Text.Json.JsonSerializer.Serialize(results);
@@ -162,7 +163,7 @@ public class SentinelIntelligenceTools
             else
             {
 
-                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport);
+                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport, cancellationToken);
                 return new ToolResult<object>
                 {
                     Success = true,
@@ -205,7 +206,7 @@ public class SentinelIntelligenceTools
         FilePath filePath = _workspaceManager.SetFilePath(filepath);
         try
         {
-            var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter);
+            var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -240,7 +241,7 @@ public class SentinelIntelligenceTools
         {
             if (direction == "forward")
             {
-                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth);
+                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth, cancellationToken);
                 if (fwd == null)
                 {
                     return new ToolResult<object>
@@ -314,7 +315,7 @@ public class SentinelIntelligenceTools
 
         try
         {
-            var result = await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath);
+            var result = await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath, cancellationToken);
             return new ToolResult<string>
             {
                 Success = true,
@@ -348,7 +349,7 @@ public class SentinelIntelligenceTools
 
         try
         {
-            var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber);
+            var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber, cancellationToken);
             return new ToolResult<object>
             {
                 Success = true,
@@ -365,5 +366,4 @@ public class SentinelIntelligenceTools
             };
         }
     }
-
 }

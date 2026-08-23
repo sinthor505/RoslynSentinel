@@ -4,8 +4,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
-using ModelContextProtocol;
-
 namespace RoslynSentinel.Common;
 
 public class ValidationEngine
@@ -58,7 +56,6 @@ public class ValidationEngine
     /// When errors are found, writes a blob to .roslynsentinel/validation/ for manual review.
     /// </summary>
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
-        IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -148,11 +145,15 @@ public class ValidationEngine
             foreach (var diagnostic in candidateCompilation.GetDiagnostics(cancellationToken))
             {
                 if (diagnostic.Severity != DiagnosticSeverity.Error)
+                {
                     continue;
+                }
 
                 Debug.WriteLine($"Found new error in project {candidateProject.Name}: {diagnostic.GetMessage()}");
                 if (!baselineErrors.Contains(DiagnosticKey(diagnostic)))
+                {
                     introducedDiagnostics.Add(diagnostic.ToInfo());
+                }
             }
         }
 
