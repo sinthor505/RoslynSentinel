@@ -6,8 +6,10 @@ public interface ICircuitBreaker
     /// <summary>Returns the current breaker summary, or null if the breaker has not tripped.</summary>
     BatchResultSummary? CheckBreaker();
     /// <summary>Human-readable directive describing what a caller should do given the current breaker state.</summary>
+    [Obsolete("No production caller. Reserved for external consumers; do not add new usages.")]
     string GetBreakerDirective();
     /// <summary>Severity tier of the current breaker state (e.g. "Caution", "Tripped").</summary>
+    [Obsolete("No production caller. Reserved for external consumers; do not add new usages.")]
     string GetBreakerSeverity();
     /// <summary>Full breaker status report including streak, rate, and rollback-score counters.</summary>
     BreakerStatusReport GetBreakerStatus();

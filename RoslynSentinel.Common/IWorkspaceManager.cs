@@ -6,18 +6,22 @@ public interface IWorkspaceManager :
     ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter,
     IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
-    /// <summary>Unique identifier for this workspace manager instance's session. No production caller as of this writing.</summary>
+    /// <summary>Unique identifier for this workspace manager instance's session.</summary>
     Guid SessionId { get; }
     /// <summary>Releases workspace resources. DI container owns lifetime; no production caller as of this writing.</summary>
     void Dispose();
     /// <summary>Checks whether sessionId matches this instance's session. No production caller as of this writing.</summary>
+    [Obsolete("No production caller. Reserved for external consumers; do not add new usages.")]
     bool IsCurrentSession(string sessionId);
     /// <summary>Resolves a symbol by its documentation-comment ID. Superseded by ResolveFromWireAsync; no production caller as of this writing.</summary>
+    [Obsolete("Superseded by ResolveFromWireAsync. No production caller; do not add new usages.")]
     Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default);
     /// <summary>Resolves a symbol by handle. Superseded by ResolveFromWireAsync; no production caller as of this writing.</summary>
+    [Obsolete("Superseded by ResolveFromWireAsync. No production caller; do not add new usages.")]
     Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken);
     /// <summary>Test-only seam: injects a solution directly, bypassing LoadSolutionAsync.</summary>
     void SetTestSolution(Solution solution);
     /// <summary>Associates a symbol handle with an agent for later lookup. No production caller as of this writing.</summary>
+    [Obsolete("No production caller. Reserved for external consumers; do not add new usages.")]
     void TrackSymbol(string agentHandle, SymbolHandle handle);
 }
