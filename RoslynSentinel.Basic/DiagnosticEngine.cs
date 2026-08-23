@@ -11,9 +11,9 @@ public record DiagnosticSummary(
 
 public class DiagnosticEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public DiagnosticEngine(IWorkspaceManager workspaceManager)
+    public DiagnosticEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

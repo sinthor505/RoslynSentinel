@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class IDEStyleEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public IDEStyleEngine(IWorkspaceManager workspaceManager)
+    public IDEStyleEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

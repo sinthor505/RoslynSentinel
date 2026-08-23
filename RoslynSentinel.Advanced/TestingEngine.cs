@@ -16,9 +16,9 @@ public record TestScaffoldResult(
 
 public class TestingEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public TestingEngine(IWorkspaceManager workspaceManager)
+    public TestingEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

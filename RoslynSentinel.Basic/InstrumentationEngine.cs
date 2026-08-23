@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class InstrumentationEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public InstrumentationEngine(IWorkspaceManager workspaceManager)
+    public InstrumentationEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -28,9 +28,9 @@ public record BreakingChange(
 /// </summary>
 public class BreakingChangeEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public BreakingChangeEngine(IWorkspaceManager workspaceManager)
+    public BreakingChangeEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

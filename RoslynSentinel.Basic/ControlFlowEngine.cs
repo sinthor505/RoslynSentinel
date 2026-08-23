@@ -40,9 +40,9 @@ public record EnumSwitchGap(
 
 public class ControlFlowEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ControlFlowEngine(IWorkspaceManager workspaceManager)
+    public ControlFlowEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }

@@ -13,10 +13,10 @@ public record MethodLocation(FilePath filePath, string TypeName, string MethodNa
 
 public class AnalysisEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
     private readonly SentinelConfiguration _config;
 
-    public AnalysisEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config)
+    public AnalysisEngine(ISolutionProvider workspaceManager, SentinelConfiguration config)
     {
         _workspaceManager = workspaceManager;
         _config = config;

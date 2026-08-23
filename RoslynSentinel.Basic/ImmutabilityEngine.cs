@@ -6,9 +6,9 @@ namespace RoslynSentinel.Basic;
 
 public class ImmutabilityEngine
 {
-    private readonly IWorkspaceManager _workspaceManager;
+    private readonly ISolutionProvider _workspaceManager;
 
-    public ImmutabilityEngine(IWorkspaceManager workspaceManager)
+    public ImmutabilityEngine(ISolutionProvider workspaceManager)
     {
         _workspaceManager = workspaceManager;
     }
