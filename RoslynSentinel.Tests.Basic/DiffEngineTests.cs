@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -13,7 +14,7 @@ public class DiffEngineTests
     [SetUp]
     public void Setup()
     {
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        var workspaceManager = new FakeWorkspaceManager();
         _diffEngine = new DiffEngine(workspaceManager);
     }
 
@@ -48,7 +49,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        var workspaceManager = new FakeWorkspaceManager();
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine(workspaceManager);
@@ -67,7 +68,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
+        var workspaceManager = new FakeWorkspaceManager();
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine(workspaceManager);
