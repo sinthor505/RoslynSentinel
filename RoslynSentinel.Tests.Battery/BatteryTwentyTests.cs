@@ -310,7 +310,8 @@ public class BatteryTwentyTests
     public async Task LoadSolution_NonExistentPath_ReturnsErrorString()
     {
         var result = await _tools.LoadSolution("fake_path.sln");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Success, Is.False, "nonexistent solution path should not succeed");
+        Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty, "should carry an error message");
     }
 
     // --- ListWorkspaceSolutions ---

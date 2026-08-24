@@ -202,10 +202,11 @@ public class ComprehensiveToolTests
     }
 
     [Test]
-    public async Task LoadSolution_ShouldReturnSuccess()
+    public async Task LoadSolution_NonExistentFile_ReturnsErrorResult()
     {
         var result = await _workspaceTools.LoadSolution("fake.sln");
-        Assert.That(result.Data, Contains.Substring("Solution loaded successfully") | Contains.Substring("Error"));
+        Assert.That(result.Success, Is.False, "fake.sln does not exist");
+        Assert.That(result.Error?.Message, Is.Not.Null.And.Not.Empty);
     }
 
     [Test]

@@ -95,7 +95,7 @@ public class MathHelper
 
         var result = await _engine.InvertBooleanAsync("Test.cs", "IsEnabled");
 
-        Assert.That(result.UpdatedText, Is.Empty, "InvertBoolean stub should return empty string");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "InvertBoolean stub should report CannotEdit");
     }
 }
 
@@ -159,8 +159,9 @@ public class OrderService
     public async Task FindTypesByAttribute_WithMatchingType_ReturnsResult()
     {
         SetSource(@"
+public class ApiControllerAttribute : System.Attribute { }
+
 [ApiController]
-[Route(""api/[controller]"")]
 public class ProductsController { }
 
 public class RegularClass { }
@@ -237,10 +238,8 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        var result = await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result");
-
-        Assert.That(result, Is.Empty,
-            "Engines return no file changes rather than throwing.");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _engine.ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
     }
 
     [Test]
@@ -265,10 +264,8 @@ public class Product
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
 
-        var result = await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string");
-
-        Assert.That(result, Is.Empty,
-            "Engines return no file changes for an unknown property rather than throwing.");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _engine.ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
     }
 
     [Test]

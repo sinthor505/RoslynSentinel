@@ -587,10 +587,8 @@ public class MetricsService
     {
         SetSource(@"public class C { public void Existing() { } }");
 
-        var result = await _engine.AddTryCatchToMethodAsync("Test.cs", "NonExistentMethod");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _engine.AddTryCatchToMethodAsync("Test.cs", "NonExistentMethod"));
     }
 
     // Helper: count non-overlapping occurrences of a substring

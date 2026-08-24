@@ -257,8 +257,12 @@ public class StructuralRefinementEngineTests
 
         var result = await _engine.SyncTypeAndFilenameAsync("Wrong.cs");
 
-        Assert.That(result.UpdatedText!, Does.StartWith("CHANGE_"), "Should propose a rename via staging change ID");
-        Assert.That(result.UpdatedText, Does.Contain("MyService.cs"), "Target filename should be the type name");
+        // The engine proposes the rename via Changes (new file path -> content) and Message,
+        // not UpdatedText — there is no "CHANGE_" staging id anywhere in the implementation.
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should propose a rename.");
+        var changeKey = result.Changes?.Keys.FirstOrDefault(k => k.Contains("MyService.cs"));
+        Assert.That(changeKey?.Absolute, Is.Not.Null.And.Not.Empty, "Target filename should be the type name");
+        Assert.That(result.Message, Does.Contain("MyService.cs"), "Message should describe the rename target");
     }
 
     [Test]

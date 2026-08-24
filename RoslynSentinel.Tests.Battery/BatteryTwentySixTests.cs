@@ -861,7 +861,7 @@ public class ImmutabilityGotchaTests
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             "Unknown class name must return the original file content, not null or empty.");
-        Assert.That(result, Does.Contain("RealClass"),
+        Assert.That(result.UpdatedText, Does.Contain("RealClass"),
             "The original class name must be present in the returned (unchanged) source.");
     }
 

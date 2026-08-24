@@ -278,8 +278,8 @@ public class UserService
         var result = await _engine.ConvertToSourceGeneratedLoggingAsync("UserService.cs", "UserService");
 
         Assert.That(result.UpdatedText, Does.Contain("GetName"), "Method should be unchanged");
-        Assert.That(result, Does.Not.Contain("partial"), "No logging calls — class should not be made partial");
-        Assert.That(result, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
+        Assert.That(result.UpdatedText, Does.Not.Contain("partial"), "No logging calls — class should not be made partial");
+        Assert.That(result.UpdatedText, Does.Not.Contain("LoggerMessage"), "Should not generate LoggerMessage attribute");
     }
 
     [Test]

@@ -406,10 +406,11 @@ public class Worker
     }
 
     [Test]
-    public async Task ConvertToSourceGeneratedLogging_NonExistentFile_ReturnsNullOrEmpty()
+    public async Task ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        await Assert.DoesNotThrowAsync(async () => await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
+        await Assert.ThrowsAsync<FileNotFoundException>(
+            async () => await _modernLoggingEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
     // --- SimplifyBooleanExpressions (via LogicOptimizationEngine) ---
@@ -504,10 +505,11 @@ public class Worker
     }
 
     [Test]
-    public async Task OptimizeToValueTask_NonExistentFile_ReturnsNullOrEmpty()
+    public async Task OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        await Assert.DoesNotThrowAsync(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
     }
 
     // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---

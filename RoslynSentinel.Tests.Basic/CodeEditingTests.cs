@@ -467,15 +467,21 @@ public class Bar
     [Test]
     public async Task RemoveAttribute_MatchesSuffixVariant()
     {
+        // RemoveAttributeAsync only targets members (methods/properties/fields), not whole
+        // type declarations, so the suffix-matching behavior ("Obsolete" matching
+        // "[ObsoleteAttribute]") must be exercised via a member, not the class itself.
         SetSource(@"
-[ObsoleteAttribute]
-public class Baz { }
+public class Baz
+{
+    [ObsoleteAttribute]
+    public void Run() { }
+}
 ", "Baz.cs");
 
-        var result = await _engine.RemoveAttributeAsync("Baz.cs", "Baz", "Obsolete");
+        var result = await _engine.RemoveAttributeAsync("Baz.cs", "Run", "Obsolete");
 
         Assert.That(result.UpdatedText, Does.Not.Contain("[ObsoleteAttribute]"));
-        Assert.That(result.UpdatedText, Does.Contain("public class Baz"));
+        Assert.That(result.UpdatedText, Does.Contain("public void Run()"));
     }
 
     // ══════════════════════════════════════════════════════════════

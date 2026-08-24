@@ -63,7 +63,7 @@ public class FinalRegressionTests
         // Should use staging (Changes dict keyed by new path) instead of direct File.Move
         Assert.That(result.Changes, Is.Not.Null.And.Not.Empty,
             "Should use staging mechanism via Changes dictionary");
-        Assert.That(result.Changes!.Keys.First(), Does.Contain("DataService.cs"),
+        Assert.That(result.Changes!.Keys.First().Absolute, Does.Contain("DataService.cs"),
             "Should identify primary type DataService");
     }
 

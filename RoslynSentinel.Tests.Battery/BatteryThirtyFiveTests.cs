@@ -65,8 +65,9 @@ public class Order
         var result = await _advancedStructuralEngine.ExtractClassAsync(
             "Order.cs", "Order", "Calculator", new[] { "Calculate" });
 
-        Assert.That(result, Does.ContainKey("Order.cs"), "Source file must be present in result");
-        var source = result["Order.cs"];
+        var orderKey = result.Keys.FirstOrDefault(k => k.Contains("Order.cs"));
+        Assert.That(orderKey.Absolute, Is.Not.Null.And.Not.Empty, "Source file must be present in result");
+        var source = result[orderKey!];
         // The internal call this.Calculate() should become Calculator.Calculate()
         Assert.That(source, Does.Contain("Calculator.Calculate"),
             "this.Calculate() should be rewritten to Calculator.Calculate()");
@@ -91,8 +92,9 @@ public class Processor
         var result = await _advancedStructuralEngine.ExtractClassAsync(
             "Proc.cs", "Processor", "Computer", new[] { "Compute" });
 
-        Assert.That(result, Does.ContainKey("Proc.cs"));
-        var source = result["Proc.cs"];
+        var procKey = result.Keys.FirstOrDefault(k => k.Contains("Proc.cs"));
+        Assert.That(procKey.Absolute, Is.Not.Null.And.Not.Empty);
+        var source = result[procKey!];
         // The bare call Compute() should become Computer.Compute()
         Assert.That(source, Does.Contain("Computer.Compute"),
             "Bare Compute() call should be rewritten to Computer.Compute()");
@@ -130,9 +132,11 @@ public class Foo
         var result = await _advancedStructuralEngine.ExtractClassAsync(
             "Foo.cs", "Foo", "StandaloneWorker", new[] { "Standalone" });
 
-        Assert.That(result, Does.ContainKey("Foo.cs"));
-        Assert.That(result, Does.ContainKey("StandaloneWorker.cs"));
-        Assert.That(result["StandaloneWorker.cs"], Does.Contain("Standalone"));
+        var fooKey = result.Keys.FirstOrDefault(k => k.Contains("Foo.cs"));
+        var workerKey = result.Keys.FirstOrDefault(k => k.Contains("StandaloneWorker.cs"));
+        Assert.That(fooKey.Absolute, Is.Not.Null.And.Not.Empty);
+        Assert.That(workerKey.Absolute, Is.Not.Null.And.Not.Empty);
+        Assert.That(result[workerKey!], Does.Contain("Standalone"));
     }
 
     // ======================================================================

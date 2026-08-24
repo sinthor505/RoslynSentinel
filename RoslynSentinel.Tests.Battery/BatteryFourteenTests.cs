@@ -32,7 +32,7 @@ public class AdvancedLogicEngineTests
         _mgr.SetTestSolution(solution);
 
         var result = await _engine.InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
-        Assert.That(result, Is.Empty, "unknown file should yield empty dictionary");
+        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound");
     }
 
     [Test]

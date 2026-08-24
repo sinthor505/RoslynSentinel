@@ -51,11 +51,11 @@ public class OrderService
 }");
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Test.cs");
 
-        Assert.That(result, Does.Contain("/// <summary>"), "Should add XML summary tags");
-        Assert.That(result, Does.Contain("GetOrderCount"), "Public method name should appear in TODO comment");
-        Assert.That(result, Does.Contain("DeleteOrder"), "Second public method should also get docs");
-        Assert.That(result, Does.Contain("<param name=\"userId\">"), "Should add <param> for each parameter");
-        Assert.That(result, Does.Contain("<returns>"), "Non-void return should get <returns> tag");
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"), "Should add XML summary tags");
+        Assert.That(result.UpdatedText, Does.Contain("GetOrderCount"), "Public method name should appear in TODO comment");
+        Assert.That(result.UpdatedText, Does.Contain("DeleteOrder"), "Second public method should also get docs");
+        Assert.That(result.UpdatedText, Does.Contain("<param name = \"userId\">"), "Should add <param> for each parameter");
+        Assert.That(result.UpdatedText, Does.Contain("<returns>"), "Non-void return should get <returns> tag");
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class Auditor
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Test.cs");
 
         // Private methods are filtered out — no summary should appear
-        Assert.That(result, Does.Not.Contain("/// <summary>"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("/// <summary>"),
             "Private methods should not receive XML doc stubs");
     }
 
@@ -163,10 +163,8 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     {
         SetSource("public class Foo { }", "Test.cs");
 
-        var result = await _engine.ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass");
-
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
-            "Engines report not-found through Outcome instead of throwing.");
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _engine.ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
     }
 
     [Test]

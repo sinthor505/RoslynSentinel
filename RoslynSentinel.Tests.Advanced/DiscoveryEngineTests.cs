@@ -286,13 +286,12 @@ public class Model
     }
 
     [Test]
-    public async Task GetPublicApiSurface_EmptyForUnknownProject()
+    public async Task GetPublicApiSurface_UnknownProject_Throws()
     {
         SetSource(@"public class A { }");
 
-        var results = await _discoveryEngine.GetPublicApiSurfaceAsync("NonExistentProject");
-
-        Assert.That(results, Is.Empty);
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await _discoveryEngine.GetPublicApiSurfaceAsync("NonExistentProject"));
     }
 
     [Test]

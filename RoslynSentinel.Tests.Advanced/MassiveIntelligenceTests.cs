@@ -58,7 +58,10 @@ public class MassiveIntelligenceTests
     [TestCase(5)]
     public async Task Search_ShouldFindTypesByAttribute(int id)
     {
-        SetSource($"[MyAttr] public class C{id} {{ }}", $"C{id}.cs");
+        // FindTypesByAttributeAsync resolves the attribute via the compilation's semantic
+        // model (compilation.GetTypeByMetadataName), so the attribute class must actually
+        // be declared/resolvable in source — not just referenced by name.
+        SetSource($"public class MyAttrAttribute : System.Attribute {{ }} [MyAttr] public class C{id} {{ }}", $"C{id}.cs");
         var results = await _searchEngine.FindTypesByAttributeAsync("MyAttr");
         Assert.That(results.Any(r => r.MemberName == $"C{id}"), Is.True);
     }

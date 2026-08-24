@@ -986,7 +986,10 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
 
         var result = await _advancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync("C.cs");
 
-        Assert.That(result.UpdatedText, Does.Not.Contain("$\""), "No concat means no interpolation should be introduced.");
+        // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset —
+        // no interpolation is introduced because there is nothing to rewrite.
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -1084,8 +1087,8 @@ public class C
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("C.cs");
 
         Assert.That(result.UpdatedText, Does.Contain("async"), "Already-async method should remain async.");
-        Assert.That(result, Does.Contain("await"), "Existing await must be preserved.");
-        Assert.That(result, Does.Not.Contain(".Result"), "No blocking calls to introduce.");
+        Assert.That(result.UpdatedText, Does.Contain("await"), "Existing await must be preserved.");
+        Assert.That(result.UpdatedText, Does.Not.Contain(".Result"), "No blocking calls to introduce.");
     }
 
     // ══════════════════════════════════════════════════════════════
