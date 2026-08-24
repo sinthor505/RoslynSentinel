@@ -1275,7 +1275,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
             else
             {
-                var project = FindContainingProject(CurrentSolution, filePath);
+                var project = SolutionProjectLocator.FindContainingProject(CurrentSolution, filePath);
                 if (project != null)
                 {
                     var docId = DocumentId.CreateNewId(project.Id);
@@ -1306,37 +1306,6 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
 
         return needsFullReload;
-    }
-
-    // Longest-prefix match: returns the project whose .csproj directory is the deepest
-    // ancestor of filePath, or null if no project contains it.
-    private static Project? FindContainingProject(Solution solution, string filePath)
-    {
-        Project? best = null;
-        int bestLen = -1;
-
-        foreach (var project in solution.Projects)
-        {
-            if (project.FilePath == null)
-            {
-                continue;
-            }
-
-            var projectDir = Path.GetDirectoryName(project.FilePath);
-            if (projectDir == null)
-            {
-                continue;
-            }
-
-            if (filePath.StartsWith(projectDir, StringComparison.OrdinalIgnoreCase) &&
-                projectDir.Length > bestLen)
-            {
-                best = project;
-                bestLen = projectDir.Length;
-            }
-        }
-
-        return best;
     }
 
     // Full MSBuild reload — runs outside the lock, re-acquires it only to swap CurrentSolution.

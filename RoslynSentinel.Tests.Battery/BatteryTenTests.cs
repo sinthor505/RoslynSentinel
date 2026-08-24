@@ -44,16 +44,57 @@ public class ValidationEngineTests
     }
 
     [Test]
-    public async Task ValidateChanges_FileNotFound_ReturnsErrorReport()
+    public async Task ValidateChanges_FileNotFound_PassesThroughWhenNoContainingProject()
     {
+        // "DoesNotExist.cs" is a bare relative filename with no project directory as an
+        // ancestor, so it can't be attributed to any project in the solution — there is no
+        // compilation to validate it against. This stays pass-through by design; see
+        // ValidateChanges_NewFileInKnownProject_* below for the case that IS now validated
+        // (a new file whose containing project CAN be inferred).
         var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
         {
             [new FilePath("DoesNotExist.cs")] = "public class X {}"
         });
 
-        Assert.That(result.Success, Is.False, "Missing file should not be valid");
-        Assert.That(result.Diagnostics.Any(d => d.Id == "RS001"), Is.True,
-            "Should include RS001 file-not-found diagnostic");
+        Assert.That(result.Success, Is.True,
+            "A new file with no attributable project can't be compiled, so it passes through");
+        Assert.That(result.Diagnostics, Is.Empty);
+    }
+
+    [Test]
+    public async Task ValidateChanges_NewFileInKnownProject_WithCompileError_ReturnsFalse()
+    {
+        var projectDir = Path.Combine(Path.GetTempPath(), "TestProj", "Source");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("Source", Path.Combine(projectDir, "Source.csproj"),
+            [("Greeter.cs", "public class Greeter { public string Greet() => \"Hello\"; }", Path.Combine(projectDir, "Greeter.cs"))]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var newFilePath = Path.Combine(projectDir, "NewFile.cs");
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        {
+            [new FilePath(newFilePath)] = "public class NewFile { public NoSuchType Field; }"
+        });
+
+        Assert.That(result.Success, Is.False, "A brand-new file with an unresolved type should fail validation");
+        Assert.That(result.Diagnostics, Is.Not.Empty, "At least one error diagnostic expected");
+    }
+
+    [Test]
+    public async Task ValidateChanges_NewFileInKnownProject_Valid_SucceedsWithNoErrors()
+    {
+        var projectDir = Path.Combine(Path.GetTempPath(), "TestProj", "Source");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("Source", Path.Combine(projectDir, "Source.csproj"),
+            [("Greeter.cs", "public class Greeter { public string Greet() => \"Hello\"; }", Path.Combine(projectDir, "Greeter.cs"))]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var newFilePath = Path.Combine(projectDir, "NewFile.cs");
+        var result = await _engine.ValidateChangesAsync(new Dictionary<FilePath, string>
+        {
+            [new FilePath(newFilePath)] = "public class NewFile { public string Name; }"
+        });
+
+        Assert.That(result.Success, Is.True, "A syntactically and semantically valid new file should pass");
+        Assert.That(result.Diagnostics, Is.Empty);
     }
 
     [Test]

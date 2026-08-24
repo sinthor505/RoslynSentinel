@@ -77,8 +77,12 @@ public class ValidationEngine
     /// workspace manager instance (e.g. from inside ApplyProposedChangesAsync using
     /// CurrentSolution, avoiding re-acquiring the solution lock).
     ///
-    /// Files not found in the solution (RS001) are treated as pass-through: the tool
-    /// cannot validate new files in-memory, so it allows them rather than blocking.
+    /// A new file (no existing Document for its path) is added into the candidate solution
+    /// so it participates in compilation like any edit — this is what lets brand-new files
+    /// with compile errors get caught here instead of being written to disk unvalidated.
+    /// Only a new file whose containing project can't be inferred (no existing project's
+    /// directory is an ancestor of its path) stays pass-through: there is no compilation to
+    /// check it against.
     /// </summary>
     public static async Task<DiagnosticReport> ValidateChangesAsync(
         Solution baseline, Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
@@ -97,7 +101,17 @@ public class ValidationEngine
 
             if (documentId == null)
             {
-                Debug.WriteLine($"File not found in solution, skipping in-memory validation: {filePath}");
+                var project = SolutionProjectLocator.FindContainingProject(baseline, filePath);
+                if (project == null)
+                {
+                    Debug.WriteLine($"New file does not belong to any project, skipping in-memory validation: {filePath}");
+                    continue;
+                }
+
+                var newDocumentId = DocumentId.CreateNewId(project.Id);
+                candidate = candidate.AddDocument(newDocumentId, Path.GetFileName(filePath),
+                    SourceText.From(newContent), filePath: filePath);
+                affectedProjectIds.Add(project.Id);
                 continue;
             }
 
