@@ -59,7 +59,7 @@ public class ImmutabilityEngineTests
 
         var result = await _engine.MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
 
-        Assert.That(result.UpdatedText, Is.Empty, "Unknown file should return empty string, not throw");
+        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText, not throw");
     }
 }
 

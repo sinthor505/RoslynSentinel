@@ -162,9 +162,8 @@ public class GranularRefactoringEngineTests
     [Test]
     public async Task InlineField_UnknownFile_ReturnsEmptyString()
     {
-        // InlineFieldAsync returns "" for an unknown file (not an error comment)
         var result = await _engine.InlineFieldAsync("NoSuchFile.cs", "_field");
-        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
     [Test]

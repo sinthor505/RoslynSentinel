@@ -100,8 +100,11 @@ namespace Avaal.Service
 
         var attrKey = changes.Keys.FirstOrDefault(fp => fp.Absolute.EndsWith("MigrationCandidateAttribute.cs", StringComparison.OrdinalIgnoreCase));
         Assert.That(attrKey.Absolute, Is.Not.Null.And.Not.Empty);
-        Assert.That(changes[attrKey], Does.Contain("namespace Avaal.Service"),
-            "Injected attribute class should use the namespace of the target file.");
+        // Attribute class is intentionally emitted in the global namespace (not the target
+        // file's namespace) to avoid CS0104 ambiguity when multiple copies are glob-included
+        // by an SDK-style project. See BuildMigrationCandidateAttributeSource.
+        Assert.That(changes[attrKey], Does.Not.Contain("namespace Avaal.Service"),
+            "Injected attribute class should use the global namespace, not the target file's namespace.");
     }
 
     [Test, CancelAfter(5000)]

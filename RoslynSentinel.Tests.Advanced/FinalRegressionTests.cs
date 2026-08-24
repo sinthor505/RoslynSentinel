@@ -60,10 +60,10 @@ public class FinalRegressionTests
 
         var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePath);
 
-        // Should use staging (CHANGE_ prefix) instead of direct File.Move
-        Assert.That(result.UpdatedText, Does.Contain("CHANGE_"),
-            "Should use staging mechanism with CHANGE_ prefix");
-        Assert.That(result.UpdatedText, Does.Contain("DataService.cs"),
+        // Should use staging (Changes dict keyed by new path) instead of direct File.Move
+        Assert.That(result.Changes, Is.Not.Null.And.Not.Empty,
+            "Should use staging mechanism via Changes dictionary");
+        Assert.That(result.Changes!.Keys.First(), Does.Contain("DataService.cs"),
             "Should identify primary type DataService");
     }
 

@@ -455,8 +455,9 @@ namespace MyApp
         var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync("WrongName.cs");
 
         Assert.That(result, Is.Not.Null, "Should return result");
-        // Should target DataService (primary type) or return a valid result
-        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return non-empty result");
+        // Should target DataService (primary type) and stage a rename via Changes
+        Assert.That(result.Changes, Is.Not.Null.And.Not.Empty, "Should return staged changes");
+        Assert.That(result.Changes!.Keys.First(), Does.Contain("DataService.cs"), "Should identify primary type DataService");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1546,7 +1547,7 @@ public class Startup
                 newVariableName: "orderId");
 
             // Should NOT produce duplicate var orderId = orderId;
-            Assert.That(result.UpdatedText, Does.Not.Contain("var orderId = orderId"),
+            Assert.That(result.UpdatedText, Is.Null.Or.Not.Contain("var orderId = orderId"),
                 "Must not produce a duplicate 'var orderId = orderId' declaration");
             // Should return no-op indicator
             Assert.That(result.Message, Does.Contain("already"),
@@ -1885,8 +1886,8 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "NonExistentMethod", "ToExpressionBody");
 
-            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
-                "Should return an error string when the named member does not exist");
+            Assert.That(result.Message, Does.Contain("not found"),
+                "Should return an error message when the named member does not exist");
         }
 
         // Bug: ConvertExpressionBody on multi-statement method → now returns error string
@@ -1905,8 +1906,8 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToExpressionBody");
 
-            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
-                "Should return an error string when method has multiple statements");
+            Assert.That(result.Message, Does.Contain("Cannot convert"),
+                "Should return an error message when method has multiple statements");
         }
 
         // Bug: ConvertExpressionBody ToBlockBody on already-block-body → now returns error string
@@ -1924,8 +1925,8 @@ public class TargetDto
             var result = await _refactoringEngine.ConvertExpressionBodyAsync(
                 "MyClass.cs", "GetName", "ToBlockBody");
 
-            Assert.That(result.UpdatedText!, Does.StartWith("Error:"),
-                "Should return an error string when converting ToBlockBody but already a block body");
+            Assert.That(result.Message, Does.Contain("Cannot convert"),
+                "Should return an error message when converting ToBlockBody but already a block body");
         }
 
         // Bug 2: PerformanceEngine missing += in loop

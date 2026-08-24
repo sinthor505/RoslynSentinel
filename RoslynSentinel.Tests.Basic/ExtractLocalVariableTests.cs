@@ -116,7 +116,7 @@ public class Person
         SetSource(source, "Test.cs");
         
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
-            "Test.cs", "this.Name", "personName", lineBefore: "return this.Name.ToUpperInvariant();");
+            "Test.cs", "this.Name", "personName");
         
         Assert.That(result.UpdatedText, Does.Contain("personName"), "Variable name must appear");
         Assert.That(result.UpdatedText, Does.Contain("var personName"), "Should declare with var");
@@ -252,8 +252,8 @@ public class Calculator
         var result = await _refactoringEngine.ExtractLocalVariableAsync(
             "Test.cs", "Add(5, 3)", "value");
         
-        // Should return empty for method call (has side effects)
-        Assert.That(result.UpdatedText, Is.Empty, 
+        // Should not modify source for method call (has side effects)
+        Assert.That(result.UpdatedText, Is.Null,
             "Should skip extraction of method calls due to potential side effects");
     }
 

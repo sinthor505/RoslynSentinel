@@ -278,7 +278,7 @@ public class OrdersController
 
         var result = await _engine.GenerateHttpClientForControllerAsync("Missing.cs", "MyController");
 
-        Assert.That(result.UpdatedText, Is.Empty, "Should return empty string when file not found");
+        Assert.That(result.UpdatedText, Is.Null, "Should return null when file not found");
     }
 
     [Test]
@@ -288,6 +288,6 @@ public class OrdersController
 
         var result = await _engine.GenerateHttpClientForControllerAsync("Test.cs", "MissingController");
 
-        Assert.That(result.UpdatedText, Is.Empty, "Should return empty string when controller class not found");
+        Assert.That(result.UpdatedText, Is.Null, "Should return null when controller class not found");
     }
 }

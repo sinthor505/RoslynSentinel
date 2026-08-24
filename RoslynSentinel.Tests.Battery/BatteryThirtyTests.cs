@@ -463,7 +463,7 @@ public class Registry {
         _cfg.SetFeatureStatus("FieldBackedProperties", false);
         SetSource("public class Test { public string X { get; set; } }", "Test.cs");
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Test.cs");
-        Assert.That(result.UpdatedText!, Is.Empty, "Disabled feature must return string.Empty");
+        Assert.That(result.UpdatedText, Is.Null, "Disabled feature must return null");
         _cfg.SetFeatureStatus("FieldBackedProperties", true);
     }
 

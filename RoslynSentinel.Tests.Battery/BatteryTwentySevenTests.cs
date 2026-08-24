@@ -501,9 +501,9 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 
         var result = await _engine.GenerateXmlDocumentationStubsAsync("Service.cs");
 
-        Assert.That(result, Does.Contain("/// <summary>"),
+        Assert.That(result.UpdatedText, Does.Contain("/// <summary>"),
             "Method inside #region must receive XML doc summary stub.");
-        Assert.That(result, Does.Contain("param name=\"input\""),
+        Assert.That(result.UpdatedText, Does.Contain("param name=\"input\""),
             "Method inside #region must receive XML doc <param> stub.");
     }
 

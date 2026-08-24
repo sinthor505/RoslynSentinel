@@ -151,7 +151,7 @@ class C {
     {
         SetSource("class C {}");
         var result = await _ideStyleEngine.UseNullPropagationAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -331,7 +331,7 @@ class C {
     {
         SetSource("class C {}");
         var result = await _modernizationEngine.UseThrowExpressionsAsync("Missing.cs");
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -460,7 +460,7 @@ class C {
     {
         SetSource("class C { void M() {} }");
         var result = await _granularEngine.RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1);
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     // ══════════════════════════════════════════════════════════════

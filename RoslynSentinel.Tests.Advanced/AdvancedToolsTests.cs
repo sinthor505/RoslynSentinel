@@ -183,8 +183,8 @@ public class C {
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
 
         // Should return unchanged (not add a second CancellationToken)
-        var ctCount = result.UpdatedText!.Split("CancellationToken").Length - 1;
-        Assert.That(ctCount, Is.LessThanOrEqualTo(2)); // type + param name
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoChange));
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]

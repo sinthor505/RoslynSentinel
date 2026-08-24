@@ -390,7 +390,7 @@ public class MyList {
         SetSource("public class X {}", "Known.cs");
         var result = await _granularRefactoringEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
 
-        Assert.That(result.UpdatedText, Is.Empty, "File not found should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "File not found should return null UpdatedText");
     }
 
     [Test]

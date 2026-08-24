@@ -218,9 +218,10 @@ public class DataService
 }");
         var result = await _engine.ConvertTupleToClassAsync("Test.cs", "GetData", "DataResult");
 
-        Assert.That(result, Does.ContainKey("Test.cs"), "Should return updated original file");
-        Assert.That(result["Test.cs"], Does.Contain("DataResult"), "Original file should reference new class name");
-        Assert.That(result["Test.cs"], Does.Not.Contain("(int Id, string Name)"), "Tuple return type should be replaced");
+        var originalKey = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
+        Assert.That(originalKey.Absolute, Is.Not.Null.And.Not.Empty, "Should return updated original file");
+        Assert.That(result[originalKey!], Does.Contain("DataResult"), "Original file should reference new class name");
+        Assert.That(result[originalKey!], Does.Not.Contain("(int Id, string Name)"), "Tuple return type should be replaced");
 
         var newClassKey = result.Keys.FirstOrDefault(k => k.Contains("DataResult.cs"));
         Assert.That(newClassKey.Absolute, Is.Not.Null.And.Not.Empty, "Should generate DataResult.cs");
@@ -253,9 +254,10 @@ public class Product
 }");
         var result = await _engine.ChangePropertyTypeAsync("Test.cs", "Product", "Price", "decimal");
 
-        Assert.That(result, Does.ContainKey("Test.cs"), "Should return changes for the modified file");
-        Assert.That(result["Test.cs"], Does.Contain("decimal Price"), "Property type should be updated to decimal");
-        Assert.That(result["Test.cs"], Does.Contain("string Name"), "Other properties should be unchanged");
+        var key = result.Keys.FirstOrDefault(k => k.Contains("Test.cs"));
+        Assert.That(key.Absolute, Is.Not.Null.And.Not.Empty, "Should return changes for the modified file");
+        Assert.That(result[key!], Does.Contain("decimal Price"), "Property type should be updated to decimal");
+        Assert.That(result[key!], Does.Contain("string Name"), "Other properties should be unchanged");
     }
 
     [Test]

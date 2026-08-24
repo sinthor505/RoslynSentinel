@@ -51,7 +51,7 @@ public class CodeStyleEngineTests
 
         var result = await _engine.ConvertPropertyToMethodsAsync("DoesNotExist.cs", "Name");
 
-        Assert.That(result.UpdatedText, Is.Empty, "Unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText");
     }
 
     [Test]
@@ -109,7 +109,7 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.AddBracesAsync("DoesNotExist.cs");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -215,7 +215,7 @@ public class RefactoringEngineTests
 
         var result = await _engine.FormatDocumentAsync("DoesNotExist.cs");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]

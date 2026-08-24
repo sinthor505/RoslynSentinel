@@ -229,7 +229,7 @@ public class CodeHealingEngineTests
     public async Task FixThreadSleep_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.FixThreadSleepAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText!, Is.EqualTo(string.Empty), "unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
     [Test]

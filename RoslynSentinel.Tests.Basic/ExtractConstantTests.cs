@@ -144,7 +144,7 @@ public class Settings
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "true", "IsDebugMode", "private", "return");
+            "Test.cs", "true", "IsDebugMode", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const bool IsDebugMode = true") |
                              Does.Contain("private const bool IsDebugMode = True"),
@@ -170,7 +170,7 @@ public class Range
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "1000", "MaxRange", "private", "value >");
+            "Test.cs", "1000", "MaxRange", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const int MaxRange = 1000"),
             "Should extract large integer literal");
@@ -195,7 +195,7 @@ public class Counter
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "0", "Zero", "private", "return");
+            "Test.cs", "0", "Zero", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const int Zero = 0"),
             "Should extract zero literal");
@@ -220,7 +220,7 @@ public class StringHelper
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "\"\"", "EmptyString", "private", "value ==");
+            "Test.cs", "\"\"", "EmptyString", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const string EmptyString = \"\""),
             "Should extract empty string literal");
@@ -242,7 +242,7 @@ public class PageSize
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "10", "DefaultSize", "private", "size ==");
+            "Test.cs", "10", "DefaultSize", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const int DefaultSize = 10"),
             "Should declare constant once");
@@ -267,7 +267,7 @@ public class Util
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "100", "MaxValue", "private", "value >");
+            "Test.cs", "100", "MaxValue", "private");
 
         Assert.That(result.UpdatedText, Does.Contain("private const int MaxValue = 100"),
             "Should use provided name for constant");
@@ -318,7 +318,7 @@ public class Logger
         SetSource(source, "Test.cs");
 
         var result = await _refactoringEngine.ExtractConstantAsync(
-            "Test.cs", "\"INFO\"", "LogLevel", "public", "Console.WriteLine");
+            "Test.cs", "\"INFO\"", "LogLevel", "public");
 
         Assert.That(result.UpdatedText, Does.Contain("public const string LogLevel = \"INFO\""),
             "Should apply public visibility modifier");

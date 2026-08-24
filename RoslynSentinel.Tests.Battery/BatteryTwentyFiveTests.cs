@@ -52,7 +52,7 @@ public class Calc {
 
         var result = await _engine.ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -439,7 +439,7 @@ public class Slicer {
 
         var result = await _engine.UseIndexFromEndAsync("NoSuchFile.cs");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 }
 
@@ -685,7 +685,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -708,7 +708,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.InlineParameterAsync("NoFile.cs", "Foo", "bar");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -731,7 +731,7 @@ public class GranularRefactoringEngineGapTests
 
         var result = await _engine.ConvertMethodToIndexerAsync("NoFile.cs", "Get");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -872,7 +872,7 @@ public class Cache {
 
         var result = await _engine.ConvertIndexerToMethodAsync("NoFile.cs");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -895,7 +895,7 @@ public class Cache {
 
         var result = await _engine.AddRemoveParamsAsync("NoFile.cs", "Foo");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]
@@ -1152,7 +1152,7 @@ public class Router {
 
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs");
 
-        Assert.That(result.UpdatedText, Is.Empty);
+        Assert.That(result.UpdatedText, Is.Null);
     }
 
     [Test]

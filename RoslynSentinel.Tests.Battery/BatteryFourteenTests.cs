@@ -43,7 +43,7 @@ public class AdvancedLogicEngineTests
         _mgr.SetTestSolution(solution);
 
         var result = await _engine.ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
-        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
     [Test]
@@ -147,7 +147,7 @@ public class AdvancedStructuralEngineTests
         _mgr.SetTestSolution(solution);
 
         var result = await _engine.ConvertAbstractClassToInterfaceAsync("NoSuchFile.cs", "MyBase");
-        Assert.That(result.UpdatedText!, Is.EqualTo(""), "unknown file should return empty string");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
     [Test]
