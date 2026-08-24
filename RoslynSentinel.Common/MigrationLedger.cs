@@ -8,9 +8,18 @@ public class LedgerOperation
 {
     public string Phase { get; set; } = "";
     /// <summary>First compiler diagnostic or exception message when the phase is a failure (e.g. BridgeValidationFail). Null for success phases.</summary>
-    public string? Reason { get; set; }
-    public DateTime Timestamp { get; set; }
-    public int Run { get; set; }
+    public string? Reason
+    {
+        get; set;
+    }
+    public DateTime Timestamp
+    {
+        get; set;
+    }
+    public int Run
+    {
+        get; set;
+    }
 }
 
 /// <summary>Accumulated history for a single method across all migration runs.</summary>
@@ -19,27 +28,51 @@ public class LedgerEntry
     public string Key { get; set; } = "";
     public string FilePath { get; set; } = "";
     public string MethodName { get; set; } = "";
-    public DateTime FirstSeen { get; set; }
-    public DateTime LastSeen { get; set; }
+    public DateTime FirstSeen
+    {
+        get; set;
+    }
+    public DateTime LastSeen
+    {
+        get; set;
+    }
     /// <summary>Total number of times any phase has touched this method. > 1 indicates re-entry.</summary>
-    public int HitCount { get; set; }
+    public int HitCount
+    {
+        get; set;
+    }
     public List<LedgerOperation> Operations { get; set; } = new();
 }
 
 /// <summary>Filtered view returned by <c>GetMigrationLedger</c>.</summary>
 public class LedgerSnapshot
 {
-    public int RunCount { get; set; }
-    public int TotalEntries { get; set; }
-    public int TotalOperations { get; set; }
+    public int RunCount
+    {
+        get; set;
+    }
+    public int TotalEntries
+    {
+        get; set;
+    }
+    public int TotalOperations
+    {
+        get; set;
+    }
     /// <summary>Number of methods touched more than once — the primary re-entry diagnostic.</summary>
-    public int RepeatedMethods { get; set; }
+    public int RepeatedMethods
+    {
+        get; set;
+    }
     public List<LedgerEntry> Entries { get; set; } = new();
 }
 
 internal class LedgerData
 {
-    public int RunCount { get; set; }
+    public int RunCount
+    {
+        get; set;
+    }
     public List<LedgerEntry> Entries { get; set; } = new();
 }
 
@@ -58,7 +91,7 @@ internal class LedgerData
 public class MigrationLedger
 {
     private readonly Dictionary<string, LedgerEntry> _entries = new();
-    private readonly object _lock = new();
+    private readonly Lock _lock = new Lock();
     private readonly SemaphoreSlim _saveLock = new(1, 1);
     private string? _solutionRoot;
     private bool _loaded;

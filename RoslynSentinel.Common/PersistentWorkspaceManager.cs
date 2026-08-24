@@ -64,7 +64,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private const double CautionRateThreshold = 0.15;
     private const int CautionRollbackScoreThreshold = 10;
 
-    private readonly object _breakerLock = new();
+    private readonly Lock _breakerLock = new();
     private bool _breakerOpen;
     private int _consecutiveFailureStreak;
     private int _totalAttempts;
