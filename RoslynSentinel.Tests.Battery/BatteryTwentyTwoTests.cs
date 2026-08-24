@@ -320,12 +320,20 @@ public class OrderService : IOrderService
     }
 
     // --- CheckPackageInconsistency (via DependencyEngine) ---
+    // Reads project.FilePath directly off disk (regexes <PackageReference> out of the raw
+    // .csproj XML — Roslyn's in-memory Project model has no NuGet-version API), so unlike the
+    // rest of this battery it can't run against TestSolutionBuilder's in-memory fake project
+    // path. Uses a real on-disk solution via TestSolutionFixture instead.
 
     [Test]
     public async Task CheckPackageInconsistency_ValidSolution_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
-        var result = await _dependencyEngine.CheckPackageInconsistencyAsync();
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+
+        var result = await dependencyEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Is.Not.Null);
     }
 

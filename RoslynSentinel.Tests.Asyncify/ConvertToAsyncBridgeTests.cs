@@ -33,6 +33,12 @@ public class ConvertToAsyncBridgeTests
         _workspaceManager.SetTestSolution(solution);
     }
 
+    private void SetMultipleFiles(params (string name, string content)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Happy-path: bridge structure
     // ══════════════════════════════════════════════════════════════════════════
@@ -439,20 +445,35 @@ public class Service
     }
 
     [Test, CancelAfter(5000)]
-    public async Task ConvertToAsyncBridge_OverrideMethod_AsyncOverloadStripsOverride()
+    public async Task ConvertToAsyncBridge_AbstractMethod_ThrowsInvalidOperation()
     {
         SetSource(@"
-using System.Threading.Tasks;
 public abstract class Base
 {
     public abstract void DoWork(string arg);
-}
+}", "Base.cs");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await _engine.ConvertToAsyncBridgeAsync("Base.cs", "DoWork"));
+    }
+
+    [Test, CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_OverrideMethod_AsyncOverloadStripsOverride()
+    {
+        SetMultipleFiles(
+            ("Base.cs", @"
+public abstract class Base
+{
+    public abstract void DoWork(string arg);
+}"),
+            ("Derived.cs", @"
 public class Derived : Base
 {
     public override void DoWork(string arg) { _ = arg; }
-}", "Service.cs");
+}")
+        );
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var result = await _engine.ConvertToAsyncBridgeAsync("Derived.cs", "DoWork");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
