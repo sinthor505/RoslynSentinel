@@ -8,14 +8,14 @@ idiosyncratic or overloaded terms that force the agent to read (or re-read) the 
 description every time.
 
 **Relationship to prior work:** This is a second pass, informed by the outcome of
-[plan-tool-rename-v1.md](plan-tool-rename-v1.md), which already executed a batch rename
+[plan-tool-rename-v1.md](../obsolete/plan-tool-rename-v1.md), which already executed a batch rename
 (e.g. `acknowledge_sync` → `clear_external_drift`, `get_external_changes` →
 `list_external_disk_changes`, `scan` → `run_scan_detector`, `list` → `list_solution_items`)
 and rewrote most tool descriptions. Some terms flagged below (`ClearExternalDrift`,
 `DescribeAdvancedToolOptions`'s lookup-table pattern) are the deliberate *result* of that
 pass, not unnoticed defects — they're included here because the terminology question is
 still open, not because the prior work missed them. See also
-[tool-disambiguation-survey-v1.md](tool-disambiguation-survey-v1.md) for the separate,
+[tool-disambiguation-survey-v1.md](../obsolete/tool-disambiguation-survey-v1.md) for the separate,
 unrelated defect-shape audit (name-only + silent-first-match + mutating tools) — that
 survey is about resolution *safety*, this document is about naming *clarity*. Do not conflate
 the two when scoping remediation.
@@ -138,8 +138,8 @@ across all dispatcher tools, rather than leaving the agent to discover the patte
 ## Out of scope for this document
 
 - Resolution-safety defects (name-only + silent-first-match + mutating tools) — tracked
-  separately in [tool-disambiguation-survey-v1.md](tool-disambiguation-survey-v1.md) and
-  [plan-tool-disambiguation-remediation-v1.md](plan-tool-disambiguation-remediation-v1.md).
+  separately in [tool-disambiguation-survey-v1.md](../obsolete/tool-disambiguation-survey-v1.md) and
+  [plan-tool-disambiguation-remediation-v1.md](../obsolete/plan-tool-disambiguation-remediation-v1.md).
   Do not fold naming changes and resolution-safety changes into the same change set; they
   have different risk profiles (naming is low-risk/cosmetic, resolution-safety changes
   affect mutation correctness).

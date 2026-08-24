@@ -522,3 +522,71 @@ implement the real logic: locate `className`'s base class via `INamedTypeSymbol.
 replace both documents — this is genuinely new logic (Roslyn has no public or internal "pull member
 up" refactoring service to delegate to), not a duplication-avoidance case.
 
+## New-file validation gap — closed (commit 1b00f3f)
+
+**Found:** documented at length in the now-`docs/obsolete/new-file-validation-gap-scope.md`. **Fixed:**
+commit `1b00f3f` ("Validate new files against their containing project's compilation") — added
+`RoslynSentinel.Common/SolutionProjectLocator.cs` (`FindContainingProject`) and wired it into
+`RoslynSentinel.Common/ValidationEngine.cs` so a brand-new file is added into the candidate `Solution`
+for validation instead of being `continue`-skipped. Also updated `RoslynSentinel.Tests.Battery/BatteryTenTests.cs`
+and `docs/known-failing-tests.{Basic,Solution}.txt`. Confirmed via `git show 1b00f3f` during the
+2026-08-24 docs reorganization pass; no further action needed.
+
+## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep
+
+**Found:** 2026-08-24, while auditing `docs/plan-normalize-whitespace-full-sweep-v1.md` (now filed
+`docs/obsolete/`) for the docs reorganization pass. That plan completed a sweep of `RoslynSentinel.Basic`
+but explicitly scoped out `RoslynSentinel.Advanced`'s ~64 occurrences of the same whole-file
+`NormalizeWhitespace()` pattern as deferred/out-of-scope, and no follow-up plan doc for the Advanced
+side exists anywhere in `docs/`.
+
+**Why this matters:** the Basic-side version of this bug caused real line-shift/re-indentation damage
+(see the plan doc's own root-cause writeup) before being fixed. If the same call pattern is still
+present ~64 times in `RoslynSentinel.Advanced` (not re-verified count-wise in this pass — worth a fresh
+grep for `NormalizeWhitespace()` before scoping work), those call sites carry the same latent risk and
+have simply not been hit by a repro yet.
+
+**Suggested approach:** grep `RoslynSentinel.Advanced` for `.NormalizeWhitespace()` calls that
+re-serialize a whole document (vs. a narrowly-scoped single-node call, which is fine), cross-check each
+against the Basic-side fix's shape (targeted formatting vs. whole-tree re-indent), and either confirm
+they're already narrow/safe or port the same fix pattern across.
+
+## Remaining `throw new` sites inside `[McpServerTool]`-adjacent code
+
+**Found:** 2026-08-24, while auditing `docs/spec-replace-throws-in-mcp-tools-v1.md` (kept in
+`docs/current/` as still-partial) for the docs reorganization pass. That spec's goal — replace
+exceptions thrown from MCP-tool-adjacent code with string/result returns so a caller doesn't have to
+catch — is not fully executed. Grep at the time of this pass found 11 remaining `throw new` sites:
+`Program.cs` (both `RoslynSentinel.Server.Basic` and `RoslynSentinel.Server.Advanced`, 1 each, line 19),
+`SentinelSymbolTools.cs:210`, `ServerStartupHelpers.cs:216`, `SentinelScanTools.cs:549`, and 6 sites in
+`SentinelAsyncifyTools.cs` (lines 2939, 2953, 2962, 3060, 3424, 3444).
+
+**Suggested approach:** re-grep `throw new` across both Server projects to get a current count (this
+list may already be smaller if fixed piecemeal since), then work through the remainder using the same
+result-shape conversion the rest of the spec already applied elsewhere.
+
+## Read-tool metadata envelope (`isComplete`/truncation flag) — entirely unimplemented
+
+**Found:** 2026-08-24, while auditing `docs/spec-read-tool-metadata-envelope-v1.md` (kept in
+`docs/current/`) for the docs reorganization pass. Zero `isComplete`/`IsTruncated`-style fields exist
+anywhere in the codebase — the spec's proposed metadata envelope for read tools (so a caller can tell
+whether a returned excerpt is the whole thing or was cut short) has not been started.
+
+**Suggested approach:** see the spec doc itself for the proposed shape; flagging here mainly so this
+doesn't get lost now that the originating spec lives outside `docs/TODO.md`'s usual discovery path.
+
+## Tool terminology/naming backlog — open, unactioned
+
+**Found:** 2026-08-24, while auditing `docs/tool-terminology-refinement-reference-v1.md` (kept in
+`docs/current/`) for the docs reorganization pass. That reference catalogs weak/ambiguous tool and
+parameter names (`GetBreakerStatus`, `GetMigrationLedger`, `ClearExternalDrift` vs. its sibling
+`ListExternalDiskChanges`'s inconsistent metaphor, the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
+untyped-string-discriminator family) and recommends, in order: (1) convert small/stable discriminator
+params to real enums; (2) standardize the "call `DescribeAdvancedToolOptions` first" wording across all
+wide dispatchers; (3) only then revisit the specific rename table. None of the three steps has been
+started as of this pass.
+
+**Suggested approach:** see the reference doc itself for the full weak-term table and confusable-group
+list; this entry exists so the backlog is discoverable from `TODO.md` without having to know the
+reference doc exists.
+
