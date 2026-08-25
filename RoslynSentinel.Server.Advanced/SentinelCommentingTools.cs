@@ -15,7 +15,7 @@ public class SentinelCommentingTools
     private readonly ILogger<SentinelCommentingTools> _logger;
 
     private const int DefaultMaxMembers = 200;
-    private const int DefaultMaxTokens = 120;
+    private const int DefaultMaxTokens = 2000;
 
     public SentinelCommentingTools(
         CommentingEngine commentingEngine,
@@ -165,7 +165,7 @@ public class SentinelCommentingTools
         // and staleMembers (they're maximally stale) — total scope size is the union of "already
         // tagged before this call" and "newly seeded this call".
         int totalMembers = alreadyTaggedAtSeedTime + seededCount;
-        int alreadyCurrentCount = alreadyTaggedAtSeedTime - staleMembers.Count(m => m.ExistingHash != null);
+        int alreadyCurrentCount = totalMembers - staleMembers.Count;
 
         if (dryRun)
         {

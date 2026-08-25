@@ -146,7 +146,7 @@ public class CommentingEngine
             foreach (var member in root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(IsTaggableMember))
             {
                 var hasTag = HasContentHashAttribute(member, out var existingHash);
-                var currentHash = ContentHasher.ComputeHash(member);
+                var currentHash = ComputeStableContentHash(member);
                 if (hasTag && existingHash == currentHash)
                 {
                     continue; // up to date
@@ -252,12 +252,22 @@ public class CommentingEngine
 
             // Hash the member's body as it stood before the doc-comment was added (the comment
             // itself isn't part of "content" for staleness purposes — only a body edit invalidates it).
-            var contentHash = ContentHasher.ComputeHash(site.Node);
+            // Deliberately does NOT call NormalizeWhitespace() on the result: newMember's leading
+            // trivia already holds the doc comment AddSummaryCommentCoreAsync just spliced in by hand
+            // (see the matching warning at RefactoringEngine.AddSummaryCommentCoreAsync), and a
+            // whole-tree normalize pass corrupts/drops that hand-built trivia. AddAttribute below
+            // gives the new [ContentHash] attribute list its own indent/newline trivia explicitly
+            // instead, so the tree never needs a blanket re-format. ComputeStableContentHash (not
+            // ContentHasher.ComputeHash directly) strips both the old [ContentHash] attribute and any
+            // doc-comment trivia before hashing, so this matches what FindStaleMembersAsync will
+            // recompute later from the post-write member on disk — hashing site.Node as-is here would
+            // bake in the old attribute's own (self-referential) hash value, which can never match.
+            var contentHash = ComputeStableContentHash(site.Node);
             var newAttr = BuildContentHashAttribute(contentHash);
             var strippedMember = RemoveContentHashAttribute(newMember);
             var taggedMember = AddAttribute(strippedMember, newAttr);
             var finalRoot = newRoot.ReplaceNode(newMember, taggedMember);
-            var finalText = finalRoot.NormalizeWhitespace().ToFullString();
+            var finalText = finalRoot.ToFullString();
 
             document = document.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(finalText));
             lastGoodText = finalText;
@@ -365,11 +375,26 @@ public class CommentingEngine
     /// <summary>Strips any existing <c>[ContentHash("Comment", ...)]</c> from <paramref name="member"/>, then appends <paramref name="newAttribute"/>.</summary>
     private static MemberDeclarationSyntax AddAttribute(MemberDeclarationSyntax member, AttributeSyntax newAttribute)
     {
-        return member.AddAttributeLists(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute)));
+        // Give the new attribute list the member's own indentation and a trailing newline explicitly
+        // — callers of this helper render the result via ToFullString() with no NormalizeWhitespace()
+        // pass to fix it up after the fact (see CommentFileAsync), so the trivia has to be right here.
+        var indentTrivia = member.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
+        var newAttrList = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute))
+            .WithLeadingTrivia(indentTrivia)
+            .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"));
+        return member.AddAttributeLists(newAttrList);
     }
 
     private static MemberDeclarationSyntax RemoveContentHashAttribute(MemberDeclarationSyntax member)
     {
+        // member's leading trivia (indentation, and — critically — a doc comment AddSummaryCommentCoreAsync
+        // may have just spliced in) is physically attached to the first token of the member's first
+        // AttributeList, not to the member node itself, whenever one is already present. Dropping that
+        // list wholesale (below, when it filters down to zero attributes) would silently discard that
+        // trivia along with it, so it's captured up front and reattached to whatever becomes the new
+        // first token afterward.
+        var originalLeadingTrivia = member.GetLeadingTrivia();
+
         var strippedLists = SyntaxFactory.List(
             member.AttributeLists
                 .Select(al =>
@@ -397,7 +422,37 @@ public class CommentingEngine
                 .Where(al => al != null)
                 .Select(al => al!));
 
-        return member.WithAttributeLists(strippedLists);
+        var strippedMember = member.WithAttributeLists(strippedLists);
+        return strippedLists.Count == member.AttributeLists.Count
+            ? strippedMember
+            : strippedMember.WithLeadingTrivia(originalLeadingTrivia);
+    }
+
+    /// <summary>
+    /// Hashes <paramref name="member"/>'s content for staleness comparison, excluding both the
+    /// <c>[ContentHash]</c> attribute itself (its value is self-referential — including it would
+    /// mean the hash never stabilizes) and any doc-comment trivia (per this engine's own contract,
+    /// the comment is tracked *output*, not input — only a body edit should invalidate the hash).
+    /// Must be used at every hash-compute site in this file so a hash stamped by
+    /// <see cref="CommentFileAsync"/> can still match what <see cref="FindStaleMembersAsync"/>
+    /// recomputes from the same member after the comment/attribute have landed on disk.
+    /// </summary>
+    private static string ComputeStableContentHash(MemberDeclarationSyntax member)
+    {
+        var stripped = RemoveContentHashAttribute(member);
+        var withoutDocComment = StripDocCommentTrivia(stripped);
+        return ContentHasher.ComputeHash(withoutDocComment);
+    }
+
+    /// <summary>Removes any <c>/// ...</c> single-line doc-comment trivia from <paramref name="member"/>'s leading trivia, keeping indentation/newlines intact.</summary>
+    private static MemberDeclarationSyntax StripDocCommentTrivia(MemberDeclarationSyntax member)
+    {
+        var leadingTrivia = member.GetLeadingTrivia();
+        var filtered = SyntaxFactory.TriviaList(leadingTrivia.Where(t =>
+            !t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) &&
+            !t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
+
+        return filtered.Count == leadingTrivia.Count ? member : member.WithLeadingTrivia(filtered);
     }
 
     /// <summary>Re-finds a member on a possibly-rewritten root by matching declaration kind + identifier text + original span start (best-effort, since ReplaceNode invalidates old node references).</summary>
