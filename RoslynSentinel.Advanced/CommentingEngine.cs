@@ -39,7 +39,9 @@ public class CommentingEngine
         string ContextSnippet,
         string? LineBefore,
         MemberDeclarationSyntax Node,
-        string? ExistingHash);
+        string? ExistingHash,
+        string? ContainingTypeName,
+        int NameOrdinal);
 
     // ── Phase 1: seed ────────────────────────────────────────────────────────
 
@@ -75,11 +77,29 @@ public class CommentingEngine
             bool fileChanged = false;
             var currentRoot = root;
 
-            foreach (var member in currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(IsTaggableMember).ToList())
+            // Track each original member's ordinal among same-kind/same-name siblings (e.g. the
+            // 2nd of 3 "Equals" overloads) up front, from the untouched original list — this is what
+            // lets FindEquivalentMember re-locate the *right* sibling below even after earlier
+            // iterations have rewritten currentRoot and shifted every later member's SpanStart.
+            var originalMembers = currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(IsTaggableMember).ToList();
+            var seenNameCounts = new Dictionary<(Type Kind, string Name), int>();
+            var memberOrdinals = new List<int>(originalMembers.Count);
+            foreach (var m in originalMembers)
             {
-                // Re-resolve the member on the possibly-already-rewritten root by identity span text,
-                // since ReplaceNode invalidates earlier node references once the tree changes.
-                var liveMember = FindEquivalentMember(currentRoot, member);
+                var name = GetTaggableMemberName(m);
+                var key = (m.GetType(), name ?? "");
+                seenNameCounts.TryGetValue(key, out var count);
+                memberOrdinals.Add(count);
+                seenNameCounts[key] = count + 1;
+            }
+
+            for (int i = 0; i < originalMembers.Count; i++)
+            {
+                var member = originalMembers[i];
+                // Re-resolve the member on the possibly-already-rewritten root by identity span text
+                // (falling back to same-kind/same-name/same-ordinal), since ReplaceNode invalidates
+                // earlier node references once the tree changes.
+                var liveMember = FindEquivalentMember(currentRoot, member, memberOrdinals[i]);
                 if (liveMember == null)
                 {
                     continue;
@@ -143,10 +163,22 @@ public class CommentingEngine
                 continue;
             }
 
+            // Ordinal among same-kind/same-name/same-containing-type siblings in this document's
+            // original root (e.g. the 2nd of 3 "Equals" overloads on FilePath) — overloaded
+            // methods/constructors share GetTaggableMemberName, so MemberName+ContainingTypeName
+            // alone can't tell CommentFileAsync's post-edit re-lookup which physical sibling this
+            // site refers to. See the matching note on FindEquivalentMember/FindEquivalentMemberByName.
+            var nameOrdinals = new Dictionary<(Type Kind, string Name, string? ContainingType), int>();
+
             foreach (var member in root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(IsTaggableMember))
             {
                 var hasTag = HasContentHashAttribute(member, out var existingHash);
                 var currentHash = ComputeStableContentHash(member);
+                var memberContainingType = member.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
+                var ordinalKey = (member.GetType(), GetTaggableMemberName(member) ?? "", memberContainingType);
+                nameOrdinals.TryGetValue(ordinalKey, out var thisOrdinal);
+                nameOrdinals[ordinalKey] = thisOrdinal + 1;
+
                 if (hasTag && existingHash == currentHash)
                 {
                     continue; // up to date
@@ -158,7 +190,20 @@ public class CommentingEngine
                     continue;
                 }
 
-                var lineSpan = member.GetLocation().GetLineSpan();
+                // member.GetLocation() spans from any attribute lists onward, so when a member
+                // already carries a [ContentHash] (or other) attribute, its "declaration line" would
+                // land on the attribute line instead — identical text across every seeded-but-not-
+                // yet-commented member in a file, which made ContextSnippet ambiguous downstream in
+                // AddSummaryCommentCoreAsync's snippet resolver (confirmed: solution-wide run on
+                // RoslynSentinel.Advanced hit "contextSnippet ambiguous (2+ candidates)" repeatedly on
+                // files with multiple already-seeded members or duplicate property names across
+                // sibling types). DeclarationStartToken skips past attribute lists to the member's own
+                // first token (a modifier or the type/return-type keyword) so the snippet always
+                // describes the actual signature line, which is what's unique.
+                var declStartToken = member.AttributeLists.Count > 0
+                    ? member.AttributeLists.Last().GetLastToken().GetNextToken()
+                    : member.GetFirstToken();
+                var lineSpan = declStartToken.GetLocation().GetLineSpan();
                 var lines = sourceText.Lines;
                 var declLineIndex = lineSpan.StartLinePosition.Line;
                 var declLineText = lines[declLineIndex].ToString();
@@ -171,7 +216,9 @@ public class CommentingEngine
                     ContextSnippet: declLineText,
                     LineBefore: lineBefore,
                     Node: member,
-                    ExistingHash: hasTag ? existingHash : null));
+                    ExistingHash: hasTag ? existingHash : null,
+                    ContainingTypeName: memberContainingType,
+                    NameOrdinal: thisOrdinal));
             }
         }
 
@@ -230,7 +277,7 @@ public class CommentingEngine
             }
 
             var editResult = await _refactoringEngine.AddSummaryCommentCoreAsync(
-                document, site.FilePath, site.MemberName, summary, site.ContextSnippet, site.LineBefore, null, cancellationToken);
+                document, site.FilePath, site.MemberName, summary, site.ContextSnippet, site.LineBefore, null, site.ContainingTypeName, cancellationToken);
 
             if (editResult.Outcome != EditOutcome.Modified || editResult.UpdatedText == null)
             {
@@ -243,7 +290,7 @@ public class CommentingEngine
             // AddSummaryCommentCoreAsync call (above) sees this one's comment already in place.
             var newTree = CSharpSyntaxTree.ParseText(editResult.UpdatedText);
             var newRoot = await newTree.GetRootAsync(cancellationToken);
-            var newMember = FindEquivalentMemberByName(newRoot, site.Node, site.MemberName);
+            var newMember = FindEquivalentMemberByName(newRoot, site.Node, site.MemberName, site.ContainingTypeName, site.NameOrdinal);
             if (newMember == null)
             {
                 outcomes.Add(new MemberCommentOutcome(site, false, "Could not re-locate member after AddSummaryComment to stamp ContentHash."));
@@ -309,7 +356,15 @@ public class CommentingEngine
 
     // ── Syntax helpers ───────────────────────────────────────────────────────
 
-    private static bool IsTaggableMember(MemberDeclarationSyntax member) => member switch
+    // ResolveMemberOrEnumMemberByNameOrSnippet (RefactoringEngine.cs) deliberately excludes
+    // interface-declared members from its name-based lookup — an interface method/property is a
+    // signature only, and callers targeting "Method X" almost always mean an implementation, not the
+    // interface's own declaration. Seeding/staleness-scanning still followed plain syntax-kind
+    // matching with no such exclusion, so every interface member got tagged [ContentHash] and then
+    // permanently failed AddSummaryComment with "target not found" on every subsequent call —
+    // confirmed live against ICircuitBreaker.cs/IRateLimiter.cs/ISolutionProvider.cs. Matching the
+    // resolver's own exclusion here means BulkComment never queues work it cannot possibly complete.
+    private static bool IsTaggableMember(MemberDeclarationSyntax member) => member.Parent is not InterfaceDeclarationSyntax && member switch
     {
         MethodDeclarationSyntax => true,
         ConstructorDeclarationSyntax => true,
@@ -455,8 +510,20 @@ public class CommentingEngine
         return filtered.Count == leadingTrivia.Count ? member : member.WithLeadingTrivia(filtered);
     }
 
-    /// <summary>Re-finds a member on a possibly-rewritten root by matching declaration kind + identifier text + original span start (best-effort, since ReplaceNode invalidates old node references).</summary>
-    private static MemberDeclarationSyntax? FindEquivalentMember(SyntaxNode currentRoot, MemberDeclarationSyntax original)
+    /// <summary>
+    /// Re-finds a member on a possibly-rewritten root by matching declaration kind + identifier text
+    /// + original span start (best-effort, since ReplaceNode invalidates old node references). Falls
+    /// back to <paramref name="nameOrdinal"/> — this member's 0-based position among same-kind/
+    /// same-name siblings in the *original*, unrewritten root — rather than a bare first-match:
+    /// overloaded methods/constructors share GetTaggableMemberName, so a name-only fallback always
+    /// resolved to sibling #0 once SpanStart drifted, silently re-tagging (or skipping, once already
+    /// tagged) the same overload on every later iteration and leaving other overloads never seeded at
+    /// all. Confirmed live: FilePath.cs's 3 "Equals" overloads (object?/string?/FilePath) — only the
+    /// first ever got a [ContentHash], the other two were never tagged across repeated solution-scope
+    /// runs, then permanently failed AddSummaryComment with "contextSnippet ambiguous" downstream
+    /// because there was nothing distinguishing an un-seeded candidate from an untagged one.
+    /// </summary>
+    private static MemberDeclarationSyntax? FindEquivalentMember(SyntaxNode currentRoot, MemberDeclarationSyntax original, int nameOrdinal)
     {
         var originalName = GetTaggableMemberName(original);
         if (originalName == null)
@@ -464,43 +531,77 @@ public class CommentingEngine
             return null;
         }
 
-        return currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>()
+        var bySpanStart = currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .Where(IsTaggableMember)
-            .FirstOrDefault(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == originalName && m.SpanStart == original.SpanStart)
-            // SpanStart can drift once earlier members in the same file were rewritten; fall back to
-            // first same-kind/same-name match, which is safe because SeedContentHashesAsync only
-            // reaches this fallback within a single member's own iteration (each member is looked up
-            // once, immediately before it's rewritten).
-            ?? currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                .Where(IsTaggableMember)
-                .FirstOrDefault(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == originalName);
+            .FirstOrDefault(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == originalName && m.SpanStart == original.SpanStart);
+        if (bySpanStart != null)
+        {
+            return bySpanStart;
+        }
+
+        var sameNameSiblings = currentRoot.DescendantNodes().OfType<MemberDeclarationSyntax>()
+            .Where(IsTaggableMember)
+            .Where(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == originalName)
+            .ToList();
+        return nameOrdinal < sameNameSiblings.Count ? sameNameSiblings[nameOrdinal] : sameNameSiblings.FirstOrDefault();
     }
 
-    private static MemberDeclarationSyntax? FindEquivalentMemberByName(SyntaxNode root, MemberDeclarationSyntax original, string memberName)
+    // Sibling types can declare identically-named, identically-shaped members (e.g. two records each
+    // with "public string CalleeMethod"), so a bare kind+name match here always picks the first
+    // occurrence in the file regardless of which member AddSummaryCommentCoreAsync actually just
+    // edited — confirmed live: the second of two identically-named properties got its real comment
+    // written by AddSummaryCommentCoreAsync (which does disambiguate by containing type), but this
+    // re-lookup then grabbed the *first* occurrence to stamp the ContentHash onto, silently
+    // overwriting/misplacing that occurrence's trivia and leaving the actually-edited member
+    // unhashed. containingTypeName narrows candidates the same way the resolver in RefactoringEngine
+    // does, only falling back to the unnarrowed set if nothing matches (should not normally happen,
+    // since it's the same hint AddSummaryCommentCoreAsync just used successfully).
+    private static MemberDeclarationSyntax? FindEquivalentMemberByName(SyntaxNode root, MemberDeclarationSyntax original, string memberName, string? containingTypeName, int nameOrdinal)
     {
-        return root.DescendantNodes().OfType<MemberDeclarationSyntax>()
+        var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
             .Where(IsTaggableMember)
-            .FirstOrDefault(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == memberName);
+            .Where(m => m.GetType() == original.GetType() && GetTaggableMemberName(m) == memberName)
+            .ToList();
+
+        if (containingTypeName != null && candidates.Count > 1)
+        {
+            var narrowed = candidates.Where(c => c.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text == containingTypeName).ToList();
+            if (narrowed.Count > 0)
+            {
+                candidates = narrowed;
+            }
+        }
+
+        // Same-type overloads (e.g. FilePath's 3 "Equals" methods) all pass the containingTypeName
+        // narrowing above identically, so nameOrdinal — this site's 0-based position among its
+        // original same-kind/same-name/same-containing-type siblings — is the only remaining way to
+        // pick the right physical sibling instead of always re-targeting the first one.
+        return nameOrdinal < candidates.Count ? candidates[nameOrdinal] : candidates.FirstOrDefault();
     }
 
     // ── Attribute class injection ────────────────────────────────────────────
 
     private static void InjectAttributeClassIfMissing(Solution solution, IReadOnlyList<Document> scopedDocuments, Dictionary<FilePath, string> changes)
     {
-        var alreadyDefined = solution.Projects
-            .SelectMany(p => p.Documents)
-            .Any(d => d.FilePath != null &&
-                      Path.GetFileName(d.FilePath).Equals($"{ContentHashAttributeSource.FullName}.cs", StringComparison.OrdinalIgnoreCase));
+        // Per-project, not solution-wide: [ContentHash] is a plain type, invisible across project
+        // boundaries without a reference, so each project that gets a member tagged needs its own
+        // copy of the source file. A solution-wide "already defined somewhere" check let the first
+        // touched project's copy silently starve every other project — confirmed live: a
+        // solution-scope BulkComment run seeded/attempted members in RoslynSentinel.Basic (which has
+        // no reference to RoslynSentinel.Advanced, where the file already existed) and every one of
+        // those files failed apply validation with dozens of CS0246-style diagnostics (the attribute
+        // type doesn't exist in that compilation) — 0 members actually committed in any such project.
+        var projectsWithAttribute = solution.Projects
+            .Where(p => p.Documents.Any(d => d.FilePath != null &&
+                      Path.GetFileName(d.FilePath).Equals($"{ContentHashAttributeSource.FullName}.cs", StringComparison.OrdinalIgnoreCase)))
+            .Select(p => p.Id)
+            .ToHashSet();
 
-        if (alreadyDefined)
-        {
-            return;
-        }
-
-        // Inject once per project touched by this batch — mirrors MigrationCandidate's per-project
-        // (project-root) placement so SDK-style glob-includes pick it up without duplication.
+        // Inject once per project touched by this batch that doesn't already have its own copy —
+        // mirrors MigrationCandidate's per-project (project-root) placement so SDK-style glob-includes
+        // pick it up without duplication.
         var touchedProjectDirs = scopedDocuments
-            .Where(d => changes.ContainsKey(d.FilePath!))
+            .Where(d => changes.ContainsKey(d.FilePath!) && !projectsWithAttribute.Contains(d.Project.Id))
             .Select(d => d.Project.FilePath)
             .Where(p => p != null)
             .Select(Path.GetDirectoryName)

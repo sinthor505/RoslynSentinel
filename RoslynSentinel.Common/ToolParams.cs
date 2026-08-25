@@ -50,6 +50,12 @@ public static class ToolParams
     public const string LineAfter =
         "Line immediately after contextSnippet. Used to disambiguate when the snippet appears multiple times.";
 
+    public const string ContainingTypeName =
+        "Optional. Only needed when the target's name AND contextSnippet are still ambiguous — e.g. " +
+        "two sibling types in the same file declare a same-named member with identical text (identical " +
+        "auto-properties on two records). Name of the type (class/struct/record/enum) that directly " +
+        "declares the target; narrows candidates before contextSnippet matching runs.";
+
     // Enum value sets
     public const string AccessibilityValues =
         "\"public\"|\"private\"|\"internal\"|\"protected\"|\"protected internal\"|\"private protected\"";

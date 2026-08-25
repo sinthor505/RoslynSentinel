@@ -3053,7 +3053,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> AddSummaryCommentAsync(FilePath filePath, string targetName, string summaryText, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3067,7 +3067,7 @@ public class RefactoringEngine
             };
         }
 
-        return await AddSummaryCommentCoreAsync(document, filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        return await AddSummaryCommentCoreAsync(document, filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
     }
 
     /// <summary>
@@ -3077,7 +3077,7 @@ public class RefactoringEngine
     /// (e.g. <c>CommentingEngine</c> commenting several members in the same file before a single
     /// disk write) reuse this logic without each call reading back the workspace's committed state.
     /// </summary>
-    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePath filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePath filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName, CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -3094,7 +3094,7 @@ public class RefactoringEngine
         SyntaxNode? target = null;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -3188,7 +3188,7 @@ public class RefactoringEngine
         return joined.Trim();
     }
 
-    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> RemoveSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3217,7 +3217,7 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -3260,7 +3260,7 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? SummaryText)> GetSummaryCommentAsync(FilePath filePath, string targetName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containingTypeName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -3279,7 +3279,7 @@ public class RefactoringEngine
         SyntaxNode? target;
         try
         {
-            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter);
+            target = ResolveMemberOrEnumMemberByNameOrSnippet(root, sourceText, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName);
         }
         catch (InvalidOperationException ex)
         {
@@ -4122,7 +4122,7 @@ public class RefactoringEngine
     // and is used only by those three methods — other tools (ReplaceMember, ModifyModifier, etc.)
     // keep using ResolveMemberByNameOrSnippet as-is, since they need MemberDeclarationSyntax-only
     // APIs (e.g. .Modifiers) that an enum member does not have.
-    private SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter)
+    private SyntaxNode? ResolveMemberOrEnumMemberByNameOrSnippet(SyntaxNode root, SourceText sourceText, string memberName, string? contextSnippet, string? lineBefore, string? lineAfter, string? containingTypeName = null)
     {
         var candidates = new List<SyntaxNode>();
         candidates.AddRange(root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(m => GetMemberName(m) == memberName && !(m.Parent is InterfaceDeclarationSyntax)));
@@ -4131,6 +4131,20 @@ public class RefactoringEngine
         if (candidates.Count > 1 && candidates.Any(c => c is ConstructorDeclarationSyntax))
         {
             candidates = candidates.Where(c => c is not BaseTypeDeclarationSyntax).ToList();
+        }
+
+        // Sibling types can declare members with byte-identical text (e.g. two records each with
+        // "public string Name { get; set; } = "";"), which no line-based contextSnippet can tell
+        // apart — narrowing by the member's own containing type first resolves that case without
+        // ever reaching snippet matching. Applied whenever the hint is given and actually narrows
+        // the set (never to an empty result, in case the caller's hint doesn't match reality).
+        if (containingTypeName != null && candidates.Count > 1)
+        {
+            var narrowed = candidates.Where(c => c.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text == containingTypeName).ToList();
+            if (narrowed.Count > 0)
+            {
+                candidates = narrowed;
+            }
         }
 
         if (contextSnippet == null || candidates.Count <= 1)

@@ -629,6 +629,7 @@ public class SentinelRefactoringTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.ContainingTypeName)] string? containingTypeName = null,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -640,7 +641,7 @@ public class SentinelRefactoringTools
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePath, targetName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                var (outcome, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePath, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
                     return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SummaryComment: {message}") };
                 return new ToolResult<object>() { Success = true, Data = new { SummaryText = text } };
@@ -652,8 +653,8 @@ public class SentinelRefactoringTools
             }
 
             var updated = operation == AddRemoveViewAction.add
-                ? await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText!, contextSnippet, lineBefore, lineAfter)
-                : await _refactoringEngine.RemoveSummaryCommentAsync(filePath, targetName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                ? await _refactoringEngine.AddSummaryCommentAsync(filePath, targetName, summaryText!, contextSnippet, lineBefore, lineAfter, containingTypeName)
+                : await _refactoringEngine.RemoveSummaryCommentAsync(filePath, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
 
             if (!autoStage)
             {
