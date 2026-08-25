@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using ModelContextProtocol.Extensions.Tasks;
+
 namespace RoslynSentinel.Server.Advanced
 {
     public class ServerStdio
@@ -82,6 +84,10 @@ namespace RoslynSentinel.Server.Advanced
                 {
                     mcpBuilder.WithStdioServerTransport();
                 }
+
+                mcpBuilder.WithTasks(
+                    new InMemoryMcpTaskStore(),
+                    o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
 
                 mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes);
 

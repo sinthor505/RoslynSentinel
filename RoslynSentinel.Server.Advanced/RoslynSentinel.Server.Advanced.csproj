@@ -20,6 +20,8 @@
 		<PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="5.9.0" />
 		<!-- HTTP transport for MCP -->
 		<PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+		<!-- MCP Tasks extension: lets long-running tools return a taskId handle instead of blocking -->
+		<PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
 		<!-- IHttpClientFactory (AddHttpClient<T>) for LmStudioClient -->
 		<PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
 		<!-- Logging -->

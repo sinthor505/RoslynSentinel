@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using ModelContextProtocol.Extensions.Tasks;
+
 namespace RoslynSentinel.Server.Advanced;
 
 public class ServerHttp
@@ -47,6 +49,9 @@ public class ServerHttp
         builder.Services.AddRoslynSentinelEnginesAdvanced();
 
         var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();
+        mcpBuilder.WithTasks(
+            new InMemoryMcpTaskStore(),
+            o => o.ExecutionModeSelector = RoslynSentinelTaskTools.SelectExecutionMode);
         mcpBuilder.AddRoslynSentinelToolsAdvanced(builder.Services, activeModes);
 
         var app = builder.Build();
