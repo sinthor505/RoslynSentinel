@@ -27,18 +27,12 @@ public class CommentingEngine
     // Each CompleteAsync call is a stateless HTTP round-trip to the (typically local) LLM server —
     // no shared state between calls — so a handful can run concurrently to keep a small local model
     // busier (a single forward pass batching multiple small inputs) without the KV-cache footprint
-    // of true request batching. Default of 2 is deliberately conservative; raise it via env var if
-    // the host has VRAM/compute headroom for more concurrent contexts. This only parallelizes the
-    // LLM calls themselves — CommentFileAsync's edit-application loop stays strictly sequential,
-    // since each member's AddSummaryCommentCoreAsync call must see the previous member's edit
-    // already applied to the document.
-    private static readonly int LlmParallelism = ParseLlmParallelism();
-
-    private static int ParseLlmParallelism()
-    {
-        var raw = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_PARALLELISM");
-        return int.TryParse(raw, out var value) && value > 0 ? value : 2;
-    }
+    // of true request batching. Default of 2 is deliberately conservative; raise it via --llm-parallelism
+    // or ROSLYNSENTINEL_LLM_PARALLELISM if the host has VRAM/compute headroom for more concurrent
+    // contexts (see LlmOptions). This only parallelizes the LLM calls themselves —
+    // CommentFileAsync's edit-application loop stays strictly sequential, since each member's
+    // AddSummaryCommentCoreAsync call must see the previous member's edit already applied to the document.
+    private static int LlmParallelism => LlmOptions.Parallelism;
 
     public CommentingEngine(ISolutionProvider workspaceManager, RefactoringEngine refactoringEngine, ILlmClient llmClient)
     {

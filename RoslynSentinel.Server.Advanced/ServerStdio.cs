@@ -31,6 +31,7 @@ namespace RoslynSentinel.Server.Advanced
         {
             // ── Arg parsing ──────────────────────────────────────────────────────
             ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
+            LlmOptions.Configure(args);
 
             if (ServerStartupHelpers.HandleListTools(args, activeModes))
             {

@@ -63,12 +63,10 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed
         // to its own HttpClient; the extra AddSingleton<ILlmClient> below forwards to that same
         // instance so CommentingEngine (which depends on the interface) resolves it.
-        var llmBaseUrl = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_BASE_URL") ?? "http://localhost:1234/v1";
-        var llmTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_TIMEOUT_SECONDS"), out var parsedTimeout) ? parsedTimeout : 30;
         services.AddHttpClient<LmStudioClient>(client =>
         {
-            client.BaseAddress = new Uri(llmBaseUrl.TrimEnd('/') + "/");
-            client.Timeout = TimeSpan.FromSeconds(llmTimeoutSeconds);
+            client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(LlmOptions.TimeoutSeconds);
         });
         services.AddSingleton<ILlmClient>(sp => sp.GetRequiredService<LmStudioClient>());
 

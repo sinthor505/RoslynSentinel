@@ -25,9 +25,9 @@ public sealed class LmStudioClient : ILlmClient
     {
         _httpClient = httpClient;
         _logger = logger;
-        _model = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_MODEL")
+        _model = LlmOptions.Model
             ?? throw new InvalidOperationException(
-                "ROSLYNSENTINEL_LLM_MODEL environment variable is required (LM Studio needs the loaded model's name).");
+                "The LLM model must be set via --llm-model or the ROSLYNSENTINEL_LLM_MODEL environment variable (LM Studio needs the loaded model's name).");
     }
 
     public async Task<string> CompleteAsync(string systemPrompt, string userPrompt, int maxTokens, CancellationToken cancellationToken = default)

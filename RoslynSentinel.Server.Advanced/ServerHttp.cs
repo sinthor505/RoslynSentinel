@@ -21,6 +21,7 @@ public class ServerHttp
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
+        LlmOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(args, activeModes))
         {
