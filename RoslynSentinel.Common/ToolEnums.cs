@@ -75,3 +75,8 @@ public enum AsyncMigrationPattern { AsyncBridgeCandidate, HandlerExtractCandidat
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum BuildVerifyLevel { noBuild, quickBuild, fullBuild }
+
+// ── Content hashing ───────────────────────────────────────────────────────────
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ContentHashPurpose { Comment }

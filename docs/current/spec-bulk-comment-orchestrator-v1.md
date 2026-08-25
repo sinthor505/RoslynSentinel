@@ -194,13 +194,39 @@ each member where `FindContentHashAsync` says the hash doesn't match current con
 2. Call `ILlmClient.CompleteAsync` with a fixed system prompt ("write a single-line
    XML summary comment describing what this code does") and the member's source as the
    user prompt.
-3. Apply via `RefactoringEngine.AddSummaryCommentAsync` (existing, reused as-is).
-4. Update `[ContentHash("Comment", newHash)]` via `SetContentHashAsync` in the same
-   edit pass as the comment insertion (single `ApplyProposedChangesAsync` per member,
-   so comment and hash never desync).
+3. Apply via `RefactoringEngine.AddSummaryCommentCoreAsync` (factored out of the
+   existing `AddSummaryCommentAsync` to accept a `Document` directly — see below).
+4. Update `[ContentHash("Comment", newHash)]` in the same edit pass as the comment
+   insertion, so comment and hash never desync.
 5. `CheckBreaker()` / `RecordBatchOutcome` around the batch, same as Asyncify — a
    member whose LLM call or apply fails gets recorded as skipped with a reason and the
    loop continues, it doesn't abort the run.
+
+**Apply granularity: per-file, not per-member.** `BulkComment` operates at file
+granularity — one `ApplyProposedChangesAsync` (disk write) per file, covering every
+stale member that file had this call — unlike the `*Async*` migration tools, which
+apply per-member because a single member's edit there can touch multiple files. A
+file with several stale members is processed by calling `AddSummaryCommentCoreAsync`
+once per member against one locally-evolving `Solution`/`Document` fork held in memory
+(seeded once from the branched solution, re-synced via `document.WithText(...)` after
+each member's edit lands) — so member N+1's snippet-disambiguation search sees member
+N's already-inserted comment — and only the final file text is handed to
+`ApplyProposedChangesAsync`, once, at the file boundary. This is why
+`AddSummaryCommentAsync` was split into a thin wrapper plus an
+`AddSummaryCommentCoreAsync` core that takes a `Document` parameter instead of always
+resolving one from `_workspaceManager.GetBranchedSolutionAsync()`: the wrapper's
+existing callers are unaffected, and `CommentingEngine.CommentFileAsync` calls the
+core directly against its own fork.
+
+*Alternative considered, deferred:* instead of re-invoking
+`AddSummaryCommentCoreAsync` per member against a re-synced local `Solution` fork,
+operate on one running `SyntaxNode`/text for the whole file and never touch a
+`Solution`/`Document` between members at all. That would avoid the per-member
+`WithText`/`GetSyntaxRootAsync` round-trip, but bypasses `AddSummaryComment`'s existing
+snippet-disambiguation machinery entirely, so it would need its own re-implementation
+of member re-location within the file. Worth revisiting once `BulkComment`'s real-world
+performance on multi-member files has been measured — for now, correctness and reuse
+of the existing disambiguation logic win over the extra in-memory round-trips.
 
 Guardrails mirroring `AsyncifyLoop`: `maxMembers` (default e.g. 200 per call, so one
 solution-scoped call over 1800 members doesn't run unbounded — caller can re-invoke,

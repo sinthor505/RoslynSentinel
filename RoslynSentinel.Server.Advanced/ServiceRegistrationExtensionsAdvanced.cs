@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol.Server;
@@ -56,6 +57,20 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         services.AddSingleton<PathDrivenTestEngine>();
         services.AddSingleton<AsyncBatchEngine>();
         services.AddSingleton<MigrationLedger>();
+        services.AddSingleton<CommentingEngine>();
+
+        // LmStudioClient talks to a locally-hosted LM Studio server (OpenAI-compatible
+        // /v1/chat/completions). AddHttpClient<LmStudioClient> registers the concrete type keyed
+        // to its own HttpClient; the extra AddSingleton<ILlmClient> below forwards to that same
+        // instance so CommentingEngine (which depends on the interface) resolves it.
+        var llmBaseUrl = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_BASE_URL") ?? "http://localhost:1234/v1";
+        var llmTimeoutSeconds = int.TryParse(Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_TIMEOUT_SECONDS"), out var parsedTimeout) ? parsedTimeout : 30;
+        services.AddHttpClient<LmStudioClient>(client =>
+        {
+            client.BaseAddress = new Uri(llmBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(llmTimeoutSeconds);
+        });
+        services.AddSingleton<ILlmClient>(sp => sp.GetRequiredService<LmStudioClient>());
 
         // ToolGraph + FailureRouter — pilot: scans SentinelAsyncifyTools for [Produces] attributes.
         ToolGraph toolGraph = BuildToolGraph(new[] { typeof(SentinelAsyncifyTools) });
@@ -169,6 +184,8 @@ public static class RoslynSentinelServiceExtensionsAdvanced
         {
             services.AddSingleton<SentinelGenerationTools>();
             mcpBuilder.WithTools<SentinelGenerationTools>();
+            services.AddSingleton<SentinelCommentingTools>();
+            mcpBuilder.WithTools<SentinelCommentingTools>();
         }
         if (activeModes.Contains("Refactor") || activeModes.Contains("Modernize") ||
             activeModes.Contains("Quality") || activeModes.Contains("Generation"))

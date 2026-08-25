@@ -3067,6 +3067,18 @@ public class RefactoringEngine
             };
         }
 
+        return await AddSummaryCommentCoreAsync(document, filePath, targetName, summaryText, contextSnippet, lineBefore, lineAfter, cancellationToken);
+    }
+
+    /// <summary>
+    /// Core of <see cref="AddSummaryCommentAsync"/>, factored out to accept a <see cref="Document"/>
+    /// directly instead of always resolving one from <c>_workspaceManager.GetBranchedSolutionAsync()</c>.
+    /// Lets a caller that's evolving its own local <see cref="Solution"/> fork across multiple edits
+    /// (e.g. <c>CommentingEngine</c> commenting several members in the same file before a single
+    /// disk write) reuse this logic without each call reading back the workspace's committed state.
+    /// </summary>
+    public async Task<DocumentEditResult> AddSummaryCommentCoreAsync(Document document, FilePath filePath, string targetName, string summaryText, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
