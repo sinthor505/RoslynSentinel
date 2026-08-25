@@ -24,6 +24,22 @@ public class CommentingEngine
         "does. Reply with ONLY the summary sentence itself — no XML tags, no markdown, no leading " +
         "'Summary:' label, no trailing period-only filler. Keep it under 25 words.";
 
+    // Each CompleteAsync call is a stateless HTTP round-trip to the (typically local) LLM server —
+    // no shared state between calls — so a handful can run concurrently to keep a small local model
+    // busier (a single forward pass batching multiple small inputs) without the KV-cache footprint
+    // of true request batching. Default of 2 is deliberately conservative; raise it via env var if
+    // the host has VRAM/compute headroom for more concurrent contexts. This only parallelizes the
+    // LLM calls themselves — CommentFileAsync's edit-application loop stays strictly sequential,
+    // since each member's AddSummaryCommentCoreAsync call must see the previous member's edit
+    // already applied to the document.
+    private static readonly int LlmParallelism = ParseLlmParallelism();
+
+    private static int ParseLlmParallelism()
+    {
+        var raw = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_LLM_PARALLELISM");
+        return int.TryParse(raw, out var value) && value > 0 ? value : 2;
+    }
+
     public CommentingEngine(ISolutionProvider workspaceManager, RefactoringEngine refactoringEngine, ILlmClient llmClient)
     {
         _workspaceManager = workspaceManager;
@@ -258,21 +274,27 @@ public class CommentingEngine
             return (null, fileMembers.Select(m => new MemberCommentOutcome(m, false, "Document not found.")).ToList());
         }
 
+        // Every site's member text comes from the shared, untouched original tree (site.Node), so
+        // the LLM calls themselves have no cross-site dependency and can run concurrently — only the
+        // edit-application loop below is inherently sequential (each AddSummaryCommentCoreAsync call
+        // must see the previous member's edit already folded into `document`). Bounding with
+        // LlmParallelism keeps a small local model's forward passes batched across a couple of
+        // requests instead of firing every member in the file at once. Indexed by position (not by
+        // MemberSite itself) since MemberSite is a record with structural equality over its Node —
+        // two sites with textually-identical members would collide as dictionary keys.
+        var summaries = await GetSummariesAsync(fileMembers, maxTokens, cancellationToken);
+
         string? lastGoodText = null;
 
-        foreach (var site in fileMembers)
+        for (int siteIndex = 0; siteIndex < fileMembers.Count; siteIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var site = fileMembers[siteIndex];
 
-            string summary;
-            try
+            var (summary, llmError) = summaries[siteIndex];
+            if (llmError != null)
             {
-                var memberText = site.Node.ToFullString().Trim();
-                summary = await _llmClient.CompleteAsync(CommentSystemPrompt, memberText, maxTokens, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                outcomes.Add(new MemberCommentOutcome(site, false, $"LLM call failed: {ex.Message}"));
+                outcomes.Add(new MemberCommentOutcome(site, false, $"LLM call failed: {llmError}"));
                 continue;
             }
 
@@ -324,6 +346,39 @@ public class CommentingEngine
         return (lastGoodText, outcomes);
     }
 
+    // Runs CompleteAsync for every site with at most LlmParallelism in flight at once, preserving
+    // fileMembers' original order in the result so CommentFileAsync's sequential apply loop can index
+    // straight into it. A failed call is captured as an error string rather than thrown, matching the
+    // per-member try/catch the sequential version used to do inline.
+    private async Task<(string Summary, string? Error)[]> GetSummariesAsync(
+        IReadOnlyList<MemberSite> fileMembers, int maxTokens, CancellationToken cancellationToken)
+    {
+        var results = new (string Summary, string? Error)[fileMembers.Count];
+        using var throttle = new SemaphoreSlim(LlmParallelism);
+
+        var tasks = fileMembers.Select(async (site, index) =>
+        {
+            await throttle.WaitAsync(cancellationToken);
+            try
+            {
+                var memberText = site.Node.ToFullString().Trim();
+                var summary = await _llmClient.CompleteAsync(CommentSystemPrompt, memberText, maxTokens, cancellationToken);
+                results[index] = (summary, null);
+            }
+            catch (Exception ex)
+            {
+                results[index] = (string.Empty, ex.Message);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+        return results;
+    }
+
     // ── Scope enumeration ────────────────────────────────────────────────────
 
     private static IReadOnlyList<Document> EnumerateScopedDocuments(Solution solution, ToolScope scope, string? projectName, string? filePath)
@@ -351,7 +406,39 @@ public class CommentingEngine
         return documents.Where(d => d.FilePath != null && d.FilePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             // Never walk into a generated attribute-carrier file itself.
             .Where(d => !Path.GetFileName(d.FilePath!).Equals($"{ContentHashAttributeSource.FullName}.cs", StringComparison.OrdinalIgnoreCase))
+            .Where(d => !IsOutsideEditableSourceTree(d.FilePath!))
             .ToList();
+    }
+
+    // Roslyn surfaces more than a project's own hand-written source as Documents: MSBuild-generated
+    // files under obj/ (AssemblyInfo.cs, GlobalUsings.g.cs, AssemblyAttributes.cs — regenerated on
+    // every build, so any [ContentHash]/comment written there is silently discarded) and, worse,
+    // Compile items a NuGet package contributes from its own build/ folder outside the repo entirely
+    // (confirmed live: seeding wrote a live [ContentHash] into the *shared, machine-wide* NuGet
+    // package cache copy of Microsoft.NET.Test.Sdk.Program.cs, breaking every other solution on the
+    // machine that restores that same package version until the cache entry was deleted and
+    // re-restored). Both cases are compile items the project references but does not own — exclude
+    // any document under an obj/bin folder or under the user's NuGet global-packages folder.
+    private static readonly string[] NuGetPackagesRoots = new[]
+        {
+            Environment.GetEnvironmentVariable("NUGET_PACKAGES"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages"),
+        }
+        .Where(p => !string.IsNullOrEmpty(p))
+        .Select(p => Path.GetFullPath(p!) + Path.DirectorySeparatorChar)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+
+    private static bool IsOutsideEditableSourceTree(string filePath)
+    {
+        var normalized = Path.GetFullPath(filePath);
+        if (NuGetPackagesRoots.Any(root => normalized.StartsWith(root, StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var segments = normalized.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return segments.Any(s => s.Equals("obj", StringComparison.OrdinalIgnoreCase) || s.Equals("bin", StringComparison.OrdinalIgnoreCase));
     }
 
     // ── Syntax helpers ───────────────────────────────────────────────────────
