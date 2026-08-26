@@ -33,7 +33,7 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<List<DependencyReport>> AnalyzeDependenciesAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -85,7 +85,7 @@ public class DependencyInjectionEngine
         string? lifetimeFilter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<DiRegistration>();
 
         IEnumerable<Document> documents = solution.Projects
@@ -242,7 +242,7 @@ public class DependencyInjectionEngine
     /// </summary>
     public async Task<DocumentEditResult> AddDependencyAsync(FilePath filePath, string className, string dependencyType, string dependencyName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException($"Class '{className}' not found in file: {filePath}");
@@ -411,7 +411,7 @@ public class DependencyInjectionEngine
                 .Select(t => t!.Split('<')[0].Split('.').Last())),
             StringComparer.OrdinalIgnoreCase);
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<UnregisteredServiceFinding>();
 
         var documents = solution.Projects
@@ -525,7 +525,7 @@ public class DependencyInjectionEngine
 
         // Also scan for lambda factory registrations:
         // services.AddSingleton(sp => new Foo(sp.GetRequiredService<IBar>()))
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var docs = solution.Projects
             .Where(p => projectName == null || p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
             .SelectMany(p => p.Documents);

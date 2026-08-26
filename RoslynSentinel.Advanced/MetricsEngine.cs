@@ -49,7 +49,7 @@ public class MetricsEngine
 
     public async Task<SolutionMetrics> GetSolutionMetricsAsync(string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var projectMetrics = new List<ProjectMetric>();
 
         int totalTypes = 0;
@@ -104,7 +104,7 @@ public class MetricsEngine
     public async Task<List<CohesionAnalysis>> AnalyzeTypeCohesionAsync(
         FilePath filePath, string? className = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)

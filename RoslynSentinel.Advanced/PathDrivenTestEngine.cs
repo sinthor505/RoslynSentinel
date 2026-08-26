@@ -31,7 +31,7 @@ public class PathDrivenTestEngine
         int? disambiguateLine = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath)
             .Select(solution.GetDocument)

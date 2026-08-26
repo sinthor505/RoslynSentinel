@@ -27,7 +27,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -104,7 +104,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -178,7 +178,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -223,7 +223,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -268,7 +268,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -334,7 +334,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -379,7 +379,7 @@ public class CodeStyleEngine
             };
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
@@ -415,7 +415,7 @@ public class CodeStyleEngine
     public async Task<List<AntiPatternFinding>> FindUseFrozenCollectionsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -658,7 +658,7 @@ public class CodeStyleAnalysisEngine
     public async Task<List<string>> FindMutablePublicCollectionPropertiesAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;

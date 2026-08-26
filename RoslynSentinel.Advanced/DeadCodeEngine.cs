@@ -16,7 +16,7 @@ public class DeadCodeEngine
 
     public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -72,7 +72,7 @@ public class DeadCodeEngine
 
     public async Task<List<DeadCodeReport>> DetectUnusedPrivateFieldsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -125,7 +125,7 @@ public class DeadCodeEngine
 
     public async Task<List<DeadCodeReport>> DetectUnusedLocalVariablesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -183,7 +183,7 @@ public class DeadCodeEngine
 
     public async Task<List<DeadCodeReport>> FindUnusedConstructorsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -235,7 +235,7 @@ public class DeadCodeEngine
 
     public async Task<List<DeadCodeReport>> CheckForUnusedEventSubscriptionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

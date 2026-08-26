@@ -25,7 +25,7 @@ public class TestingEngine
 
     public async Task<TestComplexityReport> CalculateComplexityAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not parse syntax root.");
@@ -57,7 +57,7 @@ public class TestingEngine
 
     public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(FilePath filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
@@ -158,7 +158,7 @@ public class TestingEngine
 
     public async Task<TestScaffoldResult> GenerateTestScaffoldAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
@@ -284,7 +284,7 @@ public class TestingEngine
 
     public async Task<DocumentEditResult> AddBenchmarkStubAsync(FilePath filePath, string className, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

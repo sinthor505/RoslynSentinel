@@ -6,7 +6,7 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Fakes;
 
-// Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetBranchedSolutionAsync.
+// Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetCurrentSolutionAsync.
 // Every other member throws NotImplementedException - extend as a test actually needs a member.
 public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider, ICircuitBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver
 {
@@ -14,7 +14,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
 
     public void SetTestSolution(Solution solution) => CurrentSolution = solution;
 
-    public Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken)
+    public Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
         => Task.FromResult(CurrentSolution
             ?? throw new SolutionNotLoadedException("No solution is loaded. Call load_solution with a .sln or .csproj path."));
 

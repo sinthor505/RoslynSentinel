@@ -21,7 +21,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UseSpanForParsingAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -115,7 +115,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UpgradePatternMatchingAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -159,7 +159,7 @@ public class ModernizationUpgradeEngine
     /// </summary>
     public async Task<DocumentEditResult> UseThrowExpressionsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

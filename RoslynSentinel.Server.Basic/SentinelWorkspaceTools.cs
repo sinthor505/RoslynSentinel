@@ -106,7 +106,7 @@ public class SentinelWorkspaceTools
         {
             if (kind == SolutionItemsKind.projects)
             {
-                var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+                var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
                 var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
                 return await ToolResult<object>.ForPossiblyLargeDataAsync(
                     projectInfos,
@@ -152,7 +152,7 @@ public class SentinelWorkspaceTools
 
                 try
                 {
-                    var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+                    var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
                     var project = solution.Projects.FirstOrDefault(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase));
                     if (project == null)
                     {
@@ -485,7 +485,7 @@ public class SentinelWorkspaceTools
                 {
                     try
                     {
-                        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+                        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
                         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath.Absolute || d.FilePath == filePath.Absolute);
                         if (document == null)
                         {
@@ -928,7 +928,7 @@ public class SentinelWorkspaceTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
@@ -1019,7 +1019,7 @@ public class SentinelWorkspaceTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
@@ -1118,7 +1118,7 @@ public class SentinelWorkspaceTools
         FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var normalizedPath = Path.GetFullPath(filePath);
             var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault() ?? solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase));
             if (document == null)
@@ -1249,7 +1249,7 @@ public class SentinelWorkspaceTools
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var results = new List<TextSearchMatch>();
             Regex? regex = null;
             if (isRegex)
@@ -1702,7 +1702,7 @@ public class SentinelWorkspaceTools
     public Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        // Use CurrentSolution (sync, no throw) rather than GetBranchedSolutionAsync
+        // Use CurrentSolution (sync, no throw) rather than GetCurrentSolutionAsync
         // to distinguish "no solution loaded" from "workspace error"
         Solution? currentSolution;
         try

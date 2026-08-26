@@ -19,7 +19,7 @@ public class ImpactAnalyzer
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath)
                 .Select(solution.GetDocument)
                 .FirstOrDefault();
@@ -130,7 +130,7 @@ public class ImpactAnalyzer
 
     public async Task<List<string>> GetDataFlowAsync(FilePath filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -177,7 +177,7 @@ public class ImpactAnalyzer
 
     private async Task<ImpactReport> FindSymbolRelationsAsync(FilePath filePath, int line, int column, Func<ISymbol, Solution, CancellationToken, Task<IEnumerable<ISymbol>>> relationFinder, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
             .FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");

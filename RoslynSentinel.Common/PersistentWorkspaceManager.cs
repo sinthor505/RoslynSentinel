@@ -557,9 +557,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 // No .csproj/.sln involved — resetting to the workspace's own CurrentSolution
                 // here would discard every edit accumulated in-memory since the last full
-                // load/reload (WithDocumentText/AddDocument only ever update the branched
-                // CurrentSolution property, never the underlying _workspace). Fold just the
-                // changed .cs files into the existing CurrentSolution instead.
+                // load/reload (WithDocumentText/AddDocument only ever update this manager's
+                // in-memory CurrentSolution property, never the underlying _workspace). Fold just
+                // the changed .cs files into the existing CurrentSolution instead.
                 bool needsReloadAfterAll = await ApplyInMemoryDocumentUpdatesAsync(changes, CancellationToken.None);
                 if (needsReloadAfterAll)
                 {
@@ -807,7 +807,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         }
     }
 
-    public async Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken)
+    public async Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
     {
         await _solutionLock.WaitAsync(cancellationToken);
         try
@@ -1626,7 +1626,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
 
     public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken)
     {
-        var solution = await GetBranchedSolutionAsync(cancellationToken);
+        var solution = await GetCurrentSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
@@ -1636,7 +1636,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     }
     public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await GetBranchedSolutionAsync(cancellationToken);
+        var solution = await GetCurrentSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);

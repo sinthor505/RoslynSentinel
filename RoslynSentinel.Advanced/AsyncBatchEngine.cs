@@ -786,7 +786,7 @@ public class AsyncBatchEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         foreach (var project in solution.Projects)
@@ -1350,7 +1350,7 @@ public class AsyncBatchEngine
         string? cancellationTokenExpression,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();

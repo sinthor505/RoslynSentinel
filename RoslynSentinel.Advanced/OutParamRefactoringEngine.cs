@@ -30,7 +30,7 @@ public class OutParamRefactoringEngine
     public async Task<OutParamConversionResult> ConvertOutParamsToValueTupleAsync(
         FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)

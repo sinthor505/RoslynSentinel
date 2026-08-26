@@ -21,7 +21,7 @@ public class RefinementEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
@@ -141,7 +141,7 @@ public class RefinementEngine
     /// </summary>
     public async Task<Dictionary<FilePath, string>> InlineMethodAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

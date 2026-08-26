@@ -72,7 +72,7 @@ public static class ValidateAndApplyHelper
         Dictionary<FilePath, string> changes,
         CancellationToken cancellationToken)
     {
-        var solution = await workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var parts = new List<string>();
         foreach (var (path, newText) in changes)
         {

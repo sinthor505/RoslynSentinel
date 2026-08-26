@@ -20,7 +20,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetFileDiagnosticsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var diagnostics = semanticModel?.GetDiagnostics(null, cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -35,7 +35,7 @@ public class DiagnosticEngine
 
     public async Task<EngineResultWrapper<DiagnosticSummary>> GetProjectDiagnosticsAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
         var compilation = await project.GetCompilationAsync(cancellationToken);
         var diagnostics = compilation?.GetDiagnostics(cancellationToken) ?? Enumerable.Empty<Diagnostic>();
@@ -76,7 +76,7 @@ public class DiagnosticEngine
         int maxDetails = 50,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var solutionDir = Path.GetDirectoryName(solution.FilePath ?? "") ?? "";
         var allDiagnostics = new List<DiagnosticInfo>();
 

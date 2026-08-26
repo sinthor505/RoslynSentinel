@@ -176,7 +176,7 @@ public partial class CodeGenerationEngine
 
     public async Task<DocumentEditResult> GenerateConstructorAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -295,7 +295,7 @@ public partial class CodeGenerationEngine
         string[]? excludeProperties = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -370,7 +370,7 @@ public partial class CodeGenerationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateDefaultConfigJsonAsync(string projectName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var project = solution.Projects.FirstOrDefault(p => p.Name == projectName) ?? throw new InvalidOperationException("Project not found.");
         var collectedKeys = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -499,7 +499,7 @@ public partial class CodeGenerationEngine
     public async Task<RepositoryInterfaceResult> GenerateRepositoryInterfaceAsync(
         FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
@@ -599,7 +599,7 @@ public partial class CodeGenerationEngine
     public async Task<FluentBuilderResult> GenerateFluentBuilderAsync(
         FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath == filePath || d.Name == filePath);
         if (document == null)
@@ -736,7 +736,7 @@ public partial class CodeGenerationEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -856,7 +856,7 @@ public partial class CodeGenerationEngine
 
     public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePath filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1015,7 +1015,7 @@ public partial class CodeGenerationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -1238,7 +1238,7 @@ public partial class CodeGenerationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)

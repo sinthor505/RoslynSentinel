@@ -18,7 +18,7 @@ public class IDEStyleEngine
     /// </summary>
     public async Task<DocumentEditResult> SimplifyMemberAccessAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -60,7 +60,7 @@ public class IDEStyleEngine
     /// </summary>
     public async Task<DocumentEditResult> UseObjectInitializersAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -192,7 +192,7 @@ public class IDEStyleEngine
     /// </summary>
     public async Task<DocumentEditResult> UseNullPropagationAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

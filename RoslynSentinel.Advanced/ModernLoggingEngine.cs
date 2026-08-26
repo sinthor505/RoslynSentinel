@@ -18,7 +18,7 @@ public class ModernLoggingEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException("Class not found.");

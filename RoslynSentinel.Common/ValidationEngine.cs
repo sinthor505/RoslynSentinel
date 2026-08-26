@@ -21,7 +21,7 @@ public class ValidationEngine
 
     public async Task<DiagnosticReport> ValidateDiffAsync(FilePath filePath, string unifiedDiff, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
 
         if (documentId == null)
@@ -58,7 +58,7 @@ public class ValidationEngine
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var report = await ValidateChangesAsync(solution, fileChanges, cancellationToken);
 
         if (!report.Success && report.Diagnostics.Count > 0)

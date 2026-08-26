@@ -66,7 +66,7 @@ public class DiscoveryEngine
         bool sortByFrequency = false,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<ThrowSiteInfo>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -211,7 +211,7 @@ public class DiscoveryEngine
         bool sortByFrequency = false,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<ObjectCreationSite>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -306,7 +306,7 @@ public class DiscoveryEngine
         bool includeTypes = true,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<ApiSurfaceEntry>();
 
         //return results;
@@ -509,7 +509,7 @@ public class DiscoveryEngine
     public async Task<BestInsertionResult> FindBestInsertionPointAsync(
         FilePath filePath, string containerName, string memberKind, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
@@ -598,7 +598,7 @@ public class DiscoveryEngine
     public async Task<List<TodoCommentFinding>> FindTodoFixmeCommentsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<TodoCommentFinding>();
 
         foreach (var doc in GetDocuments(solution, filePath, projectName))
@@ -665,7 +665,7 @@ public class DiscoveryEngine
         string sessionId = "",
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         ISymbol symbol;
         string resolvedSymbolName;
@@ -744,7 +744,7 @@ public class DiscoveryEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
         var name = attributeName.Trim('[', ']');

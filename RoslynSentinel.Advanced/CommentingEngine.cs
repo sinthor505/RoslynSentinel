@@ -66,7 +66,7 @@ public class CommentingEngine
     public async Task<(Dictionary<FilePath, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
         var changes = new Dictionary<FilePath, string>();
@@ -172,7 +172,7 @@ public class CommentingEngine
     public async Task<List<MemberSite>> FindStaleMembersAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = EnumerateScopedDocuments(solution, scope, projectName, filePath);
 
         var stale = new List<MemberSite>();

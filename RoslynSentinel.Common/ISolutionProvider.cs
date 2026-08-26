@@ -33,8 +33,8 @@ public interface ISolutionProvider
         get;
     }
 
-    /// <summary>Returns a branched copy of the current solution safe for speculative edits.</summary>
-    Task<Solution> GetBranchedSolutionAsync(CancellationToken cancellationToken);
+    /// <summary>Returns the current in-memory solution. Roslyn's <see cref="Solution"/> is immutable, so callers can apply speculative edits (e.g. <c>WithDocumentText</c>) without affecting this instance or other callers.</summary>
+    Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken);
     /// <summary>Lists solution-folder items (non-project files shown in Solution Explorer).</summary>
     List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems();
     /// <summary>Directory containing the loaded solution/project, or null if none is loaded.</summary>

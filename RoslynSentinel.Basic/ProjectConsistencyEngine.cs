@@ -27,7 +27,7 @@ public class ProjectConsistencyEngine
 
     public async Task<List<ProjectConsistencyIssue>> CheckConsistencyAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<ProjectConsistencyIssue>();
 
         var projects = solution.Projects.ToList();
@@ -170,7 +170,7 @@ public class ProjectConsistencyEngine
     /// </summary>
     public async Task<List<ProjectFrameworkSummary>> GetProjectFrameworkSummaryAsync(CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<ProjectFrameworkSummary>();
 
         foreach (var project in solution.Projects)

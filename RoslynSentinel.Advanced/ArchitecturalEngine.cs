@@ -24,7 +24,7 @@ public class ArchitecturalEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePath filePath, string className, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax ?? throw new InvalidOperationException("Could not parse syntax root.");
@@ -72,7 +72,7 @@ public class ArchitecturalEngine
     public async Task<List<CircularDependencyChain>> FindCircularDependenciesAsync(
         string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var projects = solution.Projects.AsEnumerable();
         if (!string.IsNullOrEmpty(projectName))
         {
@@ -447,7 +447,7 @@ public class ArchitecturalEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var violations = new List<LayerViolation>();
 
         IEnumerable<Document?> documents;

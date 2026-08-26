@@ -262,7 +262,7 @@ public class SentinelCommentingTools
         int commented = 0;
         int succeeded = 0;
         int failed = 0;
-        var baseSolution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var baseSolution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var membersByFile = staleMembers
             .GroupBy(m => m.FilePath)

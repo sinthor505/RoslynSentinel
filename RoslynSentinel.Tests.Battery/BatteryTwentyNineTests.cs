@@ -37,7 +37,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(SlnPath);
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(CancellationToken.None);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(CancellationToken.None);
 
         // Capture project name from the first available project
         _realProjectName = solution.Projects.FirstOrDefault()?.Name

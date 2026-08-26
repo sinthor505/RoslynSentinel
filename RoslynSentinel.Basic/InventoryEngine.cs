@@ -16,7 +16,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).
@@ -51,7 +51,7 @@ public class InventoryEngine
 
     public async Task<CodeInventoryReport> GetCodeInventoryAsync2(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
 
         // Fallback: tolerate path/link differences by matching on file name + full-path equality (case-insensitive).

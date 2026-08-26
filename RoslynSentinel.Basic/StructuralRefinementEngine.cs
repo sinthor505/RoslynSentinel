@@ -23,7 +23,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SyncTypeAndFilenameAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
@@ -72,7 +72,7 @@ public class StructuralRefinementEngine
             return DocumentEditResult.FeatureDisabled(filePath);
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -135,7 +135,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePath filePath, string symbolName, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -264,7 +264,7 @@ public class StructuralRefinementEngine
             return DocumentEditResult.FeatureDisabled(filePath);
         }
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {

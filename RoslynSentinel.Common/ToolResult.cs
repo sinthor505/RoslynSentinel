@@ -1,4 +1,26 @@
+using System.Reflection;
+
 namespace RoslynSentinel.Common;
+
+// ── Server build info ────────────────────────────────────────────────────────
+
+/// <summary>
+/// Identifies the running server build. Computed once from the entry assembly so tool
+/// responses carry a version signal — without this, a stale-server bug (running binaries
+/// older than the latest committed source) is invisible until behavior is investigated by hand.
+/// </summary>
+public static class ServerBuildInfo
+{
+    public static readonly string Version;
+    public static readonly DateTime BuildTimeUtc;
+
+    static ServerBuildInfo()
+    {
+        var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+        Version = assembly.GetName().Version?.ToString() ?? "Unknown";
+        BuildTimeUtc = File.Exists(assembly.Location) ? File.GetLastWriteTimeUtc(assembly.Location) : default;
+    }
+}
 
 // ── Error codes ───────────────────────────────────────────────────────────────
 public static class ToolErrorCode
@@ -21,6 +43,17 @@ public static class ToolErrorCode
 /// </summary>
 public record ToolResult<T>
 {
+    /// <summary>
+    /// Server build identity (assembly version + binary write time). Not settable — every
+    /// <see cref="ToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
+    /// Lets a caller notice a running server predates a source change without checking DLL
+    /// timestamps by hand (see docs/current/feedback_stale_server_before_rebuild.md).
+    /// </summary>
+    public string ServerVersion { get; init; } = ServerBuildInfo.Version;
+
+    /// <summary>Build timestamp (UTC) of the running server binary. See <see cref="ServerVersion"/>.</summary>
+    public DateTime ServerBuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
+
     /// <summary>True when the operation completed without error.</summary>
     public bool Success
     {

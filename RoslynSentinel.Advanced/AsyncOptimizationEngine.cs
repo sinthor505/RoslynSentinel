@@ -22,7 +22,7 @@ public class AsyncOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new InvalidOperationException("Method not found.");
@@ -108,7 +108,7 @@ public class AsyncOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> OptimizeIndependentAwaitsAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -296,7 +296,7 @@ public class AsyncOptimizationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePath filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -390,7 +390,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
@@ -612,7 +612,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
@@ -766,7 +766,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
         if (documentId == null)
         {
@@ -943,7 +943,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
@@ -988,7 +988,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
@@ -1029,7 +1029,7 @@ public class AsyncOptimizationEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
@@ -1220,7 +1220,7 @@ public class AsyncOptimizationEngine
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -1420,7 +1420,7 @@ public class AsyncOptimizationEngine
         var modified = new List<string>();
         var skipped = new List<string>();
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
@@ -1799,7 +1799,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault() ?? throw new InvalidOperationException(
@@ -1950,7 +1950,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var resultSlots = new FlagMigrationCandidateEngineResult[items.Count];
         var errors = new List<(int Index, string Error)>();
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         foreach (var (filePath, indices) in byFile)
         {
@@ -2124,7 +2124,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var findings = new List<MigrationCandidateFinding>();
 
         // Enumerate all documents, applying scope filters.
@@ -2362,7 +2362,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         IProgress<ProgressNotificationValue>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         // ── Select projects ──────────────────────────────────────────────────
         IEnumerable<Microsoft.CodeAnalysis.Project> projects = solution.Projects;
@@ -2925,7 +2925,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     {
         var result = new PropagateCtResult { MethodName = methodName };
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
@@ -3225,7 +3225,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
     {
         var fileResult = new PropagateCtFileResult { FilePath = filePath };
 
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
                                .FirstOrDefault();
@@ -3619,7 +3619,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         IEnumerable<Document> documents;
         if (!string.IsNullOrEmpty(filePath))

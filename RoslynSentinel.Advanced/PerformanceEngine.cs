@@ -15,7 +15,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -780,7 +780,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> OptimizeResourceDisposalAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -825,7 +825,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> DetectInefficientStringComparisonsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -860,7 +860,7 @@ public class PerformanceEngine
 
     public async Task<List<PerformanceIssueReport>> FindBoxingAllocationsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
@@ -934,7 +934,7 @@ public class PerformanceEngine
     public async Task<List<PerformanceIssueReport>> FindLinqN1PatternsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1023,7 +1023,7 @@ public class PerformanceEngine
     public async Task<List<PerformanceIssueReport>> FindStringFormatInLoopsAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1113,7 +1113,7 @@ public class PerformanceEngine
     public async Task<List<PerformanceIssueReport>> FindMultipleEnumerationAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1250,7 +1250,7 @@ public class PerformanceEngine
     public async Task<List<PerformanceIssueReport>> FindLinqRedundantWhereAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1331,7 +1331,7 @@ public class PerformanceEngine
     public async Task<List<PerformanceIssueReport>> FindImplicitNullableBoxingAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<PerformanceIssueReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)

@@ -36,7 +36,7 @@ public class CloneDetectionEngine
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInClassAsync(
         FilePath filePath, string className, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         Document? document = null;
         foreach (var project in solution.Projects)
@@ -84,7 +84,7 @@ public class CloneDetectionEngine
     public async Task<List<DuplicateBlockGroup>> FindDuplicateBlocksInHierarchyAsync(
         string typeName, string? projectName = null, int minStatements = 4, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var projects = string.IsNullOrEmpty(projectName)
             ? solution.Projects

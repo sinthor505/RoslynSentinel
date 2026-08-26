@@ -20,7 +20,7 @@ public class ThreadSafetyEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
             if (document == null)
             {
@@ -141,7 +141,7 @@ public class ThreadSafetyEngine
     {
         try
         {
-            var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+            var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
             var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
 
             var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get syntax root for file: {filePath}");
@@ -311,7 +311,7 @@ public class ThreadSafetyEngine
     public async Task<List<string>> FindUnsafeLazyInitAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -441,7 +441,7 @@ public class ThreadSafetyEngine
     public async Task<List<string>> FindCasLoopWithoutBackoffAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -531,7 +531,7 @@ public class ThreadSafetyEngine
     public async Task<List<string>> FindDoubleCheckedLockingAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;
@@ -645,7 +645,7 @@ public class ThreadSafetyEngine
     public async Task<List<string>> FindCheckThenActOnDictionaryAsync(
         string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         IEnumerable<Document> docs;

@@ -432,7 +432,7 @@ public class SentinelScanTools
                     return new ToolResult<object>() { Success = true, Data = result90 };
                 case DetectorId.namespace_path_mismatches:
                     {
-                        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+                        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
                         var result91 = await _analysisEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken);
                         return new ToolResult<object>() { Success = true, Data = result91 };
                     }

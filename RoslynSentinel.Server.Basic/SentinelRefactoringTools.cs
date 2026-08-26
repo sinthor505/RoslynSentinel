@@ -143,7 +143,7 @@ public class SentinelRefactoringTools
 
     [McpServerTool(Name = "RenameSymbol")]
     [Produces(DataTag.ChangeId)]
-    [Description("Renames a symbol and all its references across the solution. Returns changeId and updatedHandle for the renamed symbol. Does NOT simplify call sites or add/remove using directives — if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
+    [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives — if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
     public async Task<ToolResult<object>> RenameSymbol(
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)] string docCommentId,
@@ -216,6 +216,10 @@ public class SentinelRefactoringTools
                         h.ProjectName,
                         h.DocCommentId
                     }
+                    : null,
+                residualMentions = result.ResidualMentions is { Count: > 0 } rm ? rm : null,
+                residualMentionsNote = result.ResidualMentions is { Count: > 0 }
+                    ? $"'{result.OldName}' still appears in {result.ResidualMentions.Count} place(s) Rename couldn't reach (e.g. embedded in another identifier, or in a non-source file). Review residualMentions."
                     : null
             }
         };

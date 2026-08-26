@@ -150,7 +150,7 @@ public class SymbolNavigationEngine
         bool exactMatch = true,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -313,7 +313,7 @@ public class SymbolNavigationEngine
 
     public async Task<SymbolHoverInfo?> GetSymbolInfoAsync(FilePath filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -536,7 +536,7 @@ public class SymbolNavigationEngine
     public async Task<List<ImplementationInfo>> FindAllImplementationsAsync(
         string typeName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -611,7 +611,7 @@ public class SymbolNavigationEngine
     public async Task<List<TypeMemberDetail>> GetTypeMembersDetailAsync(
         string typeName, string? projectName = null, bool includeInherited = true, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -710,7 +710,7 @@ public class SymbolNavigationEngine
     public async Task<List<InterfaceImplementorCoverage>> VerifyInterfaceCompletenessAsync(
         string interfaceName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -774,7 +774,7 @@ public class SymbolNavigationEngine
     public async Task<List<ExtensionMethodInfo>> FindExtensionMethodsAsync(
         string targetTypeName, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -916,7 +916,7 @@ public class SymbolNavigationEngine
     public async Task<List<ReadonlyFieldCandidate>> FindReadonlyFieldCandidatesAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -982,7 +982,7 @@ public class SymbolNavigationEngine
         int maxDepth = 3,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1121,7 +1121,7 @@ public class SymbolNavigationEngine
         int maxDepth = 3,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
@@ -1286,7 +1286,7 @@ public class SymbolNavigationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         ISymbol? symbol = null;
 
@@ -1451,7 +1451,7 @@ public class SymbolNavigationEngine
         string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         ISymbol? symbol = null;
         // Non-null only when the filePath/contextSnippet-scoped lookup ran but definitively failed
@@ -1586,7 +1586,7 @@ public class SymbolNavigationEngine
         int lineNumber,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -2003,7 +2003,7 @@ public class SymbolNavigationEngine
         string? projectName = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))

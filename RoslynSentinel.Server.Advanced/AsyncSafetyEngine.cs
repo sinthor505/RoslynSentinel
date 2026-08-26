@@ -15,7 +15,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> DetectAsyncVoidMethodsAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -64,7 +64,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindTaskYieldUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -104,7 +104,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindTaskDelayUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -144,7 +144,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindTaskDelayZeroUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -211,7 +211,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindTaskWhenAllUsageAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -314,7 +314,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindConfigureAwaitMissingAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -368,7 +368,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindBlockingCallsInAsyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -442,7 +442,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindAsyncInConstructorAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -500,7 +500,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindTaskRunInAsyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -540,7 +540,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindConcurrentCollectionOpportunitiesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -597,7 +597,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindUnsafeLazyInitAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -760,7 +760,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> DetectValueTaskMisuseAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -951,7 +951,7 @@ public class AsyncSafetyEngine
 
     public async Task<List<AsyncSafetyReport>> FindAsyncOverSyncAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var documents = string.IsNullOrEmpty(filePath)
             ? solution.Projects.SelectMany(p => p.Documents)
             : solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument);
@@ -1039,7 +1039,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindCancellationTokenNotForwardedAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var reports = new List<AsyncSafetyReport>();
 
         IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
@@ -1189,7 +1189,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindUnawaitedFireAndForgetAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
         {
@@ -1406,7 +1406,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindSequentialIndependentAwaitsAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var reports = new List<AsyncSafetyReport>();
 
         IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
@@ -1554,7 +1554,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindAsyncVoidWithoutTryCatchAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var reports = new List<AsyncSafetyReport>();
 
         IEnumerable<Document?> docs = string.IsNullOrEmpty(filePath)
@@ -1635,7 +1635,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindUnawaitedDisposeAsyncAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var reports = new List<AsyncSafetyReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)
@@ -1719,7 +1719,7 @@ public class AsyncSafetyEngine
     public async Task<List<AsyncSafetyReport>> FindUnobservedTaskInFieldAsync(
         string? filePath = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var reports = new List<AsyncSafetyReport>();
 
         IEnumerable<Document> docs = string.IsNullOrEmpty(filePath)

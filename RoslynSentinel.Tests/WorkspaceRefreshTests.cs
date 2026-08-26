@@ -98,7 +98,7 @@ public class WorkspaceRefreshTests
     }
 
     [Test]
-    public async Task Refresh_LockIsReleasedBeforeMsBuildReload_GetBranchedSolutionAsyncDoesNotBlock()
+    public async Task Refresh_LockIsReleasedBeforeMsBuildReload_GetCurrentSolutionAsyncDoesNotBlock()
     {
         var projectDir = Path.Combine(Path.GetTempPath(), $"WsRefresh_Lock_{Guid.NewGuid()}");
         Directory.CreateDirectory(projectDir);
@@ -124,14 +124,14 @@ public class WorkspaceRefreshTests
             Assert.That(result.WorkspaceInSync, Is.False, "Structural change should set WorkspaceInSync=false");
 
             // After ApplyProposedChangesAsync returns the lock must be free.
-            // GetBranchedSolutionAsync should not block.
+            // GetCurrentSolutionAsync should not block.
             var sw = Stopwatch.StartNew();
-            var branchedTask = _manager.GetBranchedSolutionAsync(CancellationToken.None);
+            var branchedTask = _manager.GetCurrentSolutionAsync(CancellationToken.None);
             var completed = await Task.WhenAny(branchedTask, Task.Delay(TimeSpan.FromSeconds(2)));
             sw.Stop();
 
             Assert.That(completed, Is.SameAs(branchedTask),
-                "GetBranchedSolutionAsync should complete promptly — lock must not be held after ApplyProposedChangesAsync returns");
+                "GetCurrentSolutionAsync should complete promptly — lock must not be held after ApplyProposedChangesAsync returns");
             Assert.That(sw.ElapsedMilliseconds, Is.LessThan(1000));
         }
         finally

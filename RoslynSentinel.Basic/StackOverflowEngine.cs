@@ -16,7 +16,7 @@ public sealed class StackOverflowEngine
         bool includeInformational = false,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects
             .SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.FilePath != null &&

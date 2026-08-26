@@ -24,7 +24,7 @@ public class SecurityEngine
 
     public async Task<List<SecurityIssueReport>> AnalyzeSecurityAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
@@ -181,7 +181,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindHardcodedPathsAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
@@ -243,7 +243,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> CheckForSqlInjectionAsync(
         string? filePath = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
 
         IEnumerable<Document?> docs;
         if (!string.IsNullOrEmpty(filePath))
@@ -413,7 +413,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindReDoSPatternsAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
@@ -524,7 +524,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindUnvalidatedRegexSourceAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
         var normalizedPath = Path.GetFullPath(filePath);
@@ -672,7 +672,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> FindRegexNewInLoopAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var issues = new List<SecurityIssueReport>();
 
         var normalizedPath = Path.GetFullPath(filePath);
@@ -741,7 +741,7 @@ public class SecurityEngine
     public async Task<List<SecurityIssueReport>> DetectJsonAntiPatternsAsync(
         FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var normalizedPath = Path.GetFullPath(filePath);
         var document = solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)

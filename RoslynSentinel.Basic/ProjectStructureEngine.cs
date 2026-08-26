@@ -17,7 +17,7 @@ public class ProjectStructureEngine
 
     public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
         var project = document.Project;
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
@@ -67,7 +67,7 @@ public class ProjectStructureEngine
 
     public async Task<DocumentEditResult> PreviewMoveFileToNamespaceFolderAsync(FilePath filePath, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
@@ -158,7 +158,7 @@ public class ProjectStructureEngine
         string? filePath = null,
         CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var results = new List<string>();
 
         var projects = solution.Projects.AsEnumerable();

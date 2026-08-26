@@ -18,7 +18,7 @@ public class ApiAutomationEngine
     /// </summary>
     public async Task<DocumentEditResult> GenerateHttpClientForControllerAsync(FilePath filePath, string controllerName, CancellationToken cancellationToken = default)
     {
-        var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
+        var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
