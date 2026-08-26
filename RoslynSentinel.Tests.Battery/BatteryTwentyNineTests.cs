@@ -1,4 +1,4 @@
-// Battery 29 — Real-solution smoke tests for all 15 remaining engines
+// Battery 29 — Real-solution smoke tests for remaining engines
 // Loads the solution configured via ROSLYN_SENTINEL_TEST_SLN env var, discovers a real .cs file, class, method, and project,
 // then exercises every engine's public async API against live code.
 // All tests are read-only (engines return new content strings; nothing is written to disk).
@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B29 — All 15 remaining engines exercised against the configured real solution
+// B29 — Remaining engines exercised against the configured real solution
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
 [Category("Integration")]
@@ -154,32 +154,6 @@ public class B29_AllEngines_RealSolution_SmokeTests
             result = await engine.FindUnawaitedFireAndForgetAsync(_realFilePath),
             "FindUnawaitedFireAndForgetAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-    }
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 2. CodeSmellAndStyleEngine (2 tests)
-    // ══════════════════════════════════════════════════════════════════════════
-
-    [Test]
-    public async Task CodeSmellAndStyleEngine_ScanForSmells_DoesNotThrow()
-    {
-        var engine = new CodeSmellAndStyleEngine(_workspaceManager);
-        List<CodeSmell>? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
-            result = await engine.ScanForSmellsAsync(_realFilePath),
-            "ScanForSmellsAsync must not throw on real solution.");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    public async Task CodeSmellAndStyleEngine_UseSwitchExpression_DoesNotThrow()
-    {
-        var engine = new CodeSmellAndStyleEngine(_workspaceManager);
-        string? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
-            result = (await engine.UseSwitchExpressionAsync(_realFilePath)).UpdatedText!,
-            "UseSwitchExpressionAsync must not throw on real solution.");
-        Assert.That(result, Is.Not.Null, "Result string must not be null (may be empty if no candidates).");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

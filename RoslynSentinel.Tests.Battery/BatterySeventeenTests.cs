@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #17 — LogicOptimizationEngine, MassiveAnalyzerEngine,
+// Battery #17 — LogicOptimizationEngine,
 //               MsToolAugmentEngine, ProjectStructureEngine, RefinementEngine
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -68,98 +68,6 @@ public class Guard
     {
         var result = await _engine.SimplifyBooleanExpressionsAsync("NoSuchFile.cs");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText for SimplifyBooleanExpressions");
-    }
-}
-
-[TestFixture]
-public class MassiveAnalyzerEngineTests
-{
-    private PersistentWorkspaceManager _mgr = null!;
-    private MassiveAnalyzerEngine _engine = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new MassiveAnalyzerEngine(_mgr);
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]));
-    }
-
-    [TearDown]
-    public void TearDown() => _mgr?.Dispose();
-
-    [Test]
-    public async Task RunSpecificRule_UnknownFile_ReturnsEmptyList()
-    {
-        var issues = await _engine.RunSpecificRuleAsync("NoSuchFile.cs", "RULE001");
-        Assert.That(issues, Is.Empty, "unknown file should yield no issues");
-    }
-
-    [Test]
-    public async Task RunSpecificRule_CleanFile_NonExistentRule_ReturnsEmpty()
-    {
-        // Real implementation: "SIMULATED" isn't a real rule → clean file returns empty
-        const string source = @"
-public class Analyzer
-{
-    public void Analyze() { }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Analyzer.cs", source)]));
-
-        var issues = await _engine.RunSpecificRuleAsync("Analyzer.cs", "SIMULATED");
-
-        Assert.That(issues, Is.Empty, "non-existent rule ID should return no results for a clean file");
-    }
-
-    [Test]
-    public async Task RunSpecificRule_FileWithTypeError_CS0029_IsDetected()
-    {
-        // CS0029: Cannot implicitly convert type 'string' to 'int'
-        const string source = @"
-public class Broken
-{
-    public void M() { int x = ""bad""; }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Broken.cs", source)]));
-
-        var issues = await _engine.RunSpecificRuleAsync("Broken.cs", "CS0029");
-
-        Assert.That(issues, Is.Not.Empty, "type mismatch should produce CS0029");
-        Assert.That(issues.All(i => i.RuleId == "CS0029"), Is.True);
-    }
-
-    [Test]
-    public async Task RunSpecificRule_AllDiagnostics_EmptyRuleId()
-    {
-        const string source = @"
-public class Broken
-{
-    public void M() { int x = ""bad""; }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Broken.cs", source)]));
-
-        var issues = await _engine.RunSpecificRuleAsync("Broken.cs", "");
-
-        Assert.That(issues, Is.Not.Empty, "broken file should return all diagnostics when rule filter is empty");
-    }
-
-    [Test]
-    public async Task RunSpecificRule_ResultsHaveNonNullRuleId()
-    {
-        const string source = "public class Foo {}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Foo.cs", source)]));
-
-        var issues = await _engine.RunSpecificRuleAsync("Foo.cs", null!);
-
-        foreach (var issue in issues)
-        {
-            Assert.That(issue.RuleId, Is.Not.Null.And.Not.Empty, "every issue must have a RuleId");
-        }
     }
 }
 

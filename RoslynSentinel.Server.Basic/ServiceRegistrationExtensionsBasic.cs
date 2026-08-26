@@ -14,6 +14,12 @@ public static class RoslynSentinelServiceExtensionsBasic
     /// <summary>
     /// Registers all Roslyn analysis engine singletons into the DI container.
     /// </summary>
+    /// <remarks>
+    /// The commented-out lines below are engines Advanced registers instead (see
+    /// <see cref="RoslynSentinel.Server.Advanced.RoslynSentinelServiceExtensionsAdvanced.AddRoslynSentinelEnginesAdvanced"/>).
+    /// Don't uncomment one here without checking whether Advanced already live-registers it —
+    /// doing so would register the same engine type in both, not just in Basic.
+    /// </remarks>
     public static IServiceCollection AddRoslynSentinelEnginesBasic(this IServiceCollection services)
     {
         services.AddSingleton<SentinelConfiguration>();

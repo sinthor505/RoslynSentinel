@@ -34,52 +34,15 @@ public class NamespacePathMismatchTests
         string projectName,
         (string relPath, string content)[] documents)
     {
-        // Match the path convention used by TestSolutionBuilder so that projectRoot
-        // = Path.GetTempPath()\<projectName> and project.FilePath exists under it.
         var projectRoot = Path.Combine(Path.GetTempPath(), projectName);
         var projectPath = Path.Combine(projectRoot, $"{projectName}.csproj");
 
-        var workspace = new AdhocWorkspace();
-        var projectId = ProjectId.CreateNewId();
-
-        // Minimal metadata references (same set as TestSolutionBuilder).
-        var coreDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
-        var references = new List<MetadataReference>();
-        foreach (var name in new[] { "System.Runtime.dll", "System.Private.CoreLib.dll", "mscorlib.dll" })
-        {
-            var path = Path.Combine(coreDir, name);
-            if (File.Exists(path))
-                references.Add(MetadataReference.CreateFromFile(path));
-        }
-        var objectLoc = typeof(object).Assembly.Location;
-        if (!references.Any(r => string.Equals(r.Display, objectLoc, StringComparison.OrdinalIgnoreCase)))
-            references.Add(MetadataReference.CreateFromFile(objectLoc));
-
-        var projectInfo = ProjectInfo.Create(
-                projectId,
-                VersionStamp.Default,
-                projectName,
-                projectName,
-                LanguageNames.CSharp)
-            .WithMetadataReferences(references)
-            .WithCompilationOptions(new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
-            .WithFilePath(projectPath)
-            .WithDefaultNamespace(projectName);
-
-        var solution = workspace.CurrentSolution.AddProject(projectInfo);
-
-        foreach (var (relPath, content) in documents)
-        {
-            var absolutePath = Path.Combine(projectRoot, relPath);
-            var docId = DocumentId.CreateNewId(projectId, relPath);
-            solution = solution.AddDocument(
-                docId,
-                Path.GetFileName(relPath),
-                SourceText.From(content),
-                filePath: absolutePath);
-        }
-
-        return solution;
+        return TestSolutionBuilder.CreateSolutionWithProject(
+            projectName,
+            projectPath,
+            documents
+                .Select(d => (Path.GetFileName(d.relPath), d.content, Path.Combine(projectRoot, d.relPath)))
+                .ToArray());
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

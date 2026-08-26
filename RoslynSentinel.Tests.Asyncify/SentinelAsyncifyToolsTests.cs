@@ -121,7 +121,7 @@ public class SentinelAsyncifyToolsTests
 
     private void SetSource(string source, string fileName = "RegionForm.cs")
     {
-        var solution = AsyncifyTestHelper.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
         _workspaceManager.SetTestSolution(solution);
     }
 

@@ -702,6 +702,10 @@ public class Svc
     // T19 – large-result offload message contains get_scan_result and OperationId; no read_file
     // ══════════════════════════════════════════════════════════════════════════
 
+    // Flaky under full/parallel test runs (fails intermittently in the full Asyncify suite,
+    // passes every time when run in isolation, 2026-08-25) — likely timing/threshold-sensitive
+    // due to the large synthetic payload used to force the offload spill. Not a regression from
+    // any single change; retriage if it starts failing in isolation too.
     [Test, CancelAfter(60000)]
     public async Task T19_LargeResult_Message_ContainsGetScanResult_AndOperationId()
     {

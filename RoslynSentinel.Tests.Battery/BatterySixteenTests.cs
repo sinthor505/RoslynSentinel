@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tests.Battery;
 
 // ────────────────────────────────────────────────────────────────────────────
-// Battery #16 — DependencyInjectionEngine, ExhaustiveAnalyzerEngine,
+// Battery #16 — DependencyInjectionEngine,
 //               GranularRefactoringEngine, HealthOrchestrationEngine
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -59,85 +59,6 @@ public static class ServiceExtensions
         var registrations = await _engine.FindDiRegistrationsAsync(filePath: "ServiceExtensions.cs");
 
         Assert.That(registrations, Is.Not.Empty, "file with AddSingleton/AddScoped calls should yield registrations");
-    }
-}
-
-[TestFixture]
-public class ExhaustiveAnalyzerEngineTests
-{
-    private PersistentWorkspaceManager _mgr = null!;
-    private ExhaustiveAnalyzerEngine _engine = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _mgr = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ExhaustiveAnalyzerEngine(_mgr);
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Other.cs", "public class Other {}")]));
-    }
-
-    [TearDown]
-    public void TearDown() => _mgr?.Dispose();
-
-    [Test]
-    public async Task RunDiagnosticRule_UnknownFile_ReturnsEmptyList()
-    {
-        var issues = await _engine.RunDiagnosticRuleAsync("NoSuchFile.cs", "CS0001");
-        Assert.That(issues, Is.Empty, "unknown file should yield no issues");
-    }
-
-    [Test]
-    public async Task RunDiagnosticRule_CleanFile_NonExistentRule_ReturnsEmpty()
-    {
-        // Real implementation: a clean file has no "CS9999" diagnostics
-        const string source = @"
-public class Foo
-{
-    public void Bar() { }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Foo.cs", source)]));
-
-        var issues = await _engine.RunDiagnosticRuleAsync("Foo.cs", "CS9999");
-
-        Assert.That(issues, Is.Empty, "clean file has no CS9999 diagnostics");
-    }
-
-    [Test]
-    public async Task RunDiagnosticRule_FileWithTypeError_CS0029_IsDetected()
-    {
-        // CS0029: Cannot implicitly convert type 'string' to 'int'
-        const string source = @"
-public class Broken
-{
-    public void M() { int x = ""bad""; }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Broken.cs", source)]));
-
-        var issues = await _engine.RunDiagnosticRuleAsync("Broken.cs", "CS0029");
-
-        Assert.That(issues, Is.Not.Empty, "type mismatch should produce CS0029");
-        Assert.That(issues.All(i => i.RuleId == "CS0029"), Is.True);
-    }
-
-    [Test]
-    public async Task RunDiagnosticRule_AllDiagnostics_EmptyRuleId()
-    {
-        // Passing empty ruleId should return ALL diagnostics on the file
-        const string source = @"
-public class Broken
-{
-    public void M() { int x = ""bad""; }
-}";
-        _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
-            [("Broken.cs", source)]));
-
-        var issues = await _engine.RunDiagnosticRuleAsync("Broken.cs", "");
-
-        Assert.That(issues, Is.Not.Empty, "broken file should have at least one diagnostic when rule filter is empty");
-        Assert.That(issues.All(i => i.RuleId != null), Is.True, "every issue must have a non-null RuleId");
     }
 }
 

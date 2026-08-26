@@ -191,15 +191,8 @@ public class ComprehensiveToolTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private Solution CreateSolution(string source, string fileName = "Test.cs")
-    {
-        var adhocWorkspace = new AdhocWorkspace();
-        var solution = adhocWorkspace.CurrentSolution;
-        var projectId = ProjectId.CreateNewId();
-        solution = solution.AddProject(projectId, "TestProject", "TestProject", LanguageNames.CSharp);
-        var docId = DocumentId.CreateNewId(projectId);
-        return solution.AddDocument(docId, fileName, SourceText.From(source), filePath: fileName);
-    }
+    private Solution CreateSolution(string source, string fileName = "Test.cs") =>
+        TestSolutionBuilder.CreateSolutionWithProject("TestProject", [(fileName, source)]);
 
     [Test]
     public async Task LoadSolution_NonExistentFile_ReturnsErrorResult()

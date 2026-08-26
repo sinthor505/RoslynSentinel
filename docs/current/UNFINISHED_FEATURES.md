@@ -30,7 +30,6 @@ All of this information is crucial for:
 - `ConvertForToForEachAsync` (AdvancedLogicEngine) — real AST rewrite via `IndexedAccessRewriter`
 - `ConvertWhileToForAsync` (AdvancedLogicEngine) — real control-flow transform
 - `AddRetryPolicyAsync` (CodeHealingEngine) — injects retry loop via SyntaxFactory
-- `RunSpecificRuleAsync` (MassiveAnalyzerEngine) — runs Roslyn compiler diagnostics
 
 ### Methods implemented in May 2026 session (were genuinely stubs or no-ops):
 - `UseNullPropagationAsync` (IDEStyleEngine) — `NullPropagationRewriter` converts `if (x != null) x.Method()` → `x?.Method()`
