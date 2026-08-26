@@ -1449,8 +1449,8 @@ public class SentinelWorkspaceTools
     // ── Phase 2 — Blob persistence query + undo tools ───────────────────────
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. maxItems caps the returned slice. TotalItems reflects the filtered count; HasMorePages is true when more items remain.")]
-    public async Task<ToolResult<object>> GetOperationDetail([Consumes(DataTag.ChangeId, required: true)] string changeId, [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50, // RequestContext<CallToolRequestParams> requestParams = null,
+    [Description("Returns a filtered slice of an operation result blob by changeId. filter accepts prefix synonyms: fail/err → failures, warn/skip → skipped, ok/pass/info/success → succeeded, roll/revert/undo → rolledback, manual/manual_review/needs_manual_review → NeedsManualReview (bridge compiler-error skips), file:<path> to filter by path, or omit for all items. Unrecognised prefixes return an error. offset skips that many filtered items before taking maxItems; pass NextOffset from the previous response to page through the rest. TotalItems reflects the filtered count; HasMorePages is true when more items remain past this page.")]
+    public async Task<ToolResult<object>> GetOperationDetail([Consumes(DataTag.ChangeId, required: true)] string changeId, [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null, [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50, [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
@@ -1494,17 +1494,22 @@ public class SentinelWorkspaceTools
             }
 
             var filteredList = filtered.ToList();
-            var slice = filteredList.Take(maxItems).ToList();
+            var safeOffset = Math.Max(0, offset);
+            var slice = filteredList.Skip(safeOffset).Take(maxItems).ToList();
+            var nextOffset = safeOffset + slice.Count;
+            var hasMore = nextOffset < filteredList.Count;
             return new ToolResult<object>()
             {
                 Success = true,
-                HasMorePages = filteredList.Count > maxItems,
+                HasMorePages = hasMore,
                 Data = new OperationDetailResult
                 {
                     ChangeId = changeId,
                     BlobName = Path.GetFileName(blobPath),
                     TotalItems = filteredList.Count,
                     ReturnedItems = slice.Count,
+                    Offset = safeOffset,
+                    NextOffset = hasMore ? nextOffset : null,
                     Filter = filter,
                     Items = slice,
                 }

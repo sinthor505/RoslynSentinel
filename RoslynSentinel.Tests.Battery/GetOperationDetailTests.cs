@@ -138,6 +138,50 @@ public class GetOperationDetailTests
     }
 
     [Test]
+    public async Task GetOperationDetail_OffsetBeyondFirstPage_ReturnsRemainingItemsAsync()
+    {
+        var changeId = "change-paged";
+        WriteBlob(changeId, new[]
+        {
+            new { FilePath = Path.Combine(_tempDir, "A.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
+            new { FilePath = Path.Combine(_tempDir, "B.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
+            new { FilePath = Path.Combine(_tempDir, "C.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
+        });
+
+        var firstPage = await _tools.GetOperationDetail(changeId, maxItems: 2);
+        var firstData = (OperationDetailResult)firstPage.Data!;
+        Assert.That(firstData.Items, Has.Count.EqualTo(2));
+        Assert.That(firstPage.HasMorePages, Is.True);
+        Assert.That(firstData.NextOffset, Is.EqualTo(2));
+
+        var secondPage = await _tools.GetOperationDetail(changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
+        var secondData = (OperationDetailResult)secondPage.Data!;
+
+        Assert.That(secondPage.Success, Is.True);
+        Assert.That(secondData.Items, Has.Count.EqualTo(1));
+        Assert.That(secondData.Items[0].FilePath, Does.Contain("C.cs"));
+        Assert.That(secondPage.HasMorePages, Is.False);
+        Assert.That(secondData.NextOffset, Is.Null);
+    }
+
+    [Test]
+    public async Task GetOperationDetail_OffsetPastEnd_ReturnsEmptyPageAsync()
+    {
+        var changeId = "change-offset-past-end";
+        WriteBlob(changeId, new[]
+        {
+            new { FilePath = Path.Combine(_tempDir, "A.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
+        });
+
+        var result = await _tools.GetOperationDetail(changeId, offset: 10);
+
+        Assert.That(result.Success, Is.True);
+        var data = (OperationDetailResult)result.Data!;
+        Assert.That(data.Items, Is.Empty);
+        Assert.That(result.HasMorePages, Is.False);
+    }
+
+    [Test]
     public async Task GetOperationDetail_UnknownFilter_ReturnsInvalidArgumentAsync()
     {
         var changeId = "change-unknown-filter";

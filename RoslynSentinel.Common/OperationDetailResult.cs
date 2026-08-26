@@ -13,6 +13,15 @@ public class OperationDetailResult
     {
         get; set;
     }
+    public int Offset
+    {
+        get; set;
+    }
+    /// <summary>Pass as `offset` on the next call to continue past this page; null once no items remain.</summary>
+    public int? NextOffset
+    {
+        get; set;
+    }
     public string? Filter
     {
         get; set;
