@@ -124,44 +124,16 @@ public class SentinelCommentingTools
     {
         var changeId = Guid.NewGuid().ToString("N")[..8];
         var items = new List<OperationItemRecord>();
-        var byFile = new Dictionary<FilePath, CommentingFileBreakdown>();
+        var touchedFiles = new HashSet<FilePath>();
         var skipped = new List<FailureDetail>();
 
-        CommentingFileBreakdown FileRow(FilePath path)
-        {
-            if (!byFile.TryGetValue(path, out var row))
-            {
-                byFile[path] = row = new CommentingFileBreakdown { filePath = path };
-            }
-
-            return row;
-        }
-
-        // Collapses per-member Skipped detail down to a reason→count dict (can run into the
-        // thousands when a whole scope hits the same validation error — no per-file/method row is
-        // actionable there, only the reason and how many) and caps ByFile similarly (file-level
-        // rows can run into the hundreds for a solution-wide call).
+        // Collapses per-member Skipped detail down to a reason→count dict and per-file activity down
+        // to a file count — neither a specific skip reason's file/method nor which of hundreds of
+        // files a solution-wide call touched is actionable to a caller; the counts are.
         void ApplySampling(CommentingResult result, List<FailureDetail> allSkipped)
         {
             result.SkippedByReason = FailureSummary.ByReason(allSkipped);
-
-            const int ByFileSampleSize = 20;
-            var allFileRows = byFile.Values.ToList();
-            result.ByFileTotalCount = allFileRows.Count;
-            if (allFileRows.Count <= ByFileSampleSize)
-            {
-                result.ByFile = allFileRows;
-                result.ByFileTruncated = false;
-            }
-            else
-            {
-                result.ByFile = allFileRows
-                    .OrderByDescending(r => r.Skipped)
-                    .ThenByDescending(r => r.Commented)
-                    .Take(ByFileSampleSize)
-                    .ToList();
-                result.ByFileTruncated = true;
-            }
+            result.FilesTouched = touchedFiles.Count;
         }
 
         // ── Phase 1: seed (always runs, mechanical, no LLM) ─────────────────
@@ -219,7 +191,7 @@ public class SentinelCommentingTools
 
         foreach (var path in seedChanges.Keys)
         {
-            FileRow(path).Seeded++;
+            touchedFiles.Add(path);
         }
 
         // ── Phase 2: find stale members. When dryRun, the seed-phase changes were never applied,
@@ -247,7 +219,7 @@ public class SentinelCommentingTools
                     Reason = "content_hash_attribute_unresolved: ContentHashAttribute could not be injected/verified for this project",
                     Outcome = ItemRecordOutcome.Skipped,
                 });
-                FileRow(member.FilePath).Skipped++;
+                touchedFiles.Add(member.FilePath);
             }
         }
 
@@ -308,14 +280,14 @@ public class SentinelCommentingTools
                 if (commented >= maxMembers)
                 {
                     skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = "maxMembers cap reached", Outcome = ItemRecordOutcome.Skipped });
-                    FileRow(site.FilePath).Skipped++;
+                    touchedFiles.Add(site.FilePath);
                     continue;
                 }
 
                 if (deadline.HasValue && DateTime.UtcNow >= deadline.Value)
                 {
                     skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = "maxRuntimeSeconds cap reached", Outcome = ItemRecordOutcome.Skipped });
-                    FileRow(site.FilePath).Skipped++;
+                    touchedFiles.Add(site.FilePath);
                     continue;
                 }
 
@@ -335,7 +307,7 @@ public class SentinelCommentingTools
             foreach (var outcome in outcomes.Where(o => !o.Succeeded))
             {
                 skipped.Add(new FailureDetail { FilePath = outcome.Site.FilePath, MethodName = outcome.Site.MemberName, Reason = outcome.FailureReason ?? "unknown failure", Outcome = ItemRecordOutcome.Failed });
-                FileRow(outcome.Site.FilePath).Skipped++;
+                touchedFiles.Add(outcome.Site.FilePath);
                 failed++;
             }
 
@@ -355,7 +327,7 @@ public class SentinelCommentingTools
                 foreach (var site in toProcess.Where(s => succeededSites.Contains(s)))
                 {
                     skipped.Add(new FailureDetail { FilePath = site.FilePath, MethodName = site.MemberName, Reason = reason, Outcome = ItemRecordOutcome.Failed });
-                    FileRow(site.FilePath).Skipped++;
+                    touchedFiles.Add(site.FilePath);
                     failed++;
                 }
                 continue;
@@ -372,7 +344,7 @@ public class SentinelCommentingTools
                     Outcome = ItemRecordOutcome.Succeeded,
                     BeforeSource = beforeSource,
                 });
-                FileRow(site.FilePath).Commented++;
+                touchedFiles.Add(site.FilePath);
                 succeeded++;
             }
         }

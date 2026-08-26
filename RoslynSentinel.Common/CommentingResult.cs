@@ -1,15 +1,5 @@
 namespace RoslynSentinel.Common;
 
-/// <summary>Per-file breakdown row in <see cref="CommentingResult.ByFile"/>.</summary>
-public sealed class CommentingFileBreakdown
-{
-    public FilePath filePath { get; set; } = string.Empty;
-    public int Seeded { get; set; }
-    public int Commented { get; set; }
-    public int AlreadyCurrent { get; set; }
-    public int Skipped { get; set; }
-}
-
 /// <summary>
 /// Return type for <c>BulkComment</c>. Counts are the authoritative completion signal for a run —
 /// not agent prose. <see cref="RemainingStale"/> tells the caller whether another call is needed
@@ -41,18 +31,8 @@ public sealed class CommentingResult
     /// </summary>
     public Dictionary<string, int> SkippedByReason { get; set; } = [];
 
-    /// <summary>
-    /// Per-file breakdown, keyed implicitly by <see cref="CommentingFileBreakdown.filePath"/>. Capped
-    /// at 20 rows (files with the most Skipped, then most Commented, first) for a large solution-wide
-    /// run; see <see cref="ByFileTruncated"/> and <see cref="ByFileTotalCount"/>.
-    /// </summary>
-    public List<CommentingFileBreakdown> ByFile { get; set; } = [];
-
-    /// <summary>True when the full per-file breakdown exceeded 20 rows and <see cref="ByFile"/> is a partial sample.</summary>
-    public bool ByFileTruncated { get; set; }
-
-    /// <summary>Total number of files touched this call, regardless of <see cref="ByFileTruncated"/>.</summary>
-    public int ByFileTotalCount { get; set; }
+    /// <summary>Number of distinct files touched this call. No per-file breakdown — the top-level counts already cover the run.</summary>
+    public int FilesTouched { get; set; }
 
     /// <summary>"ok" | "caution" | "halt" — mirrors <see cref="BatchResultSummary.Severity"/>; keyed field, never infer from prose.</summary>
     public string Severity { get; set; } = "ok";
