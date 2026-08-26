@@ -17,6 +17,7 @@
     <PackageReference Include="NUnit" Version="5.0.0-beta.1" />
     <PackageReference Include="NUnit.Analyzers" Version="4.14.0" />
     <PackageReference Include="NUnit3TestAdapter" Version="6.2.0" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
   </ItemGroup>
 
   <ItemGroup>

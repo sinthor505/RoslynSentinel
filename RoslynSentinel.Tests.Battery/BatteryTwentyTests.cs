@@ -52,30 +52,30 @@ public class BatteryTwentyTests
     // --- Features (consolidated: list, update, get) ---
 
     [Test]
-    public void Features_List_ReturnsList()
+    public async Task Features_List_ReturnsList()
     {
-        var result = _tools.Features(FeaturesAction.list);
+        var result = await _tools.Features(FeaturesAction.list);
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void Features_UpdateEmpty_ReturnsResult()
+    public async Task Features_UpdateEmpty_ReturnsResult()
     {
-        var result = _tools.Features(FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
+        var result = await _tools.Features(FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void Features_GetEmptyList_ReturnsResult()
+    public async Task Features_GetEmptyList_ReturnsResult()
     {
-        var result = _tools.Features(FeaturesAction.get, names: new List<string>());
+        var result = await _tools.Features(FeaturesAction.get, names: new List<string>());
         Assert.That(result, Is.Not.Null);
     }
 
     [Test]
-    public void Features_GetWithFeatureName_ReturnsResult()
+    public async Task Features_GetWithFeatureName_ReturnsResult()
     {
-        var features = _tools.Features(FeaturesAction.list) as System.Collections.IEnumerable;
+        var features = await _tools.Features(FeaturesAction.list) as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
         Assert.Pass("Features list retrieved successfully.");
     }

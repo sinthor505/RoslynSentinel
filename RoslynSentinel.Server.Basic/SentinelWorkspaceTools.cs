@@ -53,11 +53,16 @@ public class SentinelWorkspaceTools
 
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
-    [Description("Queries or updates feature flags. list → all; get → by names; update → batch-update via enabled as [{Key: featureName, Value: bool}] pairs.")]
-    public object Features(FeaturesAction action, List<string>? names = null, List<KeyValuePair<string, bool>>? enabled = null)
+    [Description("Queries or updates feature flags. list → all; get → by names; update → batch-update via enabled as [{Key: featureName, Value: bool}] pairs. delaySeconds (test-only) waits before acting, to exercise MCP task polling/cancellation.")]
+    public async Task<object> Features(FeaturesAction action, List<string>? names = null, List<KeyValuePair<string, bool>>? enabled = null, int delaySeconds = 0, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (delaySeconds > 0)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).ConfigureAwait(false);
+            }
+
             return action switch
             {
                 FeaturesAction.list => (object)_config.GetFeatureStatuses(),

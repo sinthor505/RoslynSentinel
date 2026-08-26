@@ -17,7 +17,7 @@ namespace RoslynSentinel.Server.Advanced;
 public static class RoslynSentinelTaskTools
 {
     /// <summary>Tool names that may run as a task when the calling client declares the tasks capability.</summary>
-    public static readonly FrozenSet<string> Names = new[] { "Asyncify", "AsyncifyLoop", "BulkComment" }
+    public static readonly FrozenSet<string> Names = new[] { "Asyncify", "AsyncifyLoop", "BulkComment", "Features" }
         .ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
