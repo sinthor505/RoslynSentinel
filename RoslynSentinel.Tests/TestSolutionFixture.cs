@@ -46,28 +46,34 @@ public sealed class TestSolutionFixture : IDisposable
     }
 
     /// <summary>
-    /// Writes a new file directly to disk (relative to <see cref="SolutionDirectory"/>), then
-    /// reloads the solution and acknowledges the resulting external-change entry. Bypasses
+    /// Writes a new file directly to disk (relative to <see cref="SolutionDirectory"/>), then, by
+    /// default, reloads the solution and acknowledges the resulting external-change entry. Bypasses
     /// <c>ApplyProposedChangesAsync</c> on purpose — for tests that need a file present before a
     /// tool call without going through the normal propose/apply path (e.g. seeding a fixture's
-    /// starting state, or reproducing a scenario the workspace didn't itself write).
+    /// starting state, or reproducing a scenario the workspace didn't itself write). Pass
+    /// <paramref name="reloadSolution"/> = false to defer the reload/drift-clear — e.g. when the
+    /// caller has more out-of-band writes to make first and will reload/clear once at the end.
     /// </summary>
-    public async Task AddFileToSolution(IWorkspaceManager workspaceManager, string relativePath, string content, CancellationToken cancellationToken = default)
+    public async Task AddFileToSolution(IWorkspaceManager workspaceManager, string relativePath, string content, bool reloadSolution = true, CancellationToken cancellationToken = default)
     {
         var fullPath = Path.Combine(SolutionDirectory, relativePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         await File.WriteAllTextAsync(fullPath, content, cancellationToken);
 
-        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
-        workspaceManager.ClearExternalFileChanges();
+        if (reloadSolution)
+        {
+            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            workspaceManager.ClearExternalFileChanges();
+        }
     }
 
     /// <summary>
     /// Overwrites an existing file directly on disk (relative to <see cref="SolutionDirectory"/>),
-    /// then reloads the solution and acknowledges the resulting external-change entry. Same
-    /// bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>.
+    /// then, by default, reloads the solution and acknowledges the resulting external-change entry.
+    /// Same bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>, including the
+    /// <paramref name="reloadSolution"/> = false escape hatch for batching multiple writes.
     /// </summary>
-    public async Task ModifyFileInSolution(IWorkspaceManager workspaceManager, string relativePath, string content, CancellationToken cancellationToken = default)
+    public async Task ModifyFileInSolution(IWorkspaceManager workspaceManager, string relativePath, string content, bool reloadSolution = true, CancellationToken cancellationToken = default)
     {
         var fullPath = Path.Combine(SolutionDirectory, relativePath);
         if (!File.Exists(fullPath))
@@ -77,16 +83,20 @@ public sealed class TestSolutionFixture : IDisposable
 
         await File.WriteAllTextAsync(fullPath, content, cancellationToken);
 
-        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
-        workspaceManager.ClearExternalFileChanges();
+        if (reloadSolution)
+        {
+            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            workspaceManager.ClearExternalFileChanges();
+        }
     }
 
     /// <summary>
     /// Deletes an existing file directly from disk (relative to <see cref="SolutionDirectory"/>),
-    /// then reloads the solution and acknowledges the resulting external-change entry. Same
-    /// bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>.
+    /// then, by default, reloads the solution and acknowledges the resulting external-change entry.
+    /// Same bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>, including the
+    /// <paramref name="reloadSolution"/> = false escape hatch for batching multiple writes.
     /// </summary>
-    public async Task DeleteFileFromSolution(IWorkspaceManager workspaceManager, string relativePath, CancellationToken cancellationToken = default)
+    public async Task DeleteFileFromSolution(IWorkspaceManager workspaceManager, string relativePath, bool reloadSolution = true, CancellationToken cancellationToken = default)
     {
         var fullPath = Path.Combine(SolutionDirectory, relativePath);
         if (!File.Exists(fullPath))
@@ -96,8 +106,11 @@ public sealed class TestSolutionFixture : IDisposable
 
         File.Delete(fullPath);
 
-        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
-        workspaceManager.ClearExternalFileChanges();
+        if (reloadSolution)
+        {
+            await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+            workspaceManager.ClearExternalFileChanges();
+        }
     }
 
     private static void CopySourceFiles(string sourceRoot, string destinationRoot)

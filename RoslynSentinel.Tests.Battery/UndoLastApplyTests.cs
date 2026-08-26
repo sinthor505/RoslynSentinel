@@ -154,7 +154,8 @@ public class UndoLastApplyTests
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
         var modifiedContent = originalContent + "\n// modified for UndoLastApply test\n";
-        await File.WriteAllTextAsync(targetFile, modifiedContent);
+        var targetRelativePath = Path.GetRelativePath(fixture.SolutionDirectory, targetFile);
+        await fixture.ModifyFileInSolution(workspaceManager, targetRelativePath, modifiedContent);
 
         var changeId = "change-real-revert";
         var dir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
@@ -174,11 +175,12 @@ public class UndoLastApplyTests
             Path.Combine(dir, $"apply_diff_20260101T000000Z_{changeId}.json"),
             JsonSerializer.Serialize(payload, PrettyJson));
 
-        // The direct File.WriteAllTextAsync above (simulating the prior "apply" that this test is
-        // reverting) happened outside ApplyProposedChangesAsync, so the FileSystemWatcher records
-        // it as external drift. Acknowledge it here, same as a real agent would after an out-of-band
-        // edit — otherwise the revert write is refused by the drift guard in ApplyProposedChangesAsync
-        // (RoslynSentinel.Common/PersistentWorkspaceManager.cs) before it ever reaches undo logic.
+        // ModifyFileInSolution already cleared drift from the target-file write above. The
+        // operation-blob write just above is a second, separate out-of-band write (outside
+        // ApplyProposedChangesAsync) that the FileSystemWatcher also records as external drift, so it
+        // needs its own acknowledgment here — otherwise the revert write below is refused by the drift
+        // guard in ApplyProposedChangesAsync (RoslynSentinel.Common/PersistentWorkspaceManager.cs)
+        // before it ever reaches undo logic.
         workspaceManager.ClearExternalFileChanges();
 
         var result = await tools.UndoLastApply(changeId);

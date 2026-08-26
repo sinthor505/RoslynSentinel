@@ -168,7 +168,7 @@ public class McpTasksHarnessBulkCommentTests
             workspaceManager,
             Path.Combine("ContosoOrders.Core", "ContentHashAttribute.cs"),
             "namespace ContosoOrders.Core;\n\npublic static class NotTheRealAttribute\n{\n    public static string Unrelated() => \"decoy\";\n}\n",
-            TestContext.CurrentContext.CancellationToken);
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         var requestParams = new CallToolRequestParams
         {
