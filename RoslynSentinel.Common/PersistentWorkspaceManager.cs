@@ -534,7 +534,40 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 var slnPath = _workspace.CurrentSolution.FilePath;
                 if (!string.IsNullOrEmpty(slnPath))
                 {
-                    CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
+                    // Reload into a fresh MSBuildWorkspace rather than reusing _workspace: if
+                    // OpenSolutionAsync throws partway through (e.g. the .sln transiently
+                    // disappears mid-write during a concurrent git checkout), a reused workspace
+                    // is left in a half-reloaded state whose projects resolve with broken
+                    // references — every subsequent build/diagnostic call then reports mass
+                    // CS0234/CS0246 errors until the next explicit LoadSolution. Building a new
+                    // instance and only swapping it in on success keeps the existing _workspace
+                    // (and CurrentSolution) untouched and valid on failure.
+                    var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+                    {
+                        { "NuGetAudit", "false" },
+                        { "NuGetAuditLevel", "critical" }
+                    });
+                    newWorkspace.RegisterWorkspaceFailedHandler(d =>
+                    {
+                        if (_logger.IsEnabled(LogLevel.Warning))
+                        {
+                            _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
+                        }
+                    });
+
+                    try
+                    {
+                        var newSolution = await newWorkspace.OpenSolutionAsync(slnPath);
+                        var old = _workspace;
+                        _workspace = newWorkspace;
+                        CurrentSolution = newSolution;
+                        old?.Dispose();
+                    }
+                    catch
+                    {
+                        newWorkspace.Dispose();
+                        throw;
+                    }
                 }
             }
             else if (projectsToReload.Count > 0)
