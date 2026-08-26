@@ -1019,7 +1019,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 try
                 {
-                    preImages[key] = File.Exists(key) ? await File.ReadAllTextAsync(key) : null;
+                    preImages[key] = await FileIoHelper.ReadAllTextIfExistsAsync(key, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -1108,19 +1108,11 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                 {
                     try
                     {
-                        var directory = Path.GetDirectoryName(filePath);
-                        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                        {
-                            Directory.CreateDirectory(directory);
-                        }
-
-                        // Held for the duration of the write only, so OnFileSystemChanged can
-                        // check FilePathLock.IsLocked and skip its verification read instead of
-                        // racing the open handle (see the Changed-event branch above).
-                        using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
-                        {
-                            await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
-                        }
+                        // FileIoHelper holds the per-path lock for the duration of the write, so
+                        // OnFileSystemChanged can check FilePathLock.IsLocked and skip its
+                        // verification read instead of racing the open handle (see the
+                        // Changed-event branch above).
+                        await FileIoHelper.WriteAllTextAsync(filePath, newContent, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
                         if (_logger.IsEnabled(LogLevel.Information))
@@ -1174,19 +1166,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     {
                         preImages.TryGetValue(filePath, out var original);
                         _internalChanges[filePath] = (DateTime.UtcNow, original ?? "");
-                        using (await FilePathLock.AcquireAsync(filePath, CancellationToken.None))
+                        if (original is null)
                         {
-                            if (original is null)
-                            {
-                                if (File.Exists(filePath))
-                                {
-                                    File.Delete(filePath);
-                                }
-                            }
-                            else
-                            {
-                                await File.WriteAllTextAsync(filePath, original, CancellationToken.None);
-                            }
+                            await FileIoHelper.DeleteAsync(filePath, CancellationToken.None);
+                        }
+                        else
+                        {
+                            await FileIoHelper.WriteAllTextAsync(filePath, original, CancellationToken.None);
                         }
                         rolledBack.Add(filePath);
                     }
@@ -1301,7 +1287,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             string content;
             try
             {
-                content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                content = await FileIoHelper.ReadAllTextAsync(filePath, cancellationToken);
             }
             catch (Exception ex)
             {
