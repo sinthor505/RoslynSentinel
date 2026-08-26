@@ -163,19 +163,12 @@ public class McpTasksHarnessBulkCommentTests
         // in InjectAttributeClassIfMissing was fooled by this and skipped real injection, so every
         // seeded [ContentHash] attribute failed to compile (CS0246) and the whole seed-phase batch —
         // then every Phase 2 per-file apply — was rejected by validation, producing zero comments.
-        var decoyPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "ContentHashAttribute.cs");
-        await File.WriteAllTextAsync(decoyPath,
+        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
+        await _fixture.AddFileToSolution(
+            workspaceManager,
+            Path.Combine("ContosoOrders.Core", "ContentHashAttribute.cs"),
             "namespace ContosoOrders.Core;\n\npublic static class NotTheRealAttribute\n{\n    public static string Unrelated() => \"decoy\";\n}\n",
             TestContext.CurrentContext.CancellationToken);
-
-        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
-        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
-
-        // The decoy was written directly to disk (bypassing ApplyProposedChangesAsync), so the
-        // FileSystemWatcher-based drift tracker sees it as an unacknowledged external change —
-        // reloading the solution doesn't clear that. Acknowledge it so BulkComment's own writes
-        // aren't refused for an unrelated reason (drift refusal, not the collision this test targets).
-        workspaceManager.ClearExternalFileChanges();
 
         var requestParams = new CallToolRequestParams
         {

@@ -45,6 +45,61 @@ public sealed class TestSolutionFixture : IDisposable
         }
     }
 
+    /// <summary>
+    /// Writes a new file directly to disk (relative to <see cref="SolutionDirectory"/>), then
+    /// reloads the solution and acknowledges the resulting external-change entry. Bypasses
+    /// <c>ApplyProposedChangesAsync</c> on purpose — for tests that need a file present before a
+    /// tool call without going through the normal propose/apply path (e.g. seeding a fixture's
+    /// starting state, or reproducing a scenario the workspace didn't itself write).
+    /// </summary>
+    public async Task AddFileToSolution(IWorkspaceManager workspaceManager, string relativePath, string content, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.Combine(SolutionDirectory, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        await File.WriteAllTextAsync(fullPath, content, cancellationToken);
+
+        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+        workspaceManager.ClearExternalFileChanges();
+    }
+
+    /// <summary>
+    /// Overwrites an existing file directly on disk (relative to <see cref="SolutionDirectory"/>),
+    /// then reloads the solution and acknowledges the resulting external-change entry. Same
+    /// bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>.
+    /// </summary>
+    public async Task ModifyFileInSolution(IWorkspaceManager workspaceManager, string relativePath, string content, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.Combine(SolutionDirectory, relativePath);
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"ModifyFileInSolution: '{relativePath}' does not exist under '{SolutionDirectory}'. Use AddFileToSolution for a new file.", fullPath);
+        }
+
+        await File.WriteAllTextAsync(fullPath, content, cancellationToken);
+
+        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+        workspaceManager.ClearExternalFileChanges();
+    }
+
+    /// <summary>
+    /// Deletes an existing file directly from disk (relative to <see cref="SolutionDirectory"/>),
+    /// then reloads the solution and acknowledges the resulting external-change entry. Same
+    /// bypass-the-apply-path rationale as <see cref="AddFileToSolution"/>.
+    /// </summary>
+    public async Task DeleteFileFromSolution(IWorkspaceManager workspaceManager, string relativePath, CancellationToken cancellationToken = default)
+    {
+        var fullPath = Path.Combine(SolutionDirectory, relativePath);
+        if (!File.Exists(fullPath))
+        {
+            throw new FileNotFoundException($"DeleteFileFromSolution: '{relativePath}' does not exist under '{SolutionDirectory}'.", fullPath);
+        }
+
+        File.Delete(fullPath);
+
+        await workspaceManager.LoadSolutionAsync(SolutionPath, cancellationToken);
+        workspaceManager.ClearExternalFileChanges();
+    }
+
     private static void CopySourceFiles(string sourceRoot, string destinationRoot)
     {
         foreach (var sourceFile in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
