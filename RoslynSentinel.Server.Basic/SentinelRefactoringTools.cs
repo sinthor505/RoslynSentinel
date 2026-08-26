@@ -522,7 +522,23 @@ public class SentinelRefactoringTools
             var description = operation == AddRemoveViewAction.add
                 ? $"Adds 'using {namespaceName};' to {Path.GetFileName(filePath)}."
                 : $"Removes 'using {namespaceName};' from {Path.GetFileName(filePath)}.";
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            if (operation != AddRemoveViewAction.add)
+            {
+                return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
+            }
+
+            // namespaceName is caller-supplied verbatim (including any "static " prefix); the
+            // emitted directive text is trivially reconstructed from it rather than re-derived
+            // from the engine's inserted syntax node.
+            var addedUsing = $"using {namespaceName};";
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult
+                {
+                    Summary = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion),
+                    ChangedContent = addedUsing
+                },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
         {
@@ -608,6 +624,9 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Change accessibility of '{targetName}' to '{accessibility}'.", "ChangeAccessibility", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // No ChangedContent here: the only "new" text is the accessibility keyword itself,
+            // which the caller already passed in verbatim — echoing it back adds nothing the
+            // caller doesn't already have, unlike a reconstructed multi-part snippet.
             return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Changes accessibility of '{targetName}' to '{accessibility}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
@@ -671,7 +690,19 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, description, "SummaryComment", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff) };
+            var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff);
+
+            // add: summaryText is caller-supplied verbatim, echoed back as the added content
+            // (same reasoning as Member(add)'s raw-source path). remove has no new content to show.
+            if (operation != AddRemoveViewAction.add)
+            {
+                return new ToolResult<object>() { Success = true, Data = summary };
+            }
+
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult { Summary = summary, ChangedContent = summaryText! },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
         {
@@ -944,7 +975,20 @@ public class SentinelRefactoringTools
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AttributeModifyAction.add ? "Adds" : action == AttributeModifyAction.replace ? "Replaces" : "Removes")} '{existingAttribute}' attribute on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
-            return new ToolResult<object>() { Success = true, Data = summary };
+
+            // add/replace: existingAttribute (add) or newAttribute (replace) already holds the
+            // exact attribute source the caller composed — echoed back verbatim, same reasoning
+            // as Member(add)'s raw-source path. remove has no new content to show.
+            if (action == AttributeModifyAction.remove)
+            {
+                return new ToolResult<object>() { Success = true, Data = summary };
+            }
+
+            var changedAttribute = action == AttributeModifyAction.add ? existingAttribute : newAttribute;
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                new MemberChangedContentResult { Summary = summary, ChangedContent = changedAttribute ?? "" },
+                _workspaceManager.GetSolutionRoot(), "MemberChangedContent", ScanWrapperType.MemberChangedContent,
+                workspaceVersion: _workspaceManager.WorkspaceVersion);
         }
         catch (Exception ex)
         {
@@ -997,6 +1041,8 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifier}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // No ChangedContent: the only "new" text is the single modifier keyword the caller
+            // already passed in — same reasoning as ChangeAccessibility.
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{modifier}' modifier on '{targetName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
@@ -1051,6 +1097,8 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // No ChangedContent: the only "new" text is the base type name the caller already
+            // passed in — same reasoning as ChangeAccessibility/ModifyModifier.
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePath], $"{(action == AddRemoveAction.add ? "Adds" : "Removes")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff);
             return new ToolResult<object>() { Success = true, Data = summary };
         }
