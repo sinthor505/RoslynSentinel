@@ -436,6 +436,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             {
                 // Fall through — treat as a real external change.
             }
+            else if (FilePathLock.IsLocked(e.FullPath))
+            {
+                // A write to this exact path is still in flight — reading now would race the
+                // writer's open handle. Skip the verification read entirely rather than let it
+                // throw; this is our own write in progress, not a false-positive external edit.
+                return;
+            }
             else
             {
                 try
@@ -1107,7 +1114,13 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                             Directory.CreateDirectory(directory);
                         }
 
-                        await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+                        // Held for the duration of the write only, so OnFileSystemChanged can
+                        // check FilePathLock.IsLocked and skip its verification read instead of
+                        // racing the open handle (see the Changed-event branch above).
+                        using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
+                        {
+                            await File.WriteAllTextAsync(filePath, newContent, cancellationToken);
+                        }
                         success = true;
                         succeeded.Add(filePath);
                         if (_logger.IsEnabled(LogLevel.Information))
@@ -1161,16 +1174,19 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     {
                         preImages.TryGetValue(filePath, out var original);
                         _internalChanges[filePath] = (DateTime.UtcNow, original ?? "");
-                        if (original is null)
+                        using (await FilePathLock.AcquireAsync(filePath, CancellationToken.None))
                         {
-                            if (File.Exists(filePath))
+                            if (original is null)
                             {
-                                File.Delete(filePath);
+                                if (File.Exists(filePath))
+                                {
+                                    File.Delete(filePath);
+                                }
                             }
-                        }
-                        else
-                        {
-                            await File.WriteAllTextAsync(filePath, original, CancellationToken.None);
+                            else
+                            {
+                                await File.WriteAllTextAsync(filePath, original, CancellationToken.None);
+                            }
                         }
                         rolledBack.Add(filePath);
                     }
