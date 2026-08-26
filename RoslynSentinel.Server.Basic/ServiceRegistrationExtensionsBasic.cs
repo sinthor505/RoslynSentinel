@@ -220,6 +220,49 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                     return result;
                 }));
+
+            // Cheap large-result logging: sums the length of text content blocks in the response
+            // (no JSON serialization) and logs a warning above ScanResultHelper.ThresholdBytes.
+            // This is deliberately shape-agnostic — it exists because most tool result types
+            // aren't individually wired into LargeResultInfo (see RoslynSentinel.Common.ScanResultHelper),
+            // so this is the only signal for "this tool call returned a lot of data" for those tools.
+            // Grep the log for "Large tool result" to review offenders without parsing full payloads.
+            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+                ModelContextProtocol.Protocol.CallToolRequestParams,
+                ModelContextProtocol.Protocol.CallToolResult>(
+                async (context, cancellationToken) =>
+                {
+                    var result = await next(context, cancellationToken);
+
+                    try
+                    {
+                        long sizeChars = 0;
+                        if (result.Content is not null)
+                        {
+                            foreach (var block in result.Content)
+                            {
+                                if (block is ModelContextProtocol.Protocol.TextContentBlock textBlock)
+                                {
+                                    sizeChars += textBlock.Text?.Length ?? 0;
+                                }
+                            }
+                        }
+
+                        if (sizeChars > RoslynSentinel.Common.ScanResultHelper.ThresholdBytes)
+                        {
+                            var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
+                            logger?.LogWarning(
+                                "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {ThresholdBytes})",
+                                context.Params?.Name, sizeChars, RoslynSentinel.Common.ScanResultHelper.ThresholdBytes);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Large result logging filter failed: {ex}");
+                    }
+
+                    return result;
+                }));
         });
 
         return mcpBuilder;
