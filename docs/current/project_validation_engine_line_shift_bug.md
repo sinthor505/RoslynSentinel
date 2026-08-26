@@ -1,14 +1,16 @@
 ---
 name: project-validation-engine-line-shift-bug
-description: "ValidationEngine.ValidateChangesAsync's diagnostic-delta dedup keys on line number, so any edit above a pre-existing error misclassifies it as newly introduced — found via BulkComment solution-wide runs, not yet fixed"
+description: "ValidationEngine.ValidateChangesAsync's diagnostic-delta dedup keyed on line number, misclassifying pre-existing errors as newly introduced after a line-shifting edit — found via BulkComment solution-wide runs, fixed 2026-08-26"
 metadata:
   node_type: memory
   type: project
   originSessionId: ed38ed5b-d0aa-4f27-828c-fcbbb5d0b086
-  modified: 2026-08-26T02:21:12.518Z
+  modified: 2026-08-26T02:32:39.391Z
 ---
 
-**Not yet fixed — found 2026-08-26 while building [[project_mcp_tasks_test_harness_plan]]'s BulkComment coverage.** `ValidationEngine.ValidateChangesAsync` (`RoslynSentinel.Common\ValidationEngine.cs:178-182`) dedups baseline vs. candidate compiler errors with `DiagnosticKey`, which includes `location.StartLinePosition.Line`. This is a delta comparison meant to return only *newly introduced* errors — but any edit that adds/removes lines *above* a pre-existing error shifts that error's line number, so the candidate's copy of the same pre-existing error no longer matches its baseline key and gets reported as "new."
+**Fixed 2026-08-26** (found while building [[project_mcp_tasks_test_harness_plan]]'s BulkComment coverage). `ValidationEngine.ValidateChangesAsync` (`RoslynSentinel.Common\ValidationEngine.cs:178-182`) dedups baseline vs. candidate compiler errors with `DiagnosticKey`, which included `location.StartLinePosition.Line`. This is a delta comparison meant to return only *newly introduced* errors — but any edit that adds/removes lines *above* a pre-existing error shifts that error's line number, so the candidate's copy of the same pre-existing error no longer matched its baseline key and got reported as "new."
+
+**Fix applied:** `DiagnosticKey` now returns `$"{d.Id}|{d.GetMessage()}|{location.Path}"` — dropped the trailing `|{location.StartLinePosition.Line}` segment. Verified: solution builds with 0 errors, and the 4 `McpTasksHarnessBulkCommentTests` (including the real, non-dryRun `ContosoOrders.Core` run) still pass. Full solution test run in progress to confirm no regressions elsewhere.
 
 **Repro:** solution-wide `BulkComment` (non-dryRun) against a solution containing a project with pre-existing unresolved-reference errors (e.g. `ContosoOrders.Tests` referencing xUnit types that aren't actually restored) plus other, unrelated projects. Seeding/commenting inserts `[ContentHash]` attributes and doc comments earlier in files across the solution; even projects untouched by the edit aren't affected, but *any file in the same project* as a pre-existing error, once edited above that error's line, causes `ValidateChangesAsync` to report the (unchanged) baseline error as newly introduced — appearing in `BulkComment`'s result as `"apply validation failed (N diagnostic(s))"` for every member in that project, blocking all of them from ever being committed.
 
