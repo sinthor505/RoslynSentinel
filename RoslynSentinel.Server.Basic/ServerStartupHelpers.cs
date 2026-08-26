@@ -114,11 +114,11 @@ public static class ServerStartupHelpers
     /// </summary>
     public static string ConfigureStdioLogging(string logFileName = "server.log")
     {
-        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", logFileName);
+        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", TimestampedLogFileName(logFileName));
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
             .Enrich.FromLogContext()
-            .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
+            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite)
             .CreateLogger();
         return logPath;
     }
@@ -129,14 +129,25 @@ public static class ServerStartupHelpers
     /// </summary>
     public static string ConfigureHttpLogging(string logFileName = "http-host.log")
     {
-        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", logFileName);
+        var logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", TimestampedLogFileName(logFileName));
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Verbose()
             .Enrich.FromLogContext()
-            .WriteTo.File(logPath, rollingInterval: RollingInterval.Day)
+            .WriteTo.File(logPath, rollingInterval: RollingInterval.Infinite)
             .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
             .CreateLogger();
         return logPath;
+    }
+
+    /// <summary>
+    /// Inserts a yyyyMMdd-HHmmss timestamp before the file extension so each server restart
+    /// starts a fresh log file instead of appending to (or day-rolling into) a shared one.
+    /// </summary>
+    private static string TimestampedLogFileName(string logFileName)
+    {
+        var extension = Path.GetExtension(logFileName);
+        var stem = Path.GetFileNameWithoutExtension(logFileName);
+        return $"{stem}-{DateTime.Now:yyyyMMdd-HHmmss}{extension}";
     }
 
     // ── Crash handlers ────────────────────────────────────────────────────────
