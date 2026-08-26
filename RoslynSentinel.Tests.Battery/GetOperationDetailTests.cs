@@ -1,8 +1,9 @@
 // GetOperationDetail — SentinelWorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: blobPath == null, filter present, file: filter true/false, unknown filter).
 // Blob schema follows OperationBlobWriter.WriteAsync's on-disk layout, same as UndoLastApplyTests.cs.
-// ItemRecordOutcome has no JsonStringEnumConverter (see project_operation_blob_json_gotchas memory),
-// so blob fixtures below write enum values, never string literals.
+// ItemRecordOutcome now serializes as its string name (JsonStringEnumConverter), matching its
+// siblings ItemOutcome/OperationOutcome — fixtures below construct enum values, not string literals,
+// so this is transparent either way. See project_operation_blob_json_gotchas memory for history.
 
 using System.Text.Json;
 

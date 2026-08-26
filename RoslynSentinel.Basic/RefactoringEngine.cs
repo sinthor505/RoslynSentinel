@@ -13,13 +13,11 @@ namespace RoslynSentinel.Basic;
 
 public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
-public record RenameHunk(int LineNumber, string Before, string After, string? ContextBefore, string? ContextAfter);
-public record RenameFileChange(FilePath filePath, List<RenameHunk> Hunks);
-public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePath, string> PendingChanges, List<RenameFileChange> FileChanges, string? Error = null, SymbolHandle? UpdatedHandle = null)
+public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePath, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null)
 {
     public string ToToolResponse()
     {
-        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = FileChanges.Count, fileChanges = FileChanges, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null — re-run locate_symbol before further operations on this symbol." : null });
+        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.SessionId, h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null — re-run locate_symbol before further operations on this symbol." : null });
     }
 }
 
@@ -759,7 +757,7 @@ public class RefactoringEngine
 
     public async Task<RenameSymbolResult> RenameSymbolAsync(SymbolHandle handle, ISymbol symbol, string newName, CancellationToken cancellationToken = default)
     {
-        static RenameSymbolResult Err(string msg, string n) => new("", n, new Dictionary<FilePath, string>(), new List<RenameFileChange>(), msg);
+        static RenameSymbolResult Err(string msg, string n) => new("", n, new Dictionary<FilePath, string>(), msg);
         if (!_config.IsFeatureEnabled("Rename"))
         {
             return Err("Feature 'Rename' is disabled.", newName);
@@ -773,22 +771,23 @@ public class RefactoringEngine
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
         var updated = await Microsoft.CodeAnalysis.Rename.Renamer.RenameSymbolAsync(solution, symbol, new Microsoft.CodeAnalysis.Rename.SymbolRenameOptions(), newName, cancellationToken);
         var pendingChanges = new Dictionary<FilePath, string>();
-        var fileChanges = new List<RenameFileChange>();
         foreach (var pc in updated.GetChanges(solution).GetProjectChanges())
         {
             foreach (var docId in pc.GetChangedDocuments())
             {
                 var newDoc = updated.GetDocument(docId)!;
                 var filePth = new FilePath(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
-                var newContent = (await newDoc.GetTextAsync(cancellationToken)).ToString();
-                pendingChanges[filePth] = newContent;
-                var origContent = (await solution.GetDocument(docId)!.GetTextAsync(cancellationToken)).ToString();
-                fileChanges.Add(new RenameFileChange(filePth, ComputeRenameHunks(origContent, newContent)));
+                pendingChanges[filePth] = (await newDoc.GetTextAsync(cancellationToken)).ToString();
             }
         }
 
+        // Per-file diffs are not computed here — the caller (SentinelRefactoringTools.RenameSymbol)
+        // gets them from ValidateAndApplyAsync's returnDiff option, which builds them via the
+        // canonical DiffEngine.CreateDiff. This used to duplicate that with a second, weaker
+        // lockstep diff (ComputeRenameHunks); removed as part of the diff-logic consistency fix
+        // (docs/current/codebase-consistency-audit-v1.md #3).
         var updatedHandle = await TryResolveUpdatedHandleAsync(handle, symbol, updated, newName, cancellationToken);
-        return new RenameSymbolResult(symbol.Name, newName, pendingChanges, fileChanges, null, updatedHandle);
+        return new RenameSymbolResult(symbol.Name, newName, pendingChanges, null, updatedHandle);
     }
 
     private static async Task<SymbolHandle?> TryResolveUpdatedHandleAsync(SymbolHandle handle, ISymbol originalSymbol, Solution updatedSolution, string newName, CancellationToken cancellationToken = default)
@@ -849,30 +848,6 @@ public class RefactoringEngine
         {
             return null;
         }
-    }
-
-    private static List<RenameHunk> ComputeRenameHunks(string oldContent, string newContent, int contextLines = 2)
-    {
-        var oldLines = oldContent.Split(separator, StringSplitOptions.None);
-        var newLines = newContent.Split(separator, StringSplitOptions.None);
-        var hunks = new List<RenameHunk>();
-        // Use Max so lines added/removed at the end (e.g. new using directives) are included
-        int len = Math.Max(oldLines.Length, newLines.Length);
-        for (int i = 0; i < len; i++)
-        {
-            var oldLine = i < oldLines.Length ? oldLines[i] : "";
-            var newLine = i < newLines.Length ? newLines[i] : "";
-            if (oldLine == newLine)
-            {
-                continue;
-            }
-
-            var ctxBefore = i > 0 ? string.Join("\n", oldLines[Math.Max(0, i - contextLines)..Math.Min(i, oldLines.Length)]) : null;
-            var ctxAfter = i + 1 < newLines.Length ? string.Join("\n", newLines[(i + 1)..Math.Min(newLines.Length, i + 1 + contextLines)]) : null;
-            hunks.Add(new RenameHunk(i + 1, oldLine, newLine, ctxBefore, ctxAfter));
-        }
-
-        return hunks;
     }
 
     public async Task<DocumentEditResult> ConvertIndexerToMethodAsync(FilePath filePath, CancellationToken cancellationToken = default)
@@ -4639,12 +4614,20 @@ public class RefactoringEngine
             return new FormatPreviewResult(false, 0, new List<FormatHunk>());
         }
 
-        var originalLines = originalText.Split('\n');
-        var formattedLines = formattedText.Split('\n');
+        // Split on the same 3-way line-ending set as DiffEngine/ComputeRenameHunks (not just '\n')
+        // so a trailing '\r' on Windows-style line endings isn't folded into line content.
+        var originalLines = originalText.Split(separator, StringSplitOptions.None);
+        var formattedLines = formattedText.Split(separator, StringSplitOptions.None);
         var hunks = ComputeFormatHunks(originalLines, formattedLines, contextLines: 3);
         return new FormatPreviewResult(true, hunks.Count, hunks);
     }
 
+    // Intentionally NOT delegated to DiffEngine.CreateDiff: FormatHunk groups adjacent changed
+    // lines into merged ranges with leading/trailing context on each side, a shape CreateDiff's
+    // flat per-line unified-diff string doesn't produce and existing tests assert on directly
+    // (RegressionTests/NewToolTests/BugFixTests). See docs/current/codebase-consistency-audit-v1.md
+    // #3 — consolidating this would need a real reshape of FormatHunk/FormatPreviewResult and its
+    // consumers, not just a call-site swap, so it's left as its own diff implementation for now.
     private static List<FormatHunk> ComputeFormatHunks(string[] original, string[] formatted, int contextLines)
     {
         var changedLines = new List<int>();

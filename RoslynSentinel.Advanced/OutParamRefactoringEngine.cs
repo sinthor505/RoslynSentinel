@@ -14,7 +14,8 @@ public record OutParamConversionResult(
     string? OriginalSignature,
     string? NewSignature,
     int CallSitesRewritten,
-    List<string> CallSiteWarnings
+    List<string> CallSiteWarnings,
+    Dictionary<FilePath, string>? Changes = null
 );
 
 public class OutParamRefactoringEngine
@@ -116,7 +117,6 @@ public class OutParamRefactoringEngine
         var outParamNames = outParams.Select(p => p.Identifier.Text).ToList();
 
         // --- Rewrite the method declaration ---
-        var workspace = solution.Workspace;
         var editor = await DocumentEditor.CreateAsync(document, cancellationToken);
 
         // 1. Change return type
@@ -281,14 +281,18 @@ public class OutParamRefactoringEngine
             }
         }
 
-        // Apply the solution back to the workspace
-        bool applied = workspace.TryApplyChanges(updatedSolution);
-
-        if (!applied)
+        // Materialize the changed documents as file text for the caller to route through the
+        // shared write chokepoint (ApplyDiff/ApplyProposedChangesAsync) — this engine must not
+        // write to disk itself.
+        var changes = new Dictionary<FilePath, string>();
+        foreach (var pc in updatedSolution.GetChanges(solution).GetProjectChanges())
         {
-            return new OutParamConversionResult(false,
-                "TryApplyChanges failed — workspace may be read-only.",
-                originalSignature, tupleType, 0, callSiteWarnings);
+            foreach (var docId in pc.GetChangedDocuments())
+            {
+                var newDoc = updatedSolution.GetDocument(docId)!;
+                var changedPath = new FilePath(newDoc.FilePath ?? newDoc.Name, _workspaceManager.GetSolutionRoot());
+                changes[changedPath] = (await newDoc.GetTextAsync(cancellationToken)).ToString();
+            }
         }
 
         var newSig = $"{tupleType} {methodName}({string.Join(", ", methodDecl.ParameterList.Parameters.Where(p => !p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword))))})";
@@ -298,7 +302,8 @@ public class OutParamRefactoringEngine
             originalSignature,
             newSig,
             callSitesRewritten,
-            callSiteWarnings);
+            callSiteWarnings,
+            changes);
     }
 
     private static BlockSyntax RewriteMethodBody(

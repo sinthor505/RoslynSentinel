@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 namespace RoslynSentinel.Common;
 
 /// <summary>Per-item outcome used in operation blob records and legacy BatchResultSummary.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ItemRecordOutcome
 {
     Unset,

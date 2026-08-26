@@ -464,6 +464,8 @@ public class Bar
         Assert.That(result.UpdatedText, Does.Not.Contain("[Obsolete]"));
     }
 
+    // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
+    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task RemoveAttribute_MatchesSuffixVariant()
     {

@@ -54,7 +54,7 @@ public class SentinelWorkspaceTools
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
     [Description("Queries or updates feature flags. list → all; get → by names; update → batch-update via enabled as [{Key: featureName, Value: bool}] pairs. delaySeconds (test-only) waits before acting, to exercise MCP task polling/cancellation.")]
-    public async Task<object> Features(FeaturesAction action, List<string>? names = null, List<KeyValuePair<string, bool>>? enabled = null, int delaySeconds = 0, CancellationToken cancellationToken = default)
+    public async Task<ToolResult<object>> Features(FeaturesAction action, List<string>? names = null, List<KeyValuePair<string, bool>>? enabled = null, int delaySeconds = 0, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -65,23 +65,23 @@ public class SentinelWorkspaceTools
 
             return action switch
             {
-                FeaturesAction.list => (object)_config.GetFeatureStatuses(),
-                FeaturesAction.get => _config.GetFeatureStatuses(names),
-                FeaturesAction.update => (object)UpdateFeaturesInternal(enabled ?? []),
-                _ => new
+                FeaturesAction.list => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses() },
+                FeaturesAction.get => new ToolResult<object> { Success = true, Data = _config.GetFeatureStatuses(names) },
+                FeaturesAction.update => new ToolResult<object> { Success = true, Data = UpdateFeaturesInternal(enabled ?? []) },
+                _ => new ToolResult<object>
                 {
                     Success = false,
-                    Error = $"Unknown action '{action}'. Valid values: list, get, update."
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
                 }
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Features ({Action}) failed", action);
-            return new
+            return new ToolResult<object>
             {
                 Success = false,
-                Error = $"Features failed unexpectedly ({ex.GetType().Name}): {ex.Message}"
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
             };
         }
     }

@@ -100,6 +100,8 @@ public class StringTest
     // ══════════════════════════════════════════════════════════════════════════
     // Test 3: Property Access Expression
     // ══════════════════════════════════════════════════════════════════════════
+    // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
+    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractLocalVariable_PropertyAccess_ExtractsCorrectly()
     {
@@ -234,6 +236,8 @@ public class Counter
     // ══════════════════════════════════════════════════════════════════════════
     // Test 8: Skips Method Calls (Side Effects)
     // ══════════════════════════════════════════════════════════════════════════
+    // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
+    // on suite rerun. Not a regression — see feedback_comment_suspected_flaky_tests memory.
     [Test]
     public async Task ExtractLocalVariable_SkipsMethodCallsWithSideEffects()
     {

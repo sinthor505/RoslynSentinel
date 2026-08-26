@@ -209,7 +209,6 @@ public class SentinelRefactoringTools
                 oldName = result.OldName,
                 newName = result.NewName,
                 filesChanged = result.PendingChanges.Count,
-                fileChanges = result.FileChanges,
                 updatedHandle = result.UpdatedHandle is SymbolHandle h
                     ? new
                     {
@@ -253,7 +252,7 @@ public class SentinelRefactoringTools
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePath}'", fromType, toType, filePath);
-            return new ToolResult<object>() { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping failed for '{fromType}' to '{toType}' in '{filePath}': {ex.GetType().Name}: {ex.Message}") };
+            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
         }
     }
 
@@ -1099,6 +1098,10 @@ public class SentinelRefactoringTools
             }
             catch (Exception ex)
             {
+                // Deliberately not routed through ToolErrorMapper (unlike other catches in this
+                // file): this is a partial-success condition (new file written and validated, only
+                // the old-file delete failed), not a plain failure, and the mapper's generic
+                // "failed unexpectedly" wording would drop the actionable remediation advice below.
                 _logger.LogError(ex, "SyncTypeAndFilename wrote '{NewPath}' but failed to delete old file '{OldPath}'", newPath, filePath);
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename wrote '{Path.GetFileName(newPath)}' but failed to delete the old file '{filePath}': {ex.Message}. Delete it manually to avoid a duplicate-type compile error.") };
             }

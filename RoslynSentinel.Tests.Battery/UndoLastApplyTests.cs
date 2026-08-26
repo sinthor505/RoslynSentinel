@@ -6,8 +6,8 @@
 // exercised against FakeWorkspaceManager with a hand-written operation blob on disk — the blob
 // schema (OperationBlobWriter.WriteAsync: {toolName, changeId, generatedUtc, itemCount, items} at
 // .roslynsentinel/operations/{toolName}_{timestamp}_{changeId}.json) doesn't require a real apply
-// to produce, just matching JSON. Note ItemRecordOutcome (unlike ItemOutcome/OperationOutcome) has
-// no JsonStringEnumConverter, so Outcome must be written as the enum value, not a string literal.
+// to produce, just matching JSON. ItemRecordOutcome now carries JsonStringEnumConverter like its
+// siblings ItemOutcome/OperationOutcome, so Outcome round-trips as its string name.
 // The real-revert path requires ApplyProposedChangesAsync, which FakeWorkspaceManager deliberately
 // leaves unimplemented, so that test uses PersistentWorkspaceManager + TestSolutionFixture instead.
 

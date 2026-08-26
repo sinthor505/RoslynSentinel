@@ -75,7 +75,8 @@ public class BatteryTwentyTests
     [Test]
     public async Task Features_GetWithFeatureName_ReturnsResult()
     {
-        var features = await _tools.Features(FeaturesAction.list) as System.Collections.IEnumerable;
+        var result = await _tools.Features(FeaturesAction.list);
+        var features = result.Data as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
         Assert.Pass("Features list retrieved successfully.");
     }

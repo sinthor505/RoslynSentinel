@@ -469,13 +469,19 @@ public class SentinelCodemodTools
                     }
                 case "convert_out_params_to_value_tuple":
                     var result = await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(filePath, methodName, cancellationToken);
+                    if (result is not { Success: true, Changes.Count: > 0 })
+                    {
+                        return new ToolResult<object>
+                        {
+                            Success = false,
+                            Error = new ResultError(ToolErrorCode.Exception, $"convert_out_params_to_value_tuple failed for '{methodName}' in '{filePath}': {result?.Message}")
+                        };
+                    }
+
                     return new ToolResult<object>
                     {
-                        Success = result?.Success ?? false,
-                        Data = result,
-                        Error = result != null && !result.Success
-                            ? new ResultError(ToolErrorCode.Exception, $"convert_out_params_to_value_tuple failed for '{methodName}' in '{filePath}': {result.Message}")
-                            : null
+                        Success = true,
+                        Data = result
                     };
                 case "convert_static_to_extension":
                     {
@@ -1228,7 +1234,7 @@ public class SentinelCodemodTools
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePath}'", className, filePath);
-                            return new ToolResult<object>() { Error = new ResultError(ToolErrorCode.Exception, $"{ex.GetType().Name}: {ex.Message}") };
+                            return new ToolResult<object>() { Success = false, Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{filePath}'") };
                         }
                     }
                 case "generate_path_driven_tests":
@@ -1392,7 +1398,8 @@ public class SentinelCodemodTools
                                              Returns SourceTransformResult.
               convert_method_to_indexer      Converts a single-parameter get/set method pair to an indexer.
               convert_out_params_to_value_tuple  Converts out-parameter methods to ValueTuple returns.
-                                             Returns OutParamConversionResult.
+                                             Returns OutParamConversionResult; pass its Changes to
+                                             ApplyDiff (changesetFormat=files) to write to disk.
               convert_static_to_extension    Converts a static method to an extension method.
               convert_switch_to_expression   Converts a switch statement to a switch expression.
               convert_to_async_enumerable    Converts a Task<List<T>>-returning method to IAsyncEnumerable<T>.
