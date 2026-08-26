@@ -725,6 +725,61 @@ public class SentinelScanTools
                         };
                         break;
                     }
+                case ScanWrapperType.BreakingChangeList:
+                    {
+                        var changes = JsonSerializer.Deserialize<List<BreakingChange>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = changes.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ScanWrapperType.TextSearchMatchList:
+                    {
+                        var matches = JsonSerializer.Deserialize<List<TextSearchMatch>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = matches.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ScanWrapperType.ProjectFileList:
+                    {
+                        var files = JsonSerializer.Deserialize<List<string>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = files.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ScanWrapperType.ProjectInfoList:
+                    {
+                        var projects = JsonSerializer.Deserialize<List<ProjectInfoEntry>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = projects.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
+                case ScanWrapperType.SolutionItemFileList:
+                    {
+                        var solutionItems = JsonSerializer.Deserialize<List<SolutionItemFile>>(all.Data.ToString(), _jsonOptions)
+                            ?? [];
+                        result = new ToolResult<object>
+                        {
+                            Success = true,
+                            Data = solutionItems.Skip(offset).Take(limit).ToList()
+                        };
+                        break;
+                    }
                 default:
                     {
                         return new ToolResult<object>
@@ -954,11 +1009,13 @@ public class SentinelScanTools
             FilePath filePath = _workspaceManager.SetFilePath(filepath);
 
             var result = await _breakingChangeEngine.DetectBreakingChangesAsync(baseline, projectName, filePath, cancellationToken);
-            return new ToolResult<object>
-            {
-                Success = true,
-                Data = result
-            };
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                result,
+                _workspaceManager.GetSolutionRoot(),
+                typeof(BreakingChange).Name,
+                ScanWrapperType.BreakingChangeList,
+                totalRecords: result.Count,
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {

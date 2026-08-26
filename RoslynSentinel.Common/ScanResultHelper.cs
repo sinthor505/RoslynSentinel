@@ -71,7 +71,12 @@ public enum ScanWrapperType
     MethodSource,
     FileSource,
     MigrationScanSummary,
-    MemberChangedContent
+    MemberChangedContent,
+    BreakingChangeList,
+    TextSearchMatchList,
+    ProjectFileList,
+    ProjectInfoList,
+    SolutionItemFileList
 }
 
 /// <summary>Offloaded payload shape for a whole-file ReadFile result too large to inline (mirrors the anonymous shape ReadFile returns inline for the non-offloaded case).</summary>

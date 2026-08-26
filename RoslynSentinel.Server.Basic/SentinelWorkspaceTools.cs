@@ -21,6 +21,8 @@ public record TextSearchMatch(FilePath filePath, int Line, int Column, string Pr
 /// display name (e.g. "Solution Items").
 /// </summary>
 public record SolutionItemFile(FilePath FilePath, string SolutionFolder);
+/// <summary>A project entry returned by ListSolutionItems(kind: projects).</summary>
+public record ProjectInfoEntry(string Name, string? FilePath);
 [McpServerToolType]
 public class SentinelWorkspaceTools
 {
@@ -105,11 +107,14 @@ public class SentinelWorkspaceTools
             if (kind == SolutionItemsKind.projects)
             {
                 var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = solution.Projects.Select(p => (object)new { p.Name, p.FilePath }).ToList()
-                };
+                var projectInfos = solution.Projects.Select(p => new ProjectInfoEntry(p.Name, p.FilePath)).ToList();
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    projectInfos,
+                    _workspaceManager.GetSolutionRoot(),
+                    typeof(ProjectInfoEntry).Name,
+                    ScanWrapperType.ProjectInfoList,
+                    totalRecords: projectInfos.Count,
+                    cancellationToken: cancellationToken);
             }
 
             if (kind == SolutionItemsKind.solutionItems)
@@ -125,12 +130,13 @@ public class SentinelWorkspaceTools
                 }
 
                 var items = _workspaceManager.GetSolutionFolderItems().Select(i => new SolutionItemFile(new FilePath(Path.GetFullPath(Path.Combine(solutionRoot, i.RelativePath)), solutionRoot), i.SolutionFolder)).ToList();
-                return new ToolResult<object>()
-                {
-                    Success = true,
-                    Data = items,
-                    TotalRecords = items.Count
-                };
+                return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                    items,
+                    solutionRoot,
+                    typeof(SolutionItemFile).Name,
+                    ScanWrapperType.SolutionItemFileList,
+                    totalRecords: items.Count,
+                    cancellationToken: cancellationToken);
             }
 
             if (kind == SolutionItemsKind.files)
@@ -158,12 +164,14 @@ public class SentinelWorkspaceTools
                     }
 
                     var sep = Path.DirectorySeparatorChar;
-                    var files = project.Documents.Select(d => d.FilePath ?? d.Name).Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase)).ToList<object>();
-                    return new ToolResult<object>()
-                    {
-                        Success = true,
-                        Data = files
-                    };
+                    var files = project.Documents.Select(d => d.FilePath ?? d.Name).Where(p => !p.Contains($"{sep}obj{sep}", StringComparison.OrdinalIgnoreCase) && !p.Contains($"{sep}bin{sep}", StringComparison.OrdinalIgnoreCase)).ToList();
+                    return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                        files,
+                        _workspaceManager.GetSolutionRoot(),
+                        "ProjectFile",
+                        ScanWrapperType.ProjectFileList,
+                        totalRecords: files.Count,
+                        cancellationToken: cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -1325,15 +1333,21 @@ public class SentinelWorkspaceTools
             {
                 warnings.Add("No matches. SearchSolutionText only searches documents that are part of a loaded project's compilation (e.g. .cs files) — it does not see files attached via the .sln's Solution Folders, docs/ files, or other non-project files. Use ListSolutionItems(kind: solutionItems) to list files attached via Solution Folders, or ProjectDoc to read plan/handoff/documentation files directly.");
             }
+            else if (results.Count >= maxResults)
+            {
+                warnings.Add($"Hit maxResults ({maxResults}) — there may be more matches not shown. Narrow fileGlob/pattern or increase maxResults to see more.");
+            }
 
             string? warning = warnings.Count > 0 ? string.Join(" ", warnings) : null;
-            return new ToolResult<object>()
-            {
-                Success = true,
-                Data = results,
-                Warning = warning,
-                WorkspaceVersion = _workspaceManager.WorkspaceVersion
-            };
+            var searchResult = await ToolResult<object>.ForPossiblyLargeDataAsync(
+                results,
+                _workspaceManager.GetSolutionRoot(),
+                typeof(TextSearchMatch).Name,
+                ScanWrapperType.TextSearchMatchList,
+                totalRecords: results.Count,
+                workspaceVersion: _workspaceManager.WorkspaceVersion,
+                cancellationToken: cancellationToken);
+            return searchResult with { Warning = warning };
         }
         catch (Exception ex)
         {

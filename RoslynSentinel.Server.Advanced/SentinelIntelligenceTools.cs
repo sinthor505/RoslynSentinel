@@ -145,42 +145,15 @@ public class SentinelIntelligenceTools
 
         try
         {
-            //return await _inventoryEngine.GetCodeInventoryAsync(filePath);
             var results = await _inventoryEngine.GetCodeInventoryAsync(filePath, cancellationToken);
 
-            // convert results to json
-            var jsonResults = System.Text.Json.JsonSerializer.Serialize(results);
-
-            if (jsonResults.Length < ScanResultHelper.ThresholdBytes)
-            {
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    Data = results,
-                    TotalRecords = results.Methods.Count
-                };
-            }
-            else
-            {
-
-                var summary = await ScanResultHelper.StoreScanResultAsync(results, _workspaceManager.GetSolutionRoot(), ScanWrapperType.CodeInventoryReport, cancellationToken);
-                return new ToolResult<object>
-                {
-                    Success = true,
-                    TotalRecords = results.Methods.Count,
-                    LargeResult = new LargeResultInfo(
-                        resultType: typeof(CodeInventoryReport).Name,
-                        writtenToFile: summary.offloaded,
-                        filePath: summary.filePath.Absolute.ToString(),
-                        scanId: summary.scanId!,
-                        sizeBytes: summary.jsonBytes.Length,
-                        totalRecords: results.Methods.Count,
-                        message: $"Result written to file ({summary.jsonBytes.Length} bytes, {results.Methods.Count} records). " +
-                                   $"Use get_scan_result(scanId: \"{summary.scanId}\") to page through results. " +
-                                   "Pass limit and offset to control page size (default limit: 50).")
-
-                };
-            }
+            return await ToolResult<object>.ForPossiblyLargeDataAsync(
+                results,
+                _workspaceManager.GetSolutionRoot(),
+                typeof(CodeInventoryReport).Name,
+                ScanWrapperType.CodeInventoryReport,
+                totalRecords: results.Methods.Count,
+                cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
