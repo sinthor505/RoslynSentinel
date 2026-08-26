@@ -499,6 +499,53 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    // NOTE: ValidateChangesAsync adds the renamed file as a brand-new document into the candidate
+    // solution (RoslynSentinel.Common/ValidationEngine.cs ~line 111-113) without removing the
+    // original document at the old path first — RemoveDocumentByPathAsync only runs after a
+    // successful (non-dryRun) apply, in the tool method itself. So for any real rename where the
+    // type's declaration is unique (the normal case — that's the whole reason the file needs
+    // renaming), pre-validation sees the same type declared in two documents at once and fails
+    // with a duplicate-declaration error, dryRun or not. Confirmed pre-existing and unrelated to
+    // the dryRun/returnDiff wiring added here: no prior test exercised this tool's success path
+    // through ValidateAndApplyAsync at all (the one existing test, SyncTypeAndFilename_ValidFile_
+    // ReturnsString, renames "Order.cs" containing "class Order" — filename already matches, so it
+    // short-circuits on EditOutcome.CannotEdit before ever reaching ValidateAndApplyAsync). Tracked
+    // in docs/current/TODO.md rather than fixed here, since fixing validation's document-replacement
+    // semantics is a larger, separate change. This test asserts the one thing dryRun is responsible
+    // for: even when validation fails, no destructive action (old-file delete) has occurred.
+    [Test]
+    public async Task SyncTypeAndFilename_DryRun_NeverDeletesOriginalFileAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            var newPath = Path.Combine(tempDir, "Widget.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+
+            var solution = TestSolutionBuilder.CreateSolutionWithProject(
+                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
+                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+
+            var result = await _tools.SyncTypeAndFilename(oldPath, dryRun: true);
+
+            Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
+            Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
+            if (result.Success)
+            {
+                var data = (AppliedChangeSummary)result.Data!;
+                Assert.That(data.DryRun, Is.True);
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
     // --- InlineMethod ---
 
     [Test]

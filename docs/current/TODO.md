@@ -4,6 +4,50 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
+## `SyncTypeAndFilename` validation always sees old+new documents coexisting — likely always fails when the type is unique
+
+**Found:** 2026-08-25, while wiring `dryRun`/`returnDiff` params onto `SyncTypeAndFilename`
+(`RoslynSentinel.Server.Basic/SentinelRefactoringTools.cs`) and writing a regression test for the
+new `dryRun` behavior.
+
+**What:** `ValidationEngine.ValidateChangesAsync`'s static core (`RoslynSentinel.Common/
+ValidationEngine.cs`, ~line 102-116) treats a change whose path has no existing document as brand
+new, and *adds* it into the candidate solution alongside everything already there. But
+`SyncTypeAndFilename`'s change dictionary is keyed on the *new* path (`changes = { [newPath] =
+content }`) while the *old* document (same content, same type) is still present under the old path
+— `RemoveDocumentByPathAsync` for the old path only runs after a successful, non-dryRun apply, in
+the tool method itself (`SentinelRefactoringTools.cs`, after `ValidateAndApplyAsync` returns). So
+pre-apply validation sees the same type declared in two documents simultaneously and fails with a
+duplicate-declaration compiler error (e.g. `CS0229 Ambiguity between 'X.Member' and 'X.Member'`) —
+for what looks like every real invocation where the type's declaration is otherwise unique, which is
+the normal case (that's the whole reason the file needs renaming).
+
+**Why this went unnoticed:** no existing test exercised this tool's success path through
+`ValidateAndApplyAsync` at all. The one pre-existing test
+(`SyncTypeAndFilename_ValidFile_ReturnsString` in `BatteryTwentyFourTests.cs`) renames `"Order.cs"`
+containing `class Order` — filename already matches the type, so `SyncTypeAndFilenameAsync` returns
+`EditOutcome.CannotEdit` before ever reaching `ValidateAndApplyAsync`, and the test only asserts
+`result is not null`. Found by writing a real rename scenario (mismatched filename vs. type, real
+temp-dir files) for `SyncTypeAndFilename_DryRun_NeverDeletesOriginalFileAsync`
+(`BatteryTwentyFourTests.cs`) — that test asserts the dryRun invariant regardless of validation
+outcome, so it stayed green, but the underlying validation failure is documented inline there.
+
+Checked two other candidates that might have already covered this and confirmed neither does:
+`Samples/ContosoOrders` scenario 8 (`SCENARIOS.md`) describes `SyncTypeAndFilename` renaming
+`OrderProcessor.cs` → `Order.cs`, but the sample's `OrderProcessor.cs` still contains `class Order`
+today with a comment noting the mismatch is planted intentionally — i.e. that scenario documents an
+*intended* agent task, not a recorded successful run, and the rename was never actually applied to
+the sample on disk. `RoslynSentinel.Tests.Battery/BatteryTwentyNineTests.cs` (`B29_AllEngines_
+RealSolution_SmokeTests`) does load a real on-disk solution (via `ROSLYN_SENTINEL_TEST_SLN`), but
+its own file header states all its tests are read-only ("nothing is written to disk") and it never
+calls `SyncTypeAndFilename` — it wouldn't hit this bug either way.
+
+**Suggested approach:** either exclude the old document from the candidate solution when validating
+a rename-shaped change (the tool layer already knows both paths), or extend `ValidateChangesAsync`
+to accept an explicit "remove these paths first" list so rename tools can request it without a
+special case per tool. Whichever approach, add a real success-path test for `SyncTypeAndFilename`
+through `ValidateAndApplyAsync` (not just the engine method) once fixed.
+
 ## `ApplyDiff` hunk-anchoring and error-wrapper fixes — closed
 
 **Found:** 2026-08-20/21, while migrating tests off a dead `RefactoringEngine.SafeDeleteSymbolAsync`

@@ -1114,6 +1114,8 @@ public class SentinelRefactoringTools
     [Description("Synchronizes the filename to match the primary type declared in the file.")]
     public async Task<ToolResult<object>> SyncTypeAndFilename(
         [Consumes(DataTag.SourceFilepath, required: true)] string filepath,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
+        [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -1134,9 +1136,16 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [newPath] = content };
-            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+
+            // dryRun: ValidateAndApplyAsync never wrote newPath, so deleting filePath here would
+            // destroy the original with nothing on disk to replace it. Report the preview as-is.
+            if (apply.DryRun)
+            {
+                return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"[DryRun] Would rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
+            }
 
             // Only remove the old file after the new one is validated and written, so the
             // two never coexist as a validated on-disk duplicate of the same type.
