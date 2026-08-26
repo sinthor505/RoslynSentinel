@@ -138,16 +138,55 @@ public class SentinelCommentingTools
         }
 
         // ── Phase 1: seed (always runs, mechanical, no LLM) ─────────────────
-        var (seedChanges, seededCount, alreadyTaggedAtSeedTime) = await _commentingEngine.SeedContentHashesAsync(
+        var (seedChanges, seededCount, alreadyTaggedAtSeedTime, unresolvedProjects) = await _commentingEngine.SeedContentHashesAsync(
             scope, projectName, filePath, cancellationToken);
+
+        // Distinct from a seed-apply validation failure below: here the [ContentHash] attribute
+        // itself could not be injected/verified for one or more touched projects, so
+        // SeedContentHashesAsync already dropped those projects' members out of seedChanges rather
+        // than stamping an attribute that can't compile. Surfaced separately because the fix differs
+        // (a project reference/attribute-generator problem) from a validation failure in the member
+        // edits themselves.
+        if (unresolvedProjects.Count > 0)
+        {
+            _logger.LogWarning(
+                "BulkComment: could not inject/verify ContentHashAttribute for {Count} project(s): {Projects}",
+                unresolvedProjects.Count, string.Join(", ", unresolvedProjects));
+        }
 
         if (seedChanges.Count > 0 && !dryRun)
         {
             var seedApply = await _workspaceManager.ApplyProposedChangesAsync(seedChanges, validateChanges: true, cancellationToken: cancellationToken);
-            if (!seedApply.Success && seedApply.ValidationResult != null)
+            if (!seedApply.Success)
             {
-                _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes",
-                    seedApply.ValidationResult.Diagnostics.Count);
+                var diagnosticCount = seedApply.ValidationResult?.Diagnostics.Count ?? 0;
+                _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes; aborting before the work phase",
+                    diagnosticCount);
+
+                // Abort here rather than falling through to Phase 2: the seed writes were rejected,
+                // so FindStaleMembersAsync would see the pre-seed workspace and every stale member's
+                // eventual per-file apply would hit the same validation failure again — previously
+                // this ran unabated until the circuit breaker tripped, having burned thousands of
+                // attempts to produce zero net comments (see docs history: "BulkComment fails to
+                // apply any comments").
+                return new CommentingResult
+                {
+                    TotalMembers = alreadyTaggedAtSeedTime + seededCount,
+                    AlreadyCurrent = alreadyTaggedAtSeedTime,
+                    Seeded = 0,
+                    CommentedThisCall = 0,
+                    RemainingStale = seededCount,
+                    Skipped = seedChanges.Keys.Select(path => new FailureDetail
+                    {
+                        FilePath = path,
+                        Reason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call",
+                        Outcome = ItemRecordOutcome.Failed,
+                    }).ToList(),
+                    ByFile = byFile.Values.ToList(),
+                    Severity = "halt",
+                    BreakerOpen = _workspaceManager.GetBreakerStatus().Open,
+                    DryRun = false,
+                };
             }
         }
 
@@ -159,7 +198,31 @@ public class SentinelCommentingTools
         // ── Phase 2: find stale members. When dryRun, the seed-phase changes were never applied,
         // so this walk sees the pre-seed workspace — every never-tagged member is (correctly)
         // reported as stale/planned work, same as a real run would find before seeding lands. ──
-        var staleMembers = await _commentingEngine.FindStaleMembersAsync(scope, projectName, filePath, cancellationToken);
+        var allStaleMembers = await _commentingEngine.FindStaleMembersAsync(scope, projectName, filePath, cancellationToken);
+
+        // Members in a project whose ContentHashAttribute couldn't be injected/verified were
+        // already excluded from seedChanges above — exclude them here too, otherwise Phase 2 would
+        // try to comment+apply them and hit the identical validation failure per file instead of
+        // the single seed-phase failure this was meant to replace.
+        var unresolvedProjectSet = unresolvedProjects.ToHashSet();
+        var staleMembers = unresolvedProjectSet.Count > 0
+            ? allStaleMembers.Where(m => !unresolvedProjectSet.Contains(m.ProjectName)).ToList()
+            : allStaleMembers;
+
+        if (unresolvedProjectSet.Count > 0)
+        {
+            foreach (var member in allStaleMembers.Where(m => unresolvedProjectSet.Contains(m.ProjectName)))
+            {
+                skipped.Add(new FailureDetail
+                {
+                    FilePath = member.FilePath,
+                    MethodName = member.MemberName,
+                    Reason = "content_hash_attribute_unresolved: ContentHashAttribute could not be injected/verified for this project",
+                    Outcome = ItemRecordOutcome.Skipped,
+                });
+                FileRow(member.FilePath).Skipped++;
+            }
+        }
 
         // Members with no [ContentHash] at all show up in both seededCount (this call's seed pass)
         // and staleMembers (they're maximally stale) — total scope size is the union of "already
@@ -176,13 +239,13 @@ public class SentinelCommentingTools
                 Seeded = seededCount,
                 CommentedThisCall = 0,
                 RemainingStale = staleMembers.Count,
-                Skipped = staleMembers.Select(m => new FailureDetail
+                Skipped = skipped.Concat(staleMembers.Select(m => new FailureDetail
                 {
                     FilePath = m.FilePath,
                     MethodName = m.MemberName,
                     Reason = "dry_run",
                     Outcome = ItemRecordOutcome.Skipped,
-                }).ToList(),
+                })).ToList(),
                 ByFile = byFile.Values.ToList(),
                 Severity = "ok",
                 BreakerOpen = false,

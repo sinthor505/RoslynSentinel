@@ -58,9 +58,12 @@ public class CommentingEngine
     /// <summary>
     /// Stamps every member in scope that has no <c>[ContentHash("Comment", ...)]</c> at all with
     /// the sentinel hash. Batched per-file (one evolving root, one write per file) so this is safe
-    /// to run solution-wide in a single call.
+    /// to run solution-wide in a single call. <c>UnresolvedProjects</c> lists any touched project
+    /// whose <c>ContentHashAttribute</c> could not be injected/verified — files belonging to those
+    /// projects are dropped from <c>Changes</c> rather than seeded with an attribute that can't
+    /// compile.
     /// </summary>
-    public async Task<(Dictionary<FilePath, string> Changes, int SeededCount, int AlreadyTaggedCount)> SeedContentHashesAsync(
+    public async Task<(Dictionary<FilePath, string> Changes, int SeededCount, int AlreadyTaggedCount, List<string> UnresolvedProjects)> SeedContentHashesAsync(
         ToolScope scope, string? projectName, string? filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetBranchedSolutionAsync(cancellationToken);
@@ -135,12 +138,28 @@ public class CommentingEngine
             }
         }
 
-        if (changes.Count > 0)
+        var unresolvedProjectIds = changes.Count > 0
+            ? await InjectAttributeClassIfMissingAsync(solution, documents, changes, cancellationToken)
+            : [];
+
+        var unresolvedProjectNames = new List<string>();
+        if (unresolvedProjectIds.Count > 0)
         {
-            InjectAttributeClassIfMissing(solution, documents, changes);
+            var unresolvedIdSet = unresolvedProjectIds.ToHashSet();
+            unresolvedProjectNames = unresolvedProjectIds.Select(id => solution.GetProject(id)!.Name).ToList();
+
+            var droppedPaths = documents
+                .Where(d => d.FilePath != null && unresolvedIdSet.Contains(d.Project.Id))
+                .Select(d => (FilePath)d.FilePath!)
+                .ToHashSet();
+
+            foreach (var path in droppedPaths)
+            {
+                changes.Remove(path);
+            }
         }
 
-        return (changes, seeded, alreadyTagged);
+        return (changes, seeded, alreadyTagged, unresolvedProjectNames);
     }
 
     // ── Phase 2: find stale work ────────────────────────────────────────────
@@ -662,7 +681,15 @@ public class CommentingEngine
 
     // ── Attribute class injection ────────────────────────────────────────────
 
-    private static void InjectAttributeClassIfMissing(Solution solution, IReadOnlyList<Document> scopedDocuments, Dictionary<FilePath, string> changes)
+    /// <summary>
+    /// Ensures every project touched by <paramref name="changes"/> can actually resolve the
+    /// <c>ContentHashAttribute</c> type, injecting a fresh copy where it can't. Returns the
+    /// directories of any touched project where injection was needed but could not be verified
+    /// afterward (candidate compilation still doesn't resolve the type) — callers should treat
+    /// this as fatal for those projects rather than seeding members that can't possibly compile.
+    /// </summary>
+    private static async Task<List<ProjectId>> InjectAttributeClassIfMissingAsync(
+        Solution solution, IReadOnlyList<Document> scopedDocuments, Dictionary<FilePath, string> changes, CancellationToken cancellationToken)
     {
         // Per-project, not solution-wide: [ContentHash] is a plain type, invisible across project
         // boundaries without a reference, so each project that gets a member tagged needs its own
@@ -672,27 +699,76 @@ public class CommentingEngine
         // no reference to RoslynSentinel.Advanced, where the file already existed) and every one of
         // those files failed apply validation with dozens of CS0246-style diagnostics (the attribute
         // type doesn't exist in that compilation) — 0 members actually committed in any such project.
-        var projectsWithAttribute = solution.Projects
-            .Where(p => p.Documents.Any(d => d.FilePath != null &&
-                      Path.GetFileName(d.FilePath).Equals($"{ContentHashAttributeSource.FullName}.cs", StringComparison.OrdinalIgnoreCase)))
-            .Select(p => p.Id)
-            .ToHashSet();
+        //
+        // Detection is semantic (Compilation.GetTypeByMetadataName), not filename-based — a
+        // filename match let RoslynSentinel.Common's own ContentHashAttributeGenerator.cs (the
+        // *builder* of this source, previously misnamed ContentHashAttribute.cs) masquerade as an
+        // already-present attribute in every project that references Common, silently starving all
+        // of them the same way. See docs history: "BulkComment fails to apply any comments".
+        var touchedProjectIds = scopedDocuments
+            .Where(d => changes.ContainsKey(d.FilePath!))
+            .Select(d => d.Project.Id)
+            .Distinct()
+            .ToList();
 
-        // Inject once per project touched by this batch that doesn't already have its own copy —
-        // mirrors MigrationCandidate's per-project (project-root) placement so SDK-style glob-includes
-        // pick it up without duplication.
-        var touchedProjectDirs = scopedDocuments
-            .Where(d => changes.ContainsKey(d.FilePath!) && !projectsWithAttribute.Contains(d.Project.Id))
-            .Select(d => d.Project.FilePath)
-            .Where(p => p != null)
-            .Select(Path.GetDirectoryName)
-            .Where(dir => dir != null)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+        var unresolved = new List<ProjectId>();
 
-        foreach (var projectDir in touchedProjectDirs)
+        foreach (var projectId in touchedProjectIds)
         {
-            var attrPath = Path.Combine(projectDir!, $"{ContentHashAttributeSource.FullName}.cs");
-            changes[attrPath] = ContentHashAttributeSource.BuildSource();
+            var project = solution.GetProject(projectId)!;
+            var compilation = await project.GetCompilationAsync(cancellationToken);
+            var hasAttribute = compilation?.GetTypeByMetadataName(ContentHashAttributeSource.FullName) is { } attrType
+                                && IsAttributeType(attrType);
+            if (hasAttribute)
+            {
+                continue;
+            }
+
+            var projectDir = project.FilePath == null ? null : Path.GetDirectoryName(project.FilePath);
+            if (projectDir == null)
+            {
+                unresolved.Add(projectId);
+                continue;
+            }
+
+            var attrPath = Path.Combine(projectDir, $"{ContentHashAttributeSource.FullName}.cs");
+            var attrSource = ContentHashAttributeSource.BuildSource();
+
+            // Verify the injected source actually resolves before trusting it — re-checking against
+            // the edited candidate (not just trusting BuildSource() to be correct) is what catches a
+            // future drift between the generator and what the compiler accepts, instead of finding
+            // out only after seed-phase validation rejects hundreds of members at once.
+            var candidateProject = project.AddDocument(Path.GetFileName(attrPath), attrSource, filePath: attrPath).Project;
+            var candidateCompilation = await candidateProject.GetCompilationAsync(cancellationToken);
+            var verified = candidateCompilation?.GetTypeByMetadataName(ContentHashAttributeSource.FullName) is { } injectedType
+                            && IsAttributeType(injectedType);
+            if (!verified)
+            {
+                unresolved.Add(projectId);
+                continue;
+            }
+
+            changes[attrPath] = attrSource;
         }
+
+        return unresolved;
+    }
+
+    private static bool IsAttributeType(INamedTypeSymbol type)
+    {
+        for (var baseType = type.BaseType; baseType != null; baseType = baseType.BaseType)
+        {
+            if (baseType.SpecialType == SpecialType.System_Object)
+            {
+                break;
+            }
+
+            if (baseType.ToDisplayString() == "System.Attribute")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

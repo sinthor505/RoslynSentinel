@@ -154,6 +154,48 @@ public class McpTasksHarnessBulkCommentTests
     }
 
     [Test]
+    public async Task RealRun_FilenameCollisionWithGeneratorHelper_StillInjectsRealAttributeAndComments()
+    {
+        // Reproduces the "BulkComment fails to apply any comments" incident: a file literally named
+        // ContentHashAttribute.cs sitting in the target project, but declaring an unrelated type
+        // (mirroring RoslynSentinel.Common's own ContentHashAttributeGenerator.cs, which used to be
+        // misnamed ContentHashAttribute.cs). The old filename-based "already has the attribute" check
+        // in InjectAttributeClassIfMissing was fooled by this and skipped real injection, so every
+        // seeded [ContentHash] attribute failed to compile (CS0246) and the whole seed-phase batch —
+        // then every Phase 2 per-file apply — was rejected by validation, producing zero comments.
+        var decoyPath = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "ContentHashAttribute.cs");
+        await File.WriteAllTextAsync(decoyPath,
+            "namespace ContosoOrders.Core;\n\npublic static class NotTheRealAttribute\n{\n    public static string Unrelated() => \"decoy\";\n}\n",
+            TestContext.CurrentContext.CancellationToken);
+
+        var workspaceManager = _host.Services.GetRequiredService<IWorkspaceManager>();
+        await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, TestContext.CurrentContext.CancellationToken);
+
+        // The decoy was written directly to disk (bypassing ApplyProposedChangesAsync), so the
+        // FileSystemWatcher-based drift tracker sees it as an unacknowledged external change —
+        // reloading the solution doesn't clear that. Acknowledge it so BulkComment's own writes
+        // aren't refused for an unrelated reason (drift refusal, not the collision this test targets).
+        workspaceManager.ClearExternalFileChanges();
+
+        var requestParams = new CallToolRequestParams
+        {
+            Name = "BulkComment",
+            Arguments = ToArguments(new Dictionary<string, object?> { ["scope"] = "project", ["projectName"] = "ContosoOrders.Core", ["dryRun"] = false }),
+        };
+
+        var result = await _client.CallToolWithPollingAsync(requestParams, cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(result.IsError, Is.Not.True);
+
+        using var doc = JsonDocument.Parse(SerializeContent(result));
+        var data = FindDataElement(doc.RootElement);
+        Assert.That(data.GetProperty("severity").GetString(), Is.EqualTo("ok"),
+            "The decoy file should not be mistaken for the real attribute, so seeding/commenting should proceed normally.");
+        Assert.That(data.GetProperty("commentedThisCall").GetInt32(), Is.GreaterThan(0),
+            "Expected real injection (past the filename-alike decoy) to let members actually get seeded and commented.");
+    }
+
+    [Test]
     public async Task CancelTask_MidFlight_StopsBeforeCompletionAndReportsCancelled()
     {
         _fakeLlmClient.Delay = TimeSpan.FromSeconds(15);
