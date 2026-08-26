@@ -33,11 +33,31 @@ public sealed class CommentingResult
     /// <summary>Members still stale (never processed, or changed since last processed) after this call — nonzero means re-invoke to continue.</summary>
     public int RemainingStale { get; set; }
 
-    /// <summary>Members skipped this call, with reasons (LLM failure, apply failure, maxMembers/maxRuntimeSeconds cap reached).</summary>
+    /// <summary>
+    /// Members skipped this call, with reasons (LLM failure, apply failure, maxMembers/maxRuntimeSeconds
+    /// cap reached). Capped at 10; when there are more, this is a sample — see
+    /// <see cref="SkippedTruncated"/> and <see cref="SkippedByReason"/> for the full breakdown.
+    /// </summary>
     public List<FailureDetail> Skipped { get; set; } = [];
 
-    /// <summary>Per-file breakdown, keyed implicitly by <see cref="CommentingFileBreakdown.filePath"/>.</summary>
+    /// <summary>True when the underlying skip count exceeded 10 and <see cref="Skipped"/> is a partial sample.</summary>
+    public bool SkippedTruncated { get; set; }
+
+    /// <summary>Populated when <see cref="SkippedTruncated"/> is true. Reason→count over the full skip list.</summary>
+    public Dictionary<string, int>? SkippedByReason { get; set; }
+
+    /// <summary>
+    /// Per-file breakdown, keyed implicitly by <see cref="CommentingFileBreakdown.filePath"/>. Capped
+    /// at 20 rows (files with the most Skipped, then most Commented, first) for a large solution-wide
+    /// run; see <see cref="ByFileTruncated"/> and <see cref="ByFileTotalCount"/>.
+    /// </summary>
     public List<CommentingFileBreakdown> ByFile { get; set; } = [];
+
+    /// <summary>True when the full per-file breakdown exceeded 20 rows and <see cref="ByFile"/> is a partial sample.</summary>
+    public bool ByFileTruncated { get; set; }
+
+    /// <summary>Total number of files touched this call, regardless of <see cref="ByFileTruncated"/>.</summary>
+    public int ByFileTotalCount { get; set; }
 
     /// <summary>"ok" | "caution" | "halt" — mirrors <see cref="BatchResultSummary.Severity"/>; keyed field, never infer from prose.</summary>
     public string Severity { get; set; } = "ok";

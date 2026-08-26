@@ -137,6 +137,37 @@ public class SentinelCommentingTools
             return row;
         }
 
+        // Applies the same sample+count-instead-of-full-roster treatment to both Skipped (member-
+        // level failures, can run into the thousands when a whole scope hits the same validation
+        // error) and ByFile (file-level rows, can run into the hundreds for a solution-wide call) —
+        // neither is useful to an agent as an exhaustive list once it's this large; the reason
+        // breakdown and a handful of examples carry the same information at a fraction of the size.
+        void ApplySampling(CommentingResult result, List<FailureDetail> allSkipped)
+        {
+            var skippedSample = FailureSummary.Summarize(allSkipped);
+            result.Skipped = skippedSample.Sample;
+            result.SkippedTruncated = skippedSample.Truncated;
+            result.SkippedByReason = skippedSample.ByReason;
+
+            const int ByFileSampleSize = 20;
+            var allFileRows = byFile.Values.ToList();
+            result.ByFileTotalCount = allFileRows.Count;
+            if (allFileRows.Count <= ByFileSampleSize)
+            {
+                result.ByFile = allFileRows;
+                result.ByFileTruncated = false;
+            }
+            else
+            {
+                result.ByFile = allFileRows
+                    .OrderByDescending(r => r.Skipped)
+                    .ThenByDescending(r => r.Commented)
+                    .Take(ByFileSampleSize)
+                    .ToList();
+                result.ByFileTruncated = true;
+            }
+        }
+
         // ── Phase 1: seed (always runs, mechanical, no LLM) ─────────────────
         var (seedChanges, seededCount, alreadyTaggedAtSeedTime, unresolvedProjects) = await _commentingEngine.SeedContentHashesAsync(
             scope, projectName, filePath, cancellationToken);
@@ -169,24 +200,24 @@ public class SentinelCommentingTools
                 // this ran unabated until the circuit breaker tripped, having burned thousands of
                 // attempts to produce zero net comments (see docs history: "BulkComment fails to
                 // apply any comments").
-                return new CommentingResult
+                var abortResult = new CommentingResult
                 {
                     TotalMembers = alreadyTaggedAtSeedTime + seededCount,
                     AlreadyCurrent = alreadyTaggedAtSeedTime,
                     Seeded = 0,
                     CommentedThisCall = 0,
                     RemainingStale = seededCount,
-                    Skipped = seedChanges.Keys.Select(path => new FailureDetail
-                    {
-                        FilePath = path,
-                        Reason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call",
-                        Outcome = ItemRecordOutcome.Failed,
-                    }).ToList(),
-                    ByFile = byFile.Values.ToList(),
                     Severity = "halt",
                     BreakerOpen = _workspaceManager.GetBreakerStatus().Open,
                     DryRun = false,
                 };
+                ApplySampling(abortResult, seedChanges.Keys.Select(path => new FailureDetail
+                {
+                    FilePath = path,
+                    Reason = $"seed_validation_failed ({diagnosticCount} diagnostic(s)); no seed or comment changes were written this call",
+                    Outcome = ItemRecordOutcome.Failed,
+                }).ToList());
+                return abortResult;
             }
         }
 
@@ -232,25 +263,25 @@ public class SentinelCommentingTools
 
         if (dryRun)
         {
-            return new CommentingResult
+            var dryRunResult = new CommentingResult
             {
                 TotalMembers = totalMembers,
                 AlreadyCurrent = alreadyCurrentCount,
                 Seeded = seededCount,
                 CommentedThisCall = 0,
                 RemainingStale = staleMembers.Count,
-                Skipped = skipped.Concat(staleMembers.Select(m => new FailureDetail
-                {
-                    FilePath = m.FilePath,
-                    MethodName = m.MemberName,
-                    Reason = "dry_run",
-                    Outcome = ItemRecordOutcome.Skipped,
-                })).ToList(),
-                ByFile = byFile.Values.ToList(),
                 Severity = "ok",
                 BreakerOpen = false,
                 DryRun = true,
             };
+            ApplySampling(dryRunResult, skipped.Concat(staleMembers.Select(m => new FailureDetail
+            {
+                FilePath = m.FilePath,
+                MethodName = m.MemberName,
+                Reason = "dry_run",
+                Outcome = ItemRecordOutcome.Skipped,
+            })).ToList());
+            return dryRunResult;
         }
 
         // ── Phase 2: comment stale members, up to maxMembers / maxRuntimeSeconds ──
@@ -356,7 +387,7 @@ public class SentinelCommentingTools
 
         var status = _workspaceManager.GetBreakerStatus();
 
-        return new CommentingResult
+        var finalResult = new CommentingResult
         {
             TotalMembers = totalMembers,
             AlreadyCurrent = alreadyCurrentCount,
@@ -366,12 +397,12 @@ public class SentinelCommentingTools
             // (their [ContentHash] was never updated) same as cap-skipped ones, so a re-invoke
             // picks all of them back up via FindStaleMembersAsync.
             RemainingStale = staleMembers.Count - succeeded,
-            Skipped = skipped,
-            ByFile = byFile.Values.ToList(),
             Severity = status.Severity,
             BreakerOpen = status.Open,
             DryRun = false,
             BlobName = blobName,
         };
+        ApplySampling(finalResult, skipped);
+        return finalResult;
     }
 }
