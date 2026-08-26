@@ -34,17 +34,12 @@ public sealed class CommentingResult
     public int RemainingStale { get; set; }
 
     /// <summary>
-    /// Members skipped this call, with reasons (LLM failure, apply failure, maxMembers/maxRuntimeSeconds
-    /// cap reached). Capped at 10; when there are more, this is a sample — see
-    /// <see cref="SkippedTruncated"/> and <see cref="SkippedByReason"/> for the full breakdown.
+    /// Reason→count over every member skipped this call (LLM failure, apply failure,
+    /// maxMembers/maxRuntimeSeconds cap reached). No per-member detail — file/method names aren't
+    /// actionable here; re-invoking with the same scope is the fix for a nonzero
+    /// <see cref="RemainingStale"/> regardless of reason. Empty when nothing was skipped.
     /// </summary>
-    public List<FailureDetail> Skipped { get; set; } = [];
-
-    /// <summary>True when the underlying skip count exceeded 10 and <see cref="Skipped"/> is a partial sample.</summary>
-    public bool SkippedTruncated { get; set; }
-
-    /// <summary>Populated when <see cref="SkippedTruncated"/> is true. Reason→count over the full skip list.</summary>
-    public Dictionary<string, int>? SkippedByReason { get; set; }
+    public Dictionary<string, int> SkippedByReason { get; set; } = [];
 
     /// <summary>
     /// Per-file breakdown, keyed implicitly by <see cref="CommentingFileBreakdown.filePath"/>. Capped

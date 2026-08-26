@@ -144,29 +144,16 @@ public class FailureDetail
     public List<DiagnosticInfo>? CompilerDiagnostics { get; set; }
 }
 
-/// <summary>A small representative sample plus the reason→count breakdown for a (possibly huge) failure/skip list.</summary>
-public record FailureSample(List<FailureDetail> Sample, bool Truncated, Dictionary<string, int>? ByReason);
-
 /// <summary>
-/// Shrinks a full failure/skip list to a small inline sample plus a reason→count breakdown, so a
-/// batch of thousands of near-identical rows (e.g. every member skipped for the same
-/// validation-failure reason) doesn't get echoed back to the caller in full. Same cap convention
-/// as the hand-rolled Take(N)/GroupBy blocks already used across SentinelAsyncifyTools.cs.
+/// Collapses a failure/skip list down to a reason→count breakdown. Per-item file/method detail
+/// isn't actionable to a caller deciding what to do next — a batch of thousands of members
+/// skipped for the same reason (e.g. one validation error, or the same maxMembers cap) is fully
+/// described by the reason and how many, not by echoing every row back.
 /// </summary>
 public static class FailureSummary
 {
-    private const int SampleSize = 10;
-
-    public static FailureSample Summarize(List<FailureDetail> failures)
-    {
-        if (failures.Count <= SampleSize)
-        {
-            return new FailureSample(failures, Truncated: false, ByReason: null);
-        }
-
-        var byReason = failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count());
-        return new FailureSample(failures.Take(SampleSize).ToList(), Truncated: true, ByReason: byReason);
-    }
+    public static Dictionary<string, int> ByReason(List<FailureDetail> failures) =>
+        failures.GroupBy(f => f.Reason).ToDictionary(g => g.Key, g => g.Count());
 }
 
 // ── Phase 4 — Batch-first input types ─────────────────────────────────────────

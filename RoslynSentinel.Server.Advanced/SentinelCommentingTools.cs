@@ -137,17 +137,13 @@ public class SentinelCommentingTools
             return row;
         }
 
-        // Applies the same sample+count-instead-of-full-roster treatment to both Skipped (member-
-        // level failures, can run into the thousands when a whole scope hits the same validation
-        // error) and ByFile (file-level rows, can run into the hundreds for a solution-wide call) —
-        // neither is useful to an agent as an exhaustive list once it's this large; the reason
-        // breakdown and a handful of examples carry the same information at a fraction of the size.
+        // Collapses per-member Skipped detail down to a reason→count dict (can run into the
+        // thousands when a whole scope hits the same validation error — no per-file/method row is
+        // actionable there, only the reason and how many) and caps ByFile similarly (file-level
+        // rows can run into the hundreds for a solution-wide call).
         void ApplySampling(CommentingResult result, List<FailureDetail> allSkipped)
         {
-            var skippedSample = FailureSummary.Summarize(allSkipped);
-            result.Skipped = skippedSample.Sample;
-            result.SkippedTruncated = skippedSample.Truncated;
-            result.SkippedByReason = skippedSample.ByReason;
+            result.SkippedByReason = FailureSummary.ByReason(allSkipped);
 
             const int ByFileSampleSize = 20;
             var allFileRows = byFile.Values.ToList();
