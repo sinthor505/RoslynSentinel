@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -8,8 +10,6 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
-
-using System.Text.RegularExpressions;
 
 namespace RoslynSentinel.Basic;
 
@@ -3555,8 +3555,10 @@ public class RefactoringEngine
                 };
             }
 
-            int StatementStartLine(StatementSyntax s) => tree.GetLineSpan(s.FullSpan, cancellationToken).StartLinePosition.Line + 1;
-            int StatementEndLine(StatementSyntax s) => tree.GetLineSpan(s.FullSpan, cancellationToken).EndLinePosition.Line + 1;
+            // StatementStartLine and StatementEndLine are unused
+            // int StatementStartLine(StatementSyntax s) => tree.GetLineSpan(s.FullSpan, cancellationToken).StartLinePosition.Line + 1;
+            // int StatementEndLine(StatementSyntax s) => tree.GetLineSpan(s.FullSpan, cancellationToken).EndLinePosition.Line + 1;
+
             // Find statements that contain or overlap the snippet
             var targeted = block.Statements.Where(s => s.Span.Contains(snippetPos)).ToList();
             if (targeted.Count == 0)

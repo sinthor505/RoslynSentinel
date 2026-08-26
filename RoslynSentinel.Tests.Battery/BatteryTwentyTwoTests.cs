@@ -117,6 +117,7 @@ public class OrderService : IOrderService
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _projectStructureEngine = new ProjectStructureEngine(_workspaceManager, _config);
+        _asyncSafetyEngine = new AsyncSafetyEngine(_workspaceManager);
         _healthOrchestrationEngine = new HealthOrchestrationEngine(
             _workspaceManager, _projectStructureEngine, _analysisEngine, _config);
         _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
