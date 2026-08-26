@@ -177,7 +177,10 @@ public class ValidationEngine
 
     private static string DiagnosticKey(Diagnostic d)
     {
+        // Deliberately excludes line position: an edit anywhere above a pre-existing error shifts
+        // its line number, which would otherwise make the same baseline error look "newly introduced"
+        // in the candidate. (Id, Message, Path) is stable across such line shifts.
         var location = d.Location.GetLineSpan();
-        return $"{d.Id}|{d.GetMessage()}|{location.Path}|{location.StartLinePosition.Line}";
+        return $"{d.Id}|{d.GetMessage()}|{location.Path}";
     }
 }
