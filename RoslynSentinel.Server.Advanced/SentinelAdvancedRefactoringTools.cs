@@ -766,9 +766,6 @@ public class SentinelAdvancedRefactoringTools
                 try
                 {
                     var methodChanges = await _refinementEngine.InlineMethodAsync(filePath, targetName);
-                    if (methodChanges.Count == 0)
-                        return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Inline/method: method '{targetName}' not found or has no inlineable call sites in '{filePath}'.") };
-
                     var methodApply = await ValidateAndApplyAsync(methodChanges, $"Inline method '{targetName}'.", "Inline/method", dryRun, returnDiff, cancellationToken);
                     if (methodApply.Error is not null)
                         return new ToolResult<object> { Success = false, Error = methodApply.Error };

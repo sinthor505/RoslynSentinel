@@ -169,15 +169,13 @@ public class RefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new Dictionary<FilePath, string>
-            { { "__error__", $"File '{Path.GetFileName(filePath)}' not found in solution." } };
+            throw new ToolNotFoundException($"File '{Path.GetFileName(filePath)}' not found in solution.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new Dictionary<FilePath, string>
-            { { "__error__", $"Failed to get syntax root for '{filePath}'." } };
+            throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -185,8 +183,7 @@ public class RefinementEngine
 
         if (method == null || semanticModel == null)
         {
-            return new Dictionary<FilePath, string>
-                { { "__error__", $"Method '{methodName}' not found in '{filePath}'." } };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.");
         }
 
         ExpressionSyntax? expressionToInline = null;
@@ -201,17 +198,13 @@ public class RefinementEngine
 
         if (expressionToInline == null)
         {
-            return new Dictionary<FilePath, string>
-            {
-                { "__error__", $"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements." }
-            };
+            throw new ToolNotFoundException($"Cannot inline '{methodName}': only expression-body or single-return-statement methods are supported. This method has a complex body with multiple statements.");
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
         if (methodSymbol == null)
         {
-            return new Dictionary<FilePath, string>
-                { { "__error__", $"Cannot inline '{methodName}': failed to resolve semantic symbol." } };
+            throw new ToolNotFoundException($"Cannot inline '{methodName}': failed to resolve semantic symbol.");
         }
 
         // Find ALL references across the solution grouped by document

@@ -2553,10 +2553,9 @@ public class Math
                     Assert.Inconclusive("Document not found");
                 }
 
-                var result = await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add");
-
-                Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
-                Assert.That(result, Is.Not.Empty, "Should return non-empty result");
+                Assert.ThrowsAsync<ToolNotFoundException>(
+                    async () => await _refinementEngine.InlineMethodAsync(document.FilePath!, "Add"),
+                    "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
         }
 
@@ -3492,7 +3491,7 @@ public class Calculator
 
             Assert.That(result, Is.Not.Null, "Should return result");
             var resultText = string.Join("\n", result.Values);
-            Assert.That(resultText, Does.Not.Contain("__error__").Or.Contain("x * 2"),
+            Assert.That(resultText, Does.Contain("x * 2"),
                 "Should successfully inline single-expression method");
         }
 
@@ -3517,15 +3516,9 @@ public class Service
 
             SetSource(code, "Service.cs");
 
-            var result = await _refinementEngine.InlineMethodAsync("Service.cs", "Process");
-
-            Assert.That(result, Is.Not.Null, "Should return result");
-            Assert.That(result, Is.Not.Empty, "Should not return empty result");
-            // Multi-statement method returns error key — that's acceptable
-            if (result.ContainsKey("__error__"))
-            {
-                Assert.Pass("Method correctly returns error for complex method");
-            }
+            Assert.ThrowsAsync<ToolNotFoundException>(
+                async () => await _refinementEngine.InlineMethodAsync("Service.cs", "Process"),
+                "Multi-statement method should fail gracefully via a typed exception, not crash");
         }
 
         // ── extract_class bug: general extraction issues ──────────────────────
