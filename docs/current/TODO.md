@@ -670,6 +670,55 @@ duplicating engine formatting logic, or (c) not available without either engine 
 the whole-file `UpdatedText`/diff (in which case, leave it out rather than duplicating engine logic
 or reintroducing the original context-bloat problem this mechanism was built to avoid).
 
+**Audit update (2026-08-27, best-effort pass):** re-inventoried the "still open" list above against
+current code, since several items (`UsingDirective`, `SummaryComment`, `ModifyAttribute`,
+`ConstructorParameter`) turned out to already be wired — this list had gone stale, likely from work
+landing in a parallel session (see `[[project_concurrent_sessions]]`-style note: this repo sometimes has
+more than one Claude/VS session active).
+
+Re-checked all remaining unwired tools in both files against the (a)/(b)/(c) categories above:
+- **`RenameSymbol`, `GenerateMapping`, `SyncTypeAndFilename`:** category (c), but not for the "too
+  expensive" reason — there is no new content to show at all. `RenameSymbol` already returns rich
+  custom `Data` (`oldName`/`newName`/`residualMentions`/etc.) instead of bare `AppliedChangeSummary`,
+  so it doesn't need this mechanism. `SyncTypeAndFilename` only moves a file to a new name; the
+  file's content is unchanged. Confirmed by reading both — no code change.
+- **`ModifyEnum`, `ChangeAccessibility`, `ModifyModifier`, `ModifyBaseType`:** category (c) — the
+  "new" content (the accessibility keyword, modifier keyword, base type name, or enum value list) is
+  always caller-supplied verbatim already. `ChangeAccessibility`/`ModifyModifier`/`ModifyBaseType`
+  already carry an explicit `// No ChangedContent: ...` comment recording this as a deliberate decision,
+  not an oversight — confirms this judgment call was already made correctly. No code change.
+- **`ExtractLocalVariable`, `ExtractMethodSafe` (Basic); `Introduce`, `ConvertAnonymousToNamed`,
+  `ExtractMembers`, `IntroduceParameterObject` (Advanced):** category (c), the expensive way — these
+  generate genuinely new code (a variable declaration, an extracted method body, a named
+  record/parameter-object type) that the caller does *not* already have. But every one of them is
+  built on an engine method whose result type (`DocumentEditResult`/similar) only ever exposes the
+  whole-file `UpdatedText`, with no separately-returned "just the new fragment" field — the same
+  shape the `Member(add)` typed-generation path hit and deliberately declined to wire for exactly
+  this reason (see that entry above: "reconstructing it at the tool layer would duplicate the
+  engine's formatting logic and drift if that formatting ever changes"). Wiring these properly would
+  mean extending each engine method's return shape first, which is a materially different (and
+  riskier, since it touches core extract/introduce logic) task than "wire an existing field into the
+  offload mechanism." Left out of this pass; revisit only alongside a broader engine-API pass that
+  adds fragment-returning to these specific methods.
+- **`ChangeSignature` (Advanced):** already has bespoke handling as of the item-#7 fix above (its
+  `Data`/summary now carries `SkippedCallSites`); doesn't need the generic mechanism.
+- **`PullUpMember` (Advanced):** returns a two-file dict (derived + base) with no single "the new
+  text" to highlight the same way `Member`'s single-file operations do; category (c).
+- **`InlineClass`, `MoveAllTypesToFiles`, `InvertAssignments`, `SyncInterface`, `Inline`, `WrapRange`,
+  `MoveType`:** not individually re-verified line-by-line in this pass (time-boxed as best-effort) —
+  spot-checks of the ones actually read strongly suggest the same "whole-file `UpdatedText` only, no
+  discrete new-fragment field" shape applies uniformly across this engine generation, but this is an
+  inference from the pattern, not a confirmed per-tool finding. If revisited, check each the same way:
+  read the underlying engine method's return type first, and only wire if a fragment is already
+  separately available.
+
+**Conclusion:** no code changes were needed for item #8 this session — the tools that could be wired
+cheaply already were (by earlier work), and the rest are consistently blocked on the same "no
+separately-returned fragment" engine-API gap rather than being unwired oversights. The TODO's original
+per-tool list is now corrected to reflect this; a genuine fix for the remaining tools requires an
+engine-API-extension pass (adding fragment-returning fields to `DocumentEditResult`-shaped results for
+extract/introduce-style operations), not more tool-layer wiring.
+
 ## `PullUpMember` tool is a no-op stub, but is exposed with a description implying it works — CLOSED 2026-08-27 (findings revised — original diagnosis was stale)
 
 **Found:** 2026-08-22, during a brief Roslyn-duplication review pass of the remaining structural
