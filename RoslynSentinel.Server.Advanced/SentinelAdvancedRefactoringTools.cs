@@ -19,7 +19,6 @@ public class SentinelAdvancedRefactoringTools
     private readonly AdvancedLogicEngine _advancedLogicEngine;
     private readonly RefinementEngine _refinementEngine;
     private readonly AdvancedTypeEngine _advancedTypeEngine;
-    private readonly StructuralRefinementEngine _structuralRefinementEngine;
     private readonly CodeStyleEngine _codeStyleEngine;
     private readonly CodeFlowEngine _codeFlowEngine;
     private readonly AdvancedRefactoringEngine _advancedRefactoringEngine;
@@ -43,7 +42,6 @@ public class SentinelAdvancedRefactoringTools
         AdvancedLogicEngine advancedLogicEngine,
         RefinementEngine refinementEngine,
         AdvancedTypeEngine advancedTypeEngine,
-        StructuralRefinementEngine structuralRefinementEngine,
         CodeStyleEngine codeStyleEngine,
         CodeFlowEngine codeFlowEngine,
         AdvancedRefactoringEngine advancedRefactoringEngine,
@@ -67,7 +65,6 @@ public class SentinelAdvancedRefactoringTools
         _advancedLogicEngine = advancedLogicEngine;
         _refinementEngine = refinementEngine;
         _advancedTypeEngine = advancedTypeEngine;
-        _structuralRefinementEngine = structuralRefinementEngine;
         _codeStyleEngine = codeStyleEngine;
         _codeFlowEngine = codeFlowEngine;
         _advancedRefactoringEngine = advancedRefactoringEngine;

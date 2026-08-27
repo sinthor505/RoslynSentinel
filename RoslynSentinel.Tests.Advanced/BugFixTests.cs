@@ -2605,7 +2605,7 @@ public class Standalone
                     Assert.Inconclusive("Document not found");
                 }
 
-                var ex = Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
                     await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Standalone", "GetValue"),
                     "A class with no base class should surface a typed error, not crash the server");
                 Assert.That(ex!.Message, Does.Contain("base"), "Error message should mention base class");
@@ -2636,7 +2636,7 @@ public class Derived : Base
                 }
 
                 Dictionary<FilePath, string> result = null!;
-                Assert.DoesNotThrowAsync(async () =>
+                await Assert.DoesNotThrowAsync(async () =>
                     result = await _refinementEngine.PullUpMemberAsync(document.FilePath!, "Derived", "DoWork"),
                     "A valid base/derived/member combination should succeed, not throw");
                 Assert.That(result, Is.Not.Null, "Should return non-null result (not crash)");
@@ -4122,7 +4122,6 @@ public class SyncInterfaceToImplementationNullReturnRegressionTests
             new AdvancedLogicEngine(_workspaceManager),
             new RefinementEngine(_workspaceManager),
             new AdvancedTypeEngine(_workspaceManager),
-            new StructuralRefinementEngine(_workspaceManager, _config),
             new CodeStyleEngine(_workspaceManager, _config),
             new CodeFlowEngine(_workspaceManager),
             new AdvancedRefactoringEngine(_workspaceManager),

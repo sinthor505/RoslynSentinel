@@ -54,7 +54,7 @@ public class MassiveRefactoringTests
         // ExtractMembers / MoveType moved to SentinelAdvancedRefactoringTools in the server split.
         _advancedRefactoringTools = new SentinelAdvancedRefactoringTools(
             _refactoringEngine, standard, advStruct, mapping, semLib, granular,
-            advLogic, refinement, advType, sr, style, codeFlow,
+            advLogic, refinement, advType, style, codeFlow,
             advRefactoring, logicOpt, modernization,
             new OutParamRefactoringEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),

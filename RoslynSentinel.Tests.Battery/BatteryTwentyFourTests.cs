@@ -135,7 +135,7 @@ public enum Status { Active = 1, Pending = 2 }
             _refactoringEngine, _standardRefactoringEngine, _advancedStructuralEngine,
             _mappingEngine, _semanticRefactoringLibrary, _granularRefactoringEngine,
             _advancedLogicEngine, _refinementEngine, _advancedTypeEngine,
-            _structuralRefinementEngine, _codeStyleEngine, _codeFlowEngine,
+            _codeStyleEngine, _codeFlowEngine,
             _advancedRefactoringEngine, _logicOptimizationEngine, _modernizationEngine,
             new OutParamRefactoringEngine(_workspaceManager),
             new MsToolAugmentEngine(_workspaceManager),

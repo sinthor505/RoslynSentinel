@@ -1,4 +1,3 @@
-using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Tests.Battery;
@@ -182,16 +181,16 @@ public class RefinementEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public void PullUpMember_UnknownFile_ThrowsToolNotFoundException()
+    public async Task PullUpMember_UnknownFile_ThrowsToolNotFoundException()
     {
         // PullUpMemberAsync(filePath, className, memberName)
-        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _engine.PullUpMemberAsync("NoSuchFile.cs", "Base", "DoWork"),
             "unknown file should surface a real error, not a fake 'error' file change");
     }
 
     [Test]
-    public void PullUpMember_UnknownClass_ThrowsToolNotFoundException()
+    public async Task PullUpMember_UnknownClass_ThrowsToolNotFoundException()
     {
         const string source = @"
 public class Derived
@@ -201,7 +200,7 @@ public class Derived
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Derived.cs", source)]));
 
-        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _engine.PullUpMemberAsync("Derived.cs", "NoBase", "DoWork"),
             "unknown class should surface a real error, not a fake 'error' file change");
     }

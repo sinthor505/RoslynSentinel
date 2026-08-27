@@ -337,20 +337,4 @@ public class StructuralRefinementEngine
             UpdatedText = newRoot!.NormalizeWhitespace().ToFullString()
         };
     }
-
-    /// <summary>
-    /// Pulls a member up to the base class.
-    /// </summary>
-    public Task<Dictionary<FilePath, string>> PullUpMemberAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
-    {
-        throw new ToolNotImplementedException("PullUpMember has no implementation yet — StructuralRefinementEngine.PullUpMemberAsync is a stub that never moves any declaration.");
-    }
-
-    /// <summary>
-    /// Pushes a member down to derived classes.
-    /// </summary>
-    public Task<Dictionary<FilePath, string>> PushMembersDownAsync(FilePath filePath, string className, string memberName, CancellationToken cancellationToken = default)
-    {
-        throw new ToolNotImplementedException("PushMembersDown has no implementation yet — StructuralRefinementEngine.PushMembersDownAsync is a stub that never moves any declaration.");
-    }
 }
