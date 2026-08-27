@@ -433,7 +433,7 @@ failures.
 a follow-up pass to classify their shape (replace vs. fallback vs. something else) before assuming
 they're clean.
 
-## No tool for creating or deleting a whole file
+## No tool for creating or deleting a whole file — CLOSED 2026-08-27
 
 **Found:** 2026-08-19/20, while implementing the `Build` tool (`docs/plan-build-verification-tool-v1.md`)
 using the MCP tools on their own source as a dogfooding exercise. Needed to create a brand-new
@@ -458,19 +458,33 @@ validation/`workspaceVersion`/undo machinery as every other write, or (2) add sm
 `CreateFile`/`DeleteFile` tools. Whichever direction, the delete side should update the in-memory
 workspace and stamp `WorkspaceVersion` like other mutating tools, not bypass it.
 
-**Investigated 2026-08-27 (deferred, not fixed):** confirmed this is NOT resolved by the recent
-`FilePathLock`/`FileIoHelper` work (`RoslynSentinel.Common/FileIoHelper.cs`) — that's purely a
-per-path locking chokepoint around raw `File.ReadAllText`/`WriteAllText`/`Delete` calls to prevent
-write-vs-write/read-vs-write races; it adds no tool surface and doesn't touch `ApplyDiff`'s
-description or add any delete path. Still zero `CreateFile`/`DeleteFile` tools, and `ApplyDiff`'s
-create-on-new-path behavior is still undocumented. Confirmed the existing delete-adjacent machinery
-is thinner than the "suggested approach" above assumes: `IWorkspaceManager.RemoveDocumentByPathAsync`
-(used today only by `SyncTypeAndFilename`'s post-apply cleanup) only removes the in-memory Roslyn
-`Document` — it does not delete the file from disk, does not stamp `WorkspaceVersion`, does not go
-through `FileIoHelper`, and has no changeId/undo support. Building either of the two suggested
-designs to the standard "like other mutating tools" bar (changeId, undo, workspace-version stamping)
-is real end-to-end feature work, not a small fix — deliberately deferred rather than choosing a
-design unilaterally during unattended work; needs a decision on which direction before implementing.
+**Investigated 2026-08-27 (deferred at the time, later fixed same day):** confirmed this is NOT
+resolved by the recent `FilePathLock`/`FileIoHelper` work (`RoslynSentinel.Common/FileIoHelper.cs`) —
+that's purely a per-path locking chokepoint around raw `File.ReadAllText`/`WriteAllText`/`Delete`
+calls to prevent write-vs-write/read-vs-write races; it adds no tool surface and doesn't touch
+`ApplyDiff`'s description or add any delete path. Confirmed the existing delete-adjacent machinery
+was thinner than the "suggested approach" above assumed: `IWorkspaceManager.RemoveDocumentByPathAsync`
+(used at the time only by `SyncTypeAndFilename`'s post-apply cleanup) only removes the in-memory
+Roslyn `Document` — it does not delete the file from disk, does not stamp `WorkspaceVersion`, does
+not go through `FileIoHelper`, and has no changeId/undo support.
+
+**Fixed 2026-08-27 (same day, later pass):** user chose "add small dedicated `CreateFile`/`DeleteFile`
+tools" (option 2 above) over documenting `ApplyDiff`'s side effect. Implemented both in
+`RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs`, routed through the shared write-path
+chokepoint rather than a bespoke path: `PersistentWorkspaceManager.ApplyProposedChangesAsync` gained
+a `deletePaths` parameter (threaded through `IWorkspaceMutator`/`ValidateAndApplyHelper` too),
+handled as its own pass alongside the existing write loop — drift-checked, pre-image-captured,
+rollback-capable, and undo-tracked via `UndoLastApply` (a deleted file's captured pre-image is
+non-null, so writing it back through the normal undo path resurrects it with zero extra code).
+`CreateFile` fails if the target already exists (points callers to `ApplyDiff` for overwrite);
+`DeleteFile` fails if the target doesn't exist. The file-watcher's `OnFileSystemChanged` handler
+needed a narrower suppression check for genuine tracked deletes (previously treated every
+`WatcherChangeTypes.Deleted` as real external drift unconditionally, which caused `DeleteFile`'s own
+delete to get flagged as drift and block a subsequent `UndoLastApply` write-back) — now suppressed via
+an empty-content `_internalChanges` sentinel recorded before the delete, combined with the path still
+being absent. 7 new tests in `RoslynSentinel.Tests.Battery/CreateFileDeleteFileTests.cs` (create,
+create-collision, parent-dir-autocreate, delete, delete-nonexistent, delete-then-undo,
+delete-refused-on-drift), all passing. Committed `35b115c`.
 
 **Related, smaller, unfixed finding from this same pass:** `SyncTypeAndFilename`'s own
 `File.Delete(filePath)` call (`SentinelRefactoringTools.cs`, ~line 1159) is a bare `System.IO` call,
