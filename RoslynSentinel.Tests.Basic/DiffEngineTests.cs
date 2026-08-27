@@ -31,6 +31,51 @@ public class DiffEngineTests
     }
 
     [Test]
+    public void ApplyDiff_PredominantlyLfFile_DoesNotReflowUntouchedLinesToCrlf()
+    {
+        // Regression for docs/TODO.md's "ApplyDiff reflows far more of the file" entry: a file
+        // that's all-LF except this fix's own machinery must stay all-LF after a small, targeted
+        // hunk — not have every untouched line forced to CRLF just because the join separator was
+        // previously chosen once for the whole file based on whether "\r\n" appeared anywhere.
+        var oldText = SourceText.From("line1\nline2\nline3\nline4");
+        var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo("line1\nline2\nadded\nline3\nline4"));
+    }
+
+    [Test]
+    public void ApplyDiff_MixedLineEndings_PreservesEachSurvivingLinesOwnEnding()
+    {
+        // A file with genuinely mixed endings (routine after a partial manual edit or a merge)
+        // must keep each untouched line's own ending rather than being normalized to one
+        // convention. Only the newly-inserted line is expected to take the file's dominant ending.
+        var oldText = SourceText.From("line1\r\nline2\nline3\r\nline4");
+        var diff = "@@ -2,1 +2,2 @@\n line2\n+added\n line3";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        // line1's own \r\n, line2's own \n, "added" gets the dominant ending (\r\n — 2 vs 1), then
+        // line3's own \r\n, then line4 (last line, originally no trailing newline) stays bare.
+        Assert.That(newText, Is.EqualTo("line1\r\nline2\nadded\r\nline3\r\nline4"));
+    }
+
+    [Test]
+    public void ApplyDiff_NoTrailingNewline_InsertionAfterLastLine_AddsRealSeparator()
+    {
+        // The original last line has no trailing newline (common for a file saved without one). If
+        // a hunk appends a new line after it, the formerly-last line needs a real separator now
+        // that it's no longer last — otherwise the two lines would run together with no break.
+        var oldText = SourceText.From("line1\nline2");
+        var diff = "@@ -2,1 +2,2 @@\n line2\n+added";
+
+        var newText = _diffEngine.ApplyDiff(oldText, diff).ToString();
+
+        Assert.That(newText, Is.EqualTo("line1\nline2\nadded"));
+    }
+
+    [Test]
     public void ApplyDiff_MultipleHunks_ShouldSucceed()
     {
         var nl = Environment.NewLine;

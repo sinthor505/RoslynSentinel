@@ -32,6 +32,26 @@ public class DiffEngine
     public SourceText ApplyDiff(SourceText sourceText, string unifiedDiff)
     {
         var lines = sourceText.Lines.Select(l => l.ToString()).ToList();
+
+        // Preserve each original line's own line-break characters ("\r\n", "\n", "\r", or "" for
+        // a file with no trailing newline) instead of forcing one convention onto the whole file.
+        // TextLine excludes the break from ToString(), so it's read separately here via the span
+        // between End and EndIncludingLineBreak. A file with mixed endings (routine after a partial
+        // manual edit, or a merge) previously got every line forced to whichever ending merely
+        // *appeared* anywhere in the file — see docs/TODO.md's "ApplyDiff reflows far more of the
+        // file" entry, root-caused to this. Lines inserted by this diff get the file's dominant
+        // ending unless they land as the new last line, matching what an original last line with
+        // no ending of its own would get (see the reassembly loop's promotion logic below).
+        var endings = sourceText.Lines
+            .Select(l => sourceText.GetSubText(TextSpan.FromBounds(l.End, l.EndIncludingLineBreak)).ToString())
+            .ToList();
+        var dominantEnding = endings
+            .Where(e => e.Length > 0)
+            .GroupBy(e => e)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault() ?? Environment.NewLine;
+
         var diffLines = unifiedDiff.Split(separatorArray, StringSplitOptions.None);
 
         int offset = 0; // Track how much the file has grown/shrunk
@@ -62,7 +82,13 @@ public class DiffEngine
 
                     if (diffLine.StartsWith("+"))
                     {
+                        // Ending is left empty here, not set to dominantEnding directly: the
+                        // reassembly loop below already promotes an empty ending to dominant
+                        // unless the line lands last, so this line naturally gets no trailing
+                        // separator if it ends up as the new last line of a file that originally
+                        // had none (e.g. inserting after the former last line).
                         lines.Insert(currentLine, diffLine.Substring(1));
+                        endings.Insert(currentLine, "");
                         currentLine++;
                         offset++;
                     }
@@ -84,6 +110,7 @@ public class DiffEngine
                                 "tool instead.");
                         }
                         lines.RemoveAt(currentLine);
+                        endings.RemoveAt(currentLine);
                         offset--;
                     }
                     else if (diffLine.StartsWith(" ") || diffLine.Length == 0)
@@ -117,9 +144,23 @@ public class DiffEngine
             }
         }
 
-        var originalText = sourceText.ToString();
-        var separator = originalText.Contains("\r\n") ? "\r\n" : "\n";
-        return SourceText.From(string.Join(separator, lines), sourceText.Encoding);
+        // Reassemble using each surviving/inserted line's own ending rather than one convention for
+        // the whole file. An empty ending is only valid on the actual last line (a file with no
+        // trailing newline) — if an earlier line ended up with one (e.g. a line was inserted after
+        // what used to be the last line), it needs a real separator or the two lines would run
+        // together with no break at all.
+        var sb = new StringBuilder();
+        for (int j = 0; j < lines.Count; j++)
+        {
+            sb.Append(lines[j]);
+            var ending = endings[j];
+            if (j < lines.Count - 1 && ending.Length == 0)
+            {
+                ending = dominantEnding;
+            }
+            sb.Append(ending);
+        }
+        return SourceText.From(sb.ToString(), sourceText.Encoding);
     }
 
     /// <summary>Collects a hunk's raw lines (context/+/-) up to the next hunk header or diff end.</summary>
