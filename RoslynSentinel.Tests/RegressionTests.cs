@@ -83,7 +83,9 @@ public class RegressionTests
                 """));
 
         // Reorder [a, b, c] → [c, a, b] using permutation index [2, 0, 1]
-        var result = await _refactoringEngine.ChangeSignatureAsync("Math.cs", "Add", new[] { 2, 0, 1 });
+        var changeResult = await _refactoringEngine.ChangeSignatureAsync("Math.cs", "Add", new[] { 2, 0, 1 });
+        var result = changeResult.Changes;
+        Assert.That(changeResult.SkippedCallSites, Is.Empty, "This call site has matching arity and should not be skipped");
 
         // Declaration must reflect new order: c, a, b
         var decl = result["Math.cs"];
@@ -110,7 +112,7 @@ public class RegressionTests
         // Swapping parameters and back should produce stable output.
         SetSource("public class C { public void Greet(string first, string last) { } }");
 
-        var swapped = await _refactoringEngine.ChangeSignatureAsync("Test.cs", "Greet", new[] { 1, 0 });
+        var swapped = (await _refactoringEngine.ChangeSignatureAsync("Test.cs", "Greet", new[] { 1, 0 })).Changes;
 
         Assert.That(swapped, Is.Not.Empty);
         var content = swapped["Test.cs"];

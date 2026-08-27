@@ -566,7 +566,7 @@ cost from "one bloated response" to "two calls, one of which re-fetches what was
 the file/method afterward to confirm... actually look correct") implicitly assumes agents *should* be
 re-reading after every write, which is exactly the extra round-trip this behavior forces.
 
-## `ChangeSignature` silently skips call-site reordering on arity mismatch
+## `ChangeSignature` silently skips call-site reordering on arity mismatch — CLOSED 2026-08-27
 
 **Found:** 2026-08-22, during a Roslyn-duplication audit of `ChangeSignatureAsync`
 (`RoslynSentinel.Basic/RefactoringEngine.cs`, currently around line 205). See
@@ -584,10 +584,32 @@ those skipped call sites are left passing arguments positionally to the *old* pa
 the *new* declaration — a silent semantic break (wrong values going to wrong parameters, or a type
 mismatch if types differ) that compiles cleanly in many cases and is easy to miss in review.
 
-**Suggested approach:** at minimum, surface which call sites were skipped (file/line) in the result so
-the caller/agent knows to handle them manually. A fuller fix would need real argument-to-parameter
-binding (via the semantic model's `SemanticModel.GetSymbolInfo`/argument-matching, not just positional
-count) to correctly handle named/optional/params call sites instead of skipping them.
+**Fix (2026-08-27):** implemented the "at minimum, surface skipped call sites" option rather than the
+fuller semantic-model argument-binding rewrite — the minimal fix removes the silent-failure danger
+without the risk of a much larger behavior change overnight. `ChangeSignatureAsync` now returns a new
+`ChangeSignatureResult(Dictionary<FilePath,string> Changes, List<SkippedCallSite> SkippedCallSites)`
+record instead of a bare `Dictionary<FilePath,string>`. Two skip reasons are now detected and reported
+(file + 1-based line + human-readable reason) instead of a bare `continue`:
+- any argument uses a name (`NameColon != null`) — reordering positionally would corrupt the call
+- `args.Count != parameters.Count` (optional argument omitted, or `params` expansion) — same as before,
+  now reported instead of silently skipped
+
+A third pre-existing `continue` (reference site isn't a simple `InvocationExpressionSyntax` — e.g. a
+method-group/delegate conversion) is now also reported as skipped, for the same reason.
+
+`SentinelAdvancedRefactoringTools.ChangeSignature`'s non-dry-run success path now appends a `WARNING:`
+note listing every skipped call site (file:line + reason) onto the `AppliedChangeSummary` description
+when `SkippedCallSites.Count > 0`, so the caller/agent sees it without an extra round-trip; the
+dry-run (`autoStage=false`) path now returns `{ Changes, SkippedCallSites }` instead of just `{ Changes }`.
+
+A fuller fix — real argument-to-parameter binding via the semantic model instead of positional-count
+matching, so named/optional/params call sites could be correctly rewritten rather than just flagged —
+is still open if this proves insufficient in practice.
+
+Updated 4 pre-existing test call sites (`BugFixTests.cs` x3, `BatteryTwelveTests.cs`, `RegressionTests.cs`
+x2) for the changed return shape, and added 2 new regression tests in `BugFixTests.cs` covering the
+named-argument and arity-mismatch skip cases (`ChangeSignature_CallSiteWithNamedArgument_IsReportedAsSkipped`,
+`ChangeSignature_CallSiteWithFewerArgsThanParameters_IsReportedAsSkipped`).
 
 **Why this matters:** the large-result offload pattern is the mechanism that should resolve this
 tension: return the actual result (e.g. the new member's text, or a small tail/diff of the change)

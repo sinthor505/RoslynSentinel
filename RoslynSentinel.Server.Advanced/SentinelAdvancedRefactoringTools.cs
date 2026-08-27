@@ -147,14 +147,21 @@ public class SentinelAdvancedRefactoringTools
 
         try
         {
-            var changes = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, newParameterOrder);
+            var result = await _refactoringEngine.ChangeSignatureAsync(filePath, methodName, newParameterOrder);
+            var changes = result.Changes;
             if (!autoStage)
-                return new ToolResult<object>() { Success = true, Data = new { Changes = changes } };
+                return new ToolResult<object>() { Success = true, Data = new { Changes = changes, result.SkippedCallSites } };
 
             var apply = await ValidateAndApplyAsync(changes, $"Change signature of method '{methodName}'.", "ChangeSignature", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
-            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Reorders parameters of '{methodName}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
+
+            var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(filePath)}.";
+            if (result.SkippedCallSites.Count > 0)
+                summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " +
+                    string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
+
+            return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {

@@ -147,8 +147,9 @@ public class Svc { public void Foo() {} }";
         // Reorder [a, b, c] → [c, a, b] using index permutation [2, 0, 1]
         var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
 
-        Assert.That(result, Is.Not.Empty, "Should return changed files");
-        var content = result["Calculator.cs"];
+        Assert.That(result.Changes, Is.Not.Empty, "Should return changed files");
+        Assert.That(result.SkippedCallSites, Is.Empty, "No call sites should be skipped for this signature");
+        var content = result.Changes["Calculator.cs"];
         // Verify new parameter order: c first, then a, then b
         var cPos = content.IndexOf("int c", StringComparison.Ordinal);
         var aPos = content.IndexOf("int a", StringComparison.Ordinal);
@@ -165,7 +166,35 @@ public class Svc { public void Foo() {} }";
 
         // Wrong length
         var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new[] { 0 });
-        Assert.That(result, Is.Empty, "Invalid order length should return empty dict");
+        Assert.That(result.Changes, Is.Empty, "Invalid order length should return empty dict");
+    }
+
+    [Test]
+    public async Task ChangeSignature_CallSiteWithNamedArgument_IsReportedAsSkipped()
+    {
+        SetMultipleFiles(
+            ("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c) => a + b + c; }"),
+            ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, c: 3, b: 2); }"));
+
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
+
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should still be reordered");
+        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Named-argument call site should be reported as skipped, not silently left stale");
+        Assert.That(result.SkippedCallSites[0].FilePath.ToString(), Does.Contain("Caller.cs"));
+    }
+
+    [Test]
+    public async Task ChangeSignature_CallSiteWithFewerArgsThanParameters_IsReportedAsSkipped()
+    {
+        SetMultipleFiles(
+            ("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c = 0) => a + b + c; }"),
+            ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, 2); }"));
+
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new[] { 2, 0, 1 });
+
+        Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should still be reordered");
+        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Call site omitting the optional argument should be reported as skipped");
+        Assert.That(result.SkippedCallSites[0].FilePath.ToString(), Does.Contain("Caller.cs"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -647,8 +676,8 @@ public class Service
         // Reorder: [name, age, active] -> [active, name, age]
         var result = await _refactoringEngine.ChangeSignatureAsync("Service.cs", "Process", new[] { 2, 0, 1 });
 
-        Assert.That(result.Count, Is.GreaterThan(0), "Should return changed files");
-        var content = string.Concat(result.Values);
+        Assert.That(result.Changes.Count, Is.GreaterThan(0), "Should return changed files");
+        var content = string.Concat(result.Changes.Values);
         // Call sites should be reordered with arguments in new order
         Assert.That(content, Does.Contain("Process"),
             "Should update Process calls with reordered arguments");

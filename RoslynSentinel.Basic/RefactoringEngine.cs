@@ -16,6 +16,8 @@ namespace RoslynSentinel.Basic;
 public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record ResidualMention(FilePath FilePath, int LineNumber, string LineText);
+public record SkippedCallSite(FilePath FilePath, int LineNumber, string Reason);
+public record ChangeSignatureResult(Dictionary<FilePath, string> Changes, List<SkippedCallSite> SkippedCallSites);
 public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePath, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null)
 {
     public string ToToolResponse()
@@ -122,48 +124,48 @@ public class RefactoringEngine
         };
     }
 
-    public async Task<Dictionary<FilePath, string>> ChangeSignatureAsync(FilePath filePath, string methodName, int[] newParameterOrder, CancellationToken cancellationToken = default)
+    public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePath filePath, string methodName, int[] newParameterOrder, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         var methodDecl = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodDecl == null)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         var parameters = methodDecl.ParameterList.Parameters.ToList();
         if (parameters.Count == 0)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         // Validate order array
         if (newParameterOrder.Length != parameters.Count)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         if (newParameterOrder.Any(i => i < 0 || i >= parameters.Count))
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         if (newParameterOrder.Distinct().Count() != parameters.Count)
         {
-            return new Dictionary<FilePath, string>();
+            return new ChangeSignatureResult(new Dictionary<FilePath, string>(), new List<SkippedCallSite>());
         }
 
         var reorderedParams = newParameterOrder.Select(i => parameters[i]).ToList();
@@ -176,6 +178,7 @@ public class RefactoringEngine
             [filePath] = (await updatedDoc.GetTextAsync(cancellationToken)).ToString()
         };
         // Reorder arguments at all call sites
+        var skippedCallSites = new List<SkippedCallSite>();
         var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (symbol != null)
         {
@@ -197,16 +200,25 @@ public class RefactoringEngine
                     }
 
                     var span = location.Location.SourceSpan;
+                    var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
                     var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
                     if (invocation == null)
                     {
+                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, "Reference is not a simple invocation expression (e.g. method group or delegate conversion)."));
                         continue;
                     }
 
                     var args = invocation.ArgumentList.Arguments.ToList();
+                    if (args.Any(a => a.NameColon != null))
+                    {
+                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, "Call site uses named arguments; automatic reordering was skipped to avoid corrupting the call."));
+                        continue;
+                    }
+
                     if (args.Count != parameters.Count)
                     {
+                        skippedCallSites.Add(new SkippedCallSite(refDoc.FilePath!, refLineNumber, $"Call site passes {args.Count} argument(s) but the declaration has {parameters.Count} parameter(s) (optional argument omitted or params expansion); automatic reordering was skipped."));
                         continue;
                     }
 
@@ -244,7 +256,7 @@ public class RefactoringEngine
             }
         }
 
-        return result;
+        return new ChangeSignatureResult(result, skippedCallSites);
     }
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(FilePath filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
