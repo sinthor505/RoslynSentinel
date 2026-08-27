@@ -980,7 +980,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         DiagnosticReport? validationReport = null;
         if (validateChanges && CurrentSolution != null)
         {
-            validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, cancellationToken);
+            validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, cancellationToken: cancellationToken);
             if (!validationReport.Success)
             {
                 return new ApplyChangesResult(

@@ -128,10 +128,11 @@ public class SentinelRefactoringTools
         bool dryRun = false,
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
+        IReadOnlyCollection<FilePath>? removePaths = null,
         CancellationToken cancellationToken = default) =>
         ValidateAndApplyHelper.ValidateAndApplyAsync(
             _validationEngine, _workspaceManager, _logger, changes, operationName,
-            dryRun, returnDiff, progress, cancellationToken);
+            dryRun, returnDiff, progress, removePaths, cancellationToken);
 
     private Task<string> BuildDiffAsync(Dictionary<FilePath, string> changes, CancellationToken cancellationToken) =>
         ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
@@ -248,7 +249,7 @@ public class SentinelRefactoringTools
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' → '{toType}' in '{filePath}'. Ensure both types exist in the solution.") };
 
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
             return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Generates mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
@@ -336,7 +337,7 @@ public class SentinelRefactoringTools
                 }
 
                 var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
-                var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress, cancellationToken);
+                var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new ToolResult<object> { Success = false, Error = apply.Error };
                 return await ToolResult<object>.ForPossiblyLargeDataAsync(
@@ -1140,7 +1141,7 @@ public class SentinelRefactoringTools
             }
 
             var changes = new Dictionary<FilePath, string> { [newPath] = content };
-            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, result.Message ?? $"Rename '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", "SyncTypeAndFilename", dryRun, returnDiff, removePaths: [filePath], cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
 

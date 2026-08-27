@@ -24,12 +24,13 @@ public static class ValidateAndApplyHelper
         bool dryRun = false,
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
+        IReadOnlyCollection<FilePath>? removePaths = null,
         CancellationToken cancellationToken = default)
     {
         DiagnosticReport validation;
         try
         {
-            validation = await validationEngine.ValidateChangesAsync(changes, cancellationToken);
+            validation = await validationEngine.ValidateChangesAsync(changes, removePaths, cancellationToken);
         }
         catch (Exception ex)
         {

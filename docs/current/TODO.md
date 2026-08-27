@@ -4,11 +4,45 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Remove an entry
 once it's actually fixed (and note the fix in SCENARIOS.md/commit history instead).
 
-## `SyncTypeAndFilename` validation always sees old+new documents coexisting — likely always fails when the type is unique
+## `Git(operation: status)` hung indefinitely (30min timeout) on a freshly-loaded solution
+
+**Found:** 2026-08-27, during an autonomous overnight session, right after `LoadSolution` succeeded
+against `RoslynSentinel.slnx` on the VS Code Advanced.Http copy (port 5150, restarted minutes
+earlier by `build.ps1`). `GetWorkspaceHealth` worked fine immediately before and after. Calling
+`Git(operation: "status")` produced no response/progress for the full 1800s MCP idle timeout and
+was aborted client-side — not a fast error, a genuine hang. Not yet root-caused (didn't want to
+burn overnight time debugging the server itself instead of the planned TODO items) — could be
+something about running immediately after a fresh `build.ps1 -Force` restart + reload, git-process
+spawning inside the server, or unrelated. Worked around by falling back to the plain `git` CLI via
+PowerShell for the rest of this session's commits, per the "try first, fall back, log the gap"
+instruction. Re-verify against a normally-running (not just-restarted) server before assuming this
+repros generally.
+
+## `SyncTypeAndFilename` validation always sees old+new documents coexisting — closed (2026-08-27)
 
 **Found:** 2026-08-25, while wiring `dryRun`/`returnDiff` params onto `SyncTypeAndFilename`
 (`RoslynSentinel.Server.Basic/SentinelRefactoringTools.cs`) and writing a regression test for the
 new `dryRun` behavior.
+
+**Fixed 2026-08-27:** confirmed not resolved by the recent `FilePathLock`/`FileIoHelper` work
+(those address write-path file-locking races, unrelated to Roslyn solution/document validation).
+Added an optional `removePaths` parameter threaded through `ValidationEngine.ValidateChangesAsync`
+(both the instance wrapper and the static core, `RoslynSentinel.Common/ValidationEngine.cs`) and
+`ValidateAndApplyHelper.ValidateAndApplyAsync` (`RoslynSentinel.Common/ValidateAndApplyHelper.cs`)
+and the two tool-layer private wrappers (`SentinelRefactoringTools.cs`,
+`SentinelAdvancedRefactoringTools.cs`). The static core now removes each path's existing `Document`
+(if any) from the candidate solution before processing `fileChanges`, and adds its project to
+`affectedProjectIds` so the removal's own compile impact is still checked. `SyncTypeAndFilename`
+now passes `removePaths: [filePath]` so the old path's document is excluded from validation instead
+of coexisting with the new path's — the duplicate-declaration false failure is gone. Verified with a
+new real success-path test, `SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument`
+(`RoslynSentinel.Tests.Battery/BatteryTwentyFourTests.cs`), which renames a mismatched-filename file
+through the actual `ValidateAndApplyAsync` path (not the short-circuit the older
+`SyncTypeAndFilename_ValidFile_ReturnsString` test takes) and asserts both success and that the old
+path's `Document` is gone from `CurrentSolution` afterward. Full-suite `build.ps1 -Flavor Solution
+-Mode Test` shows 0 new failures. The post-apply `File.Delete`/`RemoveDocumentByPathAsync` sequence
+already in `SyncTypeAndFilename` (for cleaning up on-disk/in-memory state *after* a successful
+apply) was untouched — this fix only concerns the pre-apply validation gate.
 
 **What:** `ValidationEngine.ValidateChangesAsync`'s static core (`RoslynSentinel.Common/
 ValidationEngine.cs`, ~line 102-116) treats a change whose path has no existing document as brand

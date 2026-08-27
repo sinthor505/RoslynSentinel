@@ -500,19 +500,15 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // NOTE: ValidateChangesAsync adds the renamed file as a brand-new document into the candidate
-    // solution (RoslynSentinel.Common/ValidationEngine.cs ~line 111-113) without removing the
-    // original document at the old path first — RemoveDocumentByPathAsync only runs after a
-    // successful (non-dryRun) apply, in the tool method itself. So for any real rename where the
-    // type's declaration is unique (the normal case — that's the whole reason the file needs
-    // renaming), pre-validation sees the same type declared in two documents at once and fails
-    // with a duplicate-declaration error, dryRun or not. Confirmed pre-existing and unrelated to
-    // the dryRun/returnDiff wiring added here: no prior test exercised this tool's success path
-    // through ValidateAndApplyAsync at all (the one existing test, SyncTypeAndFilename_ValidFile_
-    // ReturnsString, renames "Order.cs" containing "class Order" — filename already matches, so it
-    // short-circuits on EditOutcome.CannotEdit before ever reaching ValidateAndApplyAsync). Tracked
-    // in docs/current/TODO.md rather than fixed here, since fixing validation's document-replacement
-    // semantics is a larger, separate change. This test asserts the one thing dryRun is responsible
-    // for: even when validation fails, no destructive action (old-file delete) has occurred.
+    // solution without removing the original document at the old path first, which used to make
+    // pre-validation see the same (unique) type declared in two documents at once and fail with a
+    // duplicate-declaration error on every real rename. Fixed by threading an explicit
+    // `removePaths` list through ValidateChangesAsync/ValidateAndApplyHelper so the tool layer can
+    // tell validation which old-path document to drop from the candidate before compiling (see
+    // SyncTypeAndFilename's `removePaths: [filePath]` call and
+    // SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument below). This dryRun test still
+    // asserts the one thing dryRun is responsible for regardless: no destructive action (old-file
+    // delete) has occurred, even if validation were to fail for some other reason.
     [Test]
     public async Task SyncTypeAndFilename_DryRun_NeverDeletesOriginalFileAsync()
     {
@@ -543,6 +539,46 @@ public enum Status { Active = 1, Pending = 2 }
         finally
         {
             Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    // Real success-path regression test for the removePaths fix above: a mismatched filename vs.
+    // unique type declaration, non-dryRun, through the actual ValidateAndApplyAsync path (unlike
+    // SyncTypeAndFilename_ValidFile_ReturnsString above, which short-circuits on
+    // EditOutcome.CannotEdit before ever reaching validation).
+    [Test]
+    public async Task SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            var newPath = Path.Combine(tempDir, "Widget.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+
+            var solution = TestSolutionBuilder.CreateSolutionWithProject(
+                "TestProj", Path.Combine(tempDir, "TestProj.csproj"),
+                [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+
+            var result = await _tools.SyncTypeAndFilename(oldPath);
+
+            Assert.That(result.Success, Is.True, $"Expected rename to succeed; error: {result.Error?.Message}");
+            Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
+            Assert.That(File.Exists(newPath), Is.True, "New file should exist after a successful rename.");
+
+            var currentSolution = await _workspaceManager.GetCurrentSolutionAsync();
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(oldPath), Is.Empty,
+                "Old path must not remain tracked as a Document after the rename, or the type would be seen as declared twice.");
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(newPath), Is.Not.Empty,
+                "New path must be tracked as a Document after the rename.");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
         }
     }
 

@@ -38,7 +38,7 @@ public class ValidationEngine
         try
         {
             var newText = _diffEngine.ApplyDiff(oldText, unifiedDiff);
-            return await ValidateChangesAsync(solution, new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken);
+            return await ValidateChangesAsync(solution, new Dictionary<FilePath, string> { { filePath, newText.ToString() } }, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
@@ -57,9 +57,19 @@ public class ValidationEngine
     /// </summary>
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
         CancellationToken cancellationToken = default)
+        => await ValidateChangesAsync(fileChanges, removePaths: null, cancellationToken);
+
+    /// <param name="removePaths">
+    /// Paths whose existing Document (if any) should be removed from the candidate solution
+    /// before <paramref name="fileChanges"/> is applied — for a rename-shaped change where the
+    /// old path's document would otherwise coexist with the new path's, causing a spurious
+    /// duplicate-declaration diagnostic. See <see cref="ValidateChangesAsync(Solution, Dictionary{FilePath, string}, IReadOnlyCollection{FilePath}?, CancellationToken)"/>.
+    /// </param>
+    public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePath, string> fileChanges,
+        IReadOnlyCollection<FilePath>? removePaths, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetCurrentSolutionAsync(cancellationToken);
-        var report = await ValidateChangesAsync(solution, fileChanges, cancellationToken);
+        var report = await ValidateChangesAsync(solution, fileChanges, removePaths, cancellationToken);
 
         if (!report.Success && report.Diagnostics.Count > 0)
         {
@@ -83,13 +93,33 @@ public class ValidationEngine
     /// Only a new file whose containing project can't be inferred (no existing project's
     /// directory is an ancestor of its path) stays pass-through: there is no compilation to
     /// check it against.
+    ///
+    /// <paramref name="removePaths"/> lets a rename-shaped caller (e.g. SyncTypeAndFilename)
+    /// drop the old path's Document from the candidate before <paramref name="fileChanges"/> is
+    /// processed, so the type it declares isn't validated as if it existed under both the old
+    /// and new path simultaneously (that previously produced a spurious duplicate-declaration
+    /// diagnostic on the otherwise-normal case of renaming a file to match its unique type).
     /// </summary>
     public static async Task<DiagnosticReport> ValidateChangesAsync(
-        Solution baseline, Dictionary<FilePath, string> fileChanges, CancellationToken cancellationToken = default)
+        Solution baseline, Dictionary<FilePath, string> fileChanges,
+        IReadOnlyCollection<FilePath>? removePaths = null, CancellationToken cancellationToken = default)
     {
         Debug.WriteLine("Starting validation of proposed changes...");
         var candidate = baseline;
         var affectedProjectIds = new HashSet<ProjectId>();
+
+        if (removePaths != null)
+        {
+            foreach (var removePath in removePaths)
+            {
+                var removeDocumentId = baseline.GetDocumentIdsWithFilePath(removePath).FirstOrDefault();
+                if (removeDocumentId == null)
+                    continue;
+
+                candidate = candidate.RemoveDocument(removeDocumentId);
+                affectedProjectIds.Add(removeDocumentId.ProjectId);
+            }
+        }
 
         foreach (var change in fileChanges)
         {
