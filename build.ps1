@@ -382,6 +382,13 @@ if ($SkipVSCodeRestart) {
     # at all) says nothing about whether Advanced itself currently compiles.
     Invoke-VSCodeStdioRebuild
     Invoke-VSCodeServerRestart
+
+    # Invoke-VSCodeServerRestart only confirms the process launched (PID exists after a fixed
+    # 1s sleep) - not that it's actually answering requests. Delegate to the control script's
+    # `status` verb for a real JSON-RPC round-trip (see its Test-HttpCopyReachable), so a restart
+    # that started a process which then failed during startup is caught here instead of only
+    # surfacing later as a confusing ConnectionRefused from whatever tool call happens to run next.
+    & (Join-Path $repoRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
 }
 
 exit ([int](-not $ok))
