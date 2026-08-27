@@ -199,6 +199,10 @@ public class SentinelRefactoringTools
         if (apply.Error is not null)
             return new ToolResult<object> { Success = false, Error = apply.Error };
 
+        // Deliberately not wired into ForPossiblyLargeDataAsync/MemberChangedContentResult: this
+        // already returns rich custom Data (oldName/newName/residualMentions/updatedHandle) instead
+        // of a bare AppliedChangeSummary, and newName is caller-supplied verbatim — there is no
+        // separate "new content" fragment the offload mechanism would add value for.
         return new ToolResult<object>
         {
             Success = true,
@@ -588,6 +592,8 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, description, "ModifyEnum", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // No ChangedContent: the new member list is just the caller-supplied `values` string
+            // already passed in verbatim — same reasoning as ChangeAccessibility/ModifyModifier.
             return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion) };
         }
         catch (Exception ex)
@@ -850,6 +856,11 @@ public class SentinelRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // Not wired into MemberChangedContentResult: unlike Member/ConstructorParameter, the new
+            // declaration text isn't caller-supplied or separately exposed — DocumentEditResult only
+            // returns the whole-file UpdatedText, so reconstructing just the new "var x = ..." line
+            // here would mean duplicating ExtractLocalVariableAsync's formatting logic. Revisit only
+            // if that engine method is changed to return the new declaration text alongside UpdatedText.
             return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath], $"Extracts '{variableName}' as a local variable in {Path.GetFileName(filePath)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
@@ -909,6 +920,11 @@ public class SentinelRefactoringTools
                 };
             }
 
+            // Not wired into MemberChangedContentResult: the extracted method's body isn't caller-
+            // supplied or separately exposed — ExtractMethodSafeAsync's result only carries the
+            // whole-file UpdatedContent, so showing just the new method here would mean duplicating
+            // its formatting/signature-inference logic. Revisit only if that engine method starts
+            // returning the extracted method's text alongside UpdatedContent.
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedContent };
             var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePath}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -1174,6 +1190,8 @@ public class SentinelRefactoringTools
             // the compilation, corrupting symbol resolution for every subsequent call.
             await _workspaceManager.RemoveDocumentByPathAsync(filePath, cancellationToken);
 
+            // No ChangedContent: this only moves a file to a new name — the file's content is
+            // byte-for-byte unchanged, so there is no new text to show beyond the summary.
             return new ToolResult<object> { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, [filePath, newPath], $"Renamed '{Path.GetFileName(filePath)}' to '{Path.GetFileName(newPath)}'.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)

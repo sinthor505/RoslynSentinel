@@ -156,6 +156,10 @@ public class SentinelAdvancedRefactoringTools
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
 
+            // Not wired into MemberChangedContentResult: this already has bespoke handling
+            // (SkippedCallSites folded into the summary note below) that the generic offload
+            // mechanism doesn't add value over — there's no separate "new content" fragment,
+            // just the reordered declaration text a caller can already see via ReturnDiff.
             var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(filePath)}.";
             if (result.SkippedCallSites.Count > 0)
                 summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " +
@@ -188,6 +192,11 @@ public class SentinelAdvancedRefactoringTools
             if (changes.Count == 0)
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"ConvertAnonymousToNamed: no anonymous object found in '{filePath}'.") };
 
+            // Not wired into MemberChangedContentResult: the generated class's text isn't caller-
+            // supplied or separately exposed — ConvertAnonymousToNamedAsync only returns the whole-file
+            // Changes dict, so showing just the new class declaration here would mean duplicating its
+            // formatting logic. Revisit only if that engine method starts returning the new class's text
+            // alongside the file changes.
             var apply = await ValidateAndApplyAsync(changes, $"Convert anonymous object to '{newClassName}'.", "ConvertAnonymousToNamed", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
@@ -420,6 +429,9 @@ public class SentinelAdvancedRefactoringTools
             var apply = await ValidateAndApplyAsync(changes, $"Pull up '{memberName}' from '{className}' to base class.", "PullUpMember", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
                 return new ToolResult<object> { Success = false, Error = apply.Error };
+            // Not wired into MemberChangedContentResult: this touches two files (derived + base)
+            // with no single "the new text" the way Member's single-file operations do — the
+            // member text moved is already visible in the diff, and memberName is caller-supplied.
             return new ToolResult<object>() { Success = true, Data = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Pulls '{memberName}' from '{className}' up to its base class.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
@@ -458,6 +470,11 @@ public class SentinelAdvancedRefactoringTools
                     "Verify the method name (case-sensitive) or use get_file_outline to list available methods.")
                 };
 
+            // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
+            // supplied or separately exposed — IntroduceParameterObjectAsync only returns the whole-file
+            // UpdatedText, so showing just the new record here would mean duplicating its formatting
+            // logic. Revisit only if that engine method starts returning the record's text alongside
+            // UpdatedText.
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Introduce parameter object for '{methodName}'.", "IntroduceParameterObject", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
@@ -518,6 +535,11 @@ public class SentinelAdvancedRefactoringTools
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new ToolResult<object> { Success = false, Error = new ResultError(ToolErrorCode.Exception, $"Introduce({@as}): context snippet '{contextSnippet}' not matched in '{filePath}'.") };
 
+            // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
+            // supplied or separately exposed — IntroduceVariable/Field/ParameterAsync only return
+            // the whole-file UpdatedText, so showing just the new declaration here would mean
+            // duplicating their formatting logic. Revisit only if those engine methods start
+            // returning the introduced declaration's text alongside UpdatedText.
             var changes = new Dictionary<FilePath, string> { [filePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({@as})", dryRun, returnDiff, cancellationToken);
             if (apply.Error is not null)
@@ -531,6 +553,11 @@ public class SentinelAdvancedRefactoringTools
         }
     }
 
+    // Not wired into MemberChangedContentResult for any of its four branches (interface/class/partial/
+    // superclass): each engine call (ExtractInterfaceAsync/ExtractClassAsync/ExtractMembersToPartialAsync/
+    // ExtractSuperclassAsync) only returns whole-file Changes dicts, with no separately-exposed "just the
+    // new type's text" fragment. Wiring this needs an engine-API-extension pass, not tool-layer wiring —
+    // revisit only if those engine methods start returning the extracted type's text alongside Changes.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts members from a class into a new type. as values: interface (public API → new interface file, requires newTypeName), class (named members → new class, requires memberNames + newTypeName), partial (named members → new partial file, requires memberNames), superclass (common members → new base class, requires newTypeName; for multiple classes supply filePaths[] + classNames[]). autoStage=true → ChangeId where applicable.")]
