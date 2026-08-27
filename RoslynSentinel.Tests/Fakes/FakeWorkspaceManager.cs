@@ -26,7 +26,7 @@ public sealed class FakeWorkspaceManager : IWorkspaceManager, ISolutionProvider,
     public int WorkspaceVersion => 0;
     public Guid SessionId => Guid.Empty;
 
-    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default)
+    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePath>? deletePaths = null)
         => throw new NotImplementedException();
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     public string? CheckRateLimit(string toolName, int defaultLimit) => throw new NotImplementedException();

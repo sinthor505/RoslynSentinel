@@ -570,6 +570,117 @@ public class SentinelWorkspaceTools
         }
     }
 
+    [McpServerTool(Name = "CreateFile")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Creates a new file with the given content. Fails if the file already exists — use ApplyDiff (changesetFormat=files, action=apply) to overwrite an existing file. Routes through the same write-path chokepoint as every other mutating tool (drift-checked, undo-tracked via UndoLastApply). Parent directories are created automatically if missing.")]
+    public async Task<ToolResult<object>> CreateFile([Consumes(DataTag.SourceFilepath, required: true)] string filepath, [Description("Full content of the new file.")] string content, [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true, CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePath}' already exists. Use ApplyDiff to overwrite an existing file.")
+                };
+            }
+
+            var directory = Path.GetDirectoryName((string)filePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var changes = new Dictionary<FilePath, string> { [filePath] = content };
+            var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken);
+            if (!result.Success && result.ValidationResult != null)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile pre-apply validate failed: {result.ValidationResult.Diagnostics.ToJson()}")
+                };
+            }
+
+            if (!result.Success)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePath}': {result.Summary}")
+                };
+            }
+
+            await WriteBlobForApplyAsync("create_file", result);
+            var strippedResult = result with { PreImages = null };
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = strippedResult
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "CreateFile failed for '{FilePath}'", filePath);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"CreateFile for '{filePath}'")
+            };
+        }
+    }
+
+    [McpServerTool(Name = "DeleteFile")]
+    [Produces(DataTag.ChangeId)]
+    [Description("Deletes a file from disk. Fails if the file does not exist. Routes through the same write-path chokepoint as every other mutating tool: refused if the file was modified externally since the last sync (see ListExternalDiskChanges/ClearExternalDrift), and undoable via UndoLastApply (the pre-delete content is captured). If the file is a tracked Roslyn Document, it's removed from the in-memory solution as part of the same operation.")]
+    public async Task<ToolResult<object>> DeleteFile([Consumes(DataTag.SourceFilepath, required: true)] string filepath, CancellationToken cancellationToken = default)
+    {
+        FilePath filePath = FilePath.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.InvalidArgument, $"DeleteFile: '{filePath}' does not exist.")
+                };
+            }
+
+            var result = await _workspaceManager.ApplyProposedChangesAsync(
+                changes: [],
+                cancellationToken: cancellationToken,
+                deletePaths: [filePath]);
+            if (!result.Success)
+            {
+                return new ToolResult<object>()
+                {
+                    Success = false,
+                    Error = new ResultError(ToolErrorCode.Exception, $"DeleteFile failed to delete '{filePath}': {result.Summary}")
+                };
+            }
+
+            await WriteBlobForApplyAsync("delete_file", result);
+            var strippedResult = result with { PreImages = null };
+            return new ToolResult<object>()
+            {
+                Success = true,
+                Data = strippedResult
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DeleteFile failed for '{FilePath}'", filePath);
+            return new ToolResult<object>()
+            {
+                Success = false,
+                Error = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"DeleteFile for '{filePath}'")
+            };
+        }
+    }
+
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries failed file writes using server-cached content — no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]

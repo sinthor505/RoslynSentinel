@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 public interface IWorkspaceMutator
 {
     /// <summary>Writes the given file changes to disk through the shared write-path chokepoint (drift-checked, undo-tracked, retried on lock).</summary>
-    Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default);
+    Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePath, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<ProgressNotificationValue>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePath>? deletePaths = null);
     /// <summary>Loads a solution from the given path into the workspace.</summary>
     Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default);
     /// <summary>Loads a solution from the given path, resolving relative paths against baseRepoDir.</summary>

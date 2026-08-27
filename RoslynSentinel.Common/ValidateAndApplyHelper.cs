@@ -25,12 +25,19 @@ public static class ValidateAndApplyHelper
         bool returnDiff = false,
         IProgress<ProgressNotificationValue>? progress = default,
         IReadOnlyCollection<FilePath>? removePaths = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePath>? deletePaths = null)
     {
         DiagnosticReport validation;
         try
         {
-            validation = await validationEngine.ValidateChangesAsync(changes, removePaths, cancellationToken);
+            // Files actually being deleted from disk also need their Document dropped from the
+            // candidate solution before compiling — same reasoning as removePaths (a rename's old
+            // path), just via a different route (an on-disk delete instead of a superseding write).
+            var allRemovePaths = deletePaths == null
+                ? removePaths
+                : (removePaths ?? []).Concat(deletePaths).ToList();
+            validation = await validationEngine.ValidateChangesAsync(changes, allRemovePaths, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -53,7 +60,7 @@ public static class ValidateAndApplyHelper
 
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
             changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
-            progress: progress, cancellationToken: cancellationToken);
+            progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths);
 
         if (!applyResult.Success)
         {

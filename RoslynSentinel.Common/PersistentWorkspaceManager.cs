@@ -427,12 +427,25 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // the in-memory workspace and a redundant reload would hold _solutionLock for tens of
         // seconds, starving every other caller. Path+timing alone isn't enough to tell our own
         // write apart from a human editing the same file within the suppression window, so we
-        // also verify the on-disk content still matches what we wrote (Changed/Created events
-        // only — Renamed/Deleted have no content to compare and always fall through as real).
+        // also verify the on-disk content still matches what we wrote (Changed/Created events);
+        // Renamed always falls through as real (no content to compare, and always someone else's
+        // action — nothing in this codebase renames a tracked file directly outside a rename-shaped
+        // multi-file apply that writes both paths' *content*, not a rename). Deleted gets its own
+        // narrower check just below, for a genuine tracked delete via deletePaths.
         if (_internalChanges.TryGetValue(e.FullPath, out var recordedChange) &&
             (DateTime.UtcNow - recordedChange.Timestamp).TotalSeconds < 5)
         {
-            if (e.ChangeType is WatcherChangeTypes.Renamed or WatcherChangeTypes.Deleted)
+            if (e.ChangeType is WatcherChangeTypes.Deleted && recordedChange.Content.Length == 0 && !File.Exists(e.FullPath))
+            {
+                // Our own tracked delete (ApplyProposedChangesAsync's deletePaths branch records
+                // an empty-string sentinel before deleting — see its call site). Content can't be
+                // compared the way Changed/Created is, but "we just deleted this path ourselves,
+                // recently, and it's still gone" is unambiguous enough to suppress without a false
+                // positive risk that matters here — unlike Changed/Created, nothing else could have
+                // legitimately produced a content match to check against for a delete.
+                return;
+            }
+            else if (e.ChangeType is WatcherChangeTypes.Renamed or WatcherChangeTypes.Deleted)
             {
                 // Fall through — treat as a real external change.
             }
@@ -953,8 +966,21 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         bool validateChanges = false,
         bool rollbackOnPartialFailure = false,
         IProgress<ProgressNotificationValue>? progress = default,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<FilePath>? deletePaths = null)
     {
+        deletePaths ??= [];
+        if (deletePaths.Count > 0 && changes.Keys.Any(deletePaths.Contains))
+        {
+            var overlap = changes.Keys.Where(deletePaths.Contains).ToList();
+            return new ApplyChangesResult(
+                Success: false,
+                SucceededFiles: [],
+                FailedFiles: overlap.ToDictionary(f => f, _ => "Path given as both a write and a delete target."),
+                Summary: $"Refused — {overlap.Count} path(s) appear in both changes and deletePaths: " +
+                         $"{string.Join(", ", overlap.Select(f => Path.GetFileName(f)))}.");
+        }
+
         // Refuse to write through unacknowledged external drift. A proposed change is always
         // computed against CurrentSolution's in-memory text; if the target file was touched on
         // disk after that (a human editing alongside the agent, git, a build step) and the drift
@@ -962,7 +988,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // clobber whatever changed it externally. Fail loud instead — same "no silent overwrites"
         // rule the rest of this write path already follows for no-op/whitespace-only writes.
         var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
-        var driftedTargets = changes.Keys.Where(k => drift.Contains(k)).Distinct().ToList();
+        var driftedTargets = changes.Keys.Concat(deletePaths).Where(k => drift.Contains(k)).Distinct().ToList();
         if (driftedTargets.Count > 0)
         {
             return new ApplyChangesResult(
@@ -998,7 +1024,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         bool needsFullReload = false;
 
         // Clear retry cache for this specific batch
-        foreach (var key in changes.Keys)
+        foreach (var key in changes.Keys.Concat(deletePaths))
         {
             _failedChangesCache.TryRemove(key, out _);
         }
@@ -1015,7 +1041,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             // exist (undo should delete it rather than restore content).
             // Must run inside the lock and before the first write.
             var preImages = new Dictionary<string, string?>();
-            foreach (var key in changes.Keys)
+            foreach (var key in changes.Keys.Concat(deletePaths))
             {
                 try
                 {
@@ -1029,6 +1055,35 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
                         _logger.LogWarning("Pre-image capture failed for {FilePath}: {Message}", key, ex.Message);
+                    }
+                }
+            }
+
+            // ── Deletes ──────────────────────────────────────────────────────
+            // Handled as their own pass, before the write loop below, so a delete failure is
+            // tracked the same way a write failure is (failed/succeeded/rollback), and so a
+            // deleted path ends up in `succeeded` for ApplyInMemoryDocumentUpdatesAsync — which
+            // already removes the tracked Document for any affected file that no longer exists
+            // on disk (originally written for the old half of a rename, but generically correct
+            // here too).
+            foreach (var filePath in deletePaths)
+            {
+                _internalChanges[filePath] = (DateTime.UtcNow, string.Empty);
+                try
+                {
+                    await FileIoHelper.DeleteAsync(filePath, cancellationToken);
+                    succeeded.Add(filePath);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation("Deleted {FilePath}", filePath);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failed[filePath] = ex.Message;
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(ex, "Failed to delete {FilePath}", filePath);
                     }
                 }
             }
@@ -1214,8 +1269,8 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
             }
 
             var summary = rolledBack.Count > 0
-                ? $"Partial write failure — {rolledBack.Count} already-written file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
-                : $"Applied {succeeded.Count} changes successfully. {failed.Count} failures.";
+                ? $"Partial write failure — {rolledBack.Count} already-written/deleted file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
+                : $"Applied {succeeded.Count} changes successfully ({deletePaths.Count} delete(s)). {failed.Count} failures.";
             return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
                 workspaceInSync, _workspaceVersion, preImages, validationReport,
                 rolledBack.Count > 0 ? rolledBack : null);
