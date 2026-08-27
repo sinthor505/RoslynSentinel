@@ -374,7 +374,7 @@ Verified via `build.ps1 -Flavor Solution -Mode Test`: 0 new failures.
 recommendations for the user to decide, not gaps this session's work left broken — the additive,
 non-breaking behavior is working as designed today.
 
-## `ConvertExpressionBodyAsync` has the same contextSnippet bug class as `ReplaceMember`, different code shape
+## `ConvertExpressionBodyAsync` has the same contextSnippet bug class as `ReplaceMember` — closed (2026-08-27)
 
 **Found:** 2026-08-19, while fixing `ReplaceMember`'s `ResolveMemberByNameOrSnippet`/
 `ResolveTypeByNameOrSnippet` single-candidate bug (see SCENARIOS.md Scenario 4 / "Fixed" list).
@@ -387,13 +387,51 @@ name-based candidates }` branch — structurally different from `ResolveMemberBy
 unnecessary, so the same failure mode (a defensive/mismatched snippet blocking an otherwise-unambiguous
 resolution) is still possible here, just via a different code path.
 
-**Why not fixed alongside `ReplaceMember`:** the one-line "skip if `candidates.Count <= 1`" guard used
-for the two shared helpers doesn't directly apply — this method would need restructuring to compute
-name-based candidates unconditionally first, then decide whether to also honor a snippet-based
-position, which is a larger, more careful change than the guards applied elsewhere. Worth checking
-whether any other `RefactoringEngine`/`StructuralRefinementEngine` methods share this same
-`if (contextSnippet != null) { position } else { name }` shape (not yet audited) before fixing, so all
-affected methods get the same treatment in one pass rather than one at a time as each is found live.
+**Fixed 2026-08-27:** rather than restructure the method's own resolution logic, replaced the whole
+branch with a direct call to the existing shared `ResolveMemberByNameOrSnippet` helper (already used
+by `ReplaceMember` and ~19 other call sites) — it already has the "compute name-based candidates
+first, only consult contextSnippet if 2+" shape this method was missing, and its return type
+(`MemberDeclarationSyntax?`) matches what `ConvertExpressionBodyAsync` needs directly. Passed an
+`extraFilter` restricting candidates to `MethodDeclarationSyntax`/`PropertyDeclarationSyntax`/
+`ConstructorDeclarationSyntax`, matching the original inline name-based branch's member-kind filter.
+Wrapped in the same `try/catch (InvalidOperationException)` → `EditOutcome.CannotEdit` pattern every
+other `ResolveMemberByNameOrSnippet` caller already uses (e.g. `ReplaceMemberAsync`). Verified with a
+new regression test, `ConvertExpressionBody_UnambiguousMemberWithMismatchedContextSnippet_StillSucceeds`
+(`RoslynSentinel.Tests.Advanced/BugFixTests.cs`) — a single non-overloaded method converts
+successfully even when passed a `contextSnippet` that doesn't match the file's real text at all
+(previously failed with a snippet-not-found error). `build.ps1 -Flavor Solution -Mode Test`: 0 new
+failures.
+
+**Audit while fixing this (corrected — see below):** `grep -n "contextSnippet != null"` across
+`RoslynSentinel.Basic` found 8 hits total, not just `ConvertExpressionBodyAsync`. Triaged each:
+- `RefactoringEngine.AnalyzeControlFlowAsync`/`AnalyzeDataFlowAsync` (lines ~1818, ~1862): use
+  `method ??= <name-based lookup>` — snippet is tried first but *falls back* to name-based search
+  if the snippet doesn't match, rather than replacing it. Different, more benign shape (a mismatched
+  snippet is silently ignored rather than causing failure) and these are read-only analysis methods,
+  not mutating tools. Left alone — different bug (if any), different severity, out of scope here.
+- `SymbolNavigationEngine.cs` (4 hits, ~lines 1327/1366/1484/1557/1947): read-only symbol
+  lookup/reference-finding code, not a mutating edit-target resolver — not the same "silently wrong
+  edit" risk profile as `ReplaceMember`/`ConvertExpressionBodyAsync`. Not triaged in detail this pass;
+  flagged as unaudited rather than confirmed-clean.
+- `CodeGenerationEngine.ConvertPropertySafeAsync` (line ~1043): **was the same bug class** — a
+  mismatched `contextSnippet` returned `TargetNotFound` before ever trying name-based resolution,
+  identical failure mode to `ConvertExpressionBodyAsync`'s pre-fix behavior, exposed via
+  `ApplyClassCodemod`'s `convert_property_safe` transform. Fixed in the same pass: since
+  `CodeGenerationEngine` is a separate class from `RefactoringEngine` and can't call its private
+  `ResolveMemberByNameOrSnippet`, wrote an equivalent local candidates-first/snippet-only-if-2+ block
+  directly in `ConvertPropertySafeAsync` instead of extracting a cross-class shared helper (judged
+  smaller/less risky than a refactor touching `ResolveMemberByNameOrSnippet`'s 20 existing call
+  sites). Updated the stale test that had encoded the old buggy behavior as expected
+  (`ConvertPropertySafe_WithBadContextSnippet_ReturnsErrorString` renamed to
+  `ConvertPropertySafe_UnambiguousPropertyWithBadContextSnippet_StillSucceeds`, now asserting
+  success) and added a new `ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_
+  ReturnsErrorString` test with two same-named properties on sibling types, preserving the original
+  test's intent (a snippet that matches nothing should still fail when disambiguation is genuinely
+  needed). `build.ps1 -Flavor Solution -Mode Test`: 0 new failures.
+
+**Still open:** `SymbolNavigationEngine.cs`'s 4 `contextSnippet != null` sites are unaudited — worth
+a follow-up pass to classify their shape (replace vs. fallback vs. something else) before assuming
+they're clean.
 
 ## No tool for creating or deleting a whole file
 

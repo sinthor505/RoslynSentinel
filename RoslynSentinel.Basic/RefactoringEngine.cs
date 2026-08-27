@@ -1338,26 +1338,20 @@ public class RefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
         var text = await document.GetTextAsync(cancellationToken);
-        MemberDeclarationSyntax? target = null;
-        if (contextSnippet != null)
+        MemberDeclarationSyntax? target;
+        try
         {
-            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
-            if (pos < 0)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// {snippetError}"
-                };
-            }
-
-            target = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0)).AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+            target = ResolveMemberByNameOrSnippet(root, text, memberName, contextSnippet, lineBefore, lineAfter,
+                m => m is MethodDeclarationSyntax || m is PropertyDeclarationSyntax || m is ConstructorDeclarationSyntax);
         }
-        else
+        catch (InvalidOperationException ex)
         {
-            var candidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>().Where(n => (n is MethodDeclarationSyntax m && m.Identifier.Text == memberName) || (n is PropertyDeclarationSyntax p && p.Identifier.Text == memberName) || (n is ConstructorDeclarationSyntax c && c.Identifier.Text == memberName)).ToList();
-            target = candidates.FirstOrDefault();
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = filePath,
+                Message = ex.Message
+            };
         }
 
         if (target == null)

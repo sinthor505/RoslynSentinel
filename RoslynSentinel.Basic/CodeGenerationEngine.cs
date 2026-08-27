@@ -1039,8 +1039,19 @@ public partial class CodeGenerationEngine
             };
         }
 
-        PropertyDeclarationSyntax? propNode = null;
-        if (contextSnippet != null)
+        // Compute name-based candidates first (same shape as RefactoringEngine's
+        // ResolveMemberByNameOrSnippet, duplicated here rather than shared cross-class): a
+        // contextSnippet exists only to disambiguate 2+ same-named candidates, so a defensively
+        // supplied or mismatched snippet must not block an otherwise-unambiguous resolution.
+        var candidates = root.DescendantNodes().OfType<PropertyDeclarationSyntax>()
+            .Where(p => p.Identifier.Text == propertyName).ToList();
+
+        PropertyDeclarationSyntax? propNode;
+        if (contextSnippet == null || candidates.Count <= 1)
+        {
+            propNode = candidates.FirstOrDefault();
+        }
+        else
         {
             var srcText = await document.GetTextAsync(cancellationToken);
             var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
@@ -1054,15 +1065,8 @@ public partial class CodeGenerationEngine
                 };
             }
 
-            propNode = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
-                .AncestorsAndSelf()
-                .OfType<PropertyDeclarationSyntax>()
-                .FirstOrDefault();
+            propNode = candidates.FirstOrDefault(p => p.Span.Contains(pos));
         }
-
-        propNode ??= root.DescendantNodes()
-            .OfType<PropertyDeclarationSyntax>()
-            .FirstOrDefault(p => p.Identifier.Text == propertyName);
 
         if (propNode == null)
         {

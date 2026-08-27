@@ -1856,9 +1856,14 @@ public class TargetDto
             _workspaceManager.SetTestSolution(solution);
         }
 
-        // Bug 3: ConvertPropertySafe crash on bad contextSnippet → now returns error string
+        // Bug 3, original repro (crash on bad contextSnippet, fixed by returning an error string
+        // instead) used a single, non-overloaded "Name" property — but a contextSnippet only ever
+        // needs to disambiguate 2+ same-named candidates, so failing on a mismatched snippet here
+        // was itself a bug (same class as ReplaceMember's pre-fix behavior, and
+        // ConvertExpressionBodyAsync's, see docs/current/TODO.md). Fixed 2026-08-27: an
+        // unambiguous property now resolves by name alone regardless of contextSnippet.
         [Test]
-        public async Task ConvertPropertySafe_WithBadContextSnippet_ReturnsErrorString()
+        public async Task ConvertPropertySafe_UnambiguousPropertyWithBadContextSnippet_StillSucceeds()
         {
             const string src = @"public class MyClass
 {
@@ -1869,8 +1874,31 @@ public class TargetDto
                 "MyClass.cs", "Name", "ToFullProperty",
                 contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
 
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified),
+                "An unambiguous property should resolve by name alone; a mismatched contextSnippet should not block it.");
+        }
+
+        // Real ambiguous case: two sibling types each declare their own "Name" property, so
+        // contextSnippet is actually needed to disambiguate — a snippet that matches neither
+        // should still fail with a clear error.
+        [Test]
+        public async Task ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_ReturnsErrorString()
+        {
+            const string src = @"public class MyClass
+{
+    public string Name { get; set; }
+}
+public class OtherClass
+{
+    public string Name { get; set; }
+}";
+            SetSource(src, "MyClass.cs");
+            var result = await _codeGenerationEngine.ConvertPropertySafeAsync(
+                "MyClass.cs", "Name", "ToFullProperty",
+                contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+
             Assert.That(result.Message, Does.Contain("Error:"),
-                "Should return an error string when snippet is not found");
+                "Should return an error message when contextSnippet is needed to disambiguate but doesn't match");
         }
 
         // Bug: ConvertExpressionBody with non-existent member → now returns error string
@@ -1926,6 +1954,36 @@ public class TargetDto
 
             Assert.That(result.Message, Does.Contain("Cannot convert"),
                 "Should return an error message when converting ToBlockBody but already a block body");
+        }
+
+        // Regression test: ConvertExpressionBodyAsync previously resolved via
+        // `if (contextSnippet != null) { position-based } else { name-based }`, so any supplied
+        // contextSnippet bypassed name-based resolution entirely instead of only being consulted
+        // when the name is actually ambiguous — the same bug class ReplaceMember had before being
+        // fixed via ResolveMemberByNameOrSnippet's "skip if candidates.Count <= 1" guard. Fixed by
+        // routing ConvertExpressionBodyAsync through that same shared helper. This test uses a
+        // single, non-overloaded method (unambiguous by name alone) with a contextSnippet that
+        // does not match the file's real text at all — before the fix this failed with a
+        // snippet-not-found error even though the name alone was enough to resolve the target.
+        [Test]
+        public async Task ConvertExpressionBody_UnambiguousMemberWithMismatchedContextSnippet_StillSucceeds()
+        {
+            const string src = @"public class MyClass
+{
+    public string GetName()
+    {
+        return ""hello"";
+    }
+}";
+            SetSource(src, "MyClass.cs");
+            var result = await _refactoringEngine.ConvertExpressionBodyAsync(
+                "MyClass.cs", "GetName", "ToExpressionBody",
+                contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified),
+                "An unambiguous member should resolve by name alone; a mismatched contextSnippet should not block it.");
+            Assert.That(result.UpdatedText, Does.Contain("=>"),
+                "Method should have been converted to an expression body.");
         }
 
         // Bug 2: PerformanceEngine missing += in loop
