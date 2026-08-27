@@ -3789,12 +3789,11 @@ public class RefactoringEngine
         }
 
         var newClassNode = classDecl.WithMembers(SyntaxFactory.List(newMembers));
-        var newRoot = root.ReplaceNode(classDecl, newClassNode).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString(),
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
     }
@@ -3930,12 +3929,11 @@ public class RefactoringEngine
         }
 
         var newClassNode = classDecl.WithMembers(SyntaxFactory.List(newMembers));
-        var newRoot = root.ReplaceNode(classDecl, newClassNode).NormalizeWhitespace();
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString(),
+            UpdatedText = await ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"
         };
     }
