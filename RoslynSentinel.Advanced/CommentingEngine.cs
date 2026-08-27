@@ -2,8 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using ModelContextProtocol;
-
 namespace RoslynSentinel.Advanced;
 
 /// <summary>
@@ -22,7 +20,9 @@ public class CommentingEngine
     private const string CommentSystemPrompt =
         "You write a single-line XML documentation summary describing what the given C# member " +
         "does. Reply with ONLY the summary sentence itself — no XML tags, no markdown, no leading " +
-        "'Summary:' label, no trailing period-only filler. Keep it under 25 words.";
+        "'Summary:' label, no trailing period-only filler. Keep it under 40 words. If the member's " +
+        "containing class/type isn't stated in the input, describe its behavior without naming or " +
+        "guessing a class name.";
 
     // Each CompleteAsync call is a stateless HTTP round-trip to the (typically local) LLM server —
     // no shared state between calls — so a handful can run concurrently to keep a small local model
@@ -133,7 +133,11 @@ public class CommentingEngine
 
             if (fileChanged)
             {
-                var finalSource = currentRoot.NormalizeWhitespace().ToFullString();
+                // No NormalizeWhitespace() here — same reasoning as CommentFileAsync (see the note on
+                // ComputeStableContentHash below): AddAttribute already gives each new [ContentHash]
+                // attribute list correct indent/trailing-newline trivia explicitly, so a whole-tree
+                // reformat isn't needed and would collapse unrelated blank lines throughout the file.
+                var finalSource = currentRoot.ToFullString();
                 changes[document.FilePath] = finalSource;
             }
         }
@@ -374,7 +378,18 @@ public class CommentingEngine
             await throttle.WaitAsync(cancellationToken);
             try
             {
-                var memberText = site.Node.ToFullString().Trim();
+                // site.Node still carries its own [ContentHash("Comment", ...)] sentinel/stale attribute
+                // as leading trivia at this point (seeding runs before staleness is found) — sending
+                // that raw to the LLM put the literal token "Comment" right before the member body in
+                // every request, and a 3B model echoed it back as a fabricated containing-class name
+                // (e.g. "resources used by the Comment class"). Strip it the same way
+                // ComputeStableContentHash does below, so the model only ever sees the member's actual
+                // code. Prefixing the real containing type name (when known) gives it something
+                // legitimate to anchor "what type is this on" instead.
+                var strippedNode = RemoveContentHashAttribute(site.Node);
+                var memberText = site.ContainingTypeName != null
+                    ? $"// Member of class {site.ContainingTypeName}\n{strippedNode.ToFullString().Trim()}"
+                    : strippedNode.ToFullString().Trim();
                 var summary = await _llmClient.CompleteAsync(CommentSystemPrompt, memberText, maxTokens, cancellationToken);
                 results[index] = (summary, null);
             }
